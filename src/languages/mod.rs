@@ -32,3 +32,6 @@ pub use language_typescript::*;
 
 pub mod language_preproc;
 pub use language_preproc::*;
+
+pub mod language_go;
+pub use language_go::*;

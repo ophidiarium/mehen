@@ -182,6 +182,14 @@ impl Exit for JavaCode {
     }
 }
 
+impl Exit for GoCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if matches!(node.kind_id().into(), Go::ReturnStatement) {
+            stats.exit += 1;
+        }
+    }
+}
+
 implement_metric_trait!(Exit, KotlinCode, PreprocCode, CcommentCode);
 
 #[cfg(test)]
@@ -415,6 +423,80 @@ mod tests {
                       "average": 2.0,
                       "min": 0.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_no_exit() {
+        check_metrics::<GoParser>("var a = 42", "foo.go", |metric| {
+            // 0 functions
+            insta::assert_json_snapshot!(
+                metric.nexits,
+                @r###"
+                    {
+                      "sum": 0.0,
+                      "average": null,
+                      "min": 0.0,
+                      "max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn go_simple_function() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func max(a, b int) int {
+                if a > b {
+                    return a
+                }
+                return b
+            }",
+            "foo.go",
+            |metric| {
+                // 2 exits / 1 function
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_multiple_functions() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f1() int {
+                return 1
+            }
+
+            func f2() int {
+                return 2
+            }",
+            "foo.go",
+            |metric| {
+                // 2 exits / 2 functions
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
+                      "min": 0.0,
+                      "max": 1.0
                     }"###
                 );
             },

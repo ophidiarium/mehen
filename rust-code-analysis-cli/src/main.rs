@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 mod formats;
 
 use std::cmp::Ordering;

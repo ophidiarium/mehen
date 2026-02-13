@@ -126,6 +126,16 @@ mk_langs!(
         tree_sitter_preproc,
         [],
         []
+    ),
+    (
+        Go,
+        "The `Go` language",
+        "go",
+        GoCode,
+        GoParser,
+        tree_sitter_go,
+        [go],
+        ["go"]
     )
 );
 

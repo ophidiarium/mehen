@@ -86,6 +86,7 @@ impl Alterator for PythonCode {}
 
 impl Alterator for JavaCode {}
 impl Alterator for KotlinCode {}
+impl Alterator for GoCode {}
 
 impl Alterator for MozjsCode {
     fn alterate(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {

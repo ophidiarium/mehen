@@ -490,6 +490,47 @@ impl Cognitive for JavaCode {
     }
 }
 
+impl Cognitive for GoCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use crate::Go::*;
+
+        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        match node.kind_id().into() {
+            IfStatement => {
+                if !Self::is_else_if(node) {
+                    increase_nesting(stats, &mut nesting, depth, lambda);
+                }
+            }
+            ForStatement | ExpressionSwitchStatement | TypeSwitchStatement | SelectStatement => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            Else /* else-if also */ => {
+                increment_by_one(stats);
+            }
+            UnaryExpression => {
+                stats.boolean_seq.not_operator(node.kind_id());
+            }
+            BinaryExpression => {
+                compute_booleans::<language_go::Go>(node, stats, AMPAMP, PIPEPIPE);
+            }
+            FuncLiteral => {
+                lambda += 1;
+            }
+            FunctionDeclaration | MethodDeclaration => {
+                nesting = 0;
+                increment_function_depth::<language_go::Go>(&mut depth, node, FunctionDeclaration);
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 implement_metric_trait!(Cognitive, PreprocCode, CcommentCode, KotlinCode);
 
 #[cfg(test)]
@@ -1922,6 +1963,110 @@ mod tests {
                       "average": 3.0,
                       "min": 0.0,
                       "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_no_cognitive() {
+        check_metrics::<GoParser>(
+            "package main
+
+            var x = 42",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 0.0,
+                      "average": null,
+                      "min": 0.0,
+                      "max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_simple_function() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f() {
+                if true { // +1
+                    if false { // +2 (nesting = 1)
+                        println(\"test\")
+                    }
+                }
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_for_loop() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f() {
+                for i := 0; i < 10; i++ { // +1
+                    if i > 5 { // +2 (nesting = 1)
+                        println(i)
+                    }
+                }
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_logical_operators() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f(a, b, c bool) {
+                if a && b && c { // +1 (if) +1 (sequence of &&)
+                    println(\"all true\")
+                }
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
                     }"###
                 );
             },

@@ -221,6 +221,20 @@ impl Cyclomatic for JavaCode {
     }
 }
 
+impl Cyclomatic for GoCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use crate::Go::*;
+
+        match node.kind_id().into() {
+            If | For | ExpressionCase | DefaultCase | TypeCase | CommunicationCase
+            | AMPAMP | PIPEPIPE => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 implement_metric_trait!(Cyclomatic, KotlinCode, PreprocCode, CcommentCode);
 
 #[cfg(test)]
@@ -595,6 +609,96 @@ mod tests {
                       "average": 1.25,
                       "min": 1.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_simple_function() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func calculate(a, b int) int { // +2 (+1 unit space)
+                if a > b { // +1
+                    return a
+                }
+                return b
+            }",
+            "foo.go",
+            |metric| {
+                // nspace = 2 (func and unit)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 1.5,
+                      "min": 1.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_switch_statement() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func grade(score int) string { // +2 (+1 unit space)
+                switch { // switch itself doesn't add, cases do
+                case score >= 90: // +1
+                    return \"A\"
+                case score >= 80: // +1
+                    return \"B\"
+                case score >= 70: // +1
+                    return \"C\"
+                default: // +1
+                    return \"F\"
+                }
+            }",
+            "foo.go",
+            |metric| {
+                // nspace = 2 (func and unit)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 3.0,
+                      "min": 1.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_logical_operators() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func check(a, b, c bool) bool { // +2 (+1 unit space)
+                if a && b || c { // +3 (+1 if, +1 &&, +1 ||)
+                    return true
+                }
+                return false
+            }",
+            "foo.go",
+            |metric| {
+                // nspace = 2 (func and unit)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
                     }"###
                 );
             },
