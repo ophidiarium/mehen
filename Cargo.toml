@@ -1,15 +1,14 @@
 [package]
 name = "mehen"
-version = "0.0.1"
-authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
-edition = "2024"
-rust-version = "1.93.1"
-repository = "https://github.com/ophidiarium/mehen"
-documentation = "https://docs.rs/mehen/"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
 readme = "README.md"
 keywords = ["metrics"]
 description = "Tool to compute and export code metrics"
-license = "MPL-2.0"
+license.workspace = true
 
 [dependencies]
 aho-corasick = "^1.0"
@@ -44,6 +43,14 @@ opt-level = 3
 [workspace]
 members = ["mehen-cli"]
 exclude = ["enums"]
+
+[workspace.package]
+version = "0.0.1"
+authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
+edition = "2024"
+rust-version = "1.93.1"
+repository = "https://github.com/ophidiarium/mehen"
+license = "MPL-2.0"
 
 [profile.release]
 opt-level = 3

@@ -1,0 +1,822 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Version to release (e.g., 1.2.3, 1.2.3-beta.1).
+          Leave empty for auto-generated version.
+        required: false
+        type: string
+      release_type:
+        description: 'Type of release'
+        required: false
+        default: 'manual'
+        type: choice
+        options:
+          - manual
+          - test
+          - preview
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ${{ matrix.platform.os }}
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_NET_RETRY: 10
+      CARGO_TERM_COLOR: always
+      RUSTUP_MAX_RETRIES: 10
+
+    strategy:
+      matrix:
+        platform:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: 'x86_64-unknown-linux-gnu'
+            rust_target: 'x86_64-unknown-linux-gnu'
+          - os: ubuntu-latest
+            target: 'x86_64-unknown-linux-musl'
+            rust_target: 'x86_64-unknown-linux-musl'
+          # Linux aarch64 (native ARM64 runners)
+          - os: ubuntu-24.04-arm
+            target: 'aarch64-unknown-linux-gnu'
+            rust_target: 'aarch64-unknown-linux-gnu'
+          - os: ubuntu-24.04-arm
+            target: 'aarch64-unknown-linux-musl'
+            rust_target: 'aarch64-unknown-linux-musl'
+          # macOS Intel x86_64
+          - os: macos-15-intel
+            target: 'x86_64-apple-darwin'
+            rust_target: 'x86_64-apple-darwin'
+          # macOS Apple Silicon aarch64
+          - os: macos-latest
+            target: 'aarch64-apple-darwin'
+            rust_target: 'aarch64-apple-darwin'
+          # Windows x86_64
+          - os: windows-latest
+            target: 'x86_64-pc-windows-msvc'
+            rust_target: 'x86_64-pc-windows-msvc'
+          # Windows aarch64 (native ARM64 runner)
+          - os: windows-11-arm
+            target: 'aarch64-pc-windows-msvc'
+            rust_target: 'aarch64-pc-windows-msvc'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add ${{ matrix.platform.rust_target }} --toolchain stable
+          rustup show
+          echo "CARGO_BUILD_TARGET=${{ matrix.platform.rust_target }}" >> "$GITHUB_ENV"
+
+      - name: Install musl toolchain
+        if: startsWith(matrix.platform.os, 'ubuntu') && contains(matrix.platform.rust_target, 'musl')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cache-${{ hashFiles('**/Cargo.lock') }}"
+          cache-on-failure: true
+
+      - name: Install taplo
+        uses: taiki-e/install-action@v2
+        with:
+          tool: taplo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # maturin uses pip in some platforms
+      - run: pip install pip --upgrade
+
+      - name: Extract version from tag
+        id: get_version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          if ! [[ $TAG_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]; then
+            echo "::error::Invalid version format in tag: $TAG_VERSION."
+            echo "::error::Expected semver format like 1.2.3 or 1.2.3-beta.1"
+            exit 1
+          fi
+          echo "VERSION=${TAG_VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${TAG_VERSION}"
+
+      - name: Set version for manual runs
+        id: manual_version
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          RELEASE_TYPE="${{ github.event.inputs.release_type || 'manual' }}"
+
+          regex="^[0-9]+\.[0-9]+\.[0-9]+(\.(dev[0-9]+)|a[0-9]+|b[0-9]+|rc[0-9]+|[-][a-zA-Z0-9\.-]+)?$"
+          if [[ -n "$INPUT_VERSION" ]]; then
+            if ! [[ $INPUT_VERSION =~ $regex ]]; then
+              echo "::error::Invalid version format: $INPUT_VERSION."
+              exit 1
+            fi
+            MANUAL_VERSION="$INPUT_VERSION"
+            echo "Using provided version: ${MANUAL_VERSION}"
+          else
+            case "$RELEASE_TYPE" in
+              "test")
+                MANUAL_VERSION="0.0.0-dev${{ github.run_number }}"
+                ;;
+              "preview")
+                MANUAL_VERSION="0.0.0-alpha${{ github.run_number }}"
+                ;;
+              *)
+                if [[ -f version.txt ]]; then
+                  MANUAL_VERSION="$(tr -d '\r\n' < version.txt)"
+                  if [[ -z "$MANUAL_VERSION" ]]; then
+                    echo "::error::version.txt is empty; unable to infer manual release version."
+                    exit 1
+                  fi
+                  echo "Using version.txt for manual release: ${MANUAL_VERSION}"
+                else
+                  MANUAL_VERSION="0.0.0-dev${{ github.run_number }}"
+                  echo "version.txt not found; generated auto version: ${MANUAL_VERSION}"
+                fi
+                ;;
+            esac
+          fi
+
+          echo "VERSION=${MANUAL_VERSION}" >> $GITHUB_OUTPUT
+          echo "Final version for manual run: ${MANUAL_VERSION}"
+
+      - name: Update Cargo.toml with version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION="${{ steps.get_version.outputs.VERSION }}"
+          else
+            VERSION="${{ steps.manual_version.outputs.VERSION }}"
+          fi
+          export VERSION
+
+          CURRENT_VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+          echo "Current version in Cargo.toml: ${CURRENT_VERSION}"
+          echo "New version to set: ${VERSION}"
+
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          path = Path("Cargo.toml")
+          text = path.read_text()
+          lines = text.splitlines(keepends=True)
+          in_section = False
+          updated = False
+          for index, line in enumerate(lines):
+              stripped = line.strip()
+              if stripped == "[workspace.package]":
+                  in_section = True
+                  continue
+              if in_section and stripped.startswith("["):
+                  break
+              if in_section and re.match(r"^\s*version\s*=", line):
+                  lines[index] = re.sub(
+                      r'^(\s*version\s*=\s*")[^"]*(".*)$',
+                      rf'\g<1>{version}\g<2>',
+                      line,
+                  )
+                  updated = True
+                  break
+          if not updated:
+              raise SystemExit("::error::Failed to locate workspace.package.version in Cargo.toml")
+          path.write_text("".join(lines))
+          PY
+
+          if [[ "$(taplo get -f Cargo.toml 'workspace.package.version')" != "${VERSION}" ]]; then
+            echo "::error::Failed to verify version update in Cargo.toml"
+            exit 1
+          fi
+
+          echo "Updated Cargo.toml:"
+          taplo get -f Cargo.toml -o toml workspace.package
+
+      - name: Save version to file
+        if: matrix.platform.rust_target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          UPDATED_VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+          echo "${UPDATED_VERSION}" > version.txt
+          echo "Wrote version.txt from Cargo.toml: ${UPDATED_VERSION}"
+
+          cat > version-metadata.json << EOF
+          {
+            "version": "${UPDATED_VERSION}",
+            "git_tag": "${{ github.ref_name }}",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "triggered_by": "${{ github.event_name }}"
+          }
+          EOF
+
+      - name: Run tests
+        shell: bash
+        if: matrix.platform.os != 'windows-11-arm'
+        run: cargo test --all
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          manylinux: auto
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          target: ${{ matrix.platform.rust_target }}
+
+      - name: Build npm binary
+        shell: bash
+        env:
+          RUSTC_WRAPPER: ''
+          SCCACHE_CACHE_SIZE: ''
+        run: |
+          CURRENT_VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+          echo "Building npm binary for version: ${CURRENT_VERSION}"
+
+          RUST_TARGET="${{ matrix.platform.rust_target }}"
+          echo "Building for Rust target: ${RUST_TARGET}"
+
+          if [[ "$RUST_TARGET" == *"musl"* ]]; then
+            if ! command -v musl-gcc >/dev/null 2>&1; then
+              echo "::error::musl-gcc not found on runner"
+              exit 1
+            fi
+            target_underscore="${RUST_TARGET//-/_}"
+            target_upper="${target_underscore^^}"
+            export "CC_${target_underscore}=musl-gcc"
+            export "CARGO_TARGET_${target_upper}_LINKER=musl-gcc"
+          fi
+
+          BINARY_NAME="mehen"
+          if [[ "$RUST_TARGET" == *"windows"* ]]; then
+            BINARY_NAME="mehen.exe"
+          fi
+
+          cargo build --release --package mehen-cli --target "$RUST_TARGET"
+          BINARY_PATH="target/${RUST_TARGET}/release/${BINARY_NAME}"
+
+          mkdir -p "target/npm-binaries/${RUST_TARGET}"
+
+          if [[ -f "${BINARY_PATH}" ]]; then
+            cp "${BINARY_PATH}" "target/npm-binaries/${RUST_TARGET}/${BINARY_NAME}"
+            echo "Built binary: ${BINARY_PATH} -> target/npm-binaries/${RUST_TARGET}/${BINARY_NAME}"
+            ls -la "target/npm-binaries/${RUST_TARGET}/${BINARY_NAME}"
+          else
+            echo "Binary not found at: ${BINARY_PATH}"
+            find target -name "${BINARY_NAME}" -type f || echo "No binaries found"
+            exit 1
+          fi
+
+      - name: List built wheels
+        shell: bash
+        run: |
+          CURRENT_VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+          echo "Building version: ${CURRENT_VERSION}"
+
+          ls -la dist/
+          echo "=== Wheel details ==="
+          for wheel in dist/*.whl; do
+            if [ -f "$wheel" ]; then
+              echo "Wheel: $(basename "$wheel")"
+              echo "WHEEL metadata content:"
+              unzip -p "$wheel" "*.dist-info/WHEEL"
+              echo "---"
+            fi
+          done
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.target }}-${{ github.run_id }}
+          path: dist/
+          retention-days: 7
+
+      - name: Create CLI binary archive
+        shell: bash
+        run: |
+          RUST_TARGET="${{ matrix.platform.rust_target }}"
+          VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+          BINARY_NAME="mehen"
+
+          if [[ "$RUST_TARGET" == *"windows"* ]]; then
+            BINARY_NAME="mehen.exe"
+          fi
+
+          case "$RUST_TARGET" in
+            "x86_64-unknown-linux-gnu")
+              OS="linux"; ARCH="x86_64"; EXT="tar.gz"
+              ;;
+            "x86_64-unknown-linux-musl")
+              OS="linux"; ARCH="x86_64"; EXT="tar.gz"; SUFFIX="-musl"
+              ;;
+            "aarch64-unknown-linux-gnu")
+              OS="linux"; ARCH="arm64"; EXT="tar.gz"
+              ;;
+            "aarch64-unknown-linux-musl")
+              OS="linux"; ARCH="arm64"; EXT="tar.gz"; SUFFIX="-musl"
+              ;;
+            "x86_64-apple-darwin")
+              OS="darwin"; ARCH="x86_64"; EXT="tar.gz"
+              ;;
+            "aarch64-apple-darwin")
+              OS="darwin"; ARCH="arm64"; EXT="tar.gz"
+              ;;
+            "x86_64-pc-windows-msvc")
+              OS="windows"; ARCH="x86_64"; EXT="zip"
+              ;;
+            "aarch64-pc-windows-msvc")
+              OS="windows"; ARCH="arm64"; EXT="zip"
+              ;;
+            *)
+              echo "Unknown target: $RUST_TARGET"
+              exit 1
+              ;;
+          esac
+
+          ARCHIVE_NAME="mehen_${VERSION}_${OS}_${ARCH}${SUFFIX:-}.${EXT}"
+          echo "Creating archive: $ARCHIVE_NAME"
+
+          mkdir -p cli-archives
+
+          cd "target/npm-binaries/$RUST_TARGET"
+          if [[ "$EXT" == "zip" ]]; then
+            if command -v powershell &> /dev/null; then
+              powershell -Command "Compress-Archive -Path '$BINARY_NAME' -DestinationPath '../../../cli-archives/$ARCHIVE_NAME'"
+            else
+              zip "../../../cli-archives/$ARCHIVE_NAME" "$BINARY_NAME"
+            fi
+          else
+            tar -czf "../../../cli-archives/$ARCHIVE_NAME" "$BINARY_NAME"
+          fi
+
+          cd - > /dev/null
+          echo "Archive created: cli-archives/$ARCHIVE_NAME"
+          ls -la "cli-archives/$ARCHIVE_NAME"
+
+      - name: Generate SHA256 checksum
+        shell: bash
+        run: |
+          RUST_TARGET="${{ matrix.platform.rust_target }}"
+          VERSION=$(taplo get -f Cargo.toml 'workspace.package.version')
+
+          case "$RUST_TARGET" in
+            "x86_64-unknown-linux-gnu")
+              ARCHIVE_NAME="mehen_${VERSION}_linux_x86_64.tar.gz"
+              ;;
+            "x86_64-unknown-linux-musl")
+              ARCHIVE_NAME="mehen_${VERSION}_linux_x86_64-musl.tar.gz"
+              ;;
+            "aarch64-unknown-linux-gnu")
+              ARCHIVE_NAME="mehen_${VERSION}_linux_arm64.tar.gz"
+              ;;
+            "aarch64-unknown-linux-musl")
+              ARCHIVE_NAME="mehen_${VERSION}_linux_arm64-musl.tar.gz"
+              ;;
+            "x86_64-apple-darwin")
+              ARCHIVE_NAME="mehen_${VERSION}_darwin_x86_64.tar.gz"
+              ;;
+            "aarch64-apple-darwin")
+              ARCHIVE_NAME="mehen_${VERSION}_darwin_arm64.tar.gz"
+              ;;
+            "x86_64-pc-windows-msvc")
+              ARCHIVE_NAME="mehen_${VERSION}_windows_x86_64.zip"
+              ;;
+            "aarch64-pc-windows-msvc")
+              ARCHIVE_NAME="mehen_${VERSION}_windows_arm64.zip"
+              ;;
+          esac
+
+          cd cli-archives
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            certutil -hashfile "$ARCHIVE_NAME" SHA256 > checksum.txt
+            grep -v "hash\|CertUtil" checksum.txt | tr -d '\r\n ' > "${ARCHIVE_NAME}.sha256"
+            echo "  $ARCHIVE_NAME" >> "${ARCHIVE_NAME}.sha256"
+          else
+            if command -v sha256sum &> /dev/null; then
+              sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+            elif command -v shasum &> /dev/null; then
+              shasum -a 256 "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+            else
+              echo "No SHA256 utility found"
+              exit 1
+            fi
+          fi
+
+          cd - > /dev/null
+          echo "Checksum created for: $ARCHIVE_NAME"
+          cat "cli-archives/${ARCHIVE_NAME}.sha256"
+
+      - name: Store CLI archive and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-archive-${{ matrix.platform.target }}-${{ github.run_id }}
+          path: cli-archives/
+          retention-days: 7
+
+      - name: Store npm binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-binary-${{ matrix.platform.target }}-${{ github.run_id }}
+          path: target/npm-binaries/${{ matrix.platform.rust_target }}/
+          retention-days: 7
+
+      - name: Upload version info
+        if: matrix.platform.rust_target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-info-${{ github.run_id }}
+          path: |
+            version.txt
+            version-metadata.json
+          retention-days: 7
+
+      # Build source distribution (sdist) - only on one platform to avoid duplicates
+      - name: Build sdist
+        if: matrix.platform.rust_target == 'x86_64-unknown-linux-gnu'
+        uses: PyO3/maturin-action@v1
+        with:
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          command: sdist
+          args: --out dist
+
+      - name: Store source distribution
+        if: matrix.platform.rust_target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist-${{ github.run_id }}
+          path: dist/
+          retention-days: 7
+
+      # Generate SLSA Build Provenance
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            dist/*
+            target/npm-binaries/*/*
+
+  generate-npm-packages:
+    name: Generate npm packages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download version info
+        uses: actions/download-artifact@v5
+        with:
+          name: version-info-${{ github.run_id }}
+          path: ./
+
+      - name: Download all npm binaries
+        uses: actions/download-artifact@v5
+        with:
+          pattern: npm-binary-*-${{ github.run_id }}
+          path: npm-binaries-download/
+          merge-multiple: false
+
+      - name: Organize npm binaries
+        shell: bash
+        run: |
+          VERSION=$(cat version.txt)
+          echo "Organizing npm binaries for version: ${VERSION}"
+
+          mkdir -p target/npm-binaries
+
+          echo "Downloaded artifact structure:"
+          find npm-binaries-download -type f -name "mehen*" | head -20
+
+          for artifact_dir in npm-binaries-download/*/; do
+            if [[ -d "$artifact_dir" ]]; then
+              echo "Processing artifact directory: $artifact_dir"
+
+              artifact_name=$(basename "$artifact_dir")
+              if [[ "$artifact_name" =~ npm-binary-([^-]+.*)-[0-9]+ ]]; then
+                rust_target="${BASH_REMATCH[1]}"
+                echo "Detected Rust target: $rust_target"
+
+                mkdir -p "target/npm-binaries/$rust_target"
+                find "$artifact_dir" -name "mehen*" -type f -exec cp {} "target/npm-binaries/$rust_target/" \;
+              else
+                echo "Warning: Could not extract target from artifact name: $artifact_name"
+                find "$artifact_dir" -name "mehen*" -type f -exec cp {} target/npm-binaries/ \;
+              fi
+            fi
+          done
+
+          echo "Organized npm binaries by target:"
+          find target/npm-binaries -type f | sort
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Generate npm packages
+        run: |
+          VERSION=$(cat version.txt)
+          node scripts/generate-npm-packages.js "${VERSION}" ./npm-dist ./target/npm-binaries
+
+      - name: List generated packages
+        run: |
+          echo "Generated npm packages:"
+          ls -la npm-dist/
+          for pkg in npm-dist/*/; do
+            if [ -d "$pkg" ]; then
+              echo "Package: $(basename "$pkg")"
+              echo "  Contents:"
+              ls -la "$pkg"
+              if [ -f "$pkg/package.json" ]; then
+                echo "  package.json:"
+                cat "$pkg/package.json"
+              fi
+              echo "---"
+            fi
+          done
+
+      - name: Generate npm packages attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: npm-dist/**/*
+
+      - name: Store npm packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages-${{ github.run_id }}
+          path: npm-dist/
+          retention-days: 7
+
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mehen
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v5
+        with:
+          pattern: wheels-*-${{ github.run_id }}
+          path: dist/
+          merge-multiple: true
+
+      - name: Download version info
+        uses: actions/download-artifact@v5
+        with:
+          name: version-info-${{ github.run_id }}
+          path: ./
+
+      - name: Display publishing version
+        shell: bash
+        run: |
+          echo "=== TestPyPI Release Workflow Debug Info ==="
+          echo "Workflow run ID: ${{ github.run_id }}"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "=== Version Information ==="
+          VERSION=$(cat version.txt)
+          echo "Publishing version: ${VERSION}"
+
+          if [ -f "version-metadata.json" ]; then
+            echo "Version metadata:"
+            cat version-metadata.json
+          fi
+
+      - name: Inspect wheel platform tags
+        run: |
+          ls -la dist/
+          echo "=== Wheel platform tags ==="
+          for wheel in dist/*.whl; do
+            echo "Wheel: $(basename $wheel)"
+            echo "WHEEL metadata content:"
+            unzip -p "$wheel" "*.dist-info/WHEEL"
+            echo "---"
+          done
+
+      - name: Repack aarch64 manylinux wheel
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          import shutil
+
+          def delete_related(path: Path) -> None:
+            for suffix in ("", ".publish.attestation", ".attestation"):
+              candidate = Path(f"{path}{suffix}")
+              if candidate.exists():
+                candidate.unlink()
+
+          wheels = sorted(Path("dist").glob("*manylinux*aarch64*.whl"))
+          if not wheels:
+            print("No manylinux aarch64 wheel found to repack.")
+          for wheel in wheels:
+            tmp = wheel.with_suffix(wheel.suffix + ".tmp")
+            try:
+              with zipfile.ZipFile(wheel, "r") as src:
+                bad = src.testzip()
+                if bad:
+                  raise RuntimeError(f"corrupt member: {bad}")
+                with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+                  for info in src.infolist():
+                    data = src.read(info.filename)
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    dst.writestr(info, data)
+              shutil.move(tmp, wheel)
+              print(f"Repacked {wheel}")
+            except Exception as exc:
+              if tmp.exists():
+                tmp.unlink()
+              print(f"Skipping {wheel}: {exc}")
+              delete_related(wheel)
+          PY
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+          print-hash: true
+          skip-existing: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [publish-to-testpypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mehen
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v5
+        with:
+          pattern: wheels-*-${{ github.run_id }}
+          path: dist/
+          merge-multiple: true
+
+      - name: Download version info
+        uses: actions/download-artifact@v5
+        with:
+          name: version-info-${{ github.run_id }}
+          path: ./
+
+      - name: Display publishing version
+        shell: bash
+        run: |
+          echo "=== PyPI Release Workflow Debug Info ==="
+          echo "Workflow run ID: ${{ github.run_id }}"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "=== Version Information ==="
+          VERSION=$(cat version.txt)
+          echo "Publishing version: ${VERSION}"
+
+          if [ -f "version-metadata.json" ]; then
+            echo "Version metadata:"
+            cat version-metadata.json
+          fi
+
+      - name: Repack aarch64 manylinux wheel
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          import shutil
+
+          def delete_related(path: Path) -> None:
+            for suffix in ("", ".publish.attestation", ".attestation"):
+              candidate = Path(f"{path}{suffix}")
+              if candidate.exists():
+                candidate.unlink()
+
+          wheels = sorted(Path("dist").glob("*manylinux*aarch64*.whl"))
+          if not wheels:
+            print("No manylinux aarch64 wheel found to repack.")
+          for wheel in wheels:
+            tmp = wheel.with_suffix(wheel.suffix + ".tmp")
+            try:
+              with zipfile.ZipFile(wheel, "r") as src:
+                bad = src.testzip()
+                if bad:
+                  raise RuntimeError(f"corrupt member: {bad}")
+                with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+                  for info in src.infolist():
+                    data = src.read(info.filename)
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    dst.writestr(info, data)
+              shutil.move(tmp, wheel)
+              print(f"Repacked {wheel}")
+            except Exception as exc:
+              if tmp.exists():
+                tmp.unlink()
+              print(f"Skipping {wheel}: {exc}")
+              delete_related(wheel)
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          print-hash: true
+          skip-existing: true
+
+  publish-to-npm:
+    name: Publish to npm
+    needs: [generate-npm-packages]
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/mehen
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Download npm packages
+        uses: actions/download-artifact@v5
+        with:
+          name: npm-packages-${{ github.run_id }}
+          path: npm-dist/
+
+      - name: Download version info
+        uses: actions/download-artifact@v5
+        with:
+          name: version-info-${{ github.run_id }}
+          path: ./
+
+      - name: Display publishing info
+        shell: bash
+        run: |
+          echo "=== npm Publishing Info ==="
+          echo "Workflow run ID: ${{ github.run_id }}"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "Event name: ${{ github.event_name }}"
+          VERSION=$(cat version.txt)
+          echo "Publishing version: ${VERSION}"
+          echo ""
+          echo "=== Available packages ==="
+          ls -la npm-dist/
+          echo ""
+
+      - name: Publish to npm
+        run: |
+          VERSION=$(cat version.txt)
+          node scripts/publish-npm.js "${VERSION}" ./npm-dist

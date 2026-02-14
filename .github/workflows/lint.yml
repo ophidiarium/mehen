@@ -1,0 +1,200 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.rs'
+
+permissions:
+  pull-requests: write
+  issues: write
+
+name: Code Quality Checks
+
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: '-Dwarnings'
+  CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up Rust toolchain
+        run: rustup show
+
+      - run: cargo clippy --workspace --all-targets --all-features --locked
+
+      - run: cargo fmt --all --check
+
+      - name: Spell Check Repo
+        uses: crate-ci/typos@v1
+
+      # Install rust-code-analysis
+      - name: Install rust-code-analysis
+        env:
+          RCA_LINK: https://github.com/mozilla/rust-code-analysis/releases/download
+          RCA_VERSION: v0.0.25
+        run: |
+          mkdir -p $HOME/.local/bin
+          curl -L "$RCA_LINK/$RCA_VERSION/rust-code-analysis-linux-cli-x86_64.tar.gz" |
+          tar xz -C $HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # Prepare output directory for rust-code-analysis
+      - name: Prepare rust-code-analysis output dir
+        run: mkdir -p $HOME/rca-json
+
+      # Run rust-code-analysis on PR-diff files
+      - name: Run rust-code-analysis on PR-diff
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          rust-code-analysis-cli --metrics -O json --pr -o "$HOME/rca-json" -p src
+
+      # Run rust-code-analysis on all files (push to main)
+      - name: Run rust-code-analysis on all files
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          rust-code-analysis-cli --metrics -O json -o "$HOME/rca-json" -p src
+
+      - name: Upload rust-code-analysis json
+        uses: actions/upload-artifact@v4
+        with:
+          name: rca-json-ubuntu
+          path: ~/rca-json
+
+      # Generate baseline rust-code-analysis metrics from main branch
+      - name: Prepare baseline rust-code-analysis output dir
+        if: ${{ github.event_name == 'pull_request' }}
+        run: mkdir -p $HOME/rca-json-base
+      - name: Checkout main branch for baseline
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: main
+      - name: Run rust-code-analysis on main branch
+        if: ${{ github.event_name == 'pull_request' }}
+        working-directory: main
+        run: |
+          rust-code-analysis-cli --metrics -O json -o "$HOME/rca-json-base" -p src
+
+      # Comment rust-code-analysis metrics on pull requests with comparison
+      - name: Comment rust-code-analysis metrics on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const prDir = `${process.env.HOME}/rca-json`;
+            const baseDir = `${process.env.HOME}/rca-json-base`;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = context.payload.pull_request.head.sha;
+            const changedFilesList = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: context.issue.number }
+            );
+            const changedFiles = new Set(changedFilesList.map(f => f.filename));
+            let rows = [];
+            const collectFiles = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(dirent => {
+              const full = `${d}/${dirent.name}`;
+              return dirent.isDirectory() ? collectFiles(full) : [full];
+            });
+            let prFiles = collectFiles(prDir).filter(f => f.endsWith('.json'));
+            prFiles = prFiles.filter(fullPath => {
+              const rel = fullPath.slice(prDir.length + 1).replace(/\.json$/, '');
+              return changedFiles.has(rel);
+            });
+            prFiles.forEach(fullPath => {
+              const rel = fullPath.slice(prDir.length + 1).replace(/\.json$/, '');
+              const fileLink = `[${rel}](https://github.com/${owner}/${repo}/blob/${ref}/${rel})`;
+              const prRaw = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+              const prItems = Array.isArray(prRaw) ? prRaw : [prRaw];
+              const prCount = prItems.length || 1;
+              const prCyclo = prItems.reduce((s,o)=>s+o.metrics.cyclomatic.sum,0)/prCount;
+              const prCog   = prItems.reduce((s,o)=>s+o.metrics.cognitive.sum,0)/prCount;
+              const prFunc  = prItems.reduce((s,o)=>s+o.metrics.nom.functions,0);
+              const prLloc  = prItems.reduce((s,o)=>s+o.metrics.loc.lloc,0);
+              let baseCyclo = prCyclo, baseCog = prCog, baseFunc = prFunc, baseLloc = prLloc;
+              const basePath = `${baseDir}/${rel}.json`;
+              if (fs.existsSync(basePath)) {
+                const baseRaw = JSON.parse(fs.readFileSync(basePath,'utf8'));
+                const baseItems = Array.isArray(baseRaw)?baseRaw:[baseRaw];
+                const baseCount = baseItems.length||1;
+                baseCyclo = baseItems.reduce((s,o)=>s+o.metrics.cyclomatic.sum,0)/baseCount;
+                baseCog   = baseItems.reduce((s,o)=>s+o.metrics.cognitive.sum,0)/baseCount;
+                baseFunc  = baseItems.reduce((s,o)=>s+o.metrics.nom.functions,0);
+                baseLloc  = baseItems.reduce((s,o)=>s+o.metrics.loc.lloc,0);
+              }
+              const diffFunc = prFunc - baseFunc;
+              const diffCyclo = (prCyclo - baseCyclo).toFixed(1);
+              const diffCog = (prCog - baseCog).toFixed(1);
+              const diffLloc = prLloc - baseLloc;
+              const emoji = d => d>0? '🔴': d<0? '🟢':'⚪';
+              const funcsCell = prFunc === baseFunc
+                ? `${prFunc.toFixed(0)} ${emoji(0)}`
+                : `${prFunc} (main: ${baseFunc}) ${emoji(diffFunc)}`;
+              const cycloCell = prCyclo === baseCyclo
+                ? `${prCyclo.toFixed(0)} ${emoji(0)}`
+                : `${prCyclo.toFixed(0)} (main: ${baseCyclo.toFixed(0)}) ${emoji(diffCyclo)}`;
+              const cogCell = prCog === baseCog
+                ? `${prCog.toFixed(0)} ${emoji(0)}`
+                : `${prCog.toFixed(0)} (main: ${baseCog.toFixed(0)}) ${emoji(diffCog)}`;
+              const llocCell = prLloc === baseLloc
+                ? `${prLloc} ${emoji(0)}`
+                : `${prLloc} (main: ${baseLloc}) ${emoji(diffLloc)}`;
+              rows.push({ file: fileLink, funcsVal: prFunc, funcs: funcsCell, cyclo: cycloCell, cog: cogCell, lloc: llocCell });
+            });
+            rows.sort((a, b) => {
+              const diff = b.funcsVal - a.funcsVal;
+              return diff !== 0 ? diff : a.file.localeCompare(b.file);
+            });
+            const commentTitle = '## [Rust-Code-Analysis](https://mozilla.github.io/rust-code-analysis/) Summary';
+            let body = commentTitle + ' (this PR vs `main`)\n\n';
+            body += '| File | Functions | [Cyclomatic](https://en.wikipedia.org/wiki/Cyclomatic_complexity) | [Cognitive](https://www.sonarsource.com/blog/cognitive-complexity-because-testability-understandability/) | LLOC |\n';
+            body += '|---|---:|---:|---:|---:|\n';
+            rows.forEach(r => body += `| ${r.file} | ${r.funcs} | ${r.cyclo} | ${r.cog} | ${r.lloc} |\n`);
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const prev = comments.find(c => c.body.startsWith(commentTitle));
+            if (prev) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prev.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Cargo Machete
+        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1

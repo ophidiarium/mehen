@@ -1,13 +1,13 @@
 [package]
 name = "mehen-cli"
-version = "0.0.1"
-authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
-repository = "https://github.com/ophidiarium/mehen/blob/master/mehen-cli/"
-edition = "2024"
-rust-version = "1.93.1"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 keywords = ["metrics"]
 description = "Tool to compute and export code metrics"
-license = "MPL-2.0"
 
 [[bin]]
 name = "mehen"
@@ -17,7 +17,7 @@ path = "src/main.rs"
 clap = { version = "^4.0", features = ["derive"] }
 globset = "^0.4"
 regex = "^1.7"
-mehen = { path = "..", version = "=0.0.1" }
+mehen = { path = ".." }
 serde = "^1.0"
 serde_cbor = "^0.11"
 serde_json = "^1.0"

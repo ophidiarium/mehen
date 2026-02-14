@@ -79,7 +79,7 @@ macro_rules! mk_lang {
             /// # Examples
             ///
             /// ```
-            /// use rust_code_analysis::LANG;
+            /// use mehen::LANG;
             ///
             /// for lang in LANG::into_enum_iter() {
             ///     println!("{:?}", lang);
@@ -95,7 +95,7 @@ macro_rules! mk_lang {
             /// # Examples
             ///
             /// ```
-            /// use rust_code_analysis::LANG;
+            /// use mehen::LANG;
             ///
             /// println!("{}", LANG::Rust.get_name());
             /// ```
@@ -133,16 +133,14 @@ macro_rules! mk_action {
         /// ```
         /// use std::path::PathBuf;
         ///
-        /// use rust_code_analysis::{action, Callback, LANG, Metrics, MetricsCfg};
+        /// use mehen::{action, Callback, LANG, Metrics, MetricsCfg};
         ///
-        /// let source_code = "int a = 42;";
-        /// let language = LANG::Cpp;
+        /// let source_code = "fn main() { let a = 42; }";
+        /// let language = LANG::Rust;
         ///
-        /// // The path to a dummy file used to contain the source code
-        /// let path = PathBuf::from("foo.c");
+        /// let path = PathBuf::from("foo.rs");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
-        /// // Configuration options used by the function which computes the metrics
         /// let cfg = MetricsCfg {
         ///     path,
         /// };
@@ -170,13 +168,12 @@ macro_rules! mk_action {
         /// ```
         /// use std::path::PathBuf;
         ///
-        /// use rust_code_analysis::{get_function_spaces, LANG};
+        /// use mehen::{get_function_spaces, LANG};
         ///
-        /// let source_code = "int a = 42;";
-        /// let language = LANG::Cpp;
+        /// let source_code = "fn main() { let a = 42; }";
+        /// let language = LANG::Rust;
         ///
-        /// // The path to a dummy file used to contain the source code
-        /// let path = PathBuf::from("foo.c");
+        /// let path = PathBuf::from("foo.rs");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// get_function_spaces(&language, source_as_vec, &path, None).unwrap();
@@ -200,14 +197,13 @@ macro_rules! mk_action {
         /// ```
         /// use std::path::PathBuf;
         ///
-        /// use rust_code_analysis::{get_ops, LANG};
+        /// use mehen::{get_ops, LANG};
         ///
         /// # fn main() {
-        /// let source_code = "int a = 42;";
-        /// let language = LANG::Cpp;
+        /// let source_code = "fn main() { let a = 42; }";
+        /// let language = LANG::Rust;
         ///
-        /// // The path to a dummy file used to contain the source code
-        /// let path = PathBuf::from("foo.c");
+        /// let path = PathBuf::from("foo.rs");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// get_ops(&language, source_as_vec, &path, None).unwrap();
@@ -234,7 +230,7 @@ macro_rules! mk_extensions {
         /// # Examples
         ///
         /// ```
-        /// use rust_code_analysis::get_from_ext;
+        /// use mehen::get_from_ext;
         ///
         /// let ext = "rs";
         ///
@@ -263,7 +259,7 @@ macro_rules! mk_emacs_mode {
         /// # Examples
         ///
         /// ```
-        /// use rust_code_analysis::get_from_emacs_mode;
+        /// use mehen::get_from_emacs_mode;
         ///
         /// let emacs_mode = "rust";
         ///

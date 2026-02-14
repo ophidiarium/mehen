@@ -1,0 +1,57 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Rust toolchain
+        run: rustup show
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cache-${{ hashFiles('**/Cargo.lock') }}"
+          cache-on-failure: true
+
+      - name: Install cargo-insta
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-insta
+
+      - name: Run tests
+        shell: bash
+        run: cargo insta test --all-features --check --unreferenced reject
+
+      - name: Smoke test CLI
+        shell: bash
+        run: |
+          cargo build --release -p mehen-cli
+          ./target/release/mehen --help

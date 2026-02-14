@@ -139,17 +139,15 @@ fn finalize<T: ParserTrait>(state_stack: &mut Vec<State>, diff_level: usize) {
 /// ```
 /// use std::path::PathBuf;
 ///
-/// use rust_code_analysis::{operands_and_operators, CppParser, ParserTrait};
+/// use mehen::{operands_and_operators, RustParser, ParserTrait};
 ///
 /// # fn main() {
-/// let source_code = "int a = 42;";
+/// let source_code = "fn main() { let a = 42; }";
 ///
-/// // The path to a dummy file used to contain the source code
-/// let path = PathBuf::from("foo.c");
+/// let path = PathBuf::from("foo.rs");
 /// let source_as_vec = source_code.as_bytes().to_vec();
 ///
-/// // The parser of the code, in this case a CPP parser
-/// let parser = CppParser::new(source_as_vec, &path, None);
+/// let parser = RustParser::new(source_as_vec, &path, None);
 ///
 /// // Returns the operands and operators of each space in a code.
 /// operands_and_operators(&parser, &path).unwrap();
