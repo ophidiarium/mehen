@@ -47,6 +47,9 @@ jobs:
       - name: Spell Check Repo
         uses: crate-ci/typos@v1
 
+      - name: Cargo Machete
+        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
+
       # Install rust-code-analysis
       - name: Install rust-code-analysis
         env:
@@ -194,6 +197,3 @@ jobs:
                 body,
               });
             }
-
-      - name: Cargo Machete
-        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
