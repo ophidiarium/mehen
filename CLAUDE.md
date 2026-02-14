@@ -31,15 +31,26 @@ The following were intentionally removed:
 
 ## Build Requirements
 
-**Critical**: This project requires **nightly Rust** due to the `#![feature(let_chains)]` feature.
+### Rust Version Requirements
+
+**Minimum**: Rust **1.88.0** with edition 2024
+
+The codebase uses **let chains** syntax:
+
+```rust
+if let Some(label_child) = node.child(1)
+    && let Label = label_child.kind_id().into()
+{
+    // ...
+}
+```
+
+This feature was stabilized in Rust 1.88.0 for edition 2024.
 
 ```bash
-# Building
-cargo +nightly build
-cargo +nightly check
-cargo +nightly test
-
-# Must use nightly, stable will fail
+cargo build
+cargo test
+cargo check
 ```
 
 ## Project Structure
@@ -172,9 +183,9 @@ All C/C++ preprocessing infrastructure has been removed:
 ### Running Tests
 
 ```bash
-cargo +nightly test --lib          # Library tests only
-cargo +nightly test                # All tests
-cargo +nightly test -- --nocapture # With output
+cargo test --lib          # Library tests only
+cargo test                # All tests
+cargo test -- --nocapture # With output
 ```
 
 ### Test Pattern
@@ -277,9 +288,9 @@ If you see references to these in git history, ignore them:
 - ❌ Mozilla JavaScript (Mozjs) variants
 - ❌ Ccomment/Preproc parsers
 
-### Don't Use Stable Rust
+### Rust Version Matters
 
-The project requires `#![feature(let_chains)]` which is only available in nightly.
+The project requires Rust 1.88.0+ (or nightly for older versions) due to `let_chains` feature usage.
 
 ### Don't Break the Macro System
 
@@ -301,14 +312,13 @@ The `enums` crate is excluded from the workspace (it's a build-time code generat
 
 ## Git Conventions
 
-- Use nightly Rust: `cargo +nightly ...`
 - Run tests before committing
 - This project inherited history from mozilla/rust-code-analysis
 - The fork point is commit `4ed54eb` (feat: Add Go language support)
 
 ## Documentation
 
-- Code documentation: `cargo +nightly doc --open`
+- Code documentation: `cargo doc --open`
 - Book: `mehen-book/` (mdBook format)
 - API docs are published at https://docs.rs/mehen/
 
@@ -323,22 +333,22 @@ Do NOT change these legitimate external references:
 
 ```bash
 # Build everything
-cargo +nightly build --workspace
+cargo build --workspace
 
 # Run all tests
-cargo +nightly test --lib
+cargo test --lib
 
 # Check compilation
-cargo +nightly check --workspace
+cargo check --workspace
 
 # Format code
-cargo +nightly fmt --all
+cargo fmt --all
 
 # Run CLI
-cargo +nightly run -p mehen-cli -- -m -p test.go
+cargo run -p mehen-cli -- -m -p test.go
 
 # Run web server
-cargo +nightly run -p mehen-web
+cargo run -p mehen-web
 ```
 
 ## Key Insights from the Cleanup
@@ -360,7 +370,6 @@ cargo +nightly run -p mehen-web
 
 ❌ **Don't**:
 - Add back removed languages without discussion
-- Use stable Rust (will fail to compile)
 - Break the macro-generated code
 - Add preprocessing or C/C++ specific features
 - Reference removed parser types in code

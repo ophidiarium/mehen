@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 mod formats;
 
 use std::path::PathBuf;

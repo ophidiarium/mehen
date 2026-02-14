@@ -45,7 +45,6 @@
 //! - NARGS: it counts the number of arguments of a function/method.
 
 #![allow(clippy::upper_case_acronyms)]
-#![feature(let_chains)]
 
 mod getter;
 mod macros;
