@@ -16,7 +16,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "^4.0", features = ["derive"] }
 globset = "^0.4"
-regex = "^1.7"
 mehen = { path = ".." }
 serde = "^1.0"
 serde_cbor = "^0.11"

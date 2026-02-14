@@ -11,7 +11,6 @@ description = "Tool to compute and export code metrics"
 license.workspace = true
 
 [dependencies]
-aho-corasick = "^1.0"
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset = "^0.4"
 num = "^0.4"
@@ -29,6 +28,9 @@ tree-sitter-typescript = "=0.23.2"
 tree-sitter-python = "=0.23.6"
 tree-sitter-rust = "=0.23.2"
 tree-sitter-go = "=0.23.4"
+
+[package.metadata.cargo-machete]
+ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust"]
 
 [dev-dependencies]
 insta = { version = "1.29.0", features = ["yaml", "json", "redactions"] }
