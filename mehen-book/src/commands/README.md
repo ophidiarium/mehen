@@ -1,6 +1,6 @@
 # Commands
 
-**mehen-cli** offers a range of **commands** to analyze and extract information from source code. Each command **may** include parameters specific to the task it performs. Below, we describe the core types of commands available in **mehen-cli**.
+**mehen** offers a range of **commands** to analyze and extract information from source code. Each command **may** include parameters specific to the task it performs. Below, we describe the core types of commands available in **mehen**.
 
 ## Metrics
 
@@ -16,7 +16,7 @@ source code of a program. These kind of metrics are called *static metrics*.
 
 ## Nodes
 
-To represent the structure of program code, **mehen-cli** builds
+To represent the structure of program code, **mehen** builds
 an
 <a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree" target="_blank">Abstract Syntax Tree (AST)</a>.
 A **node** is an element of this tree and denotes any syntactic construct

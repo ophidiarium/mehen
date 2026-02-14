@@ -306,7 +306,7 @@ The `mk_langs!` macro generates lots of boilerplate. Changes to language registr
 The workspace has 3 packages:
 
 1. **mehen** (root) - Core library
-2. **mehen-cli** - Command-line tool
+2. **mehen-cli** - Command-line tool (binary name: `mehen`)
 3. **mehen-web** - REST API server
 
 The `enums` crate is excluded from the workspace (it's a build-time code generator).

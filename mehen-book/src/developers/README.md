@@ -115,16 +115,16 @@ each dependency used by **mehen**.
 
 ## Run your code
 
-You can run **mehen-cli** using:
+You can run **mehen** using:
 
 ```console
-cargo run -p mehen-cli -- [mehen-cli-parameters]
+cargo run -p mehen -- [mehen-cli-parameters]
 ```
 
-To know the list of **mehen-cli** parameters, run:
+To know the list of **mehen** parameters, run:
 
 ```console
-cargo run -p mehen-cli -- --help
+cargo run -p mehen -- --help
 ```
 
 You can run **mehen-web** using:

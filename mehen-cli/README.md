@@ -1,6 +1,6 @@
 # mehen-cli
 
-`mehen-cli` is a tool designed to compute and export code metrics, analyze source code, and perform various operations such as removing comments, counting nodes, retrieving functions, and computing code metrics in different formats.
+`mehen` is a tool designed to compute and export code metrics, analyze source code, and perform various operations such as removing comments, counting nodes, retrieving functions, and computing code metrics in different formats.
 
 ## Features
 
@@ -22,7 +22,7 @@ cargo build
 Run the tool by specifying the input file and the desired operation:
 
 ```sh
-mehen-cli [OPTIONS]
+mehen [OPTIONS]
 ```
 
 ## Available Options
@@ -55,5 +55,5 @@ mehen-cli [OPTIONS]
 To analyze the code in a file and export the metrics in JSON format:
 
 ```sh
-mehen-cli --metrics --output-format json --output . --paths path/to/file.rs
+mehen --metrics --output-format json --output . --paths path/to/file.rs
 ```

@@ -51,6 +51,6 @@ If you prefer to use **mehen** as a crate, you can find the
 
 - Konstantin Vyatkin-defined grammars are released under the MIT license.
 
-- **mehen**, **mehen-cli** and **mehen-web**
+- **mehen**, **mehen** and **mehen-web**
 are released under the
 <a href="https://www.mozilla.org/MPL/2.0/" target="_blank">Konstantin Vyatkin Public License v2.0</a>.

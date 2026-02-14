@@ -134,7 +134,7 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
 
 #[derive(Parser, Debug)]
 #[clap(
-    name = "mehen-cli",
+    name = "mehen",
     version,
     author,
     about = "Analyze source code."

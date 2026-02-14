@@ -1,20 +1,20 @@
 # Metrics
 
-Metrics can be displayed or exported in various formats using **mehen-cli**.
+Metrics can be displayed or exported in various formats using **mehen**.
 
 ## Display Metrics
 
 To compute and display metrics for a given file or directory, run:
 
 ```bash
-mehen-cli -m -p /path/to/your/file/or/directory
+mehen -m -p /path/to/your/file/or/directory
 ```
 
 - `-p`: Path to the file or directory to analyze. If a directory is provided, metrics will be computed for all supported files it contains.
 
 ## Exporting Metrics
 
-**mehen-cli** supports multiple output formats for exporting metrics, including:
+**mehen** supports multiple output formats for exporting metrics, including:
 
 - CBOR
 - JSON
@@ -28,7 +28,7 @@ Both `JSON` and `TOML` can be exported as pretty-printed.
 To export metrics as a JSON file:
 
 ```bash
-mehen-cli -m -p /path/to/your/file/or/directory -O json -o /path/to/output/directory
+mehen -m -p /path/to/your/file/or/directory -O json -o /path/to/output/directory
 ```
 
 - `-O`: Specifies the output format (e.g., json, toml, yaml, cbor).
@@ -39,7 +39,7 @@ mehen-cli -m -p /path/to/your/file/or/directory -O json -o /path/to/output/direc
 To output pretty-printed JSON metrics:
 
 ```bash
-mehen-cli -m -p /path/to/your/file/or/directory --pr -O json
+mehen -m -p /path/to/your/file/or/directory --pr -O json
 ```
 
 This command prints the formatted metrics to the console or the specified output path.
