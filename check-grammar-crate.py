@@ -43,25 +43,9 @@ NEW_SUFFIX = "-new"
 EXTENSIONS = {
     "tree-sitter-tsx": ["*.tsx"],
     "tree-sitter-typescript": ["*.ts", "*.jsw", "*.jsmw"],
-    "tree-sitter-java": ["*.java"],
-    "tree-sitter-kotlin": ["*.kt", "*.kts"],
+    "tree-sitter-go": ["*.go"],
     "tree-sitter-rust": ["*.rs"],
     "tree-sitter-python": ["*.py"],
-    "tree-sitter-mozjs": ["*.js", "*.js2", "*.jsm", "*.mjs", "*.jsx"],
-    "tree-sitter-mozcpp": [
-        "*.cpp",
-        "*.cx",
-        "*.cxx",
-        "*.cc",
-        "*.hxx",
-        "*.hpp",
-        "*.c",
-        "*.h",
-        "*.hh",
-        "*.inc",
-        "*.mm",
-        "*.m",
-    ],
 }
 
 # Run a subprocess.
@@ -105,12 +89,8 @@ def compute_ci_metrics(args: argparse.Namespace) -> None:
         print(args.grammar, "is not a valid tree-sitter grammar")
         sys.exit(1)
 
-    # Use C/C++ files to test if there are any changes in metrics when
-    # the tree-sitter crate is updated
-    if args.grammar == "tree-sitter":
-        grammar = "tree-sitter-mozcpp"
-    else:
-        grammar = args.grammar
+    # Use the specified grammar
+    grammar = args.grammar
 
     # Repository passed as input
     repo_dir = pathlib.Path(args.path)
@@ -127,14 +107,14 @@ def compute_ci_metrics(args: argparse.Namespace) -> None:
     old_dir.mkdir(parents=True, exist_ok=True)
     new_dir.mkdir(parents=True, exist_ok=True)
 
-    # Git clone mehen master branch repository
-    print(f"Cloning mehen master branch into /tmp")
+    # Git clone mehen main branch repository
+    print(f"Cloning mehen main branch into /tmp")
     run_subprocess(
         "git",
         "clone",
         "--depth=1",
         "-j8",
-        "https://github.com/mozilla/mehen",
+        "https://github.com/ophidiarium/mehen",
         rca_path,
     )
 
@@ -209,7 +189,7 @@ def main() -> None:
         description="This tool computes the metrics of a chosen repository "
         "before and after a tree-sitter grammar update.",
         epilog="The source code of this program can be found on "
-        "GitHub at https://github.com/mozilla/mehen",
+        "GitHub at https://github.com/ophidiarium/mehen",
     )
 
     # Subcommands parsers
