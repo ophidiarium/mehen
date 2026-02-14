@@ -60,7 +60,7 @@ impl Stats {
     }
 
     /// Returns the `Mi` metric calculated using the derivative formula
-    /// employed by the Software Engineering Insitute (SEI).
+    /// employed by the Software Engineering Institute (SEI).
     ///
     /// Its value can be negative.
     #[inline(always)]
