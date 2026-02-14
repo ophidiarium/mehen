@@ -67,7 +67,7 @@ jobs:
 
             if [ -n "$WORKFLOW_ID" ]; then
               COMPLETED_RUNS=$(gh api "repos/${{ github.repository }}/actions/workflows/$WORKFLOW_ID/runs" \
-                --jq "[.workflow_runs[] | select(.head_sha == \"$(git rev-parse $TAG_NAME)\") | select(.status == \"completed\")] | length")
+                --jq "[.workflow_runs[] | select(.head_sha == \"$(git rev-parse $TAG_NAME)\") | select(.status == \"completed\") | select(.conclusion == \"success\")] | length")
 
               if [ "$COMPLETED_RUNS" -gt 0 ]; then
                 echo "Release workflow completed!"
@@ -94,7 +94,7 @@ jobs:
 
           WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/workflows --jq '.workflows[] | select(.name == "Release") | .id')
           RUN_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/$WORKFLOW_ID/runs" \
-            --jq ".workflow_runs[] | select(.head_sha == \"$(git rev-parse $TAG_NAME)\") | select(.status == \"completed\") | .id" | head -1)
+            --jq ".workflow_runs[] | select(.head_sha == \"$(git rev-parse $TAG_NAME)\") | select(.status == \"completed\") | select(.conclusion == \"success\") | .id" | head -1)
 
           echo "Found release workflow run ID: $RUN_ID"
 
