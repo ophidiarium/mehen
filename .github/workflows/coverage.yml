@@ -38,6 +38,7 @@ jobs:
       - name: Generate coverage report
         shell: bash
         env:
+          NEXTEST_PROFILE: 'ci'
           RUSTFLAGS: '-C instrument-coverage'
         run: |
           mkdir -p target/llvm-cov
