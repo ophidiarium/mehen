@@ -34,19 +34,13 @@ command:
 cargo build
 ```
 
-If you want to build the `cli`:
+If you want to build the CLI:
 
 ```console
 cargo build -p mehen-cli
 ```
 
-If you want to build the `web` server:
-
-```console
-cargo build -p mehen-web
-```
-
-If you want to build everything in one fell swoop:
+To build everything:
 
 ```console
 cargo build --workspace
@@ -125,18 +119,6 @@ To know the list of **mehen** CLI parameters, run:
 
 ```console
 cargo run -p mehen-cli -- --help
-```
-
-You can run **mehen-web** using:
-
-```console
-cargo run -p mehen-web -- [mehen-web-parameters]
-```
-
-To know the list of **mehen-web** parameters, run:
-
-```console
-cargo run -p mehen-web -- --help
 ```
 
 ## Practical advice
