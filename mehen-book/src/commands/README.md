@@ -28,8 +28,4 @@ Nodes can be used to:
 - Discover if a construct of a language is present in the analyzed
   code
 - Count the number of constructs of a certain kind
-- Detect errors i the source code
-
-## REST API
-
-**mehen-web** runs a server offering a REST API. This allows users to send source code via HTTP and receive corresponding metrics in `JSON` format.
+- Detect errors in the source code

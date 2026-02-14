@@ -32,5 +32,5 @@ If you prefer to use **mehen** as a crate, you can find the
 
 ## License
 
-**mehen**, **mehen-cli** (binary: `mehen`) and **mehen-web** are released under the
+**mehen** and **mehen-cli** (binary: `mehen`) are released under the
 <a href="https://www.mozilla.org/MPL/2.0/" target="_blank">Mozilla Public License v2.0</a>.

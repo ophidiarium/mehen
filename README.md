@@ -7,15 +7,13 @@ called
 <a href="https://tree-sitter.github.io/tree-sitter/" target="_blank">Tree Sitter</a>.
 
 
-A command line tool called **mehen** is provided to interact with the API of the library in an easy way.
+A command line tool called **mehen** is provided to interact with the API of the library.
 
 This tool can be used to:
 
-- Call **mehen** API
 - Print nodes and metrics information
 - Export metrics in different formats
-
-In addition, we provide a **mehen-web** tool to use the library through a REST API.
+- Analyze code complexity and maintainability
 
 
 # Usage
@@ -39,13 +37,7 @@ If you want to build the `cli`:
 cargo build -p mehen-cli
 ```
 
-If you want to build the `web` server:
-
-```console
-cargo build -p mehen-web
-```
-
-If you want to build everything in one fell swoop:
+To build everything:
 
 ```console
 cargo build --workspace
@@ -80,7 +72,7 @@ If you want to contribute to the development of this software, please open an is
 
 # License
 
-**mehen**, **mehen-cli** (binary: `mehen`), and **mehen-web** are released under the
+**mehen** and **mehen-cli** (binary: `mehen`) are released under the
 <a href="https://www.mozilla.org/MPL/2.0/" target="_blank">Mozilla Public License v2.0</a>.
 
 # Credits

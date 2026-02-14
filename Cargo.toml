@@ -42,7 +42,7 @@ opt-level = 3
 opt-level = 3
 
 [workspace]
-members = ["mehen-cli", "mehen-web"]
+members = ["mehen-cli"]
 exclude = ["enums"]
 
 [profile.release]

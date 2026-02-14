@@ -85,7 +85,6 @@ mehen/
 │   ├── parser.rs           # Parser wrapper
 │   └── lib.rs              # Library entry point
 ├── mehen-cli/              # Command-line interface
-├── mehen-web/              # REST API server
 ├── mehen-book/             # Documentation (mdBook)
 └── enums/                  # Code generator for language enums
 
@@ -303,11 +302,10 @@ The `mk_langs!` macro generates lots of boilerplate. Changes to language registr
 
 ## Workspace Members
 
-The workspace has 3 packages:
+The workspace has 2 packages:
 
 1. **mehen** (root) - Core library
 2. **mehen-cli** - Command-line tool (binary name: `mehen`)
-3. **mehen-web** - REST API server
 
 The `enums` crate is excluded from the workspace (it's a build-time code generator).
 
@@ -347,9 +345,6 @@ cargo fmt --all
 
 # Run CLI
 cargo run -p mehen-cli -- -m -p test.go
-
-# Run web server
-cargo run -p mehen-web
 ```
 
 ## Key Insights from the Cleanup
