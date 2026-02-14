@@ -1,12 +1,5 @@
 # mehen
 
-[![Crates.io](https://img.shields.io/crates/v/mehen.svg)](https://crates.io/crates/mehen)
-[![Task Status](https://community-tc.services.mozilla.com/api/github/v1/repository/mozilla/mehen/master/badge.svg)](https://community-tc.services.mozilla.com/api/github/v1/repository/mozilla/mehen/master/latest)
-[![codecov](https://codecov.io/gh/mozilla/mehen/branch/master/graph/badge.svg)](https://codecov.io/gh/mozilla/mehen)
-<a href="https://chat.mozilla.org/#/room/#mehen:mozilla.org" target="_blank">
-   <img src="https://img.shields.io/badge/chat%20on%20[m]-%23rust--code--analysis%3Amozilla.org-blue">
-</a>
-
 **mehen** is a Rust library to analyze and extract information
 from source code written in many different programming languages.
 It is based on a parser generator tool and an incremental parsing library
