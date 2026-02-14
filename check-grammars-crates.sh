@@ -9,17 +9,17 @@ TS_CRATE=`grep $1 Cargo.toml | tr -d ' '`
 # Disable/Enable CI flag
 RUN_CI="no"
 
-# Temporary master branch Cargo.toml filename
-MASTER_CARGO_TOML="master-cargo.toml"
+# Temporary main branch Cargo.toml filename
+MAIN_CARGO_TOML="main-cargo.toml"
 
-# Download master branch Cargo.toml and save it in a temporary file
-wget -LqO - https://raw.githubusercontent.com/mozilla/mehen/master/Cargo.toml | tr -d ' ' > $MASTER_CARGO_TOML
+# Download main branch Cargo.toml and save it in a temporary file
+wget -LqO - https://raw.githubusercontent.com/ophidiarium/mehen/main/Cargo.toml | tr -d ' ' > $MAIN_CARGO_TOML
 
 # Get the name of the current crate
 TS_CRATE_NAME=`echo $TS_CRATE | cut -f1 -d "="`
 
 # Get the crate name from the master branch Cargo.toml
-MASTER_TS_CRATE_NAME=`grep $TS_CRATE_NAME $MASTER_CARGO_TOML | head -n 1 | cut -f1 -d "="`
+MASTER_TS_CRATE_NAME=`grep $TS_CRATE_NAME $MAIN_CARGO_TOML | head -n 1 | cut -f1 -d "="`
 
 # If the current crate name is not present in master branch, exit the script
 if [ -z "$MASTER_TS_CRATE_NAME" ]
@@ -28,7 +28,7 @@ then
 fi
 
 # Get the same crate from the master branch Cargo.toml
-MASTER_TS_CRATE=`grep $TS_CRATE $MASTER_CARGO_TOML | head -n 1`
+MASTER_TS_CRATE=`grep $TS_CRATE $MAIN_CARGO_TOML | head -n 1`
 
 # If the current crate has been updated, save the crate name
 if [ -z "$MASTER_TS_CRATE" ]
@@ -40,7 +40,7 @@ then
 fi
 
 # Remove temporary master branch Cargo.toml file
-rm -rf $MASTER_CARGO_TOML
+rm -rf $MAIN_CARGO_TOML
 
 # If any crates have been updated, exit the script
 if [ "$RUN_CI" = "no" ]; then
@@ -53,14 +53,11 @@ JMT_VERSION="0.1.9"
 curl -L "$JMT_LINK/v$JMT_VERSION/json-minimal-tests-linux.tar.gz" |
 tar xz -C $CARGO_HOME/bin
 
-# Download mozilla-central repository
-MOZILLA_CENTRAL_REPO="https://github.com/mozilla/gecko-dev"
-[ ! -d "/cache/gecko-dev" ] &&
-git clone --quiet $MOZILLA_CENTRAL_REPO /cache/gecko-dev || true
-pushd /cache/gecko-dev && git pull origin master && popd
+# Use a test repository (configure your own test repository)
+TEST_REPO="${TEST_REPO_PATH:-/cache/test-repo}"
 
 # Compute metrics
-./check-grammar-crate.py compute-ci-metrics -p /cache/gecko-dev -g $TREE_SITTER_CRATE
+./check-grammar-crate.py compute-ci-metrics -p $TEST_REPO -g $TREE_SITTER_CRATE
 
 # Count files in metrics directories
 OLD=`ls /tmp/$TREE_SITTER_CRATE-old | wc -l`
