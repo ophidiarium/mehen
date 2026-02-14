@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script generates a Mozilla-defined grammar automatically.
+# This script generates a Konstantin Vyatkin-defined grammar automatically.
 #
 # Usage: ./generate-grammars/generate-grammar.sh GRAMMAR_NAME
 

@@ -3,7 +3,6 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::macros::implement_metric_trait;
 use crate::*;
 
 /// The `NExit` metric.
@@ -122,21 +121,6 @@ impl Exit for PythonCode {
     }
 }
 
-impl Exit for MozjsCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Mozjs::ReturnStatement) {
-            stats.exit += 1;
-        }
-    }
-}
-
-impl Exit for JavascriptCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Javascript::ReturnStatement) {
-            stats.exit += 1;
-        }
-    }
-}
 
 impl Exit for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
@@ -166,21 +150,6 @@ impl Exit for RustCode {
     }
 }
 
-impl Exit for CppCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Cpp::ReturnStatement) {
-            stats.exit += 1;
-        }
-    }
-}
-
-impl Exit for JavaCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Java::ReturnStatement) {
-            stats.exit += 1;
-        }
-    }
-}
 
 impl Exit for GoCode {
     fn compute(node: &Node, stats: &mut Stats) {
@@ -190,7 +159,8 @@ impl Exit for GoCode {
     }
 }
 
-implement_metric_trait!(Exit, KotlinCode, PreprocCode, CcommentCode);
+// No languages require empty Exit implementations
+// implement_metric_trait!(Exit);
 
 #[cfg(test)]
 mod tests {
@@ -244,40 +214,6 @@ mod tests {
                       "average": null,
                       "min": 3.0,
                       "max": 3.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn c_no_exit() {
-        check_metrics::<CppParser>("int a = 42;", "foo.c", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn javascript_no_exit() {
-        check_metrics::<JavascriptParser>("var a = 42;", "foo.js", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
                     }"###
             );
         });
@@ -353,76 +289,6 @@ mod tests {
                       "average": 0.5,
                       "min": 0.0,
                       "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_no_exit() {
-        check_metrics::<JavaParser>("int a = 42;", "foo.java", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn java_simple_function() {
-        check_metrics::<JavaParser>(
-            "class A {
-              public int sum(int x, int y) {
-                return x + y;
-              }
-            }",
-            "foo.java",
-            |metric| {
-                // 1 exit / 1 space
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_split_function() {
-        check_metrics::<JavaParser>(
-            "class A {
-              public int multiply(int x, int y) {
-                if(x == 0 || y == 0){
-                    return 0;
-                }
-                return x * y;
-              }
-            }",
-            "foo.java",
-            |metric| {
-                // 2 exit / space 1
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
                     }"###
                 );
             },

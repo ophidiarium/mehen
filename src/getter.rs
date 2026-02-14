@@ -1,7 +1,6 @@
 use crate::metrics::halstead::HalsteadType;
 
 use crate::spaces::SpaceKind;
-use crate::traits::Search;
 
 use crate::*;
 
@@ -91,141 +90,6 @@ impl Getter for PythonCode {
     }
 }
 
-impl Getter for MozjsCode {
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use Mozjs::*;
-
-        match node.kind_id().into() {
-            FunctionExpression
-            | MethodDefinition
-            | GeneratorFunction
-            | FunctionDeclaration
-            | GeneratorFunctionDeclaration
-            | ArrowFunction => SpaceKind::Function,
-            Class | ClassDeclaration => SpaceKind::Class,
-            Program => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        if let Some(name) = node.child_by_field_name("name") {
-            let code = &code[name.start_byte()..name.end_byte()];
-            std::str::from_utf8(code).ok()
-        } else {
-            // We can be in a pair: foo: function() {}
-            // Or in a variable declaration: var aFun = function() {}
-            if let Some(parent) = node.parent() {
-                match parent.kind_id().into() {
-                    Mozjs::Pair => {
-                        if let Some(name) = parent.child_by_field_name("key") {
-                            let code = &code[name.start_byte()..name.end_byte()];
-                            return std::str::from_utf8(code).ok();
-                        }
-                    }
-                    Mozjs::VariableDeclarator => {
-                        if let Some(name) = parent.child_by_field_name("name") {
-                            let code = &code[name.start_byte()..name.end_byte()];
-                            return std::str::from_utf8(code).ok();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Some("<anonymous>")
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Mozjs::*;
-
-        match node.kind_id().into() {
-            Export | Import | Import2 | Extends | DOT | From | LPAREN | COMMA | As | STAR
-            | GTGT | GTGTGT | COLON | Return | Delete | Throw | Break | Continue | If | Else
-            | Switch | Case | Default | Async | For | In | Of | While | Try | Catch | Finally
-            | With | EQ | AT | AMPAMP | PIPEPIPE | PLUS | DASH | DASHDASH | PLUSPLUS | SLASH
-            | PERCENT | STARSTAR | PIPE | AMP | LTLT | TILDE | LT | LTEQ | EQEQ | BANGEQ | GTEQ
-            | GT | PLUSEQ | BANG | BANGEQEQ | EQEQEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ
-            | STARSTAREQ | GTGTEQ | GTGTGTEQ | LTLTEQ | AMPEQ | CARET | CARETEQ | PIPEEQ
-            | Yield | LBRACK | LBRACE | Await | QMARK | QMARKQMARK | New | Let | Var | Const
-            | Function | FunctionExpression | SEMI => HalsteadType::Operator,
-            Identifier | Identifier2 | MemberExpression | MemberExpression2
-            | PropertyIdentifier | String | String2 | Number | True | False | Null | Void
-            | This | Super | Undefined | Set | Get | Typeof | Instanceof => HalsteadType::Operand,
-            _ => HalsteadType::Unknown,
-        }
-    }
-
-    get_operator!(Mozjs);
-}
-
-impl Getter for JavascriptCode {
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use Javascript::*;
-
-        match node.kind_id().into() {
-            FunctionExpression
-            | MethodDefinition
-            | GeneratorFunction
-            | FunctionDeclaration
-            | GeneratorFunctionDeclaration
-            | ArrowFunction => SpaceKind::Function,
-            Class | ClassDeclaration => SpaceKind::Class,
-            Program => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        if let Some(name) = node.child_by_field_name("name") {
-            let code = &code[name.start_byte()..name.end_byte()];
-            std::str::from_utf8(code).ok()
-        } else {
-            // We can be in a pair: foo: function() {}
-            // Or in a variable declaration: var aFun = function() {}
-            if let Some(parent) = node.parent() {
-                match parent.kind_id().into() {
-                    Mozjs::Pair => {
-                        if let Some(name) = parent.child_by_field_name("key") {
-                            let code = &code[name.start_byte()..name.end_byte()];
-                            return std::str::from_utf8(code).ok();
-                        }
-                    }
-                    Mozjs::VariableDeclarator => {
-                        if let Some(name) = parent.child_by_field_name("name") {
-                            let code = &code[name.start_byte()..name.end_byte()];
-                            return std::str::from_utf8(code).ok();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Some("<anonymous>")
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Javascript::*;
-
-        match node.kind_id().into() {
-            Export | Import | Import2 | Extends | DOT | From | LPAREN | COMMA | As | STAR
-            | GTGT | GTGTGT | COLON | Return | Delete | Throw | Break | Continue | If | Else
-            | Switch | Case | Default | Async | For | In | Of | While | Try | Catch | Finally
-            | With | EQ | AT | AMPAMP | PIPEPIPE | PLUS | DASH | DASHDASH | PLUSPLUS | SLASH
-            | PERCENT | STARSTAR | PIPE | AMP | LTLT | TILDE | LT | LTEQ | EQEQ | BANGEQ | GTEQ
-            | GT | PLUSEQ | BANG | BANGEQEQ | EQEQEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ
-            | STARSTAREQ | GTGTEQ | GTGTGTEQ | LTLTEQ | AMPEQ | CARET | CARETEQ | PIPEEQ
-            | Yield | LBRACK | LBRACE | Await | QMARK | QMARKQMARK | New | Let | Var | Const
-            | Function | FunctionExpression | SEMI => HalsteadType::Operator,
-            Identifier | Identifier2 | MemberExpression | MemberExpression2
-            | PropertyIdentifier | String | String2 | Number | True | False | Null | Void
-            | This | Super | Undefined | Set | Get | Typeof | Instanceof => HalsteadType::Operand,
-            _ => HalsteadType::Unknown,
-        }
-    }
-
-    get_operator!(Javascript);
-}
 
 impl Getter for TypescriptCode {
     fn get_space_kind(node: &Node) -> SpaceKind {
@@ -254,13 +118,13 @@ impl Getter for TypescriptCode {
             // Or in a variable declaration: var aFun = function() {}
             if let Some(parent) = node.parent() {
                 match parent.kind_id().into() {
-                    Mozjs::Pair => {
+                    Typescript::Pair => {
                         if let Some(name) = parent.child_by_field_name("key") {
                             let code = &code[name.start_byte()..name.end_byte()];
                             return std::str::from_utf8(code).ok();
                         }
                     }
-                    Mozjs::VariableDeclarator => {
+                    Typescript::VariableDeclarator => {
                         if let Some(name) = parent.child_by_field_name("name") {
                             let code = &code[name.start_byte()..name.end_byte()];
                             return std::str::from_utf8(code).ok();
@@ -323,13 +187,13 @@ impl Getter for TsxCode {
             // Or in a variable declaration: var aFun = function() {}
             if let Some(parent) = node.parent() {
                 match parent.kind_id().into() {
-                    Mozjs::Pair => {
+                    Tsx::Pair => {
                         if let Some(name) = parent.child_by_field_name("key") {
                             let code = &code[name.start_byte()..name.end_byte()];
                             return std::str::from_utf8(code).ok();
                         }
                     }
-                    Mozjs::VariableDeclarator => {
+                    Tsx::VariableDeclarator => {
                         if let Some(name) = parent.child_by_field_name("name") {
                             let code = &code[name.start_byte()..name.end_byte()];
                             return std::str::from_utf8(code).ok();
@@ -428,154 +292,6 @@ impl Getter for RustCode {
 
     get_operator!(Rust);
 }
-
-impl Getter for CppCode {
-    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        match node.kind_id().into() {
-            Cpp::FunctionDefinition | Cpp::FunctionDefinition2 | Cpp::FunctionDefinition3 => {
-                if let Some(op_cast) = node.first_child(|id| Cpp::OperatorCast == id) {
-                    let code = &code[op_cast.start_byte()..op_cast.end_byte()];
-                    return std::str::from_utf8(code).ok();
-                }
-                // we're in a function_definition so need to get the declarator
-                if let Some(declarator) = node.child_by_field_name("declarator") {
-                    let declarator_node = declarator;
-                    if let Some(fd) = declarator_node.first_occurrence(|id| {
-                        Cpp::FunctionDeclarator == id
-                            || Cpp::FunctionDeclarator2 == id
-                            || Cpp::FunctionDeclarator3 == id
-                    }) && let Some(first) = fd.child(0)
-                    {
-                        match first.kind_id().into() {
-                            Cpp::TypeIdentifier
-                            | Cpp::Identifier
-                            | Cpp::FieldIdentifier
-                            | Cpp::DestructorName
-                            | Cpp::OperatorName
-                            | Cpp::QualifiedIdentifier
-                            | Cpp::QualifiedIdentifier2
-                            | Cpp::QualifiedIdentifier3
-                            | Cpp::QualifiedIdentifier4
-                            | Cpp::TemplateFunction
-                            | Cpp::TemplateMethod => {
-                                let code = &code[first.start_byte()..first.end_byte()];
-                                return std::str::from_utf8(code).ok();
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            _ => {
-                if let Some(name) = node.child_by_field_name("name") {
-                    let code = &code[name.start_byte()..name.end_byte()];
-                    return std::str::from_utf8(code).ok();
-                }
-            }
-        }
-        None
-    }
-
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use Cpp::*;
-
-        match node.kind_id().into() {
-            FunctionDefinition | FunctionDefinition2 | FunctionDefinition3 => SpaceKind::Function,
-            StructSpecifier => SpaceKind::Struct,
-            ClassSpecifier => SpaceKind::Class,
-            NamespaceDefinition => SpaceKind::Namespace,
-            TranslationUnit => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Cpp::*;
-
-        match node.kind_id().into() {
-            DOT | LPAREN | LPAREN2 | COMMA | STAR | GTGT | COLON | SEMI | Return | Break
-            | Continue | If | Else | Switch | Case | Default | For | While | Goto | Do | Delete
-            | New | Try | Try2 | Catch | Throw | EQ | AMPAMP | PIPEPIPE | DASH | DASHDASH
-            | DASHGT | PLUS | PLUSPLUS | SLASH | PERCENT | PIPE | AMP | LTLT | TILDE | LT
-            | LTEQ | EQEQ | BANGEQ | GTEQ | GT | GT2 | PLUSEQ | BANG | STAREQ | SLASHEQ
-            | PERCENTEQ | GTGTEQ | LTLTEQ | AMPEQ | CARET | CARETEQ | PIPEEQ | LBRACK | LBRACE
-            | QMARK | COLONCOLON | PrimitiveType | TypeSpecifier | Sizeof => HalsteadType::Operator,
-            Identifier | TypeIdentifier | FieldIdentifier | RawStringLiteral | StringLiteral
-            | NumberLiteral | True | False | Null | DOTDOTDOT => HalsteadType::Operand,
-            NamespaceIdentifier => match node.parent() {
-                Some(parent) if matches!(parent.kind_id().into(), NamespaceDefinition) => {
-                    HalsteadType::Operand
-                }
-                _ => HalsteadType::Unknown,
-            },
-            _ => HalsteadType::Unknown,
-        }
-    }
-
-    get_operator!(Cpp);
-}
-
-impl Getter for PreprocCode {}
-impl Getter for CcommentCode {}
-
-impl Getter for JavaCode {
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use Java::*;
-
-        match node.kind_id().into() {
-            ClassDeclaration => SpaceKind::Class,
-            MethodDeclaration | ConstructorDeclaration | LambdaExpression => SpaceKind::Function,
-            InterfaceDeclaration => SpaceKind::Interface,
-            Program => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Java::*;
-        // Some guides that informed grammar choice for Halstead
-        // keywords, operators, literals: https://docs.oracle.com/javase/specs/jls/se18/html/jls-3.html#jls-3.12
-        // https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/?msclkid=5e181114abef11ecbb03527e95a34828
-        match node.kind_id().into() {
-            // Operator: control flow
-            | If | Else | Switch | Case | Try | Catch | Throw | Throws | Throws2 | For | While | Continue | Break | Do | Finally
-            // Operator: keywords
-            | New | Return | Default | Abstract | Assert | Instanceof | Extends | Final | Implements | Transient | Synchronized | Super | This | VoidType
-            // Operator: brackets and comma and terminators (separators)
-            | SEMI | COMMA | COLONCOLON | LBRACE | LBRACK | LPAREN // | RBRACE | RBRACK | RPAREN | DOTDOTDOT | DOT
-            // Operator: operators
-            | EQ | LT | GT | BANG | TILDE | QMARK | COLON // no grammar for lambda operator ->
-            | EQEQ | LTEQ | GTEQ | BANGEQ | AMPAMP | PIPEPIPE | PLUSPLUS | DASHDASH
-            | PLUS | DASH | STAR | SLASH | AMP | PIPE | CARET | PERCENT| LTLT | GTGT | GTGTGT
-            | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | AMPEQ | PIPEEQ | CARETEQ | PERCENTEQ | LTLTEQ | GTGTEQ | GTGTGTEQ
-            // primitive types
-            | Int | Float
-            => {
-                HalsteadType::Operator
-            },
-            // Operands: variables, constants, literals
-            Identifier | NullLiteral | ClassLiteral | StringLiteral | CharacterLiteral | HexIntegerLiteral | OctalIntegerLiteral | BinaryIntegerLiteral | DecimalIntegerLiteral | HexFloatingPointLiteral | DecimalFloatingPointLiteral  => {
-                HalsteadType::Operand
-            },
-            _ => {
-                HalsteadType::Unknown
-            },
-        }
-    }
-
-    fn get_operator_id_as_str(id: u16) -> &'static str {
-        let typ = id.into();
-        match typ {
-            Java::LPAREN => "()",
-            Java::LBRACK => "[]",
-            Java::LBRACE => "{}",
-            Java::VoidType => "void",
-            _ => typ.into(),
-        }
-    }
-}
-
-impl Getter for KotlinCode {}
 
 impl Getter for GoCode {
     fn get_space_kind(node: &Node) -> SpaceKind {

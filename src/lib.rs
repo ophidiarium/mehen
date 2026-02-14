@@ -1,10 +1,10 @@
-//! rust-code-analysis is a library to analyze and extract information
+//! mehen is a library to analyze and extract information
 //! from source codes written in many different programming languages.
 //!
 //! You can find the source code of this software on
-//! <a href="https://github.com/mozilla/rust-code-analysis/" target="_blank">GitHub</a>,
+//! <a href="https://github.com/ophidiarium/mehen/" target="_blank">GitHub</a>,
 //! while issues and feature requests can be posted on the respective
-//! <a href="https://github.com/mozilla/rust-code-analysis/issues/" target="_blank">GitHub Issue Tracker</a>.
+//! <a href="https://github.com/ophidiarium/mehen/issues/" target="_blank">GitHub Issue Tracker</a>.
 //!
 //! ## Supported Languages
 //!
@@ -47,8 +47,6 @@
 #![allow(clippy::upper_case_acronyms)]
 #![feature(let_chains)]
 
-mod c_langs_macros;
-mod c_macro;
 mod getter;
 mod macros;
 

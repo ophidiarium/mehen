@@ -6,12 +6,7 @@ use petgraph::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::c_langs_macros::is_specials;
-
-use crate::langs::*;
-use crate::languages::language_preproc::*;
 use crate::tools::*;
-use crate::traits::*;
 
 /// Preprocessor data of a `C/C++` file.
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -181,63 +176,12 @@ pub fn fix_includes<S: ::std::hash::BuildHasher>(
     }
 }
 
-/// Extracts preprocessor data from a `C/C++` file
-/// and inserts these data in a [`PreprocResults`] object.
-///
+/// This function is deprecated and no longer functional as preprocessor support
+/// for C/C++ has been removed.
 ///
 /// [`PreprocResults`]: struct.PreprocResults.html
-pub fn preprocess(parser: &PreprocParser, path: &Path, results: &mut PreprocResults) {
-    let node = parser.get_root();
-    let mut cursor = node.cursor();
-    let mut stack = Vec::new();
-    let code = parser.get_code();
-    let mut file_result = PreprocFile::default();
-
-    stack.push(node);
-
-    while let Some(node) = stack.pop() {
-        cursor.reset(&node);
-        if cursor.goto_first_child() {
-            loop {
-                stack.push(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-
-        let id = Preproc::from(node.kind_id());
-        match id {
-            Preproc::Define | Preproc::Undef => {
-                cursor.reset(&node);
-                cursor.goto_first_child();
-                let identifier = cursor.node();
-
-                if identifier.kind_id() == Preproc::Identifier {
-                    let r#macro = identifier.utf8_text(code).unwrap();
-                    if !is_specials(r#macro) {
-                        file_result.macros.insert(r#macro.to_string());
-                    }
-                }
-            }
-            Preproc::PreprocInclude => {
-                cursor.reset(&node);
-                cursor.goto_first_child();
-                let file = cursor.node();
-
-                if file.kind_id() == Preproc::StringLiteral {
-                    // remove the starting/ending double quote
-                    let file = &code[file.start_byte() + 1..file.end_byte() - 1];
-                    let start = file.iter().position(|&c| c != b' ' && c != b'\t').unwrap();
-                    let end = file.iter().rposition(|&c| c != b' ' && c != b'\t').unwrap();
-                    let file = &file[start..=end];
-                    let file = String::from_utf8(file.to_vec()).unwrap();
-                    file_result.direct_includes.insert(file);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    results.files.insert(path.to_path_buf(), file_result);
+#[deprecated(note = "Preprocessor support removed with C/C++ language removal")]
+#[allow(dead_code)]
+pub fn preprocess(_path: &Path, _results: &mut PreprocResults) {
+    // No-op: Preprocessor support removed with C/C++ language removal
 }

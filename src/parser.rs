@@ -19,10 +19,9 @@ use crate::wmc::Wmc;
 use crate::alterator::Alterator;
 use crate::getter::Getter;
 
-use crate::c_macro;
 use crate::langs::*;
 use crate::node::{Node, Tree};
-use crate::preproc::{PreprocResults, get_macros};
+use crate::preproc::PreprocResults;
 use crate::traits::*;
 
 #[derive(Debug)]
@@ -77,21 +76,11 @@ impl Filter {
 
 #[inline(always)]
 fn get_fake_code<T: LanguageInfo>(
-    code: &[u8],
-    path: &Path,
-    pr: Option<Arc<PreprocResults>>,
+    _code: &[u8],
+    _path: &Path,
+    _pr: Option<Arc<PreprocResults>>,
 ) -> Option<Vec<u8>> {
-    if let Some(pr) = pr {
-        match T::get_lang() {
-            LANG::Cpp => {
-                let macros = get_macros(path, &pr.files);
-                c_macro::replace(code, &macros)
-            }
-            _ => None,
-        }
-    } else {
-        None
-    }
+    None
 }
 
 impl<

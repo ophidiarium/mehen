@@ -5,7 +5,6 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::macros::implement_metric_trait;
 use crate::*;
 
 // TODO: Find a way to increment the cognitive complexity value
@@ -354,44 +353,6 @@ impl Cognitive for RustCode {
     }
 }
 
-impl Cognitive for CppCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use Cpp::*;
-
-        //TODO: Implement macros
-        let (mut nesting, depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        match node.kind_id().into() {
-            IfStatement => {
-                if !Self::is_else_if(node) {
-                    increase_nesting(stats,&mut nesting, depth, lambda);
-                }
-            }
-            ForStatement | WhileStatement | DoStatement | SwitchStatement | CatchClause => {
-                increase_nesting(stats,&mut nesting, depth, lambda);
-            }
-            GotoStatement | Else /* else-if also */ => {
-                increment_by_one(stats);
-            }
-            UnaryExpression2 => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            BinaryExpression2 => {
-                compute_booleans::<language_cpp::Cpp>(node, stats, AMPAMP, PIPEPIPE);
-            }
-            LambdaExpression => {
-                lambda += 1;
-            }
-            _ => {}
-        }
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
-}
-
 macro_rules! js_cognitive {
     ($lang:ident) => {
         fn compute(node: &Node, stats: &mut Stats, nesting_map: &mut HashMap<usize, (usize, usize, usize)>) {
@@ -437,14 +398,6 @@ macro_rules! js_cognitive {
     };
 }
 
-impl Cognitive for MozjsCode {
-    js_cognitive!(Mozjs);
-}
-
-impl Cognitive for JavascriptCode {
-    js_cognitive!(Javascript);
-}
-
 impl Cognitive for TypescriptCode {
     js_cognitive!(Typescript);
 }
@@ -453,42 +406,6 @@ impl Cognitive for TsxCode {
     js_cognitive!(Tsx);
 }
 
-impl Cognitive for JavaCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use Java::*;
-
-        let (mut nesting, depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        match node.kind_id().into() {
-            IfStatement => {
-                if !Self::is_else_if(node) {
-                    increase_nesting(stats,&mut nesting, depth, lambda);
-                }
-            }
-            ForStatement | WhileStatement | DoStatement | SwitchBlock | CatchClause => {
-                increase_nesting(stats,&mut nesting, depth, lambda);
-            }
-            Else /* else-if also */ => {
-                increment_by_one(stats);
-            }
-            UnaryExpression => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            BinaryExpression => {
-                compute_booleans::<language_java::Java>(node, stats, AMPAMP, PIPEPIPE);
-            }
-            LambdaExpression => {
-                lambda += 1;
-            }
-            _ => {}
-        }
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
-}
 
 impl Cognitive for GoCode {
     fn compute(
@@ -531,7 +448,8 @@ impl Cognitive for GoCode {
     }
 }
 
-implement_metric_trait!(Cognitive, PreprocCode, CcommentCode, KotlinCode);
+// No languages require empty Cognitive implementations
+// implement_metric_trait!(Cognitive);
 
 #[cfg(test)]
 mod tests {
@@ -558,38 +476,6 @@ mod tests {
     #[test]
     fn rust_no_cognitive() {
         check_metrics::<RustParser>("let a = 42;", "foo.rs", |metric| {
-            insta::assert_json_snapshot!(
-                metric.cognitive,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn c_no_cognitive() {
-        check_metrics::<CppParser>("int a = 42;", "foo.c", |metric| {
-            insta::assert_json_snapshot!(
-                metric.cognitive,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn mozjs_no_cognitive() {
-        check_metrics::<MozjsParser>("var a = 42;", "foo.js", |metric| {
             insta::assert_json_snapshot!(
                 metric.cognitive,
                 @r###"
@@ -755,60 +641,6 @@ mod tests {
     }
 
     #[test]
-    fn c_simple_function() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (a && b) { // +2 (+1 &&)
-                     printf(\"test\");
-                 }
-                 if (c && d) { // +2 (+1 &&)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_simple_function() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (a && b) { // +2 (+1 &&)
-                     window.print(\"test\");
-                 }
-                 if (c && d) { // +2 (+1 &&)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn python_sequence_same_booleans() {
         check_metrics::<PythonParser>(
             "def f(a, b):
@@ -860,96 +692,6 @@ mod tests {
                  }
              }",
             "foo.rs",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn c_sequence_same_booleans() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (a && b && 1 == 1) { // +2 (+1 sequence of &&)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (a || b || c || d) { // +2 (+1 sequence of ||)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_sequence_same_booleans() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (a && b && 1 == 1) { // +2 (+1 sequence of &&)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (a || b || c || d) { // +2 (+1 sequence of ||)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.cognitive,
@@ -1032,96 +774,6 @@ mod tests {
     }
 
     #[test]
-    fn c_not_booleans() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (a && !(b && c)) { // +3 (+1 &&, +1 &&)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (!(a || b) && !(c || d)) { // +4 (+1 ||, +1 &&, +1 ||)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_not_booleans() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (a && !(b && c)) { // +3 (+1 &&, +1 &&)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (!(a || b) && !(c || d)) { // +4 (+1 ||, +1 &&, +1 ||)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn python_sequence_different_booleans() {
         check_metrics::<PythonParser>(
             "def f(a, b):
@@ -1152,54 +804,6 @@ mod tests {
                  }
              }",
             "foo.rs",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn c_sequence_different_booleans() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (a && b || 1 == 1) { // +3 (+1 &&, +1 ||)
-                     printf(\"test\");
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_sequence_different_booleans() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (a && b || 1 == 1) { // +3 (+1 &&, +1 ||)
-                     window.print(\"test\");
-                 }
-             }",
-            "foo.js",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.cognitive,
@@ -1322,74 +926,6 @@ mod tests {
     }
 
     #[test]
-    fn c_1_level_nesting() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 if (1 == 1) { // +1
-                     if (1 == 1) { // +2 (nesting = 1)
-                         printf(\"test\");
-                     } else if (1 == 1) { // +1
-                         if (1 == 1) { // +3 (nesting = 2)
-                             printf(\"test\");
-                         }
-                     } else { // +1
-                         if (1 == 1) { // +3 (nesting = 2)
-                             printf(\"test\");
-                         }
-                     }
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 11.0,
-                      "average": 11.0,
-                      "min": 0.0,
-                      "max": 11.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_1_level_nesting() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 if (1 == 1) { // +1
-                     if (1 == 1) { // +2 (nesting = 1)
-                         window.print(\"test\");
-                     } else if (1 == 1) { // +1
-                         if (1 == 1) { // +3 (nesting = 2)
-                             window.print(\"test\");
-                         }
-                     } else { // +1
-                         if (1 == 1) { // +3 (nesting = 2)
-                             window.print(\"test\");
-                         }
-                     }
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 11.0,
-                      "average": 11.0,
-                      "min": 0.0,
-                      "max": 11.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn python_2_level_nesting() {
         check_metrics::<PythonParser>(
             "def f(a, b):
@@ -1469,38 +1005,6 @@ mod tests {
     }
 
     #[test]
-    fn mozjs_try_construct() {
-        check_metrics::<MozjsParser>(
-            "function asyncOnChannelRedirect(oldChannel, newChannel, flags, callback) {
-                 for (const collector of this.collectors) {
-                     try {
-                         collector._onChannelRedirect(oldChannel, newChannel, flags);
-                     } catch (ex) {
-                         console.error(
-                             \"StackTraceCollector.onChannelRedirect threw an exception\",
-                              ex
-                         );
-                     }
-                 }
-                 callback.onRedirectVerifyCallback(Cr.NS_OK);
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn rust_break_continue() {
         // Only labeled break and continue statements are considered
         check_metrics::<RustParser>(
@@ -1529,104 +1033,6 @@ mod tests {
                       "average": 11.0,
                       "min": 0.0,
                       "max": 11.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn c_goto() {
-        check_metrics::<CppParser>(
-            "void f() {
-             OUT: for (int i = 1; i <= max; ++i) { // +1
-                      for (int j = 2; j < i; ++j) { // +2 (nesting = 1)
-                          if (i % j == 0) { // +3 (nesting = 2)
-                              goto OUT; // +1
-                          }
-                      }
-                  }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 7.0,
-                      "average": 7.0,
-                      "min": 0.0,
-                      "max": 7.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn c_switch() {
-        check_metrics::<CppParser>(
-            "void f() {
-                 switch (1) { // +1
-                     case 1:
-                         printf(\"one\");
-                         break;
-                     case 2:
-                         printf(\"two\");
-                         break;
-                     case 3:
-                         printf(\"three\");
-                         break;
-                     default:
-                         printf(\"all\");
-                         break;
-                 }
-             }",
-            "foo.c",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn mozjs_switch() {
-        check_metrics::<MozjsParser>(
-            "function f() {
-                 switch (1) { // +1
-                     case 1:
-                         window.print(\"one\");
-                         break;
-                     case 2:
-                         window.print(\"two\");
-                         break;
-                     case 3:
-                         window.print(\"three\");
-                         break;
-                     default:
-                         window.print(\"all\");
-                         break;
-                 }
-             }",
-            "foo.js",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
                     }"###
                 );
             },
@@ -1770,199 +1176,6 @@ mod tests {
                       "average": 4.0,
                       "min": 0.0,
                       "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_no_cognitive() {
-        check_metrics::<JavaParser>("int a = 42;", "foo.java", |metric| {
-            insta::assert_json_snapshot!(
-                metric.cognitive,
-                @r###"
-            {
-              "sum": 0.0,
-              "average": null,
-              "min": 0.0,
-              "max": 0.0
-            }
-            "###
-            );
-        });
-    }
-
-    #[test]
-    fn java_single_branch_function() {
-        check_metrics::<JavaParser>(
-            "class X {
-                public static void print(boolean a){  
-                if(a){ // +1
-                  System.out.println(\"test1\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                {
-                  "sum": 1.0,
-                  "average": 1.0,
-                  "min": 0.0,
-                  "max": 1.0
-                }
-                "###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_multiple_branch_function() {
-        check_metrics::<JavaParser>(
-            "class X {
-              public static void print(boolean a, boolean b){  
-                if(a){ // +1
-                  System.out.println(\"test1\");
-                }
-                if(b){ // +1
-                  System.out.println(\"test2\");
-                }
-                else { // +1
-                  System.out.println(\"test3\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                {
-                  "sum": 3.0,
-                  "average": 3.0,
-                  "min": 0.0,
-                  "max": 3.0
-                }
-                "###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_compound_conditions() {
-        check_metrics::<JavaParser>(
-            "class X {
-              public static void print(boolean a, boolean b, boolean c, boolean d){  
-                if(a && b){ // +2 (+1 &&)
-                  System.out.println(\"test1\");
-                }
-                if(c && d){ // +2 (+1 &&)
-                  System.out.println(\"test2\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_switch_statement() {
-        check_metrics::<JavaParser>(
-            "class X {
-              public static void print(boolean a, boolean b, boolean c, boolean d){
-                switch(expr){ //+1
-                  case 1:
-                    System.out.println(\"test1\");
-                    break;
-                  case 2:
-                    System.out.println(\"test2\");
-                    break;
-                  default:
-                    System.out.println(\"test\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_switch_expression() {
-        check_metrics::<JavaParser>(
-            "class X {
-              public static void print(boolean a, boolean b, boolean c, boolean d){
-                switch(expr){ // +1
-                  case 1 -> System.out.println(\"test1\");
-                  case 2 -> System.out.println(\"test2\");
-                  default -> System.out.println(\"test\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn java_not_booleans() {
-        check_metrics::<JavaParser>(
-            "class X {
-              public static void print(boolean a, boolean b, boolean c, boolean d){
-                if (a && !(b && c)) { // +3 (+1 &&, +1 &&)
-                  printf(\"test\");
-                }
-              }
-            }",
-            "foo.java",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
                     }"###
                 );
             },
