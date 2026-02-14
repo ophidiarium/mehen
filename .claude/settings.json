@@ -1,0 +1,57 @@
+{
+    "$schema": "https://json.schemastore.org/claude-code-settings.json",
+    "env": {
+        "DISABLE_TELEMETRY": "1",
+        "CARGO_TERM_COLOR": "always",
+        "CLICOLOR": "1",
+        "CLICOLOR_FORCE": "1",
+        "NEXTEST_COLOR": "1",
+        "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
+        "GH_PAGER": "cat",
+        "MAX_THINKING_TOKENS": "32000"
+    },
+    "permissions": {
+        "allow": [
+            "mcp__*",
+            "Bash(gsed:*)",
+            "Bash(git:*)",
+            "Bash(git add:*)",
+            "Bash(git commit:*)",
+            "Bash(gh:*)",
+            "Bash(grep:*)",
+            "Bash(cargo:*)",
+            "Bash(RUST_LOG=debug cargo:*)",
+            "Bash(kill:*)",
+            "Bash(curl:*)",
+            "Bash(wget:*)",
+            "Bash(cp:*)",
+            "Bash(rustc:*)",
+            "Bash(timeout:*)",
+            "Bash(rg:*)",
+            "Bash(sed:*)",
+            "Bash(mkdir:*)",
+            "Bash(chmod:*)",
+            "Bash(cargo build:*)",
+            "Bash(mv:*)",
+            "Bash(ls:*)",
+            "WebFetch(domain:github.com)",
+            "WebFetch(domain:raw.githubusercontent.com)",
+            "WebFetch(domain:pypi.org)"
+        ],
+        "deny": []
+    },
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/prevent-main-commit.sh"
+                    }
+                ]
+            }
+        ]
+    },
+    "enableAllProjectMcpServers": true
+}
