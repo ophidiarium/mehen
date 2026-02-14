@@ -120,10 +120,10 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
             line_end: cfg.line_end,
         };
         action::<Find>(&language, source, &path, None, cfg)
-    } else if cfg.count_lock.is_some() {
+    } else if let Some(count_lock) = &cfg.count_lock {
         let cfg = CountCfg {
             filters: cfg.count_filter.clone(),
-            stats: cfg.count_lock.as_ref().unwrap().clone(),
+            stats: count_lock.clone(),
         };
         action::<Count>(&language, source, &path, None, cfg)
     } else {

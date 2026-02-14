@@ -75,7 +75,7 @@ impl Filter {
 }
 
 #[inline(always)]
-fn get_fake_code<T: LanguageInfo>(
+fn get_fake_code(
     _code: &[u8],
     _path: &Path,
     _pr: Option<Arc<PreprocResults>>,
@@ -119,7 +119,7 @@ impl<
     type Npa = T;
 
     fn new(code: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Self {
-        let fake_code = get_fake_code::<T>(&code, path, pr);
+        let fake_code = get_fake_code(&code, path, pr);
         let code = if let Some(fake) = fake_code {
             fake
         } else {

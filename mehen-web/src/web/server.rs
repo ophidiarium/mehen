@@ -64,7 +64,6 @@ async fn comment_removal_json(item: web::Json<WebCommentPayload>) -> HttpRespons
     let (language, _) = guess_language(&buf, path);
     if let Some(language) = language {
         let cfg = WebCommentCfg { id: payload.id };
-        let language = language;
         HttpResponse::Ok().json(action::<WebCommentCallback>(
             &language,
             buf,
