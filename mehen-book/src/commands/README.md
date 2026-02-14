@@ -1,6 +1,6 @@
 # Commands
 
-**mehen** offers a range of **commands** to analyze and extract information from source code. Each command **may** include parameters specific to the task it performs. Below, we describe the core types of commands available in **mehen**.
+The **mehen** CLI offers a range of **commands** to analyze and extract information from source code. Each command **may** include parameters specific to the task it performs. Below, we describe the core types of commands available.
 
 ## Metrics
 
