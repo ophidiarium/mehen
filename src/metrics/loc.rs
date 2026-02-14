@@ -758,8 +758,6 @@ impl Loc for GoCode {
     }
 }
 
-// implement_metric_trait!(Loc, PreprocCode, CcommentCode, KotlinCode);
-
 #[cfg(test)]
 mod tests {
     use crate::tools::check_metrics;
