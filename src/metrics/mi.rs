@@ -102,14 +102,7 @@ where
     }
 }
 
-implement_metric_trait!(
-    [Mi],
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode
-);
+implement_metric_trait!([Mi], PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
 
 #[cfg(test)]
 mod tests {

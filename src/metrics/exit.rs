@@ -121,7 +121,6 @@ impl Exit for PythonCode {
     }
 }
 
-
 impl Exit for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if matches!(node.kind_id().into(), Typescript::ReturnStatement) {
@@ -149,7 +148,6 @@ impl Exit for RustCode {
         }
     }
 }
-
 
 impl Exit for GoCode {
     fn compute(node: &Node, stats: &mut Stats) {

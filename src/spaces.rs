@@ -378,5 +378,4 @@ impl Callback for Metrics {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
