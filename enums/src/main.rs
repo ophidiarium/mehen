@@ -10,7 +10,6 @@ enum OutputLanguage {
     Rust,
     Go,
     Json,
-    CMacros,
 }
 
 impl std::str::FromStr for OutputLanguage {
@@ -21,7 +20,6 @@ impl std::str::FromStr for OutputLanguage {
             "rust" => Ok(Self::Rust),
             "go" => Ok(Self::Go),
             "json" => Ok(Self::Json),
-            "c_macros" => Ok(Self::CMacros),
             _ => Err("Not a valid value, run `--help` to know valid values"),
         }
     }
@@ -69,11 +67,6 @@ fn main() {
         }
         OutputLanguage::Json => {
             if let Some(err) = generate_json(&opts.output, &opts.file_template).err() {
-                eprintln!("{:?}", err);
-            }
-        }
-        OutputLanguage::CMacros => {
-            if let Some(err) = generate_macros(&opts.output).err() {
                 eprintln!("{:?}", err);
             }
         }
