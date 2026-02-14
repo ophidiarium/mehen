@@ -22,7 +22,7 @@ git clone -j8 https://github.com/ophidiarium/mehen.git
 or through **SSH**
 
 ```
-git clone -j8 git@github.com:mozilla/mehen.git
+git clone -j8 git@github.com:ophidiarium/mehen.git
 ```
 
 ## Building
@@ -115,16 +115,16 @@ each dependency used by **mehen**.
 
 ## Run your code
 
-You can run **mehen** using:
+You can run the **mehen** CLI using:
 
 ```console
-cargo run -p mehen -- [mehen-cli-parameters]
+cargo run -p mehen-cli -- [mehen-parameters]
 ```
 
-To know the list of **mehen** parameters, run:
+To know the list of **mehen** CLI parameters, run:
 
 ```console
-cargo run -p mehen -- --help
+cargo run -p mehen-cli -- --help
 ```
 
 You can run **mehen-web** using:
