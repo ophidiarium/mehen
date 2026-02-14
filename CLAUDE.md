@@ -33,8 +33,8 @@ The following were intentionally removed:
 
 ### Rust Version Requirements
 
-**Minimum**: Rust **1.88.0** with edition 2024
-**Recommended**: Rust **1.93.1** (current stable as of Feb 2025)
+**Minimum**: Rust **1.93.1** (current stable as of Feb 2025)
+**Edition**: 2024
 
 The codebase uses **let chains** syntax:
 
@@ -46,7 +46,7 @@ if let Some(label_child) = node.child(1)
 }
 ```
 
-This feature was stabilized in Rust 1.88.0 with edition 2024.
+This feature requires Rust 1.88.0+ with edition 2024.
 
 ```bash
 cargo build
