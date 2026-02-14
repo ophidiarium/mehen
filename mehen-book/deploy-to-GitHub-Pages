@@ -4,7 +4,7 @@
 
 git worktree add -b gh-pages /tmp/book
 rm -rf /tmp/book/* # this won't delete the .git directory
-cp -rp rust-code-analysis-book/book/* /tmp/book/
+cp -rp mehen-book/book/* /tmp/book/
 cd /tmp/book
 git add -A
-git commit -m "Deploy rust-code-analysis"
+git commit -m "Deploy mehen documentation"
