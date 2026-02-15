@@ -5,9 +5,9 @@ use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
-use regex::bytes::Regex;
 use crate::langs::fake;
 use crate::langs::*;
+use regex::bytes::Regex;
 
 /// Reads a file.
 ///

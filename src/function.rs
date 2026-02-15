@@ -57,11 +57,7 @@ pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
     spans
 }
 
-fn dump_span(
-    span: &FunctionSpan,
-    stdout: &mut io::StdoutLock,
-    last: bool,
-) -> std::io::Result<()> {
+fn dump_span(span: &FunctionSpan, stdout: &mut io::StdoutLock, last: bool) -> std::io::Result<()> {
     let pref = if last { "   `- " } else { "   |- " };
 
     write!(stdout, "{}", pref.blue())?;
