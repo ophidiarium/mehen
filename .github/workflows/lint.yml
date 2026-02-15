@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '**/*.rs'
+      - Cargo.lock
 
 permissions:
   pull-requests: write
