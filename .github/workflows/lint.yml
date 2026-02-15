@@ -51,6 +51,14 @@ jobs:
       - name: Cargo Machete
         uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Update npm
+        run: npm install -g npm@11
+
       # Prepare output directory for mehen
       - name: Prepare mehen output dir
         run: mkdir -p $HOME/mehen-json
