@@ -1,9 +1,8 @@
-use std::io::Write;
+use std::io::{self, Write};
 
-use termcolor::{Color, ColorChoice, StandardStream, StandardStreamLock};
+use owo_colors::OwoColorize;
 
 use crate::node::Node;
-use crate::tools::{color, intense_color};
 
 use crate::traits::*;
 
@@ -41,9 +40,9 @@ pub fn dump_node(
     line_start: Option<usize>,
     line_end: Option<usize>,
 ) -> std::io::Result<()> {
-    let stdout = StandardStream::stdout(ColorChoice::Always);
+    let stdout = io::stdout();
     let mut stdout = stdout.lock();
-    let ret = dump_tree_helper(
+    dump_tree_helper(
         code,
         node,
         "",
@@ -51,11 +50,7 @@ pub fn dump_node(
         &mut stdout,
         depth,
         (line_start, line_end),
-    );
-
-    color(&mut stdout, Color::White)?;
-
-    ret
+    )
 }
 
 fn dump_tree_helper(
@@ -63,7 +58,7 @@ fn dump_tree_helper(
     node: &Node,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
     depth: i32,
     line_range: LineRange,
 ) -> std::io::Result<()> {
@@ -74,9 +69,9 @@ fn dump_tree_helper(
     let (pref_child, pref) = if node.parent().is_none() {
         ("", "")
     } else if last {
-        ("   ", "\u{256e}\u{2500} ")
+        ("   ", "`- ")
     } else {
-        ("\u{2502}  ", "\u{251c}\u{2500} ")
+        ("|  ", "|- ")
     };
 
     let node_row = node.start_row() + 1;
@@ -89,34 +84,40 @@ fn dump_tree_helper(
     }
 
     if display {
-        color(stdout, Color::Blue)?;
-        write!(stdout, "{prefix}{pref}")?;
+        write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
 
-        intense_color(stdout, Color::Yellow)?;
-        write!(stdout, "{{{}:{}}} ", node.kind(), node.kind_id())?;
+        write!(
+            stdout,
+            "{}",
+            format_args!("{{{}:{}}} ", node.kind(), node.kind_id())
+                .yellow()
+                .bold()
+        )?;
 
-        color(stdout, Color::White)?;
-        write!(stdout, "from ")?;
+        write!(stdout, "{}", "from ".white())?;
 
-        color(stdout, Color::Green)?;
         let (pos_row, pos_column) = node.start_position();
-        write!(stdout, "({}, {}) ", pos_row + 1, pos_column + 1)?;
+        write!(
+            stdout,
+            "{}",
+            format_args!("({}, {}) ", pos_row + 1, pos_column + 1).green()
+        )?;
 
-        color(stdout, Color::White)?;
-        write!(stdout, "to ")?;
+        write!(stdout, "{}", "to ".white())?;
 
-        color(stdout, Color::Green)?;
         let (pos_row, pos_column) = node.end_position();
-        write!(stdout, "({}, {}) ", pos_row + 1, pos_column + 1)?;
+        write!(
+            stdout,
+            "{}",
+            format_args!("({}, {}) ", pos_row + 1, pos_column + 1).green()
+        )?;
 
         if node.start_row() == node.end_row() {
-            color(stdout, Color::White)?;
-            write!(stdout, ": ")?;
+            write!(stdout, "{}", ": ".white())?;
 
-            intense_color(stdout, Color::Red)?;
             let code = &code[node.start_byte()..node.end_byte()];
             if let Ok(code) = String::from_utf8(code.to_vec()) {
-                write!(stdout, "{code} ")?;
+                write!(stdout, "{}", format_args!("{code} ").red().bold())?;
             } else {
                 stdout.write_all(code).unwrap();
             }
