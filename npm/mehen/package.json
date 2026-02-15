@@ -9,6 +9,8 @@
     "cyclomatic",
     "halstead",
     "rust",
+    "go",
+    "typescript",
     "cli"
   ],
   "homepage": "https://github.com/ophidiarium/mehen",
