@@ -47,7 +47,7 @@ members = ["mehen-cli"]
 exclude = ["enums"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
 rust-version = "1.93.1"

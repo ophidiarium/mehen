@@ -1,6 +1,6 @@
 {
   "name": "mehen",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Tool to compute and export code metrics",
   "keywords": [
     "metrics",
@@ -35,14 +35,14 @@
     "node": ">=18.0.0"
   },
   "optionalDependencies": {
-    "@mehen/linux-x64-gnu": "0.0.1",
-    "@mehen/linux-x64-musl": "0.0.1",
-    "@mehen/linux-arm64-gnu": "0.0.1",
-    "@mehen/linux-arm64-musl": "0.0.1",
-    "@mehen/darwin-x64": "0.0.1",
-    "@mehen/darwin-arm64": "0.0.1",
-    "@mehen/win32-x64": "0.0.1",
-    "@mehen/win32-arm64": "0.0.1"
+    "@mehen/linux-x64-gnu": "0.0.2",
+    "@mehen/linux-x64-musl": "0.0.2",
+    "@mehen/linux-arm64-gnu": "0.0.2",
+    "@mehen/linux-arm64-musl": "0.0.2",
+    "@mehen/darwin-x64": "0.0.2",
+    "@mehen/darwin-arm64": "0.0.2",
+    "@mehen/win32-x64": "0.0.2",
+    "@mehen/win32-arm64": "0.0.2"
   },
   "publishConfig": {
     "access": "public"
