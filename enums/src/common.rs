@@ -76,6 +76,21 @@ pub fn sanitize_identifier(name: &str) -> String {
             result += replacement;
         }
     }
+
+    // If all characters were unmapped (e.g. Unicode symbols like `·`),
+    // generate identifier from their codepoints.
+    if result.is_empty() {
+        if name.is_empty() {
+            result = "EMPTY".to_string();
+        } else {
+            result = name
+                .chars()
+                .map(|c| format!("U{:04X}", c as u32))
+                .collect::<Vec<_>>()
+                .join("_");
+        }
+    }
+
     result
 }
 
