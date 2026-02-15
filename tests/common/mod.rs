@@ -87,7 +87,10 @@ pub fn compare_rca_output_with_files(repo_name: &str, include: &[&str], exclude:
     };
 
     if let Err(e) = ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
-        eprintln!("{e:?}");
-        process::exit(1);
+        #[allow(clippy::exit, clippy::disallowed_methods)]
+        {
+            log::error!("{e:?}");
+            process::exit(1);
+        }
     }
 }

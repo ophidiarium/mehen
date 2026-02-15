@@ -13,6 +13,7 @@ license.workspace = true
 [dependencies]
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset = "^0.4"
+log = "^0.4"
 num = "^0.4"
 num-derive = "^0.4"
 num-format = "^0.4"

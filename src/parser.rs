@@ -54,9 +54,17 @@ pub struct Filter {
     filters: Vec<Box<FilterFn>>,
 }
 
+impl std::fmt::Debug for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Filter")
+            .field("count", &self.filters.len())
+            .finish()
+    }
+}
+
 impl Filter {
     pub fn any(&self, node: &Node) -> bool {
-        for f in self.filters.iter() {
+        for f in &self.filters {
             if f(node) {
                 return true;
             }
@@ -65,7 +73,7 @@ impl Filter {
     }
 
     pub fn all(&self, node: &Node) -> bool {
-        for f in self.filters.iter() {
+        for f in &self.filters {
             if !f(node) {
                 return false;
             }
@@ -148,7 +156,7 @@ impl<
 
     fn get_filters(&self, filters: &[String]) -> Filter {
         let mut res: Vec<Box<FilterFn>> = Vec::new();
-        for f in filters.iter() {
+        for f in filters {
             let f = f.as_str();
             match f {
                 "all" => res.push(Box::new(|_: &Node| -> bool { true })),
@@ -170,7 +178,7 @@ impl<
             }
         }
         if res.is_empty() {
-            res.push(Box::new(|_: &Node| -> bool { true }))
+            res.push(Box::new(|_: &Node| -> bool { true }));
         }
 
         Filter { filters: res }

@@ -1,5 +1,6 @@
 mod formats;
 
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process;
 use std::sync::{Arc, Mutex};
@@ -193,6 +194,7 @@ struct Opts {
 }
 
 fn main() {
+    env_logger::init();
     let opts = Opts::parse();
 
     let count_lock = if !opts.count.is_empty() {
@@ -203,7 +205,7 @@ fn main() {
 
     let output_is_dir = opts.output.as_ref().map(|p| p.is_dir()).unwrap_or(false);
     if (opts.metrics || opts.ops) && opts.output.is_some() && !output_is_dir {
-        eprintln!("Error: The output parameter must be a directory");
+        log::error!("The output parameter must be a directory");
         process::exit(1);
     }
 
@@ -256,13 +258,13 @@ fn main() {
     let _all_files = match ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
         Ok(all_files) => all_files,
         Err(e) => {
-            eprintln!("{e:?}");
+            log::error!("{e:?}");
             process::exit(1);
         }
     };
 
     if let Some(count) = count_lock {
         let count = Arc::try_unwrap(count).unwrap().into_inner().unwrap();
-        println!("{count}");
+        writeln!(io::stdout(), "{count}").expect("failed to write to stdout");
     }
 }

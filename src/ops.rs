@@ -83,8 +83,8 @@ fn compute_operators_and_operands<T: ParserTrait>(state: &mut State) {
     // Add primitive types to operators
     let v: Vec<_> = state.primitive_types.iter().cloned().collect();
     state.ops.operators.extend_from_slice(&v);
-    println!("{:?}", state.ops.operators);
-    println!("{:?}", state.halstead_maps.operators);
+    log::debug!("{:?}", state.ops.operators);
+    log::debug!("{:?}", state.halstead_maps.operators);
 
     state.ops.operands = state
         .halstead_maps

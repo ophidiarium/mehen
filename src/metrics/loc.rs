@@ -56,7 +56,7 @@ impl Sloc {
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Sloc) {
+    pub fn merge(&mut self, other: &Self) {
         self.sloc_min = self.sloc_min.min(other.sloc() as usize);
         self.sloc_max = self.sloc_max.max(other.sloc() as usize);
     }
@@ -109,9 +109,9 @@ impl Ploc {
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Ploc) {
+    pub fn merge(&mut self, other: &Self) {
         // Merge ploc lines
-        for l in other.lines.iter() {
+        for l in &other.lines {
             self.lines.insert(*l);
         }
 
@@ -171,7 +171,7 @@ impl Cloc {
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Cloc) {
+    pub fn merge(&mut self, other: &Self) {
         // Merge cloc lines
         self.only_comment_lines += other.only_comment_lines;
         self.code_comment_lines += other.code_comment_lines;
@@ -228,7 +228,7 @@ impl Lloc {
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Lloc) {
+    pub fn merge(&mut self, other: &Self) {
         // Merge lloc lines
         self.logical_lines += other.logical_lines;
         self.lloc_min = self.lloc_min.min(other.lloc() as usize);
@@ -331,7 +331,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Loc` metric suite into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.sloc.merge(&other.sloc);
         self.ploc.merge(&other.ploc);
         self.cloc.merge(&other.cloc);
@@ -575,7 +575,7 @@ impl Loc for PythonCode {
             }
             String => {
                 let parent = node.parent().unwrap();
-                if let ExpressionStatement = parent.kind_id().into() {
+                if parent.kind_id() == ExpressionStatement {
                     add_cloc_lines(stats, start, end);
                 } else if parent.start_row() != start {
                     check_comment_ends_on_code_line(stats, start);

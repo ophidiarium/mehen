@@ -87,7 +87,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Nom` metric suite into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.functions_min = self.functions_min.min(other.functions_min);
         self.functions_max = self.functions_max.max(other.functions_max);
         self.closures_min = self.closures_min.min(other.closures_min);

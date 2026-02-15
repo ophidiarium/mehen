@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use termcolor::{Color, ColorChoice, StandardStream, StandardStreamLock};
@@ -40,14 +40,14 @@ pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
             let end_line = n.end_row() + 1;
             if let Some(name) = T::Getter::get_func_name(n, code) {
                 spans.push(FunctionSpan {
-                    name: name.to_string(),
+                    name: name.to_owned(),
                     start_line,
                     end_line,
                     error: false,
                 });
             } else {
                 spans.push(FunctionSpan {
-                    name: "".to_string(),
+                    name: String::new(),
                     start_line,
                     end_line,
                     error: true,
@@ -60,7 +60,7 @@ pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
 }
 
 fn dump_span(
-    span: FunctionSpan,
+    span: &FunctionSpan,
     stdout: &mut StandardStreamLock,
     last: bool,
 ) -> std::io::Result<()> {
@@ -94,7 +94,7 @@ fn dump_span(
     writeln!(stdout, "{}.", span.end_line)
 }
 
-fn dump_spans(mut spans: Vec<FunctionSpan>, path: PathBuf) -> std::io::Result<()> {
+fn dump_spans(spans: &[FunctionSpan], path: &Path) -> std::io::Result<()> {
     if !spans.is_empty() {
         let stdout = StandardStream::stdout(ColorChoice::Always);
         let mut stdout = stdout.lock();
@@ -102,10 +102,11 @@ fn dump_spans(mut spans: Vec<FunctionSpan>, path: PathBuf) -> std::io::Result<()
         intense_color(&mut stdout, Color::Yellow)?;
         writeln!(&mut stdout, "In file {}", path.to_str().unwrap_or("..."))?;
 
-        for span in spans.drain(..spans.len() - 1) {
+        let last_idx = spans.len() - 1;
+        for span in &spans[..last_idx] {
             dump_span(span, &mut stdout, false)?;
         }
-        dump_span(spans.pop().unwrap(), &mut stdout, true)?;
+        dump_span(&spans[last_idx], &mut stdout, true)?;
         color(&mut stdout, Color::White)?;
     }
     Ok(())
@@ -119,6 +120,7 @@ pub struct FunctionCfg {
     pub path: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct Function {
     _guard: (),
 }
@@ -128,6 +130,7 @@ impl Callback for Function {
     type Cfg = FunctionCfg;
 
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res {
-        dump_spans(function(parser), cfg.path)
+        let spans = function(parser);
+        dump_spans(&spans, &cfg.path)
     }
 }

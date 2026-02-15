@@ -90,8 +90,7 @@ pub fn fix_includes<S: ::std::hash::BuildHasher>(
                     };
                     g.add_edge(node, i, 0);
                 } else {
-                    // TODO: add an option to display warning
-                    eprintln!("Warning: possible self inclusion {file:?}");
+                    log::warn!("possible self inclusion {file:?}");
                 }
             }
         }
@@ -138,11 +137,10 @@ pub fn fix_includes<S: ::std::hash::BuildHasher>(
                 *nodes.get_mut(&path).unwrap() = replacement;
             }
 
-            eprintln!("Warning: possible include cycle:");
+            log::warn!("possible include cycle:");
             for p in paths.iter() {
-                eprintln!("  - {p:?}");
+                log::warn!("  - {p:?}");
             }
-            eprintln!();
 
             scc_map.insert(replacement, paths);
         }
@@ -161,27 +159,17 @@ pub fn fix_includes<S: ::std::hash::BuildHasher>(
                             x_inc.insert(p.to_string());
                         }
                     } else {
-                        eprintln!("DEBUG: {path:?} {node:?}");
+                        log::debug!("{path:?} {node:?}");
                     }
                 } else {
                     x_inc.insert(w.to_str().unwrap().to_string());
                 }
             }
         } else {
-            eprintln!(
-                "Warning: included file which has not been preprocessed: {:?}",
+            log::warn!(
+                "included file which has not been preprocessed: {:?}",
                 path
             );
         }
     }
-}
-
-/// This function is deprecated and no longer functional as preprocessor support
-/// for C/C++ has been removed.
-///
-/// [`PreprocResults`]: struct.PreprocResults.html
-#[deprecated(note = "Preprocessor support removed with C/C++ language removal")]
-#[allow(dead_code)]
-pub fn preprocess(_path: &Path, _results: &mut PreprocResults) {
-    // No-op: Preprocessor support removed with C/C++ language removal
 }

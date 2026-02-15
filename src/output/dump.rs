@@ -31,6 +31,9 @@ use crate::traits::*;
 /// ```
 ///
 /// [`Result`]: #variant.Result
+/// Line range filter for dump output.
+type LineRange = (Option<usize>, Option<usize>);
+
 pub fn dump_node(
     code: &[u8],
     node: &Node,
@@ -47,8 +50,7 @@ pub fn dump_node(
         true,
         &mut stdout,
         depth,
-        &line_start,
-        &line_end,
+        (line_start, line_end),
     );
 
     color(&mut stdout, Color::White)?;
@@ -56,7 +58,6 @@ pub fn dump_node(
     ret
 }
 
-#[allow(clippy::too_many_arguments)]
 fn dump_tree_helper(
     code: &[u8],
     node: &Node,
@@ -64,8 +65,7 @@ fn dump_tree_helper(
     last: bool,
     stdout: &mut StandardStreamLock,
     depth: i32,
-    line_start: &Option<usize>,
-    line_end: &Option<usize>,
+    line_range: LineRange,
 ) -> std::io::Result<()> {
     if depth == 0 {
         return Ok(());
@@ -74,18 +74,18 @@ fn dump_tree_helper(
     let (pref_child, pref) = if node.parent().is_none() {
         ("", "")
     } else if last {
-        ("   ", "╰─ ")
+        ("   ", "\u{256e}\u{2500} ")
     } else {
-        ("│  ", "├─ ")
+        ("\u{2502}  ", "\u{251c}\u{2500} ")
     };
 
     let node_row = node.start_row() + 1;
     let mut display = true;
-    if let Some(line_start) = line_start {
-        display = node_row >= *line_start
+    if let Some(line_start) = line_range.0 {
+        display = node_row >= line_start;
     }
-    if let Some(line_end) = line_end {
-        display = display && node_row <= *line_end
+    if let Some(line_end) = line_range.1 {
+        display = display && node_row <= line_end;
     }
 
     if display {
@@ -141,8 +141,7 @@ fn dump_tree_helper(
                 i == 0,
                 stdout,
                 depth - 1,
-                line_start,
-                line_end,
+                line_range,
             )?;
             if !cursor.goto_next_sibling() {
                 break;
@@ -168,6 +167,7 @@ pub struct DumpCfg {
     pub line_end: Option<usize>,
 }
 
+#[derive(Debug)]
 pub struct Dump {
     _guard: (),
 }
