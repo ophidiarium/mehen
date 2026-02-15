@@ -1,3 +1,65 @@
+#![allow(clippy::upper_case_acronyms)]
+
+mod getter;
+mod macros;
+
+mod alterator;
+pub use alterator::*;
+
+mod node;
+pub use crate::node::*;
+
+mod metrics;
+pub use metrics::*;
+
+mod languages;
+pub(crate) use languages::*;
+
+mod checker;
+pub(crate) use checker::*;
+
+mod output;
+pub use output::*;
+
+mod spaces;
+pub use crate::spaces::*;
+
+mod ops;
+pub use crate::ops::*;
+
+mod find;
+pub use crate::find::*;
+
+mod function;
+pub use crate::function::*;
+
+mod ast;
+pub use crate::ast::*;
+
+mod count;
+pub use crate::count::*;
+
+mod preproc;
+pub use crate::preproc::*;
+
+mod langs;
+pub use crate::langs::*;
+
+mod tools;
+pub use crate::tools::*;
+
+mod concurrent_files;
+pub use crate::concurrent_files::*;
+
+mod traits;
+pub use crate::traits::*;
+
+mod parser;
+pub use crate::parser::*;
+
+mod comment_rm;
+pub use crate::comment_rm::*;
+
 mod formats;
 
 use std::io::{self, Write};
@@ -6,25 +68,10 @@ use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread::available_parallelism;
 
-use clap::Parser;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use formats::Format;
-
-// Enums
-use mehen::LANG;
-
-// Structs
-use mehen::{
-    CommentRm, CommentRmCfg, ConcurrentRunner, Count, CountCfg, Dump, DumpCfg, FilesData, Find,
-    FindCfg, Function, FunctionCfg, Metrics, MetricsCfg, OpsCfg, OpsCode,
-};
-
-// Functions
-use mehen::{
-    action, get_from_ext, get_function_spaces, get_ops, guess_language, read_file_with_eol,
-};
+use crate::formats::Format;
 
 #[derive(Debug)]
 struct Config {
@@ -130,7 +177,7 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[clap(name = "mehen", version, author, about = "Analyze source code.")]
 struct Opts {
     /// Input files to analyze.
@@ -195,7 +242,7 @@ struct Opts {
 
 fn main() {
     env_logger::init();
-    let opts = Opts::parse();
+    let opts = <Opts as clap::Parser>::parse();
 
     let count_lock = if !opts.count.is_empty() {
         Some(Arc::new(Mutex::new(Count::default())))

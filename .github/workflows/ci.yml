@@ -43,12 +43,19 @@ jobs:
         with:
           tool: cargo-insta
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Run tests
         shell: bash
-        run: cargo insta test --all-features --check --unreferenced reject
+        env:
+          NEXTEST_PROFILE: ci
+        run: cargo insta test --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
 
       - name: Smoke test CLI
         shell: bash
         run: |
-          cargo build --release -p mehen-cli
+          cargo build --release
           ./target/release/mehen --help

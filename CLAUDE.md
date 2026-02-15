@@ -58,7 +58,7 @@ cargo check
 
 ```
 mehen/
-├── src/                      # Core library
+├── src/                      # Core CLI and analysis engine
 │   ├── languages/           # Language-specific AST enums (5 files)
 │   │   ├── language_go.rs
 │   │   ├── language_python.rs
@@ -83,8 +83,8 @@ mehen/
 │   ├── getter.rs           # Extract information from nodes
 │   ├── langs.rs            # Language definitions (mk_langs! macro)
 │   ├── parser.rs           # Parser wrapper
-│   └── lib.rs              # Library entry point
-├── mehen-cli/              # Command-line interface
+│   ├── formats.rs          # Output serializers
+│   └── main.rs             # CLI entry point
 ├── mehen-book/             # Documentation (mdBook)
 └── enums/                  # Code generator for language enums
 
@@ -183,8 +183,8 @@ All C/C++ preprocessing infrastructure has been removed:
 ### Running Tests
 
 ```bash
-cargo test --lib          # Library tests only
 cargo test                # All tests
+cargo test metrics::      # Filter by test name
 cargo test -- --nocapture # With output
 ```
 
@@ -302,10 +302,9 @@ The `mk_langs!` macro generates lots of boilerplate. Changes to language registr
 
 ## Workspace Members
 
-The workspace has 2 packages:
+The workspace has 1 package:
 
-1. **mehen** (root) - Core library
-2. **mehen-cli** - Command-line tool (binary name: `mehen`)
+1. **mehen** (root) - Command-line tool (binary name: `mehen`)
 
 The `enums` crate is excluded from the workspace (it's a build-time code generator).
 
@@ -319,7 +318,7 @@ The `enums` crate is excluded from the workspace (it's a build-time code generat
 
 - Code documentation: `cargo doc --open`
 - Book: `mehen-book/` (mdBook format)
-- API docs are published at https://docs.rs/mehen/
+- CLI/user docs live in the README and `mehen-book/`
 
 ## External Links to Preserve
 
@@ -332,19 +331,19 @@ Do NOT change these legitimate external references:
 
 ```bash
 # Build everything
-cargo build --workspace
+cargo build
 
 # Run all tests
-cargo test --lib
+cargo test
 
 # Check compilation
-cargo check --workspace
+cargo check
 
 # Format code
 cargo fmt --all
 
 # Run CLI
-cargo run -p mehen-cli -- -m -p test.go
+cargo run -- -m -p test.go
 ```
 
 ## Key Insights from the Cleanup

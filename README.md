@@ -1,13 +1,9 @@
 # mehen
 
-**mehen** is a Rust library to analyze and extract information
-from source code written in many different programming languages.
-It is based on a parser generator tool and an incremental parsing library
-called
+**mehen** is a Rust command-line tool to analyze and extract information
+from source code written in multiple programming languages.
+It is based on a parser generator tool and an incremental parsing library called
 <a href="https://tree-sitter.github.io/tree-sitter/" target="_blank">Tree Sitter</a>.
-
-
-A command line tool called **mehen** is provided to interact with the API of the library.
 
 This tool can be used to:
 
@@ -24,23 +20,10 @@ Run `mehen --help` to see all available commands and options.
 
 ## Building
 
-To build the `mehen` library, you need to run the following
-command:
+To build `mehen`, run:
 
 ```console
 cargo build
-```
-
-If you want to build the `cli`:
-
-```console
-cargo build -p mehen-cli
-```
-
-To build everything:
-
-```console
-cargo build --workspace
 ```
 
 ## Testing
@@ -48,7 +31,7 @@ cargo build --workspace
 To verify whether all tests pass, run the `cargo test` command.
 
 ```console
-cargo test --workspace --all-features --verbose
+cargo test --all-features --verbose
 ```
 
 ### Updating insta tests
@@ -72,7 +55,7 @@ If you want to contribute to the development of this software, please open an is
 
 # License
 
-**mehen** and **mehen-cli** (binary: `mehen`) are released under the
+**mehen** is released under the
 <a href="https://www.mozilla.org/MPL/2.0/" target="_blank">Mozilla Public License v2.0</a>.
 
 # Credits

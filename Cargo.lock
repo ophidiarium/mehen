@@ -498,7 +498,9 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 name = "mehen"
 version = "0.0.2"
 dependencies = [
+ "clap",
  "crossbeam",
+ "env_logger",
  "globset",
  "insta",
  "log",
@@ -511,28 +513,16 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "serde",
+ "serde_cbor",
+ "serde_json",
+ "serde_yaml",
+ "toml",
  "tree-sitter",
  "tree-sitter-go",
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "walkdir",
-]
-
-[[package]]
-name = "mehen-cli"
-version = "0.0.2"
-dependencies = [
- "clap",
- "env_logger",
- "globset",
- "log",
- "mehen",
- "serde",
- "serde_cbor",
- "serde_json",
- "serde_yaml",
- "toml",
 ]
 
 [[package]]

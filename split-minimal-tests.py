@@ -23,7 +23,7 @@ import shutil
 import typing as T
 
 # List of metrics
-# TODO: Implement a command into mehen-cli that returns all
+# TODO: Implement a command into mehen that returns all
 # computed metrics https://github.com/mozilla/mehen/issues/478
 METRICS = [
     "cognitive",

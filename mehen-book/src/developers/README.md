@@ -27,23 +27,10 @@ git clone -j8 git@github.com:ophidiarium/mehen.git
 
 ## Building
 
-To build the `mehen` library, you need to run the following
-command:
+To build `mehen`, run:
 
 ```console
 cargo build
-```
-
-If you want to build the CLI:
-
-```console
-cargo build -p mehen-cli
-```
-
-To build everything:
-
-```console
-cargo build --workspace
 ```
 
 ## Testing
@@ -52,7 +39,7 @@ After you have finished changing the code, you should **always** verify whether
 all tests pass with the `cargo test` command.
 
 ```console
-cargo test --workspace --all-features --verbose
+cargo test --all-features --verbose
 ```
 
 ## Code Formatting
@@ -92,7 +79,7 @@ rustup component add clippy
 To detect errors and warnings:
 
 ```console
-cargo clippy --workspace --all-targets --
+cargo clippy --all-targets --all-features
 ```
 
 ## Code Documentation
@@ -112,20 +99,20 @@ each dependency used by **mehen**.
 You can run the **mehen** CLI using:
 
 ```console
-cargo run -p mehen-cli -- [mehen-parameters]
+cargo run -- [mehen-parameters]
 ```
 
 To know the list of **mehen** CLI parameters, run:
 
 ```console
-cargo run -p mehen-cli -- --help
+cargo run -- --help
 ```
 
 ## Practical advice
 
 - When you add a new feature, add at least one unit or integration test to
   verify that everything works correctly
-- Document public API
+- Document user-facing behavior
 - Do not add dead code
 - Comment intricate code such that others can comprehend what you have
   accomplished
