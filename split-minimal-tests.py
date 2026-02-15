@@ -23,8 +23,8 @@ import shutil
 import typing as T
 
 # List of metrics
-# TODO: Implement a command into mehen that returns all
-# computed metrics https://github.com/mozilla/mehen/issues/478
+# TODO: Add `--list-metrics` to `mehen` to print all supported metrics
+# (optionally with a short description for each metric).
 METRICS = [
     "cognitive",
     "sloc",
@@ -47,7 +47,7 @@ def main() -> None:
         "a software called `json-minimal-tests`, into distinct directories "
         "depending on metric differences.",
         epilog="The source code of this program can be found on "
-        "GitHub at https://github.com/mozilla/mehen",
+        "GitHub at https://github.com/ophidiarium/mehen",
     )
 
     # Arguments
