@@ -1,0 +1,78 @@
+name: Regenerate Tree-sitter Grammars
+
+on:
+  pull_request_target:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+  RUSTUP_MAX_RETRIES: 10
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regenerate:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      contains(github.event.pull_request.head.ref, 'tree-sitter')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Sync tree-sitter versions to enums
+        run: |
+          grep '^tree-sitter' Cargo.toml | while IFS= read -r line; do
+            pkg="${line%% =*}"
+            sed -i "s|^${pkg} = .*|${line}|" enums/Cargo.toml
+          done
+          echo "Updated enums/Cargo.toml:"
+          grep '^tree-sitter' enums/Cargo.toml
+
+      - name: Set up Rust toolchain
+        run: rustup show
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cache-${{ hashFiles('**/Cargo.lock') }}"
+          cache-on-failure: true
+
+      - name: Regenerate grammars
+        run: ./recreate-grammars.sh
+
+      - name: Install cargo-insta
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-insta
+
+      - name: Run tests
+        run: cargo insta test --all-features --check --unreferenced reject
+
+      - name: Commit and push regenerated grammars
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: regenerate tree-sitter grammars"
+            git push
+          fi
+
+      - name: Add tree-sitter label
+        run: |
+          gh label create tree-sitter --description "Tree-sitter grammar updates" --color "0075ca" --force 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" --add-label "tree-sitter"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
