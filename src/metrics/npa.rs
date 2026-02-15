@@ -202,11 +202,4 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-implement_metric_trait!(
-    Npa,
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode
-);
+implement_metric_trait!(Npa, PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);

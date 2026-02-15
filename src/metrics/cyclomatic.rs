@@ -129,7 +129,6 @@ impl Cyclomatic for PythonCode {
     }
 }
 
-
 impl Cyclomatic for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Typescript::*;
@@ -169,14 +168,13 @@ impl Cyclomatic for RustCode {
     }
 }
 
-
 impl Cyclomatic for GoCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use crate::Go::*;
 
         match node.kind_id().into() {
-            If | For | ExpressionCase | DefaultCase | TypeCase | CommunicationCase
-            | AMPAMP | PIPEPIPE => {
+            If | For | ExpressionCase | DefaultCase | TypeCase | CommunicationCase | AMPAMP
+            | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
             _ => {}

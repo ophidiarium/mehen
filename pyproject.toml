@@ -1,0 +1,37 @@
+[build-system]
+requires      = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "mehen"
+dynamic = ["version"]
+description = "Tool to compute and export code metrics"
+authors = [{ name = "Konstantin Vyatkin", email = "tino@vtkn.io" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+keywords = ["metrics", "code-analysis", "complexity", "cyclomatic", "halstead"]
+
+[project.urls]
+Homepage      = "https://github.com/ophidiarium/mehen"
+Repository    = "https://github.com/ophidiarium/mehen"
+Documentation = "https://github.com/ophidiarium/mehen#readme"
+Issues        = "https://github.com/ophidiarium/mehen/issues"
+
+[tool.maturin]
+bindings      = "bin"
+python-source = "python"
+manifest-path = "mehen-cli/Cargo.toml"

@@ -1,18 +1,16 @@
 [package]
 name = "mehen"
-version = "0.0.1"
-authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
-edition = "2024"
-rust-version = "1.93.1"
-repository = "https://github.com/ophidiarium/mehen"
-documentation = "https://docs.rs/mehen/"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
 readme = "README.md"
 keywords = ["metrics"]
 description = "Tool to compute and export code metrics"
-license = "MPL-2.0"
+license.workspace = true
 
 [dependencies]
-aho-corasick = "^1.0"
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset = "^0.4"
 num = "^0.4"
@@ -31,6 +29,9 @@ tree-sitter-python = "=0.23.6"
 tree-sitter-rust = "=0.23.2"
 tree-sitter-go = "=0.23.4"
 
+[package.metadata.cargo-machete]
+ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust"]
+
 [dev-dependencies]
 insta = { version = "1.29.0", features = ["yaml", "json", "redactions"] }
 pretty_assertions = "^1.3"
@@ -44,6 +45,14 @@ opt-level = 3
 [workspace]
 members = ["mehen-cli"]
 exclude = ["enums"]
+
+[workspace.package]
+version = "0.0.1"
+authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
+edition = "2024"
+rust-version = "1.93.1"
+repository = "https://github.com/ophidiarium/mehen"
+license = "MPL-2.0"
 
 [profile.release]
 opt-level = 3

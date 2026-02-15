@@ -727,11 +727,26 @@ impl Loc for GoCode {
                 add_cloc_lines(stats, start, end);
             }
             // LLOC: count statements
-            ExpressionStatement | SendStatement | IncStatement | DecStatement
-            | AssignmentStatement | ShortVarDeclaration | VarDeclaration | ConstDeclaration
-            | TypeDeclaration | GoStatement | DeferStatement | ReturnStatement
-            | BreakStatement | ContinueStatement | GotoStatement | FallthroughStatement
-            | IfStatement | ExpressionSwitchStatement | TypeSwitchStatement | SelectStatement
+            ExpressionStatement
+            | SendStatement
+            | IncStatement
+            | DecStatement
+            | AssignmentStatement
+            | ShortVarDeclaration
+            | VarDeclaration
+            | ConstDeclaration
+            | TypeDeclaration
+            | GoStatement
+            | DeferStatement
+            | ReturnStatement
+            | BreakStatement
+            | ContinueStatement
+            | GotoStatement
+            | FallthroughStatement
+            | IfStatement
+            | ExpressionSwitchStatement
+            | TypeSwitchStatement
+            | SelectStatement
             | ForStatement => {
                 stats.lloc.logical_lines += 1;
             }
@@ -742,8 +757,6 @@ impl Loc for GoCode {
         }
     }
 }
-
-// implement_metric_trait!(Loc, PreprocCode, CcommentCode, KotlinCode);
 
 #[cfg(test)]
 mod tests {

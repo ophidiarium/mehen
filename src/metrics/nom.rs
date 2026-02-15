@@ -201,14 +201,7 @@ where
     }
 }
 
-implement_metric_trait!(
-    [Nom],
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode
-);
+implement_metric_trait!([Nom], PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
 
 #[cfg(test)]
 mod tests {
@@ -277,5 +270,4 @@ mod tests {
             },
         );
     }
-
 }

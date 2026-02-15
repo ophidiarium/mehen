@@ -11,7 +11,7 @@ where
     ///
     /// This function can be overloaded according to the needs of each
     /// programming language.
-    fn alterate(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
+    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
         Self::get_default(node, code, span, children)
     }
 
@@ -53,7 +53,7 @@ where
         if comment && Self::is_comment(node) {
             None
         } else {
-            Some(Self::alterate(node, code, span, children))
+            Some(Self::alter(node, code, span, children))
         }
     }
 }
@@ -62,7 +62,7 @@ impl Alterator for PythonCode {}
 impl Alterator for GoCode {}
 
 impl Alterator for TypescriptCode {
-    fn alterate(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
+    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
         match Typescript::from(node.kind_id()) {
             Typescript::String => {
                 let (text, span) = Self::get_text_span(node, code, span, true);
@@ -74,7 +74,7 @@ impl Alterator for TypescriptCode {
 }
 
 impl Alterator for TsxCode {
-    fn alterate(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
+    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
         match Tsx::from(node.kind_id()) {
             Tsx::String => {
                 let (text, span) = Self::get_text_span(node, code, span, true);
@@ -86,7 +86,7 @@ impl Alterator for TsxCode {
 }
 
 impl Alterator for RustCode {
-    fn alterate(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
+    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
         match Rust::from(node.kind_id()) {
             Rust::StringLiteral | Rust::CharLiteral => {
                 let (text, span) = Self::get_text_span(node, code, span, true);

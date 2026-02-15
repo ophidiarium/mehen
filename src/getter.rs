@@ -90,7 +90,6 @@ impl Getter for PythonCode {
     }
 }
 
-
 impl Getter for TypescriptCode {
     fn get_space_kind(node: &Node) -> SpaceKind {
         use Typescript::*;
