@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Rust {
+pub(crate) enum Rust {
     End = 0,
     Identifier = 1,
     SEMI = 2,
@@ -471,7 +471,7 @@ impl From<Rust> for &'static str {
             Rust::Loop => "loop",
             Rust::Match => "match",
             Rust::Mod => "mod",
-            Rust::Pub => "pub",
+            Rust::Pub => "pub(crate)",
             Rust::Return => "return",
             Rust::Static => "static",
             Rust::Struct => "struct",

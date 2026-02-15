@@ -4,61 +4,40 @@ mod getter;
 mod macros;
 
 mod alterator;
-pub use alterator::*;
 
 mod node;
-pub use crate::node::*;
 
 mod metrics;
-pub use metrics::*;
 
 mod languages;
-pub(crate) use languages::*;
 
 mod checker;
-pub(crate) use checker::*;
 
 mod output;
-pub use output::*;
 
 mod spaces;
-pub use crate::spaces::*;
 
 mod ops;
-pub use crate::ops::*;
 
 mod find;
-pub use crate::find::*;
 
 mod function;
-pub use crate::function::*;
-
-mod ast;
-pub use crate::ast::*;
 
 mod count;
-pub use crate::count::*;
 
 mod preproc;
-pub use crate::preproc::*;
 
 mod langs;
-pub use crate::langs::*;
 
 mod tools;
-pub use crate::tools::*;
 
 mod concurrent_files;
-pub use crate::concurrent_files::*;
 
 mod traits;
-pub use crate::traits::*;
 
 mod parser;
-pub use crate::parser::*;
 
 mod comment_rm;
-pub use crate::comment_rm::*;
 
 mod formats;
 
@@ -71,7 +50,17 @@ use std::thread::available_parallelism;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
+use crate::comment_rm::{CommentRm, CommentRmCfg};
+use crate::concurrent_files::{ConcurrentRunner, FilesData};
+use crate::count::{Count, CountCfg};
+use crate::find::{Find, FindCfg};
 use crate::formats::Format;
+use crate::function::{Function, FunctionCfg};
+use crate::langs::{LANG, action, get_from_ext, get_function_spaces, get_ops};
+use crate::ops::{OpsCfg, OpsCode};
+use crate::output::{Dump, DumpCfg};
+use crate::spaces::{Metrics, MetricsCfg};
+use crate::tools::{guess_language, read_file_with_eol};
 
 #[derive(Debug)]
 struct Config {
@@ -305,7 +294,7 @@ fn main() {
     let _all_files = match ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
         Ok(all_files) => all_files,
         Err(e) => {
-            log::error!("{e:?}");
+            log::error!("{e}");
             process::exit(1);
         }
     };

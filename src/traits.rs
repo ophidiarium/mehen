@@ -1,31 +1,31 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::abc::Abc;
 use crate::alterator::Alterator;
 use crate::checker::Checker;
-use crate::cognitive::Cognitive;
-use crate::cyclomatic::Cyclomatic;
-use crate::exit::Exit;
 use crate::getter::Getter;
-use crate::halstead::Halstead;
 use crate::langs::*;
-use crate::loc::Loc;
-use crate::mi::Mi;
-use crate::nargs::NArgs;
+use crate::metrics::abc::Abc;
+use crate::metrics::cognitive::Cognitive;
+use crate::metrics::cyclomatic::Cyclomatic;
+use crate::metrics::exit::Exit;
+use crate::metrics::halstead::Halstead;
+use crate::metrics::loc::Loc;
+use crate::metrics::mi::Mi;
+use crate::metrics::nargs::NArgs;
+use crate::metrics::nom::Nom;
+use crate::metrics::npa::Npa;
+use crate::metrics::npm::Npm;
+use crate::metrics::wmc::Wmc;
 use crate::node::Node;
-use crate::nom::Nom;
-use crate::npa::Npa;
-use crate::npm::Npm;
 use crate::parser::Filter;
 use crate::preproc::PreprocResults;
-use crate::wmc::Wmc;
 
 /// A trait for callback functions.
 ///
 /// Allows to call a private library function, getting as result
 /// its output value.
-pub trait Callback {
+pub(crate) trait Callback {
     /// The output type returned by the callee
     type Res;
     /// The input type used by the caller to pass the arguments to the callee
@@ -35,15 +35,14 @@ pub trait Callback {
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res;
 }
 
-pub trait LanguageInfo {
+pub(crate) trait LanguageInfo {
     type BaseLang;
 
     fn get_lang() -> LANG;
-    fn get_lang_name() -> &'static str;
 }
 
 #[doc(hidden)]
-pub trait ParserTrait {
+pub(crate) trait ParserTrait {
     type Checker: Alterator + Checker;
     type Getter: Getter;
     type Cognitive: Cognitive;
@@ -60,7 +59,6 @@ pub trait ParserTrait {
     type Npa: Npa;
 
     fn new(code: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Self;
-    fn get_language(&self) -> LANG;
     fn get_root(&self) -> Node<'_>;
     fn get_code(&self) -> &[u8];
     fn get_filters(&self, filters: &[String]) -> Filter;

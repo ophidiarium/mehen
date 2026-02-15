@@ -6,7 +6,7 @@ use crate::traits::*;
 
 /// Counts the types of nodes specified in the input slice
 /// and the number of nodes in a code.
-pub fn count<T: ParserTrait>(parser: &T, filters: &[String]) -> (usize, usize) {
+pub(crate) fn count<T: ParserTrait>(parser: &T, filters: &[String]) -> (usize, usize) {
     let filters = parser.get_filters(filters);
     let node = parser.get_root();
     let mut cursor = node.cursor();
@@ -37,20 +37,20 @@ pub fn count<T: ParserTrait>(parser: &T, filters: &[String]) -> (usize, usize) {
 /// Configuration options for counting different
 /// types of nodes in a code.
 #[derive(Debug)]
-pub struct CountCfg {
+pub(crate) struct CountCfg {
     /// Types of nodes to count
-    pub filters: Vec<String>,
+    pub(crate) filters: Vec<String>,
     /// Number of nodes of a certain type counted by each thread
-    pub stats: Arc<Mutex<Count>>,
+    pub(crate) stats: Arc<Mutex<Count>>,
 }
 
 /// Count of different types of nodes in a code.
 #[derive(Debug, Default)]
-pub struct Count {
+pub(crate) struct Count {
     /// The number of specific types of nodes searched in a code
-    pub good: usize,
+    pub(crate) good: usize,
     /// The total number of nodes in a code
-    pub total: usize,
+    pub(crate) total: usize,
 }
 
 impl Callback for Count {

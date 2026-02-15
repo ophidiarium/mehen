@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Python {
+pub(crate) enum Python {
     End = 0,
     Identifier = 1,
     SEMI = 2,

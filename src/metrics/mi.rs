@@ -7,13 +7,12 @@ use super::halstead;
 use super::loc;
 
 use crate::checker::Checker;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
-
-use crate::*;
 
 /// The `Mi` metric.
 #[derive(Default, Clone, Debug)]
-pub struct Stats {
+pub(crate) struct Stats {
     halstead_length: f64,
     halstead_vocabulary: f64,
     halstead_volume: f64,
@@ -54,7 +53,7 @@ impl Stats {
     ///
     /// Its value can be negative.
     #[inline(always)]
-    pub fn mi_original(&self) -> f64 {
+    pub(crate) fn mi_original(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         16.2_f64.mul_add(
             -self.sloc.ln(),
@@ -70,7 +69,7 @@ impl Stats {
     ///
     /// Its value can be negative.
     #[inline(always)]
-    pub fn mi_sei(&self) -> f64 {
+    pub(crate) fn mi_sei(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         50.0_f64.mul_add(
             (self.comments_percentage * 2.4).sqrt().sin(),
@@ -87,7 +86,7 @@ impl Stats {
     /// Returns the `Mi` metric calculated using the derivative formula
     /// employed by Microsoft Visual Studio.
     #[inline(always)]
-    pub fn mi_visual_studio(&self) -> f64 {
+    pub(crate) fn mi_visual_studio(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         let formula = 16.2_f64.mul_add(
             -self.sloc.ln(),
@@ -100,7 +99,7 @@ impl Stats {
     }
 }
 
-pub trait Mi
+pub(crate) trait Mi
 where
     Self: Checker,
 {
@@ -123,9 +122,8 @@ implement_metric_trait!([Mi], PythonCode, TypescriptCode, TsxCode, RustCode, GoC
 
 #[cfg(test)]
 mod tests {
+    use crate::langs::PythonParser;
     use crate::tools::check_metrics;
-
-    use super::*;
 
     #[test]
     fn check_mi_metrics() {

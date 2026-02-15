@@ -5,7 +5,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::*;
+use crate::langs::{GoCode, PythonCode, PythonParser, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Python, Rust, Tsx, Typescript};
+use crate::node::Node;
 
 // TODO: Find a way to increment the cognitive complexity value
 // for recursive code. For some kind of languages, such as C++, it is pretty
@@ -18,7 +20,7 @@ use crate::*;
 
 /// The `Cognitive Complexity` metric.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     structural: usize,
     structural_sum: usize,
     structural_min: usize,
@@ -71,27 +73,27 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Cognitive Complexity` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.structural_min = self.structural_min.min(other.structural_min);
         self.structural_max = self.structural_max.max(other.structural_max);
         self.structural_sum += other.structural_sum;
     }
 
     /// Returns the `Cognitive Complexity` metric value
-    pub fn cognitive(&self) -> f64 {
+    pub(crate) fn cognitive(&self) -> f64 {
         self.structural as f64
     }
     /// Returns the `Cognitive Complexity` sum metric value
-    pub fn cognitive_sum(&self) -> f64 {
+    pub(crate) fn cognitive_sum(&self) -> f64 {
         self.structural_sum as f64
     }
 
     /// Returns the `Cognitive Complexity` minimum metric value
-    pub fn cognitive_min(&self) -> f64 {
+    pub(crate) fn cognitive_min(&self) -> f64 {
         self.structural_min as f64
     }
     /// Returns the `Cognitive Complexity` maximum metric value
-    pub fn cognitive_max(&self) -> f64 {
+    pub(crate) fn cognitive_max(&self) -> f64 {
         self.structural_max as f64
     }
 
@@ -101,7 +103,7 @@ impl Stats {
     /// for the total number of functions/closures in a space.
     ///
     /// If there are no functions in a code, its value is `NAN`.
-    pub fn cognitive_average(&self) -> f64 {
+    pub(crate) fn cognitive_average(&self) -> f64 {
         self.cognitive_sum() / self.total_space_functions as f64
     }
     #[inline(always)]
@@ -120,7 +122,7 @@ impl Stats {
     }
 }
 
-pub trait Cognitive
+pub(crate) trait Cognitive
 where
     Self: Checker,
 {
@@ -404,7 +406,7 @@ impl Cognitive for GoCode {
         stats: &mut Stats,
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
-        use crate::Go::*;
+        use crate::languages::Go::*;
 
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
@@ -424,14 +426,18 @@ impl Cognitive for GoCode {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
             BinaryExpression => {
-                compute_booleans::<language_go::Go>(node, stats, &AMPAMP, &PIPEPIPE);
+                compute_booleans::<crate::languages::Go>(node, stats, &AMPAMP, &PIPEPIPE);
             }
             FuncLiteral => {
                 lambda += 1;
             }
             FunctionDeclaration | MethodDeclaration => {
                 nesting = 0;
-                increment_function_depth::<language_go::Go>(&mut depth, node, &FunctionDeclaration);
+                increment_function_depth::<crate::languages::Go>(
+                    &mut depth,
+                    node,
+                    &FunctionDeclaration,
+                );
             }
             _ => {}
         }
@@ -444,9 +450,8 @@ impl Cognitive for GoCode {
 
 #[cfg(test)]
 mod tests {
+    use crate::langs::{GoParser, PythonParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
-
-    use super::*;
 
     #[test]
     fn python_no_cognitive() {
@@ -1116,7 +1121,7 @@ mod tests {
     #[test]
     fn rust_if_let_else_if_else() {
         check_metrics::<RustParser>(
-            "pub fn create_usage_no_title(p: &Parser, used: &[&str]) -> String {
+            "pub(crate) fn create_usage_no_title(p: &Parser, used: &[&str]) -> String {
                  debugln!(\"usage::create_usage_no_title;\");
                  if let Some(u) = p.meta.usage_str { // +1
                      String::from(&*u)

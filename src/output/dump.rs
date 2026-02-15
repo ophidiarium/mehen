@@ -33,7 +33,7 @@ use crate::traits::*;
 /// Line range filter for dump output.
 type LineRange = (Option<usize>, Option<usize>);
 
-pub fn dump_node(
+pub(crate) fn dump_node(
     code: &[u8],
     node: &Node,
     depth: i32,
@@ -155,21 +155,21 @@ fn dump_tree_helper(
 
 /// Configuration options for dumping the `AST` of a code.
 #[derive(Debug)]
-pub struct DumpCfg {
+pub(crate) struct DumpCfg {
     /// The first line of code to dump
     ///
     /// If `None`, the code is dumped from the first line of code
     /// in a file
-    pub line_start: Option<usize>,
+    pub(crate) line_start: Option<usize>,
     /// The last line of code to dump
     ///
     /// If `None`, the code is dumped until the last line of code
     /// in a file
-    pub line_end: Option<usize>,
+    pub(crate) line_end: Option<usize>,
 }
 
 #[derive(Debug)]
-pub struct Dump {
+pub(crate) struct Dump {
     _guard: (),
 }
 

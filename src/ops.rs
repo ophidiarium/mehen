@@ -8,31 +8,30 @@ use crate::getter::Getter;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
-use crate::halstead::{Halstead, HalsteadMaps};
-
-use crate::dump_ops::*;
+use crate::metrics::halstead::{Halstead, HalsteadMaps};
+use crate::output::dump_ops::*;
 use crate::traits::*;
 
 /// All operands and operators of a space.
 #[derive(Debug, Clone, Serialize)]
-pub struct Ops {
+pub(crate) struct Ops {
     /// The name of a function space.
     ///
     /// If `None`, an error is occurred in parsing
     /// the name of a function space.
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// The first line of a function space.
-    pub start_line: usize,
+    pub(crate) start_line: usize,
     /// The last line of a function space.
-    pub end_line: usize,
+    pub(crate) end_line: usize,
     /// The space kind.
-    pub kind: SpaceKind,
+    pub(crate) kind: SpaceKind,
     /// All subspaces contained in a function space.
-    pub spaces: Vec<Ops>,
+    pub(crate) spaces: Vec<Ops>,
     /// All operands of a space.
-    pub operands: Vec<String>,
+    pub(crate) operands: Vec<String>,
     /// All operators of a space.
-    pub operators: Vec<String>,
+    pub(crate) operators: Vec<String>,
 }
 
 impl Ops {
@@ -153,7 +152,10 @@ fn finalize<T: ParserTrait>(state_stack: &mut Vec<State>, diff_level: usize) {
 /// operands_and_operators(&parser, &path).unwrap();
 /// # }
 /// ```
-pub fn operands_and_operators<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Ops> {
+pub(crate) fn operands_and_operators<'a, T: ParserTrait>(
+    parser: &'a T,
+    path: &'a Path,
+) -> Option<Ops> {
     let code = parser.get_code();
     let node = parser.get_root();
     let mut cursor = node.cursor();
@@ -222,12 +224,12 @@ pub fn operands_and_operators<'a, T: ParserTrait>(parser: &'a T, path: &'a Path)
 /// Configuration options for retrieving
 /// all the operands and operators in a code.
 #[derive(Debug)]
-pub struct OpsCfg {
+pub(crate) struct OpsCfg {
     /// Path to the file containing the code.
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
 }
 
-pub struct OpsCode {
+pub(crate) struct OpsCode {
     _guard: (),
 }
 
@@ -248,7 +250,7 @@ impl Callback for OpsCode {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{LANG, get_ops};
+    use crate::langs::{LANG, get_ops};
 
     #[inline(always)]
     fn check_ops(
