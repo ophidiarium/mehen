@@ -75,11 +75,7 @@ impl Filter {
 }
 
 #[inline(always)]
-fn get_fake_code(
-    _code: &[u8],
-    _path: &Path,
-    _pr: Option<Arc<PreprocResults>>,
-) -> Option<Vec<u8>> {
+fn get_fake_code(_code: &[u8], _path: &Path, _pr: Option<Arc<PreprocResults>>) -> Option<Vec<u8>> {
     None
 }
 

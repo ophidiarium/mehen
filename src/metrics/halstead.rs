@@ -285,7 +285,6 @@ impl Halstead for PythonCode {
     }
 }
 
-
 impl Halstead for TypescriptCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -303,7 +302,6 @@ impl Halstead for RustCode {
         compute_halstead::<Self>(node, code, halstead_maps);
     }
 }
-
 
 impl Halstead for GoCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {

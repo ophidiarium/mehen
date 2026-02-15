@@ -22,10 +22,8 @@ use mehen::{
 
 // Functions
 use mehen::{
-    action, get_from_ext, get_function_spaces, get_ops, guess_language,
-    read_file_with_eol,
+    action, get_from_ext, get_function_spaces, get_ops, guess_language, read_file_with_eol,
 };
-
 
 #[derive(Debug)]
 struct Config {
@@ -131,14 +129,8 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
     }
 }
 
-
 #[derive(Parser, Debug)]
-#[clap(
-    name = "mehen",
-    version,
-    author,
-    about = "Analyze source code."
-)]
+#[clap(name = "mehen", version, author, about = "Analyze source code.")]
 struct Opts {
     /// Input files to analyze.
     #[clap(long, short, value_parser)]
@@ -261,9 +253,7 @@ fn main() {
         paths: opts.paths,
     };
 
-    let _all_files = match ConcurrentRunner::new(num_jobs, act_on_file)
-        .run(cfg, files_data)
-    {
+    let _all_files = match ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
         Ok(all_files) => all_files,
         Err(e) => {
             eprintln!("{e:?}");

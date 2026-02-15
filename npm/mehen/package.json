@@ -1,0 +1,50 @@
+{
+  "name": "mehen",
+  "version": "0.0.1",
+  "description": "Tool to compute and export code metrics",
+  "keywords": [
+    "metrics",
+    "code-analysis",
+    "complexity",
+    "cyclomatic",
+    "halstead",
+    "rust",
+    "cli"
+  ],
+  "homepage": "https://github.com/ophidiarium/mehen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ophidiarium/mehen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ophidiarium/mehen/issues"
+  },
+  "license": "MPL-2.0",
+  "author": {
+    "name": "Konstantin Vyatkin",
+    "email": "tino@vtkn.io"
+  },
+  "bin": {
+    "mehen": "./bin/mehen.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "optionalDependencies": {
+    "@mehen/linux-x64-gnu": "0.0.1",
+    "@mehen/linux-x64-musl": "0.0.1",
+    "@mehen/linux-arm64-gnu": "0.0.1",
+    "@mehen/linux-arm64-musl": "0.0.1",
+    "@mehen/darwin-x64": "0.0.1",
+    "@mehen/darwin-arm64": "0.0.1",
+    "@mehen/win32-x64": "0.0.1",
+    "@mehen/win32-arm64": "0.0.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

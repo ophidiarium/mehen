@@ -1,12 +1,18 @@
 # See https://github.com/crate-ci/typos/blob/master/docs/reference.md to configure typos
 
 [default.extend-identifiers]
+# Common Rust abbreviation for "type" (reserved keyword)
+typ = "typ"
+typs = "typs"
+typs1 = "typs1"
+typs2 = "typs2"
 
 [default.extend-words]
+# Intentional name of a removed language parser
+Ccomment = "Ccomment"
 
 [files]
 extend-exclude = [
     "enums/data/",
     "tree-sitter-*/examples/",
-    "src/c_langs_macros/c_macros.rs",
 ]

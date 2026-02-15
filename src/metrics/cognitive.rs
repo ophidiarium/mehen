@@ -406,7 +406,6 @@ impl Cognitive for TsxCode {
     js_cognitive!(Tsx);
 }
 
-
 impl Cognitive for GoCode {
     fn compute(
         node: &Node,

@@ -27,21 +27,17 @@ use crate::tools::{color, intense_color};
 /// ```
 /// use std::path::PathBuf;
 ///
-/// use rust_code_analysis::{dump_root, metrics, CppParser, ParserTrait};
+/// use mehen::{dump_root, metrics, RustParser, ParserTrait};
 ///
-/// let source_code = "int a = 42;";
+/// let source_code = "fn main() { let a = 42; }";
 ///
-/// // The path to a dummy file used to contain the source code
-/// let path = PathBuf::from("foo.c");
+/// let path = PathBuf::from("foo.rs");
 /// let source_as_vec = source_code.as_bytes().to_vec();
 ///
-/// // The parser of the code, in this case a CPP parser
-/// let parser = CppParser::new(source_as_vec, &path, None);
+/// let parser = RustParser::new(source_as_vec, &path, None);
 ///
-/// // Compute metrics
 /// let space = metrics(&parser, &path).unwrap();
 ///
-/// // Dump all metrics
 /// dump_root(&space).unwrap();
 /// ```
 ///

@@ -101,7 +101,6 @@ pub trait Checker {
     }
 }
 
-
 impl Checker for PythonCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Python::Comment
@@ -155,7 +154,6 @@ impl Checker for PythonCode {
         false
     }
 }
-
 
 impl Checker for TypescriptCode {
     fn is_comment(node: &Node) -> bool {
@@ -373,10 +371,7 @@ impl Checker for GoCode {
     }
 
     fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Go::LPAREN | Go::COMMA | Go::RPAREN
-        )
+        matches!(node.kind_id().into(), Go::LPAREN | Go::COMMA | Go::RPAREN)
     }
 
     fn is_string(node: &Node) -> bool {

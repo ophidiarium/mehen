@@ -16,21 +16,17 @@ use crate::traits::*;
 /// ```
 /// use std::path::PathBuf;
 ///
-/// use rust_code_analysis::{dump_node, CppParser, ParserTrait};
+/// use mehen::{dump_node, RustParser, ParserTrait};
 ///
-/// let source_code = "int a = 42;";
+/// let source_code = "fn main() { let a = 42; }";
 ///
-/// // The path to a dummy file used to contain the source code
-/// let path = PathBuf::from("foo.c");
+/// let path = PathBuf::from("foo.rs");
 /// let source_as_vec = source_code.as_bytes().to_vec();
 ///
-/// // The parser of the code, in this case a CPP parser
-/// let parser = CppParser::new(source_as_vec.clone(), &path, None);
+/// let parser = RustParser::new(source_as_vec.clone(), &path, None);
 ///
-/// // The root of the AST
 /// let root = parser.get_root();
 ///
-/// // Dump the AST from the first line of code in a file to the last one
 /// dump_node(&source_as_vec, &root, -1, None, None).unwrap();
 /// ```
 ///

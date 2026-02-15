@@ -269,18 +269,15 @@ struct State<'a> {
 /// ```
 /// use std::path::Path;
 ///
-/// use rust_code_analysis::{CppParser, metrics, ParserTrait};
+/// use mehen::{RustParser, metrics, ParserTrait};
 ///
-/// let source_code = "int a = 42;";
+/// let source_code = "fn main() { let a = 42; }";
 ///
-/// // The path to a dummy file used to contain the source code
-/// let path = Path::new("foo.c");
+/// let path = Path::new("foo.rs");
 /// let source_as_vec = source_code.as_bytes().to_vec();
 ///
-/// // The parser of the code, in this case a CPP parser
-/// let parser = CppParser::new(source_as_vec, &path, None);
+/// let parser = RustParser::new(source_as_vec, &path, None);
 ///
-/// // Gets all function spaces data of the code contained in foo.c
 /// metrics(&parser, &path).unwrap();
 /// ```
 pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
@@ -381,5 +378,4 @@ impl Callback for Metrics {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

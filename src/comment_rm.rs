@@ -96,7 +96,7 @@ impl Callback for CommentRm {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{RustParser, ParserTrait};
+    use crate::{ParserTrait, RustParser};
 
     use super::rm_comments;
 

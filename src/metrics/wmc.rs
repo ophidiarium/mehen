@@ -124,11 +124,4 @@ where
     fn compute(space_kind: SpaceKind, cyclomatic: &cyclomatic::Stats, stats: &mut Stats);
 }
 
-implement_metric_trait!(
-    Wmc,
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode
-);
+implement_metric_trait!(Wmc, PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);

@@ -14,22 +14,18 @@ use crate::tools::{color, intense_color};
 /// ```
 /// use std::path::PathBuf;
 ///
-/// use rust_code_analysis::{dump_ops, operands_and_operators, CppParser, ParserTrait};
+/// use mehen::{dump_ops, operands_and_operators, RustParser, ParserTrait};
 ///
 /// # fn main() {
-/// let source_code = "int a = 42;";
+/// let source_code = "fn main() { let a = 42; }";
 ///
-/// // The path to a dummy file used to contain the source code
-/// let path = PathBuf::from("foo.c");
+/// let path = PathBuf::from("foo.rs");
 /// let source_as_vec = source_code.as_bytes().to_vec();
 ///
-/// // The parser of the code, in this case a CPP parser
-/// let parser = CppParser::new(source_as_vec, &path, None);
+/// let parser = RustParser::new(source_as_vec, &path, None);
 ///
-/// // Retrieve all operands and operators
 /// let ops = operands_and_operators(&parser, &path).unwrap();
 ///
-/// // Dump all operands and operators
 /// dump_ops(&ops).unwrap();
 /// # }
 /// ```
