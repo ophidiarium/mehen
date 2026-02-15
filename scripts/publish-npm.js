@@ -28,20 +28,12 @@ function execCommandWithOutput(command, options = {}) {
   const result = spawnSync(command, {
     shell: true,
     encoding: 'utf8',
+    stdio: 'inherit',
     ...options
   });
 
-  if (result.stdout) {
-    process.stdout.write(result.stdout);
-  }
-  if (result.stderr) {
-    process.stderr.write(result.stderr);
-  }
-
   if (result.status !== 0) {
     const error = new Error(`Command failed: ${command}`);
-    error.stdout = result.stdout;
-    error.stderr = result.stderr;
     throw error;
   }
 
