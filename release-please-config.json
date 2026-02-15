@@ -82,7 +82,7 @@
                 {
                     "type": "toml",
                     "path": "Cargo.lock",
-                    "jsonpath": "$.package[?(@.name == 'mehen')].version"
+                    "jsonpath": "$.package[?(@.name.value == 'mehen')].version"
                 },
                 {
                     "type": "json",
