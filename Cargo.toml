@@ -21,7 +21,6 @@ num-derive = "^0.4"
 num-format = "^0.4"
 num-traits = "^0.2"
 owo-colors = "^4"
-petgraph = "^0.8"
 regex = "^1.7"
 serde = { version = "^1.0", features = ["derive"] }
 serde_cbor = "^0.11"
