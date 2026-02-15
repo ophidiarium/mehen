@@ -574,7 +574,7 @@ jobs:
           done
 
       - name: Generate npm packages attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: npm-dist/**/*
 
