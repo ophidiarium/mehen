@@ -13,6 +13,7 @@ license.workspace = true
 [dependencies]
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset = "^0.4"
+log = "^0.4"
 num = "^0.4"
 num-derive = "^0.4"
 num-format = "^0.4"
@@ -20,7 +21,7 @@ num-traits = "^0.2"
 petgraph = "^0.8"
 regex = "^1.7"
 serde = { version = "^1.0", features = ["derive"] }
-termcolor = "^1.2"
+owo-colors = "^4"
 walkdir = "^2.3"
 
 tree-sitter = "=0.26.5"

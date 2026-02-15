@@ -5,11 +5,9 @@ use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
-use regex::bytes::Regex;
-use termcolor::{Color, ColorSpec, StandardStreamLock, WriteColor};
-
 use crate::langs::fake;
 use crate::langs::*;
+use regex::bytes::Regex;
 
 /// Reads a file.
 ///
@@ -366,16 +364,6 @@ pub(crate) fn guess_file<S: ::std::hash::BuildHasher>(
     }
 
     vec![]
-}
-
-#[inline(always)]
-pub(crate) fn color(stdout: &mut StandardStreamLock, color: Color) -> std::io::Result<()> {
-    stdout.set_color(ColorSpec::new().set_fg(Some(color)))
-}
-
-#[inline(always)]
-pub(crate) fn intense_color(stdout: &mut StandardStreamLock, color: Color) -> std::io::Result<()> {
-    stdout.set_color(ColorSpec::new().set_fg(Some(color)).set_intense(true))
 }
 
 #[cfg(test)]

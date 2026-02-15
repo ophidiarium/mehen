@@ -71,7 +71,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Cognitive Complexity` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.structural_min = self.structural_min.min(other.structural_min);
         self.structural_max = self.structural_max.max(other.structural_max);
         self.structural_sum += other.structural_sum;
@@ -131,17 +131,17 @@ where
     );
 }
 
-fn compute_booleans<T: std::cmp::PartialEq + std::convert::From<u16>>(
+fn compute_booleans<T: PartialEq + From<u16>>(
     node: &Node,
     stats: &mut Stats,
-    typs1: T,
-    typs2: T,
+    typs1: &T,
+    typs2: &T,
 ) {
     for child in node.children() {
-        if typs1 == child.kind_id().into() || typs2 == child.kind_id().into() {
+        if *typs1 == child.kind_id().into() || *typs2 == child.kind_id().into() {
             stats.structural = stats
                 .boolean_seq
-                .eval_based_on_prev(child.kind_id(), stats.structural)
+                .eval_based_on_prev(child.kind_id(), stats.structural);
         }
     }
 }
@@ -192,7 +192,7 @@ fn increment_by_one(stats: &mut Stats) {
 
 fn get_nesting_from_map(
     node: &Node,
-    nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    nesting_map: &HashMap<usize, (usize, usize, usize)>,
 ) -> (usize, usize, usize) {
     if let Some(parent) = node.parent() {
         if let Some(n) = nesting_map.get(&parent.id()) {
@@ -205,15 +205,11 @@ fn get_nesting_from_map(
     }
 }
 
-fn increment_function_depth<T: std::cmp::PartialEq + std::convert::From<u16>>(
-    depth: &mut usize,
-    node: &Node,
-    stop: T,
-) {
+fn increment_function_depth<T: PartialEq + From<u16>>(depth: &mut usize, node: &Node, stop: &T) {
     // Increase depth function nesting if needed
     let mut child = *node;
     while let Some(parent) = child.parent() {
-        if stop == parent.kind_id().into() {
+        if *stop == parent.kind_id().into() {
             *depth += 1;
             break;
         }
@@ -282,7 +278,7 @@ impl Cognitive for PythonCode {
                         },
                     );
                 }
-                compute_booleans::<language_python::Python>(node, stats, And, Or);
+                compute_booleans::<Python>(node, stats, &And, &Or);
             }
             Lambda => {
                 // Increase lambda nesting
@@ -290,11 +286,7 @@ impl Cognitive for PythonCode {
             }
             FunctionDefinition => {
                 // Increase depth function nesting if needed
-                increment_function_depth::<language_python::Python>(
-                    &mut depth,
-                    node,
-                    FunctionDefinition,
-                );
+                increment_function_depth::<Python>(&mut depth, node, &FunctionDefinition);
             }
             _ => {}
         }
@@ -328,7 +320,7 @@ impl Cognitive for RustCode {
             }
             BreakExpression | ContinueExpression => {
                 if let Some(label_child) = node.child(1)
-                    && let Label = label_child.kind_id().into()
+                    && label_child.kind_id() == Label
                 {
                     increment_by_one(stats);
                 }
@@ -337,12 +329,12 @@ impl Cognitive for RustCode {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
             BinaryExpression => {
-                compute_booleans::<language_rust::Rust>(node, stats, AMPAMP, PIPEPIPE);
+                compute_booleans::<Rust>(node, stats, &AMPAMP, &PIPEPIPE);
             }
             FunctionItem  => {
                 nesting = 0;
                 // Increase depth function nesting if needed
-                increment_function_depth::<language_rust::Rust>(&mut depth, node, FunctionItem);
+                increment_function_depth::<Rust>(&mut depth, node, &FunctionItem);
             }
             ClosureExpression => {
                 lambda += 1;
@@ -379,14 +371,14 @@ macro_rules! js_cognitive {
                     stats.boolean_seq.not_operator(node.kind_id());
                 }
                 BinaryExpression => {
-                    compute_booleans::<$lang>(node, stats, AMPAMP, PIPEPIPE);
+                    compute_booleans::<$lang>(node, stats, &AMPAMP, &PIPEPIPE);
                 }
                 FunctionDeclaration => {
                     // Reset lambda nesting at function for JS
                     nesting = 0;
                     lambda = 0;
                     // Increase depth function nesting if needed
-                    increment_function_depth::<$lang>(&mut depth, node, FunctionDeclaration);
+                    increment_function_depth::<$lang>(&mut depth, node, &FunctionDeclaration);
                 }
                 ArrowFunction => {
                     lambda += 1;
@@ -432,14 +424,14 @@ impl Cognitive for GoCode {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
             BinaryExpression => {
-                compute_booleans::<language_go::Go>(node, stats, AMPAMP, PIPEPIPE);
+                compute_booleans::<language_go::Go>(node, stats, &AMPAMP, &PIPEPIPE);
             }
             FuncLiteral => {
                 lambda += 1;
             }
             FunctionDeclaration | MethodDeclaration => {
                 nesting = 0;
-                increment_function_depth::<language_go::Go>(&mut depth, node, FunctionDeclaration);
+                increment_function_depth::<language_go::Go>(&mut depth, node, &FunctionDeclaration);
             }
             _ => {}
         }

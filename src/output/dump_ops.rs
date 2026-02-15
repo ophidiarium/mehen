@@ -1,9 +1,8 @@
-use std::io::Write;
-use termcolor::{Color, ColorChoice, StandardStream, StandardStreamLock};
+use std::io::{self, Write};
+
+use owo_colors::OwoColorize;
 
 use crate::ops::Ops;
-
-use crate::tools::{color, intense_color};
 
 /// Dumps all operands and operators of a code.
 ///
@@ -32,33 +31,35 @@ use crate::tools::{color, intense_color};
 ///
 /// [`Result`]: #variant.Result
 pub fn dump_ops(ops: &Ops) -> std::io::Result<()> {
-    let stdout = StandardStream::stdout(ColorChoice::Always);
+    let stdout = io::stdout();
     let mut stdout = stdout.lock();
-    dump_space(ops, "", true, &mut stdout)?;
-    color(&mut stdout, Color::White)?;
-
-    Ok(())
+    dump_space(ops, "", true, &mut stdout)
 }
 
 fn dump_space(
     space: &Ops,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Yellow)?;
-    write!(stdout, "{}: ", space.kind)?;
-
-    intense_color(stdout, Color::Cyan)?;
-    write!(stdout, "{}", space.name.as_ref().map_or("", |name| name))?;
-
-    intense_color(stdout, Color::Red)?;
-    writeln!(stdout, " (@{})", space.start_line)?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    write!(
+        stdout,
+        "{}",
+        format_args!("{}: ", space.kind).yellow().bold()
+    )?;
+    write!(
+        stdout,
+        "{}",
+        space.name.as_ref().map_or("", |name| name).cyan().bold()
+    )?;
+    writeln!(
+        stdout,
+        "{}",
+        format_args!(" (@{})", space.start_line).red().bold()
+    )?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_space_ops(space, &prefix, space.spaces.is_empty(), stdout)?;
@@ -77,7 +78,7 @@ fn dump_space_ops(
     ops: &Ops,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     dump_ops_values("operators", &ops.operators, prefix, last, stdout)?;
     dump_ops_values("operands", &ops.operands, prefix, last, stdout)
@@ -88,28 +89,19 @@ fn dump_ops_values(
     ops: &[String],
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "{name}")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", name.green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     for op in ops.iter().take(ops.len() - 1) {
-        color(stdout, Color::Blue)?;
-        write!(stdout, "{prefix}|- ")?;
-
-        color(stdout, Color::White)?;
-        writeln!(stdout, "{op}")?;
+        write!(stdout, "{}", format_args!("{prefix}|- ").blue())?;
+        writeln!(stdout, "{}", op.white())?;
     }
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}`- ")?;
-
-    color(stdout, Color::White)?;
-    writeln!(stdout, "{}", ops.last().unwrap())
+    write!(stdout, "{}", format_args!("{prefix}`- ").blue())?;
+    writeln!(stdout, "{}", ops.last().unwrap().white())
 }

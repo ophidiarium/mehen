@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::path::PathBuf;
-use std::process;
 
 use globset::{Glob, GlobSetBuilder};
 
@@ -86,8 +85,7 @@ pub fn compare_rca_output_with_files(repo_name: &str, include: &[&str], exclude:
         paths: vec![Path::new(REPO).join(repo_name)],
     };
 
-    if let Err(e) = ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
-        eprintln!("{e:?}");
-        process::exit(1);
-    }
+    ConcurrentRunner::new(num_jobs, act_on_file)
+        .run(cfg, files_data)
+        .unwrap();
 }

@@ -63,7 +63,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npa` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.class_npa_sum += other.class_npa_sum;
         self.interface_npa_sum += other.interface_npa_sum;
         self.class_na_sum += other.class_na_sum;
