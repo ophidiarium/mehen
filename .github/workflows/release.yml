@@ -109,7 +109,7 @@ jobs:
 
       # maturin uses pip in some platforms
       - run: pip install pip --upgrade
-        if: !startsWith(matrix.platform.os, 'windows')
+        if: (matrix.platform.os != 'windows-11-arm') && (matrix.platform.os != 'windows-latest')
 
       - name: Extract version from tag
         id: get_version
