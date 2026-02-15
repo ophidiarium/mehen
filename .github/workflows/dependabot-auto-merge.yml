@@ -1,0 +1,25 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request_target:
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Approve and enable auto-merge
+        run: |
+          gh pr review "$PR_NUMBER" --repo "$REPO" --approve --body "Dependabot PR — auto-approved."
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
