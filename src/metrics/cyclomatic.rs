@@ -56,7 +56,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Cyclomatic` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         //Calculate minimum and maximum values
         self.cyclomatic_max = self.cyclomatic_max.max(other.cyclomatic_max);
         self.cyclomatic_min = self.cyclomatic_min.min(other.cyclomatic_min);

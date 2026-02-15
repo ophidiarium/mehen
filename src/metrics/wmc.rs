@@ -55,12 +55,12 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Wmc` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         use SpaceKind::*;
 
         // Merges the cyclomatic complexity of a method
         // into the `Wmc` metric value of a class or interface
-        if let Function = other.space_kind {
+        if other.space_kind == Function {
             match self.space_kind {
                 Class => self.class_wmc += other.cyclomatic,
                 Interface => self.interface_wmc += other.cyclomatic,

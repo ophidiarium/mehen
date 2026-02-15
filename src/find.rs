@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 use crate::node::Node;
@@ -6,13 +7,12 @@ use crate::dump::*;
 use crate::traits::*;
 
 /// Finds the types of nodes specified in the input slice.
-pub fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Option<Vec<Node<'a>>> {
+pub fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Vec<Node<'a>> {
     let filters = parser.get_filters(filters);
     let node = parser.get_root();
     let mut cursor = node.cursor();
     let mut stack = Vec::new();
     let mut good = Vec::new();
-    let mut children = Vec::new();
 
     stack.push(node);
 
@@ -22,18 +22,17 @@ pub fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Option<Vec
         }
         cursor.reset(&node);
         if cursor.goto_first_child() {
+            let start = stack.len();
             loop {
-                children.push(cursor.node());
+                stack.push(cursor.node());
                 if !cursor.goto_next_sibling() {
                     break;
                 }
             }
-            for child in children.drain(..).rev() {
-                stack.push(child);
-            }
+            stack[start..].reverse();
         }
     }
-    Some(good)
+    good
 }
 
 /// Configuration options for finding different
@@ -56,6 +55,7 @@ pub struct FindCfg {
     pub line_end: Option<usize>,
 }
 
+#[derive(Debug)]
 pub struct Find {
     _guard: (),
 }
@@ -65,14 +65,14 @@ impl Callback for Find {
     type Cfg = FindCfg;
 
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res {
-        if let Some(good) = find(parser, &cfg.filters)
-            && !good.is_empty()
-        {
-            println!("In file {}", cfg.path.to_str().unwrap());
+        let good = find(parser, &cfg.filters);
+        if !good.is_empty() {
+            let mut stdout = io::stdout().lock();
+            writeln!(stdout, "In file {}", cfg.path.to_str().unwrap())?;
             for node in good {
                 dump_node(parser.get_code(), &node, 1, cfg.line_start, cfg.line_end)?;
             }
-            println!();
+            writeln!(stdout)?;
         }
         Ok(())
     }

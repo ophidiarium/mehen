@@ -108,7 +108,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Abc` metric into the first one.
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         // Calculates minimum and maximum values
         self.assignments_min = self.assignments_min.min(other.assignments_min);
         self.assignments_max = self.assignments_max.max(other.assignments_max);
@@ -210,12 +210,23 @@ impl Stats {
 
     /// Returns the `Abc` magnitude metric value.
     pub fn magnitude(&self) -> f64 {
-        (self.assignments.powi(2) + self.branches.powi(2) + self.conditions.powi(2)).sqrt()
+        self.conditions
+            .mul_add(
+                self.conditions,
+                self.assignments
+                    .mul_add(self.assignments, self.branches.powi(2)),
+            )
+            .sqrt()
     }
 
     /// Returns the `Abc` magnitude sum metric value.
     pub fn magnitude_sum(&self) -> f64 {
-        (self.assignments_sum.powi(2) + self.branches_sum.powi(2) + self.conditions_sum.powi(2))
+        self.conditions_sum
+            .mul_add(
+                self.conditions_sum,
+                self.assignments_sum
+                    .mul_add(self.assignments_sum, self.branches_sum.powi(2)),
+            )
             .sqrt()
     }
 

@@ -63,7 +63,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npm` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.class_npm_sum += other.class_npm_sum;
         self.interface_npm_sum += other.interface_npm_sum;
         self.class_nm_sum += other.class_nm_sum;

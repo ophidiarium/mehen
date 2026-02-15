@@ -82,7 +82,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `NArgs` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.closure_nargs_min = self.closure_nargs_min.min(other.closure_nargs_min);
         self.closure_nargs_max = self.closure_nargs_max.max(other.closure_nargs_max);
         self.fn_nargs_min = self.fn_nargs_min.min(other.fn_nargs_min);
@@ -195,8 +195,7 @@ fn compute_args<T: Checker>(node: &Node, nargs: &mut usize) {
 
 pub trait NArgs
 where
-    Self: Checker,
-    Self: std::marker::Sized,
+    Self: Checker + Sized,
 {
     fn compute(node: &Node, stats: &mut Stats) {
         if Self::is_func(node) {

@@ -34,17 +34,17 @@ pub fn rm_comments<T: ParserTrait>(parser: &T) -> Option<Vec<u8>> {
             }
         }
     }
-    if !spans.is_empty() {
-        Some(remove_from_code(parser.get_code(), spans))
-    } else {
+    if spans.is_empty() {
         None
+    } else {
+        Some(remove_from_code(parser.get_code(), spans))
     }
 }
 
-fn remove_from_code(code: &[u8], mut spans: Vec<(usize, usize, usize)>) -> Vec<u8> {
+fn remove_from_code(code: &[u8], spans: Vec<(usize, usize, usize)>) -> Vec<u8> {
     let mut new_code = Vec::with_capacity(code.len());
     let mut code_start = 0;
-    for (start, end, lines) in spans.drain(..).rev() {
+    for (start, end, lines) in spans.into_iter().rev() {
         new_code.extend(&code[code_start..start]);
         if lines != 0 {
             if lines <= CR.len() {
@@ -70,22 +70,26 @@ pub struct CommentRmCfg {
     pub path: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct CommentRm {
     _guard: (),
 }
 
 impl Callback for CommentRm {
-    type Res = std::io::Result<()>;
+    type Res = io::Result<()>;
     type Cfg = CommentRmCfg;
 
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res {
         if let Some(new_source) = rm_comments(parser) {
             if cfg.in_place {
                 write_file(&cfg.path, &new_source)?;
-            } else if let Ok(new_source) = std::str::from_utf8(&new_source) {
-                println!("{new_source}");
             } else {
-                io::stdout().write_all(&new_source)?;
+                let mut stdout = io::stdout().lock();
+                if let Ok(new_source) = std::str::from_utf8(&new_source) {
+                    writeln!(stdout, "{new_source}")?;
+                } else {
+                    stdout.write_all(&new_source)?;
+                }
             }
         }
         Ok(())

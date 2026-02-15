@@ -59,7 +59,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `NExit` metric into the first one
-    pub fn merge(&mut self, other: &Stats) {
+    pub fn merge(&mut self, other: &Self) {
         self.exit_max = self.exit_max.max(other.exit_max);
         self.exit_min = self.exit_min.min(other.exit_min);
         self.exit_sum += other.exit_sum;

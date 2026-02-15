@@ -19,6 +19,7 @@ pub struct Stats {
 }
 
 /// Specifies the type of nodes accepted by the `Halstead` metric.
+#[derive(Debug)]
 pub enum HalsteadType {
     /// The node is an `Halstead` operator
     Operator,
@@ -42,11 +43,11 @@ impl<'a> HalsteadMaps<'a> {
         }
     }
 
-    pub(crate) fn merge(&mut self, other: &HalsteadMaps<'a>) {
-        for (k, v) in other.operators.iter() {
+    pub(crate) fn merge(&mut self, other: &Self) {
+        for (k, v) in &other.operators {
             *self.operators.entry(*k).or_insert(0) += v;
         }
-        for (k, v) in other.operands.iter() {
+        for (k, v) in &other.operands {
             *self.operands.entry(*k).or_insert(0) += v;
         }
     }
@@ -120,7 +121,7 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
-    pub(crate) fn merge(&mut self, _other: &Stats) {}
+    pub(crate) fn merge(&self, _other: &Self) {}
 
     /// Returns `η1`, the number of distinct operators
     #[inline(always)]
@@ -155,8 +156,10 @@ impl Stats {
     /// Returns the calculated estimated program length
     #[inline(always)]
     pub fn estimated_program_length(&self) -> f64 {
-        self.u_operators() * self.u_operators().log2()
-            + self.u_operands() * self.u_operands().log2()
+        self.u_operators().mul_add(
+            self.u_operators().log2(),
+            self.u_operands() * self.u_operands().log2(),
+        )
     }
 
     /// Returns the purity ratio
@@ -275,7 +278,7 @@ fn compute_halstead<'a, T: Getter>(
                 .entry(get_id(node, code))
                 .or_insert(0) += 1;
         }
-        _ => {}
+        HalsteadType::Unknown => {}
     }
 }
 
@@ -378,8 +381,8 @@ mod tests {
                       "n2": 9.0,
                       "N2": 15.0,
                       "length": 38.0,
-                      "estimated_program_length": 61.74860596185444,
-                      "purity_ratio": 1.624963314785643,
+                      "estimated_program_length": 61.74860596185443,
+                      "purity_ratio": 1.6249633147856428,
                       "vocabulary": 19.0,
                       "volume": 161.42124551085624,
                       "difficulty": 8.333333333333334,
@@ -543,8 +546,8 @@ mod tests {
                       "n2": 3.0,
                       "N2": 5.0,
                       "length": 12.0,
-                      "estimated_program_length": 24.406371956566694,
-                      "purity_ratio": 2.033864329713891,
+                      "estimated_program_length": 24.406371956566698,
+                      "purity_ratio": 2.0338643297138916,
                       "vocabulary": 10.0,
                       "volume": 39.86313713864835,
                       "difficulty": 5.833333333333333,

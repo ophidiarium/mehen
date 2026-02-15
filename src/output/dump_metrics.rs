@@ -1,5 +1,6 @@
-use std::io::Write;
-use termcolor::{Color, ColorChoice, StandardStream, StandardStreamLock};
+use std::io::{self, Write};
+
+use owo_colors::OwoColorize;
 
 use crate::abc;
 use crate::cognitive;
@@ -15,8 +16,6 @@ use crate::npm;
 use crate::wmc;
 
 use crate::spaces::{CodeMetrics, FuncSpace};
-
-use crate::tools::{color, intense_color};
 
 /// Dumps the metrics of a code.
 ///
@@ -43,33 +42,35 @@ use crate::tools::{color, intense_color};
 ///
 /// [`Result`]: #variant.Result
 pub fn dump_root(space: &FuncSpace) -> std::io::Result<()> {
-    let stdout = StandardStream::stdout(ColorChoice::Always);
+    let stdout = io::stdout();
     let mut stdout = stdout.lock();
-    dump_space(space, "", true, &mut stdout)?;
-    color(&mut stdout, Color::White)?;
-
-    Ok(())
+    dump_space(space, "", true, &mut stdout)
 }
 
 fn dump_space(
     space: &FuncSpace,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Yellow)?;
-    write!(stdout, "{}: ", space.kind)?;
-
-    intense_color(stdout, Color::Cyan)?;
-    write!(stdout, "{}", space.name.as_ref().map_or("", |name| name))?;
-
-    intense_color(stdout, Color::Red)?;
-    writeln!(stdout, " (@{})", space.start_line)?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    write!(
+        stdout,
+        "{}",
+        format_args!("{}: ", space.kind).yellow().bold()
+    )?;
+    write!(
+        stdout,
+        "{}",
+        space.name.as_ref().map_or("", |name| name).cyan().bold()
+    )?;
+    writeln!(
+        stdout,
+        "{}",
+        format_args!(" (@{})", space.start_line).red().bold()
+    )?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_metrics(&space.metrics, &prefix, space.spaces.is_empty(), stdout)?;
@@ -88,15 +89,12 @@ fn dump_metrics(
     metrics: &CodeMetrics,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Yellow)?;
-    writeln!(stdout, "metrics")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "metrics".yellow().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_cognitive(&metrics.cognitive, &prefix, false, stdout)?;
@@ -117,15 +115,12 @@ fn dump_cognitive(
     stats: &cognitive::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "cognitive")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "cognitive".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
 
@@ -137,15 +132,12 @@ fn dump_cyclomatic(
     stats: &cyclomatic::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "cyclomatic")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "cyclomatic".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
 
@@ -157,15 +149,12 @@ fn dump_halstead(
     stats: &halstead::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "halstead")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "halstead".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
 
@@ -196,15 +185,12 @@ fn dump_loc(
     stats: &loc::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "loc")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "loc".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("sloc", stats.sloc(), &prefix, false, stdout)?;
@@ -218,15 +204,12 @@ fn dump_nom(
     stats: &nom::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "nom")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "nom".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("functions", stats.functions(), &prefix, false, stdout)?;
@@ -238,15 +221,12 @@ fn dump_mi(
     stats: &mi::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "mi")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "mi".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("mi_original", stats.mi_original(), &prefix, false, stdout)?;
@@ -264,15 +244,12 @@ fn dump_nargs(
     stats: &nargs::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "nargs")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "nargs".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("functions", stats.fn_args(), &prefix, false, stdout)?;
@@ -285,33 +262,25 @@ fn dump_nexits(
     stats: &exit::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let pref = if last { "`- " } else { "|- " };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    write!(stdout, "nexits: ")?;
-
-    color(stdout, Color::White)?;
-    writeln!(stdout, "{}", stats.exit())
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    write!(stdout, "{}", "nexits: ".green().bold())?;
+    writeln!(stdout, "{}", stats.exit().white())
 }
 
 fn dump_abc(
     stats: &abc::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "abc")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "abc".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
 
@@ -331,7 +300,7 @@ fn dump_wmc(
     stats: &wmc::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     if stats.is_disabled() {
         return Ok(());
@@ -339,11 +308,8 @@ fn dump_wmc(
 
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "wmc")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "wmc".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("classes", stats.class_wmc_sum(), &prefix, false, stdout)?;
@@ -361,7 +327,7 @@ fn dump_npm(
     stats: &npm::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     if stats.is_disabled() {
         return Ok(());
@@ -369,11 +335,8 @@ fn dump_npm(
 
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "npm")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "npm".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("classes", stats.class_npm_sum(), &prefix, false, stdout)?;
@@ -392,7 +355,7 @@ fn dump_npa(
     stats: &npa::Stats,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     if stats.is_disabled() {
         return Ok(());
@@ -400,11 +363,8 @@ fn dump_npa(
 
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Green)?;
-    writeln!(stdout, "npa")?;
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    writeln!(stdout, "{}", "npa".green().bold())?;
 
     let prefix = format!("{prefix}{pref_child}");
     dump_value("classes", stats.class_npa_sum(), &prefix, false, stdout)?;
@@ -424,16 +384,11 @@ fn dump_value(
     val: f64,
     prefix: &str,
     last: bool,
-    stdout: &mut StandardStreamLock,
+    stdout: &mut io::StdoutLock,
 ) -> std::io::Result<()> {
     let pref = if last { "`- " } else { "|- " };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{prefix}{pref}")?;
-
-    intense_color(stdout, Color::Magenta)?;
-    write!(stdout, "{name}: ")?;
-
-    color(stdout, Color::White)?;
-    writeln!(stdout, "{val}")
+    write!(stdout, "{}", format_args!("{prefix}{pref}").blue())?;
+    write!(stdout, "{}", format_args!("{name}: ").magenta().bold())?;
+    writeln!(stdout, "{}", val.white())
 }

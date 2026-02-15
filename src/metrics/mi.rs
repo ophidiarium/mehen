@@ -48,7 +48,7 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
-    pub(crate) fn merge(&mut self, _other: &Stats) {}
+    pub(crate) fn merge(&self, _other: &Self) {}
 
     /// Returns the `Mi` metric calculated using the original formula.
     ///
@@ -56,7 +56,13 @@ impl Stats {
     #[inline(always)]
     pub fn mi_original(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
-        171.0 - 5.2 * (self.halstead_volume).ln() - 0.23 * self.cyclomatic - 16.2 * self.sloc.ln()
+        16.2_f64.mul_add(
+            -self.sloc.ln(),
+            0.23_f64.mul_add(
+                -self.cyclomatic,
+                5.2_f64.mul_add(-(self.halstead_volume).ln(), 171.0),
+            ),
+        )
     }
 
     /// Returns the `Mi` metric calculated using the derivative formula
@@ -66,8 +72,16 @@ impl Stats {
     #[inline(always)]
     pub fn mi_sei(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
-        171.0 - 5.2 * self.halstead_volume.log2() - 0.23 * self.cyclomatic - 16.2 * self.sloc.log2()
-            + 50.0 * (self.comments_percentage * 2.4).sqrt().sin()
+        50.0_f64.mul_add(
+            (self.comments_percentage * 2.4).sqrt().sin(),
+            16.2_f64.mul_add(
+                -self.sloc.log2(),
+                0.23_f64.mul_add(
+                    -self.cyclomatic,
+                    5.2_f64.mul_add(-self.halstead_volume.log2(), 171.0),
+                ),
+            ),
+        )
     }
 
     /// Returns the `Mi` metric calculated using the derivative formula
@@ -75,10 +89,13 @@ impl Stats {
     #[inline(always)]
     pub fn mi_visual_studio(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
-        let formula = 171.0
-            - 5.2 * self.halstead_volume.ln()
-            - 0.23 * self.cyclomatic
-            - 16.2 * self.sloc.ln();
+        let formula = 16.2_f64.mul_add(
+            -self.sloc.ln(),
+            0.23_f64.mul_add(
+                -self.cyclomatic,
+                5.2_f64.mul_add(-self.halstead_volume.ln(), 171.0),
+            ),
+        );
         (formula * 100.0 / 171.0).max(0.)
     }
 }

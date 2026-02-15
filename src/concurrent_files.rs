@@ -27,6 +27,9 @@ struct JobItem<Config> {
 type JobReceiver<Config> = Receiver<Option<JobItem<Config>>>;
 type JobSender<Config> = Sender<Option<JobItem<Config>>>;
 
+// Both args are moved into this thread entry point from a `move ||` closure;
+// pass-by-value is required because `Receiver` is consumed and `Arc` is moved.
+#[allow(clippy::needless_pass_by_value)]
 fn consumer<Config, ProcFiles>(receiver: JobReceiver<Config>, func: Arc<ProcFiles>)
 where
     ProcFiles: Fn(PathBuf, &Config) -> std::io::Result<()> + Send + Sync,
@@ -40,7 +43,7 @@ where
         let path = job.path.clone();
 
         if let Err(err) = func(job.path, &job.cfg) {
-            eprintln!("{err:?} for file {path:?}");
+            log::error!("{err:?} for file {path:?}");
         }
     }
 }
@@ -62,8 +65,7 @@ fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()
         .to_str()
-        .map(|s| s.starts_with('.'))
-        .unwrap_or(false)
+        .is_some_and(|s| s.starts_with('.'))
 }
 
 fn explore<Config, ProcDirPaths, ProcPath>(
@@ -78,16 +80,16 @@ where
     ProcPath: Fn(&Path, &Config) + Send + Sync,
 {
     let FilesData {
-        mut paths,
+        paths,
         ref include,
         ref exclude,
     } = files_data;
 
     let mut all_files: HashMap<String, Vec<PathBuf>> = HashMap::new();
 
-    for path in paths.drain(..) {
+    for path in paths {
         if !path.exists() {
-            eprintln!("Warning: File doesn't exist: {path:?}");
+            log::warn!("File doesn't exist: {path:?}");
             continue;
         }
         if path.is_dir() {
@@ -160,6 +162,14 @@ pub struct ConcurrentRunner<Config> {
     num_jobs: usize,
 }
 
+impl<Config> std::fmt::Debug for ConcurrentRunner<Config> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConcurrentRunner")
+            .field("num_jobs", &self.num_jobs)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
     /// Creates a new `ConcurrentRunner`.
     ///
@@ -181,6 +191,7 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
 
     /// Sets the function to process the paths and subpaths contained in a
     /// directory.
+    #[must_use]
     pub fn set_proc_dir_paths<ProcDirPaths>(mut self, proc_dir_paths: ProcDirPaths) -> Self
     where
         ProcDirPaths:
@@ -191,6 +202,7 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
     }
 
     /// Sets the function to process a single path.
+    #[must_use]
     pub fn set_proc_path<ProcPath>(mut self, proc_path: ProcPath) -> Self
     where
         ProcPath: 'static + Fn(&Path, &Config) + Send + Sync,
@@ -251,13 +263,10 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
             receivers.push(t);
         }
 
-        let all_files = match producer.join() {
-            Ok(res) => res,
-            Err(_) => {
-                return Err(ConcurrentErrors::Producer(
-                    "Child thread panicked".to_owned(),
-                ));
-            }
+        let Ok(all_files) = producer.join() else {
+            return Err(ConcurrentErrors::Producer(
+                "Child thread panicked".to_owned(),
+            ));
         };
 
         // Poison the receiver, now that the producer is finished.

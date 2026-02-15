@@ -1,15 +1,13 @@
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
+use owo_colors::OwoColorize;
 use serde::Serialize;
-use termcolor::{Color, ColorChoice, StandardStream, StandardStreamLock};
 
 use crate::traits::*;
 
 use crate::checker::Checker;
 use crate::getter::Getter;
-
-use crate::tools::{color, intense_color};
 
 /// Function span data.
 #[derive(Debug, Serialize)]
@@ -40,14 +38,14 @@ pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
             let end_line = n.end_row() + 1;
             if let Some(name) = T::Getter::get_func_name(n, code) {
                 spans.push(FunctionSpan {
-                    name: name.to_string(),
+                    name: name.to_owned(),
                     start_line,
                     end_line,
                     error: false,
                 });
             } else {
                 spans.push(FunctionSpan {
-                    name: "".to_string(),
+                    name: String::new(),
                     start_line,
                     end_line,
                     error: true,
@@ -59,54 +57,45 @@ pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
     spans
 }
 
-fn dump_span(
-    span: FunctionSpan,
-    stdout: &mut StandardStreamLock,
-    last: bool,
-) -> std::io::Result<()> {
-    /*if !span.error {
-        return Ok(());
-    }*/
-
+fn dump_span(span: &FunctionSpan, stdout: &mut io::StdoutLock, last: bool) -> std::io::Result<()> {
     let pref = if last { "   `- " } else { "   |- " };
 
-    color(stdout, Color::Blue)?;
-    write!(stdout, "{pref}")?;
+    write!(stdout, "{}", pref.blue())?;
 
     if span.error {
-        intense_color(stdout, Color::Red)?;
-        write!(stdout, "error: ")?;
+        write!(stdout, "{}", "error: ".red().bold())?;
     } else {
-        intense_color(stdout, Color::Magenta)?;
-        write!(stdout, "{}: ", span.name)?;
+        write!(
+            stdout,
+            "{}",
+            format_args!("{}: ", span.name).magenta().bold()
+        )?;
     }
 
-    color(stdout, Color::Green)?;
-    write!(stdout, "from line ")?;
-
-    color(stdout, Color::White)?;
-    write!(stdout, "{}", span.start_line)?;
-
-    color(stdout, Color::Green)?;
-    write!(stdout, " to line ")?;
-
-    color(stdout, Color::White)?;
-    writeln!(stdout, "{}.", span.end_line)
+    write!(stdout, "{}", "from line ".green())?;
+    write!(stdout, "{}", span.start_line.white())?;
+    write!(stdout, "{}", " to line ".green())?;
+    writeln!(stdout, "{}", format_args!("{}.", span.end_line).white())
 }
 
-fn dump_spans(mut spans: Vec<FunctionSpan>, path: PathBuf) -> std::io::Result<()> {
+fn dump_spans(spans: &[FunctionSpan], path: &Path) -> std::io::Result<()> {
     if !spans.is_empty() {
-        let stdout = StandardStream::stdout(ColorChoice::Always);
+        let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
-        intense_color(&mut stdout, Color::Yellow)?;
-        writeln!(&mut stdout, "In file {}", path.to_str().unwrap_or("..."))?;
+        writeln!(
+            stdout,
+            "{}",
+            format_args!("In file {}", path.to_str().unwrap_or("..."))
+                .yellow()
+                .bold()
+        )?;
 
-        for span in spans.drain(..spans.len() - 1) {
+        let last_idx = spans.len() - 1;
+        for span in &spans[..last_idx] {
             dump_span(span, &mut stdout, false)?;
         }
-        dump_span(spans.pop().unwrap(), &mut stdout, true)?;
-        color(&mut stdout, Color::White)?;
+        dump_span(&spans[last_idx], &mut stdout, true)?;
     }
     Ok(())
 }
@@ -119,6 +108,7 @@ pub struct FunctionCfg {
     pub path: PathBuf,
 }
 
+#[derive(Debug)]
 pub struct Function {
     _guard: (),
 }
@@ -128,6 +118,7 @@ impl Callback for Function {
     type Cfg = FunctionCfg;
 
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res {
-        dump_spans(function(parser), cfg.path)
+        let spans = function(parser);
+        dump_spans(&spans, &cfg.path)
     }
 }

@@ -20,7 +20,7 @@ where
         let text = if text {
             String::from_utf8(code[node.start_byte()..node.end_byte()].to_vec()).unwrap()
         } else {
-            "".to_string()
+            String::new()
         };
         if span {
             let (spos_row, spos_column) = node.start_position();
