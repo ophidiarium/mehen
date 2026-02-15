@@ -80,11 +80,14 @@ pub fn sanitize_identifier(name: &str) -> String {
     // If all characters were unmapped (e.g. Unicode symbols like `·`),
     // generate identifier from their codepoints.
     if result.is_empty() {
-        for c in name.chars() {
-            if !result.is_empty() {
-                result.push('_');
-            }
-            result += &format!("U{:04X}", c as u32);
+        if name.is_empty() {
+            result = "EMPTY".to_string();
+        } else {
+            result = name
+                .chars()
+                .map(|c| format!("U{:04X}", c as u32))
+                .collect::<Vec<_>>()
+                .join("_");
         }
     }
 
