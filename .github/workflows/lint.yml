@@ -51,65 +51,54 @@ jobs:
       - name: Cargo Machete
         uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
 
-      # Install rust-code-analysis
-      - name: Install rust-code-analysis
-        env:
-          RCA_LINK: https://github.com/mozilla/rust-code-analysis/releases/download
-          RCA_VERSION: v0.0.25
-        run: |
-          mkdir -p $HOME/.local/bin
-          curl -L "$RCA_LINK/$RCA_VERSION/rust-code-analysis-linux-cli-x86_64.tar.gz" |
-          tar xz -C $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      # Prepare output directory for mehen
+      - name: Prepare mehen output dir
+        run: mkdir -p $HOME/mehen-json
 
-      # Prepare output directory for rust-code-analysis
-      - name: Prepare rust-code-analysis output dir
-        run: mkdir -p $HOME/rca-json
-
-      # Run rust-code-analysis on PR-diff files
-      - name: Run rust-code-analysis on PR-diff
+      # Run mehen metrics (pull request)
+      - name: Run mehen metrics on PR
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          rust-code-analysis-cli --metrics -O json --pr -o "$HOME/rca-json" -p src
+          npx -y mehen -m -O json -o "$HOME/mehen-json" -p src
 
-      # Run rust-code-analysis on all files (push to main)
-      - name: Run rust-code-analysis on all files
+      # Run mehen metrics (push to main)
+      - name: Run mehen metrics on all files
         if: ${{ github.event_name == 'push' }}
         run: |
-          rust-code-analysis-cli --metrics -O json -o "$HOME/rca-json" -p src
+          npx -y mehen -m -O json -o "$HOME/mehen-json" -p src
 
-      - name: Upload rust-code-analysis json
+      - name: Upload mehen json
         uses: actions/upload-artifact@v4
         with:
-          name: rca-json-ubuntu
-          path: ~/rca-json
+          name: mehen-json-ubuntu
+          path: ~/mehen-json
 
-      # Generate baseline rust-code-analysis metrics from main branch
-      - name: Prepare baseline rust-code-analysis output dir
+      # Generate baseline mehen metrics from main branch
+      - name: Prepare baseline mehen output dir
         if: ${{ github.event_name == 'pull_request' }}
-        run: mkdir -p $HOME/rca-json-base
+        run: mkdir -p $HOME/mehen-json-base
       - name: Checkout main branch for baseline
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/checkout@v5
         with:
           ref: main
           path: main
-      - name: Run rust-code-analysis on main branch
+      - name: Run mehen on main branch
         if: ${{ github.event_name == 'pull_request' }}
         working-directory: main
         run: |
-          rust-code-analysis-cli --metrics -O json -o "$HOME/rca-json-base" -p src
+          npx -y mehen -m -O json -o "$HOME/mehen-json-base" -p src
 
-      # Comment rust-code-analysis metrics on pull requests with comparison
-      - name: Comment rust-code-analysis metrics on PR
+      # Comment mehen metrics on pull requests with comparison
+      - name: Comment mehen metrics on PR
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const prDir = `${process.env.HOME}/rca-json`;
-            const baseDir = `${process.env.HOME}/rca-json-base`;
+            const prDir = `${process.env.HOME}/mehen-json`;
+            const baseDir = `${process.env.HOME}/mehen-json-base`;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const ref = context.payload.pull_request.head.sha;
@@ -172,7 +161,7 @@ jobs:
               const diff = b.funcsVal - a.funcsVal;
               return diff !== 0 ? diff : a.file.localeCompare(b.file);
             });
-            const commentTitle = '## [Rust-Code-Analysis](https://mozilla.github.io/rust-code-analysis/) Summary';
+            const commentTitle = '## [Mehen](https://github.com/ophidiarium/mehen) Summary';
             let body = commentTitle + ' (this PR vs `main`)\n\n';
             body += '| File | Functions | [Cyclomatic](https://en.wikipedia.org/wiki/Cyclomatic_complexity) | [Cognitive](https://www.sonarsource.com/blog/cognitive-complexity-because-testability-understandability/) | LLOC |\n';
             body += '|---|---:|---:|---:|---:|\n';
