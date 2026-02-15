@@ -128,6 +128,10 @@
                     "type": "json",
                     "path": "npm/mehen/package.json",
                     "jsonpath": "$.optionalDependencies.@mehen/win32-arm64"
+                },
+                {
+                    "type": "generic",
+                    "path": "python/mehen/__init__.py"
                 }
             ]
         }
