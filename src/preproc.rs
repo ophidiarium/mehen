@@ -166,10 +166,7 @@ pub fn fix_includes<S: ::std::hash::BuildHasher>(
                 }
             }
         } else {
-            log::warn!(
-                "included file which has not been preprocessed: {:?}",
-                path
-            );
+            log::warn!("included file which has not been preprocessed: {:?}", path);
         }
     }
 }

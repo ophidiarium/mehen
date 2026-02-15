@@ -211,14 +211,22 @@ impl Stats {
     /// Returns the `Abc` magnitude metric value.
     pub fn magnitude(&self) -> f64 {
         self.conditions
-            .mul_add(self.conditions, self.assignments.mul_add(self.assignments, self.branches.powi(2)))
+            .mul_add(
+                self.conditions,
+                self.assignments
+                    .mul_add(self.assignments, self.branches.powi(2)),
+            )
             .sqrt()
     }
 
     /// Returns the `Abc` magnitude sum metric value.
     pub fn magnitude_sum(&self) -> f64 {
         self.conditions_sum
-            .mul_add(self.conditions_sum, self.assignments_sum.mul_add(self.assignments_sum, self.branches_sum.powi(2)))
+            .mul_add(
+                self.conditions_sum,
+                self.assignments_sum
+                    .mul_add(self.assignments_sum, self.branches_sum.powi(2)),
+            )
             .sqrt()
     }
 

@@ -156,7 +156,10 @@ impl Stats {
     /// Returns the calculated estimated program length
     #[inline(always)]
     pub fn estimated_program_length(&self) -> f64 {
-        self.u_operators().mul_add(self.u_operators().log2(), self.u_operands() * self.u_operands().log2())
+        self.u_operators().mul_add(
+            self.u_operators().log2(),
+            self.u_operands() * self.u_operands().log2(),
+        )
     }
 
     /// Returns the purity ratio

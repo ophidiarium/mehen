@@ -205,11 +205,7 @@ fn get_nesting_from_map(
     }
 }
 
-fn increment_function_depth<T: PartialEq + From<u16>>(
-    depth: &mut usize,
-    node: &Node,
-    stop: &T,
-) {
+fn increment_function_depth<T: PartialEq + From<u16>>(depth: &mut usize, node: &Node, stop: &T) {
     // Increase depth function nesting if needed
     let mut child = *node;
     while let Some(parent) = child.parent() {
@@ -290,11 +286,7 @@ impl Cognitive for PythonCode {
             }
             FunctionDefinition => {
                 // Increase depth function nesting if needed
-                increment_function_depth::<Python>(
-                    &mut depth,
-                    node,
-                    &FunctionDefinition,
-                );
+                increment_function_depth::<Python>(&mut depth, node, &FunctionDefinition);
             }
             _ => {}
         }
