@@ -41,6 +41,10 @@ mod comment_rm;
 
 mod formats;
 
+mod ci;
+mod diff;
+mod git;
+
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process;
@@ -53,6 +57,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use crate::comment_rm::{CommentRm, CommentRmCfg};
 use crate::concurrent_files::{ConcurrentRunner, FilesData};
 use crate::count::{Count, CountCfg};
+use crate::diff::DiffOpts;
 use crate::find::{Find, FindCfg};
 use crate::formats::Format;
 use crate::function::{Function, FunctionCfg};
@@ -81,7 +86,7 @@ struct Config {
     count_lock: Option<Arc<Mutex<Count>>>,
 }
 
-fn mk_globset(elems: Vec<String>) -> GlobSet {
+pub(crate) fn mk_globset(elems: Vec<String>) -> GlobSet {
     if elems.is_empty() {
         return GlobSet::empty();
     }
@@ -168,7 +173,22 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
 
 #[derive(clap::Parser, Debug)]
 #[clap(name = "mehen", version, author, about = "Analyze source code.")]
-struct Opts {
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[command(flatten)]
+    analyze: AnalyzeOpts,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Compare metrics between two git revisions.
+    Diff(DiffOpts),
+}
+
+#[derive(clap::Args, Debug)]
+struct AnalyzeOpts {
     /// Input files to analyze.
     #[clap(long, short, value_parser)]
     paths: Vec<PathBuf>,
@@ -229,10 +249,7 @@ struct Opts {
     warning: bool,
 }
 
-fn main() {
-    env_logger::init();
-    let opts = <Opts as clap::Parser>::parse();
-
+fn run_analyze(opts: AnalyzeOpts) {
     let count_lock = if !opts.count.is_empty() {
         Some(Arc::new(Mutex::new(Count::default())))
     } else {
@@ -302,5 +319,15 @@ fn main() {
     if let Some(count) = count_lock {
         let count = Arc::try_unwrap(count).unwrap().into_inner().unwrap();
         writeln!(io::stdout(), "{count}").expect("failed to write to stdout");
+    }
+}
+
+fn main() {
+    env_logger::init();
+    let cli = <Cli as clap::Parser>::parse();
+
+    match cli.command {
+        Some(Command::Diff(opts)) => diff::run_diff(opts),
+        None => run_analyze(cli.analyze),
     }
 }
