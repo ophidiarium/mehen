@@ -471,7 +471,7 @@ impl From<Rust> for &'static str {
             Rust::Loop => "loop",
             Rust::Match => "match",
             Rust::Mod => "mod",
-            Rust::Pub => "pub(crate)",
+            Rust::Pub => "pub",
             Rust::Return => "return",
             Rust::Static => "static",
             Rust::Struct => "struct",

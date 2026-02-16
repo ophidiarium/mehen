@@ -73,10 +73,12 @@ cargo insta test --all-features --review --test-runner nextest --no-test-runner-
 ```
 
 ## Language/Grammar Changes
+Hard rule: never edit `src/languages/language_*.rs` directly. These files are generated and direct edits will be overwritten.
+
 When adding or updating a language:
 1. Update `enums/Cargo.toml` and `enums/src/languages.rs`.
 2. Update `enums/src/macros.rs` `mk_get_language` mapping.
-3. Regenerate enums with `./recreate-grammars.sh`.
+3. For token/keyword mapping changes, modify generator/source-of-truth in `enums/`, then regenerate with `./recreate-grammars.sh`.
 4. Wire language in `src/languages/mod.rs` and `src/langs.rs`.
 5. Implement or adjust behavior in `checker/getter/metrics`.
 
