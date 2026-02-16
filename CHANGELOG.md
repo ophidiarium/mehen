@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.3](https://github.com/ophidiarium/mehen/compare/v0.0.2...v0.0.3) (2026-02-16)
+
+
+### Bug Fixes
+
+* update typos config ([a41a4a4](https://github.com/ophidiarium/mehen/commit/a41a4a462e96d965641a4615e2403646c4e0885a))
+* use GitHub App token in release-please workflow ([#20](https://github.com/ophidiarium/mehen/issues/20)) ([88cf7ba](https://github.com/ophidiarium/mehen/commit/88cf7ba030b4ffbe74203cef9250e7d56702184b))
+
 ## [0.0.2](https://github.com/ophidiarium/mehen/compare/v0.0.1...v0.0.2) (2026-02-15)
 
 
