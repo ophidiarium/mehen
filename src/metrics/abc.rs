@@ -3,9 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
-use crate::*;
 
 /// The `ABC` metric.
 ///
@@ -21,7 +21,7 @@ use crate::*;
 ///
 /// <https://www.softwarerenovation.com/Articles.aspx>
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     assignments: f64,
     assignments_sum: f64,
     assignments_min: f64,
@@ -108,7 +108,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Abc` metric into the first one.
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         // Calculates minimum and maximum values
         self.assignments_min = self.assignments_min.min(other.assignments_min);
         self.assignments_max = self.assignments_max.max(other.assignments_max);
@@ -124,13 +124,8 @@ impl Stats {
         self.space_count += other.space_count;
     }
 
-    /// Returns the `Abc` assignments metric value.
-    pub fn assignments(&self) -> f64 {
-        self.assignments
-    }
-
     /// Returns the `Abc` assignments sum metric value.
-    pub fn assignments_sum(&self) -> f64 {
+    pub(crate) fn assignments_sum(&self) -> f64 {
         self.assignments_sum
     }
 
@@ -138,27 +133,22 @@ impl Stats {
     ///
     /// This value is computed dividing the `Abc`
     /// assignments value for the number of spaces.
-    pub fn assignments_average(&self) -> f64 {
+    pub(crate) fn assignments_average(&self) -> f64 {
         self.assignments_sum() / self.space_count as f64
     }
 
     /// Returns the `Abc` assignments minimum value.
-    pub fn assignments_min(&self) -> f64 {
+    pub(crate) fn assignments_min(&self) -> f64 {
         self.assignments_min
     }
 
     /// Returns the `Abc` assignments maximum value.
-    pub fn assignments_max(&self) -> f64 {
+    pub(crate) fn assignments_max(&self) -> f64 {
         self.assignments_max
     }
 
-    /// Returns the `Abc` branches metric value.
-    pub fn branches(&self) -> f64 {
-        self.branches
-    }
-
     /// Returns the `Abc` branches sum metric value.
-    pub fn branches_sum(&self) -> f64 {
+    pub(crate) fn branches_sum(&self) -> f64 {
         self.branches_sum
     }
 
@@ -166,27 +156,22 @@ impl Stats {
     ///
     /// This value is computed dividing the `Abc`
     /// branches value for the number of spaces.
-    pub fn branches_average(&self) -> f64 {
+    pub(crate) fn branches_average(&self) -> f64 {
         self.branches_sum() / self.space_count as f64
     }
 
     /// Returns the `Abc` branches minimum value.
-    pub fn branches_min(&self) -> f64 {
+    pub(crate) fn branches_min(&self) -> f64 {
         self.branches_min
     }
 
     /// Returns the `Abc` branches maximum value.
-    pub fn branches_max(&self) -> f64 {
+    pub(crate) fn branches_max(&self) -> f64 {
         self.branches_max
     }
 
-    /// Returns the `Abc` conditions metric value.
-    pub fn conditions(&self) -> f64 {
-        self.conditions
-    }
-
     /// Returns the `Abc` conditions sum metric value.
-    pub fn conditions_sum(&self) -> f64 {
+    pub(crate) fn conditions_sum(&self) -> f64 {
         self.conditions_sum
     }
 
@@ -194,33 +179,22 @@ impl Stats {
     ///
     /// This value is computed dividing the `Abc`
     /// conditions value for the number of spaces.
-    pub fn conditions_average(&self) -> f64 {
+    pub(crate) fn conditions_average(&self) -> f64 {
         self.conditions_sum() / self.space_count as f64
     }
 
     /// Returns the `Abc` conditions minimum value.
-    pub fn conditions_min(&self) -> f64 {
+    pub(crate) fn conditions_min(&self) -> f64 {
         self.conditions_min
     }
 
     /// Returns the `Abc` conditions maximum value.
-    pub fn conditions_max(&self) -> f64 {
+    pub(crate) fn conditions_max(&self) -> f64 {
         self.conditions_max
     }
 
-    /// Returns the `Abc` magnitude metric value.
-    pub fn magnitude(&self) -> f64 {
-        self.conditions
-            .mul_add(
-                self.conditions,
-                self.assignments
-                    .mul_add(self.assignments, self.branches.powi(2)),
-            )
-            .sqrt()
-    }
-
     /// Returns the `Abc` magnitude sum metric value.
-    pub fn magnitude_sum(&self) -> f64 {
+    pub(crate) fn magnitude_sum(&self) -> f64 {
         self.conditions_sum
             .mul_add(
                 self.conditions_sum,
@@ -249,7 +223,7 @@ impl Stats {
     }
 }
 
-pub trait Abc
+pub(crate) trait Abc
 where
     Self: Checker,
 {

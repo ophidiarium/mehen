@@ -11,17 +11,22 @@ description = "Tool to compute and export code metrics"
 license.workspace = true
 
 [dependencies]
+clap = { version = "^4.0", features = ["derive"] }
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
+env_logger = "^0.11"
 globset = "^0.4"
 log = "^0.4"
 num = "^0.4"
 num-derive = "^0.4"
 num-format = "^0.4"
 num-traits = "^0.2"
-petgraph = "^0.8"
+owo-colors = "^4"
 regex = "^1.7"
 serde = { version = "^1.0", features = ["derive"] }
-owo-colors = "^4"
+serde_cbor = "^0.11"
+serde_json = "^1.0"
+serde_norway = "^0.9"
+toml = "^1.0"
 walkdir = "^2.3"
 
 tree-sitter = "=0.26.5"
@@ -44,7 +49,6 @@ opt-level = 3
 opt-level = 3
 
 [workspace]
-members = ["mehen-cli"]
 exclude = ["enums"]
 
 [workspace.package]

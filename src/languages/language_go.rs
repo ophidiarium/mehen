@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Go {
+pub(crate) enum Go {
     End = 0,
     Identifier = 1,
     SourceFileToken1 = 2,

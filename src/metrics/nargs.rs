@@ -3,15 +3,19 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+#[cfg(test)]
+use crate::langs::{PythonParser, RustParser};
 use crate::macros::implement_metric_trait;
-use crate::*;
+use crate::node::Node;
+use crate::traits::Search;
 
 /// The `NArgs` metric.
 ///
 /// This metric counts the number of arguments
 /// of functions/closures.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     fn_nargs: usize,
     closure_nargs: usize,
     fn_nargs_sum: usize,
@@ -82,7 +86,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `NArgs` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.closure_nargs_min = self.closure_nargs_min.min(other.closure_nargs_min);
         self.closure_nargs_max = self.closure_nargs_max.max(other.closure_nargs_max);
         self.fn_nargs_min = self.fn_nargs_min.min(other.fn_nargs_min);
@@ -93,44 +97,44 @@ impl Stats {
 
     /// Returns the number of function arguments in a space.
     #[inline(always)]
-    pub fn fn_args(&self) -> f64 {
+    pub(crate) fn fn_args(&self) -> f64 {
         self.fn_nargs as f64
     }
 
     /// Returns the number of closure arguments in a space.
     #[inline(always)]
-    pub fn closure_args(&self) -> f64 {
+    pub(crate) fn closure_args(&self) -> f64 {
         self.closure_nargs as f64
     }
 
     /// Returns the number of function arguments sum in a space.
     #[inline(always)]
-    pub fn fn_args_sum(&self) -> f64 {
+    pub(crate) fn fn_args_sum(&self) -> f64 {
         self.fn_nargs_sum as f64
     }
 
     /// Returns the number of closure arguments sum in a space.
     #[inline(always)]
-    pub fn closure_args_sum(&self) -> f64 {
+    pub(crate) fn closure_args_sum(&self) -> f64 {
         self.closure_nargs_sum as f64
     }
 
     /// Returns the average number of functions arguments in a space.
     #[inline(always)]
-    pub fn fn_args_average(&self) -> f64 {
+    pub(crate) fn fn_args_average(&self) -> f64 {
         self.fn_nargs_sum as f64 / self.total_functions.max(1) as f64
     }
 
     /// Returns the average number of closures arguments in a space.
     #[inline(always)]
-    pub fn closure_args_average(&self) -> f64 {
+    pub(crate) fn closure_args_average(&self) -> f64 {
         self.closure_nargs_sum as f64 / self.total_closures.max(1) as f64
     }
 
     /// Returns the total number of arguments of each function and
     /// closure in a space.
     #[inline(always)]
-    pub fn nargs_total(&self) -> f64 {
+    pub(crate) fn nargs_total(&self) -> f64 {
         self.fn_args_sum() + self.closure_args_sum()
     }
 
@@ -139,27 +143,27 @@ impl Stats {
     /// This value is computed dividing the `NArgs` value
     /// for the total number of functions/closures in a space.
     #[inline(always)]
-    pub fn nargs_average(&self) -> f64 {
+    pub(crate) fn nargs_average(&self) -> f64 {
         self.nargs_total() / (self.total_functions + self.total_closures).max(1) as f64
     }
     /// Returns the minimum number of function arguments in a space.
     #[inline(always)]
-    pub fn fn_args_min(&self) -> f64 {
+    pub(crate) fn fn_args_min(&self) -> f64 {
         self.fn_nargs_min as f64
     }
     /// Returns the maximum number of function arguments in a space.
     #[inline(always)]
-    pub fn fn_args_max(&self) -> f64 {
+    pub(crate) fn fn_args_max(&self) -> f64 {
         self.fn_nargs_max as f64
     }
     /// Returns the minimum number of closure arguments in a space.
     #[inline(always)]
-    pub fn closure_args_min(&self) -> f64 {
+    pub(crate) fn closure_args_min(&self) -> f64 {
         self.closure_nargs_min as f64
     }
     /// Returns the maximum number of closure arguments in a space.
     #[inline(always)]
-    pub fn closure_args_max(&self) -> f64 {
+    pub(crate) fn closure_args_max(&self) -> f64 {
         self.closure_nargs_max as f64
     }
     #[inline(always)]
@@ -193,7 +197,7 @@ fn compute_args<T: Checker>(node: &Node, nargs: &mut usize) {
     }
 }
 
-pub trait NArgs
+pub(crate) trait NArgs
 where
     Self: Checker + Sized,
 {

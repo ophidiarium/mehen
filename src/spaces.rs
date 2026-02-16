@@ -7,27 +7,27 @@ use std::path::{Path, PathBuf};
 use crate::checker::Checker;
 use crate::node::Node;
 
-use crate::abc::{self, Abc};
-use crate::cognitive::{self, Cognitive};
-use crate::cyclomatic::{self, Cyclomatic};
-use crate::exit::{self, Exit};
 use crate::getter::Getter;
-use crate::halstead::{self, Halstead, HalsteadMaps};
-use crate::loc::{self, Loc};
-use crate::mi::{self, Mi};
-use crate::nargs::{self, NArgs};
-use crate::nom::{self, Nom};
-use crate::npa::{self, Npa};
-use crate::npm::{self, Npm};
-use crate::wmc::{self, Wmc};
+use crate::metrics::abc::{self, Abc};
+use crate::metrics::cognitive::{self, Cognitive};
+use crate::metrics::cyclomatic::{self, Cyclomatic};
+use crate::metrics::exit::{self, Exit};
+use crate::metrics::halstead::{self, Halstead, HalsteadMaps};
+use crate::metrics::loc::{self, Loc};
+use crate::metrics::mi::{self, Mi};
+use crate::metrics::nargs::{self, NArgs};
+use crate::metrics::nom::{self, Nom};
+use crate::metrics::npa::{self, Npa};
+use crate::metrics::npm::{self, Npm};
+use crate::metrics::wmc::{self, Wmc};
 
-use crate::dump_metrics::*;
+use crate::output::dump_metrics::*;
 use crate::traits::*;
 
 /// The list of supported space kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SpaceKind {
+pub(crate) enum SpaceKind {
     /// An unknown space
     #[default]
     Unknown,
@@ -35,16 +35,12 @@ pub enum SpaceKind {
     Function,
     /// A class space
     Class,
-    /// A struct space
-    Struct,
     /// A `Rust` trait space
     Trait,
     /// A `Rust` implementation space
     Impl,
     /// A general space
     Unit,
-    /// A `C/C++` namespace
-    Namespace,
     /// An interface
     Interface,
 }
@@ -55,11 +51,9 @@ impl fmt::Display for SpaceKind {
             SpaceKind::Unknown => "unknown",
             SpaceKind::Function => "function",
             SpaceKind::Class => "class",
-            SpaceKind::Struct => "struct",
             SpaceKind::Trait => "trait",
             SpaceKind::Impl => "impl",
             SpaceKind::Unit => "unit",
-            SpaceKind::Namespace => "namespace",
             SpaceKind::Interface => "interface",
         };
         write!(f, "{s}")
@@ -68,33 +62,33 @@ impl fmt::Display for SpaceKind {
 
 /// All metrics data.
 #[derive(Default, Debug, Clone, Serialize)]
-pub struct CodeMetrics {
+pub(crate) struct CodeMetrics {
     /// `NArgs` data
-    pub nargs: nargs::Stats,
+    pub(crate) nargs: nargs::Stats,
     /// `NExits` data
-    pub nexits: exit::Stats,
-    pub cognitive: cognitive::Stats,
+    pub(crate) nexits: exit::Stats,
+    pub(crate) cognitive: cognitive::Stats,
     /// `Cyclomatic` data
-    pub cyclomatic: cyclomatic::Stats,
+    pub(crate) cyclomatic: cyclomatic::Stats,
     /// `Halstead` data
-    pub halstead: halstead::Stats,
+    pub(crate) halstead: halstead::Stats,
     /// `Loc` data
-    pub loc: loc::Stats,
+    pub(crate) loc: loc::Stats,
     /// `Nom` data
-    pub nom: nom::Stats,
+    pub(crate) nom: nom::Stats,
     /// `Mi` data
-    pub mi: mi::Stats,
+    pub(crate) mi: mi::Stats,
     /// `Abc` data
-    pub abc: abc::Stats,
+    pub(crate) abc: abc::Stats,
     /// `Wmc` data
     #[serde(skip_serializing_if = "wmc::Stats::is_disabled")]
-    pub wmc: wmc::Stats,
+    pub(crate) wmc: wmc::Stats,
     /// `Npm` data
     #[serde(skip_serializing_if = "npm::Stats::is_disabled")]
-    pub npm: npm::Stats,
+    pub(crate) npm: npm::Stats,
     /// `Npa` data
     #[serde(skip_serializing_if = "npa::Stats::is_disabled")]
-    pub npa: npa::Stats,
+    pub(crate) npa: npa::Stats,
 }
 
 impl fmt::Display for CodeMetrics {
@@ -111,7 +105,7 @@ impl fmt::Display for CodeMetrics {
 }
 
 impl CodeMetrics {
-    pub fn merge(&mut self, other: &CodeMetrics) {
+    pub(crate) fn merge(&mut self, other: &CodeMetrics) {
         self.cognitive.merge(&other.cognitive);
         self.cyclomatic.merge(&other.cyclomatic);
         self.halstead.merge(&other.halstead);
@@ -129,22 +123,22 @@ impl CodeMetrics {
 
 /// Function space data.
 #[derive(Debug, Clone, Serialize)]
-pub struct FuncSpace {
+pub(crate) struct FuncSpace {
     /// The name of a function space
     ///
     /// If `None`, an error is occurred in parsing
     /// the name of a function space
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// The first line of a function space
-    pub start_line: usize,
+    pub(crate) start_line: usize,
     /// The last line of a function space
-    pub end_line: usize,
+    pub(crate) end_line: usize,
     /// The space kind
-    pub kind: SpaceKind,
+    pub(crate) kind: SpaceKind,
     /// All subspaces contained in a function space
-    pub spaces: Vec<FuncSpace>,
+    pub(crate) spaces: Vec<FuncSpace>,
     /// All metrics of a function space
-    pub metrics: CodeMetrics,
+    pub(crate) metrics: CodeMetrics,
 }
 
 impl FuncSpace {
@@ -280,7 +274,7 @@ struct State<'a> {
 ///
 /// metrics(&parser, &path).unwrap();
 /// ```
-pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
+pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
     let code = parser.get_code();
     let node = parser.get_root();
     let mut cursor = node.cursor();
@@ -356,12 +350,12 @@ pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Func
 /// Configuration options for computing
 /// the metrics of a code.
 #[derive(Debug)]
-pub struct MetricsCfg {
+pub(crate) struct MetricsCfg {
     /// Path to the file containing the code
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
 }
 
-pub struct Metrics {
+pub(crate) struct Metrics {
     _guard: (),
 }
 

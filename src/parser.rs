@@ -2,30 +2,29 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::abc::Abc;
 use crate::checker::Checker;
-use crate::cognitive::Cognitive;
-use crate::cyclomatic::Cyclomatic;
-use crate::exit::Exit;
-use crate::halstead::Halstead;
-use crate::loc::Loc;
-use crate::mi::Mi;
-use crate::nargs::NArgs;
-use crate::nom::Nom;
-use crate::npa::Npa;
-use crate::npm::Npm;
-use crate::wmc::Wmc;
+use crate::metrics::abc::Abc;
+use crate::metrics::cognitive::Cognitive;
+use crate::metrics::cyclomatic::Cyclomatic;
+use crate::metrics::exit::Exit;
+use crate::metrics::halstead::Halstead;
+use crate::metrics::loc::Loc;
+use crate::metrics::mi::Mi;
+use crate::metrics::nargs::NArgs;
+use crate::metrics::nom::Nom;
+use crate::metrics::npa::Npa;
+use crate::metrics::npm::Npm;
+use crate::metrics::wmc::Wmc;
 
 use crate::alterator::Alterator;
 use crate::getter::Getter;
 
-use crate::langs::*;
 use crate::node::{Node, Tree};
 use crate::preproc::PreprocResults;
 use crate::traits::*;
 
 #[derive(Debug)]
-pub struct Parser<
+pub(crate) struct Parser<
     T: LanguageInfo
         + Alterator
         + Checker
@@ -50,7 +49,7 @@ pub struct Parser<
 
 type FilterFn = dyn Fn(&Node) -> bool;
 
-pub struct Filter {
+pub(crate) struct Filter {
     filters: Vec<Box<FilterFn>>,
 }
 
@@ -63,22 +62,13 @@ impl std::fmt::Debug for Filter {
 }
 
 impl Filter {
-    pub fn any(&self, node: &Node) -> bool {
+    pub(crate) fn any(&self, node: &Node) -> bool {
         for f in &self.filters {
             if f(node) {
                 return true;
             }
         }
         false
-    }
-
-    pub fn all(&self, node: &Node) -> bool {
-        for f in &self.filters {
-            if !f(node) {
-                return false;
-            }
-        }
-        true
     }
 }
 
@@ -137,11 +127,6 @@ impl<
             tree,
             phantom: PhantomData,
         }
-    }
-
-    #[inline(always)]
-    fn get_language(&self) -> LANG {
-        T::get_lang()
     }
 
     #[inline(always)]

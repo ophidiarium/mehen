@@ -6,7 +6,7 @@ use std::str::FromStr;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
-pub enum Format {
+pub(crate) enum Format {
     Cbor,
     Json,
     Toml,
@@ -14,11 +14,11 @@ pub enum Format {
 }
 
 impl Format {
-    pub const fn all() -> &'static [&'static str] {
+    pub(crate) const fn all() -> &'static [&'static str] {
         &["cbor", "json", "toml", "yaml"]
     }
 
-    pub fn dump_formats<T: Serialize>(
+    pub(crate) fn dump_formats<T: Serialize>(
         &self,
         space: T,
         path: PathBuf,
@@ -212,7 +212,7 @@ struct Yaml;
 
 impl WriteOnStdout for Yaml {
     fn format<T: Serialize>(content: T) -> String {
-        serde_yaml::to_string(&content).unwrap()
+        serde_norway::to_string(&content).unwrap()
     }
 }
 
@@ -220,7 +220,7 @@ impl WriteFile for Yaml {
     const EXTENSION: &'static str = ".yml";
 
     fn with_writer<T: Serialize>(content: T, path: PathBuf, output_path: &Path) {
-        serde_yaml::to_writer(Self::open_file(path, output_path), &content).unwrap()
+        serde_norway::to_writer(Self::open_file(path, output_path), &content).unwrap()
     }
 }
 

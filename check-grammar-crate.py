@@ -67,7 +67,7 @@ def run_rca(
         manifest_path / "Cargo.toml" if manifest_path else "Cargo.toml",
         "--release",
         "--package",
-        "mehen-cli",
+        "mehen",
         "--",
         "--metrics",
         "--output-format=json",

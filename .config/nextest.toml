@@ -4,6 +4,9 @@
 failure-output = "immediate-final"
 # Do not cancel the test run on the first failure.
 fail-fast = false
+# Snapshot assertions (insta) should not be retried since reruns add noise and
+# can produce confusing pending-snapshot states.
+retries = 0
 
 status-level = "skip"
 

@@ -34,4 +34,4 @@ Issues        = "https://github.com/ophidiarium/mehen/issues"
 [tool.maturin]
 bindings      = "bin"
 python-source = "python"
-manifest-path = "mehen-cli/Cargo.toml"
+manifest-path = "Cargo.toml"

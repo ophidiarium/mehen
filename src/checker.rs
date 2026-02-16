@@ -2,7 +2,11 @@ use std::sync::OnceLock;
 
 use regex::bytes::Regex;
 
-use crate::*;
+use crate::langs::{
+    GoCode, PythonCode, RustCode, TsxCode, TsxParser, TypescriptCode, TypescriptParser,
+};
+use crate::languages::{Go, Python, Rust, Tsx, Typescript};
+use crate::node::Node;
 
 static RE: OnceLock<Regex> = OnceLock::new();
 
@@ -84,7 +88,7 @@ macro_rules! is_js_func_and_closure_checker {
     };
 }
 
-pub trait Checker {
+pub(crate) trait Checker {
     fn is_comment(_: &Node) -> bool;
     fn is_useful_comment(_: &Node, _: &[u8]) -> bool;
     fn is_func_space(_: &Node) -> bool;

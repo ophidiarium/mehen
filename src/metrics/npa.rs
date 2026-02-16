@@ -12,7 +12,7 @@ use crate::node::Node;
 /// This metric counts the number of public attributes
 /// of classes/interfaces.
 #[derive(Clone, Debug, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     class_npa: usize,
     interface_npa: usize,
     class_na: usize,
@@ -63,58 +63,34 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npa` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.class_npa_sum += other.class_npa_sum;
         self.interface_npa_sum += other.interface_npa_sum;
         self.class_na_sum += other.class_na_sum;
         self.interface_na_sum += other.interface_na_sum;
     }
 
-    /// Returns the number of class public attributes in a space.
-    #[inline(always)]
-    pub fn class_npa(&self) -> f64 {
-        self.class_npa as f64
-    }
-
-    /// Returns the number of interface public attributes in a space.
-    #[inline(always)]
-    pub fn interface_npa(&self) -> f64 {
-        self.interface_npa as f64
-    }
-
-    /// Returns the number of class attributes in a space.
-    #[inline(always)]
-    pub fn class_na(&self) -> f64 {
-        self.class_na as f64
-    }
-
-    /// Returns the number of interface attributes in a space.
-    #[inline(always)]
-    pub fn interface_na(&self) -> f64 {
-        self.interface_na as f64
-    }
-
     /// Returns the number of class public attributes sum in a space.
     #[inline(always)]
-    pub fn class_npa_sum(&self) -> f64 {
+    pub(crate) fn class_npa_sum(&self) -> f64 {
         self.class_npa_sum as f64
     }
 
     /// Returns the number of interface public attributes sum in a space.
     #[inline(always)]
-    pub fn interface_npa_sum(&self) -> f64 {
+    pub(crate) fn interface_npa_sum(&self) -> f64 {
         self.interface_npa_sum as f64
     }
 
     /// Returns the number of class attributes sum in a space.
     #[inline(always)]
-    pub fn class_na_sum(&self) -> f64 {
+    pub(crate) fn class_na_sum(&self) -> f64 {
         self.class_na_sum as f64
     }
 
     /// Returns the number of interface attributes sum in a space.
     #[inline(always)]
-    pub fn interface_na_sum(&self) -> f64 {
+    pub(crate) fn interface_na_sum(&self) -> f64 {
         self.interface_na_sum as f64
     }
 
@@ -128,7 +104,7 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn class_cda(&self) -> f64 {
+    pub(crate) fn class_cda(&self) -> f64 {
         self.class_npa_sum() / self.class_na_sum as f64
     }
 
@@ -142,7 +118,7 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn interface_cda(&self) -> f64 {
+    pub(crate) fn interface_cda(&self) -> f64 {
         // For the Java language it's not necessary to compute the metric value
         // The metric value in Java can only be 1.0 or f64:NAN
         if self.interface_npa_sum == self.interface_na_sum && self.interface_npa_sum != 0 {
@@ -162,19 +138,19 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn total_cda(&self) -> f64 {
+    pub(crate) fn total_cda(&self) -> f64 {
         self.total_npa() / self.total_na()
     }
 
     /// Returns the total number of public attributes in a space.
     #[inline(always)]
-    pub fn total_npa(&self) -> f64 {
+    pub(crate) fn total_npa(&self) -> f64 {
         self.class_npa_sum() + self.interface_npa_sum()
     }
 
     /// Returns the total number of attributes in a space.
     #[inline(always)]
-    pub fn total_na(&self) -> f64 {
+    pub(crate) fn total_na(&self) -> f64 {
         self.class_na_sum() + self.interface_na_sum()
     }
 
@@ -195,7 +171,7 @@ impl Stats {
     }
 }
 
-pub trait Npa
+pub(crate) trait Npa
 where
     Self: Checker,
 {

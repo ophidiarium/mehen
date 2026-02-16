@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 use crate::node::Node;
 
-use crate::dump::*;
+use crate::output::dump::*;
 use crate::traits::*;
 
 /// Finds the types of nodes specified in the input slice.
-pub fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Vec<Node<'a>> {
+pub(crate) fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Vec<Node<'a>> {
     let filters = parser.get_filters(filters);
     let node = parser.get_root();
     let mut cursor = node.cursor();
@@ -38,25 +38,25 @@ pub fn find<'a, T: ParserTrait>(parser: &'a T, filters: &[String]) -> Vec<Node<'
 /// Configuration options for finding different
 /// types of nodes in a code.
 #[derive(Debug)]
-pub struct FindCfg {
+pub(crate) struct FindCfg {
     /// Path to the file containing the code
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     /// Types of nodes to find
-    pub filters: Vec<String>,
+    pub(crate) filters: Vec<String>,
     /// The first line of code considered in the search
     ///
     /// If `None`, the search starts from the
     /// first line of code in a file
-    pub line_start: Option<usize>,
+    pub(crate) line_start: Option<usize>,
     /// The end line of code considered in the search
     ///
     /// If `None`, the search ends at the
     /// last line of code in a file
-    pub line_end: Option<usize>,
+    pub(crate) line_end: Option<usize>,
 }
 
 #[derive(Debug)]
-pub struct Find {
+pub(crate) struct Find {
     _guard: (),
 }
 

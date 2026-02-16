@@ -1,8 +1,8 @@
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Python, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
-
+use crate::node::Node;
 use crate::spaces::SpaceKind;
-
-use crate::*;
 
 macro_rules! get_operator {
     ($language:ident) => {
@@ -19,7 +19,7 @@ macro_rules! get_operator {
     };
 }
 
-pub trait Getter {
+pub(crate) trait Getter {
     fn get_func_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
         Self::get_func_space_name(node, code)
     }
@@ -294,7 +294,7 @@ impl Getter for RustCode {
 
 impl Getter for GoCode {
     fn get_space_kind(node: &Node) -> SpaceKind {
-        use crate::Go::*;
+        use crate::languages::Go::*;
         match node.kind_id().into() {
             FunctionDeclaration | MethodDeclaration | FuncLiteral => SpaceKind::Function,
             SourceFile => SpaceKind::Unit,
@@ -303,7 +303,7 @@ impl Getter for GoCode {
     }
 
     fn get_op_type(node: &Node) -> HalsteadType {
-        use crate::Go::*;
+        use crate::languages::Go::*;
         match node.kind_id().into() {
             // Operators: keywords and control flow
             // Note: Go::Go is the `go` keyword for goroutines
