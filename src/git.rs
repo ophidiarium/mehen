@@ -137,30 +137,16 @@ pub(crate) fn read_blob(
 /// one that points at the same commit.  Returns the short branch name
 /// (e.g. `"main"`) on a match, or falls back to `rev` unchanged.
 pub(crate) fn friendly_ref_label(repo: &gix::Repository, rev: &str) -> String {
-    let Ok(id) = repo.rev_parse_single(rev) else {
-        return rev.to_string();
-    };
-    let Ok(obj) = id.object() else {
-        return rev.to_string();
-    };
-    let Ok(commit) = obj.peel_to_commit() else {
-        return rev.to_string();
-    };
-    let commit_id = commit.id;
+    let friendly_name = (|| {
+        let id = repo.rev_parse_single(rev).ok()?;
+        let commit = id.object().ok()?.peel_to_commit().ok()?;
+        let refs = repo.references().ok()?;
 
-    let Ok(refs) = repo.references() else {
-        return rev.to_string();
-    };
+        find_branch_for_commit(&refs, commit.id, true)
+            .or_else(|| find_branch_for_commit(&refs, commit.id, false))
+    })();
 
-    // Prefer local branches, fall back to remote tracking branches.
-    if let Some(name) = find_branch_for_commit(&refs, commit_id, true) {
-        return name;
-    }
-    if let Some(name) = find_branch_for_commit(&refs, commit_id, false) {
-        return name;
-    }
-
-    rev.to_string()
+    friendly_name.unwrap_or_else(|| rev.to_string())
 }
 
 fn find_branch_for_commit(
