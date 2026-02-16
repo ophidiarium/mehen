@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/ophidiarium/mehen/compare/v0.0.3...v0.0.4) (2026-02-16)
+
+
+### Features
+
+* add `mehen diff` subcommand ([#24](https://github.com/ophidiarium/mehen/issues/24)) ([8edfcdf](https://github.com/ophidiarium/mehen/commit/8edfcdfef6b98c726becc681533bbb6a89c237db))
+
 ## [0.0.3](https://github.com/ophidiarium/mehen/compare/v0.0.2...v0.0.3) (2026-02-16)
 
 
