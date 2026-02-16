@@ -52,7 +52,7 @@ opt-level = 3
 exclude = ["enums"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
 rust-version = "1.93.1"
