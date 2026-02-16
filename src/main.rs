@@ -1,3 +1,44 @@
+#![allow(clippy::upper_case_acronyms)]
+
+mod getter;
+mod macros;
+
+mod alterator;
+
+mod node;
+
+mod metrics;
+
+mod languages;
+
+mod checker;
+
+mod output;
+
+mod spaces;
+
+mod ops;
+
+mod find;
+
+mod function;
+
+mod count;
+
+mod preproc;
+
+mod langs;
+
+mod tools;
+
+mod concurrent_files;
+
+mod traits;
+
+mod parser;
+
+mod comment_rm;
+
 mod formats;
 
 use std::io::{self, Write};
@@ -6,25 +47,20 @@ use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread::available_parallelism;
 
-use clap::Parser;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use formats::Format;
-
-// Enums
-use mehen::LANG;
-
-// Structs
-use mehen::{
-    CommentRm, CommentRmCfg, ConcurrentRunner, Count, CountCfg, Dump, DumpCfg, FilesData, Find,
-    FindCfg, Function, FunctionCfg, Metrics, MetricsCfg, OpsCfg, OpsCode,
-};
-
-// Functions
-use mehen::{
-    action, get_from_ext, get_function_spaces, get_ops, guess_language, read_file_with_eol,
-};
+use crate::comment_rm::{CommentRm, CommentRmCfg};
+use crate::concurrent_files::{ConcurrentRunner, FilesData};
+use crate::count::{Count, CountCfg};
+use crate::find::{Find, FindCfg};
+use crate::formats::Format;
+use crate::function::{Function, FunctionCfg};
+use crate::langs::{LANG, action, get_from_ext, get_function_spaces, get_ops};
+use crate::ops::{OpsCfg, OpsCode};
+use crate::output::{Dump, DumpCfg};
+use crate::spaces::{Metrics, MetricsCfg};
+use crate::tools::{guess_language, read_file_with_eol};
 
 #[derive(Debug)]
 struct Config {
@@ -130,7 +166,7 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[clap(name = "mehen", version, author, about = "Analyze source code.")]
 struct Opts {
     /// Input files to analyze.
@@ -195,7 +231,7 @@ struct Opts {
 
 fn main() {
     env_logger::init();
-    let opts = Opts::parse();
+    let opts = <Opts as clap::Parser>::parse();
 
     let count_lock = if !opts.count.is_empty() {
         Some(Arc::new(Mutex::new(Count::default())))
@@ -258,7 +294,7 @@ fn main() {
     let _all_files = match ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
         Ok(all_files) => all_files,
         Err(e) => {
-            log::error!("{e:?}");
+            log::error!("{e}");
             process::exit(1);
         }
     };

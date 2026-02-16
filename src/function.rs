@@ -11,16 +11,16 @@ use crate::getter::Getter;
 
 /// Function span data.
 #[derive(Debug, Serialize)]
-pub struct FunctionSpan {
+pub(crate) struct FunctionSpan {
     /// The function name
-    pub name: String,
+    pub(crate) name: String,
     /// The first line of a function
-    pub start_line: usize,
+    pub(crate) start_line: usize,
     /// The last line of a function
-    pub end_line: usize,
+    pub(crate) end_line: usize,
     /// If `true`, an error is occurred in determining the span
     /// of a function
-    pub error: bool,
+    pub(crate) error: bool,
 }
 
 /// Detects the span of each function in a code.
@@ -28,7 +28,7 @@ pub struct FunctionSpan {
 /// Returns a vector containing the [`FunctionSpan`] of each function
 ///
 /// [`FunctionSpan`]: struct.FunctionSpan.html
-pub fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
+pub(crate) fn function<T: ParserTrait>(parser: &T) -> Vec<FunctionSpan> {
     let root = parser.get_root();
     let code = parser.get_code();
     let mut spans = Vec::new();
@@ -103,13 +103,13 @@ fn dump_spans(spans: &[FunctionSpan], path: &Path) -> std::io::Result<()> {
 /// Configuration options for detecting the span of
 /// each function in a code.
 #[derive(Debug)]
-pub struct FunctionCfg {
+pub(crate) struct FunctionCfg {
     /// Path to the file containing the code
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
 }
 
 #[derive(Debug)]
-pub struct Function {
+pub(crate) struct Function {
     _guard: (),
 }
 

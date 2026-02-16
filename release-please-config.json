@@ -85,11 +85,6 @@
                     "jsonpath": "$.package[?(@.name.value == 'mehen')].version"
                 },
                 {
-                    "type": "toml",
-                    "path": "Cargo.lock",
-                    "jsonpath": "$.package[?(@.name.value == 'mehen-cli')].version"
-                },
-                {
                     "type": "json",
                     "path": "npm/mehen/package.json",
                     "jsonpath": "$.version"

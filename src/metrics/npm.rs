@@ -12,7 +12,7 @@ use crate::node::Node;
 /// This metric counts the number of public methods
 /// of classes/interfaces.
 #[derive(Clone, Debug, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     class_npm: usize,
     interface_npm: usize,
     class_nm: usize,
@@ -63,58 +63,34 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npm` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.class_npm_sum += other.class_npm_sum;
         self.interface_npm_sum += other.interface_npm_sum;
         self.class_nm_sum += other.class_nm_sum;
         self.interface_nm_sum += other.interface_nm_sum;
     }
 
-    /// Returns the number of class public methods in a space.
-    #[inline(always)]
-    pub fn class_npm(&self) -> f64 {
-        self.class_npm as f64
-    }
-
-    /// Returns the number of interface public methods in a space.
-    #[inline(always)]
-    pub fn interface_npm(&self) -> f64 {
-        self.interface_npm as f64
-    }
-
-    /// Returns the number of class methods in a space.
-    #[inline(always)]
-    pub fn class_nm(&self) -> f64 {
-        self.class_nm as f64
-    }
-
-    /// Returns the number of interface methods in a space.
-    #[inline(always)]
-    pub fn interface_nm(&self) -> f64 {
-        self.interface_nm as f64
-    }
-
     /// Returns the number of class public methods sum in a space.
     #[inline(always)]
-    pub fn class_npm_sum(&self) -> f64 {
+    pub(crate) fn class_npm_sum(&self) -> f64 {
         self.class_npm_sum as f64
     }
 
     /// Returns the number of interface public methods sum in a space.
     #[inline(always)]
-    pub fn interface_npm_sum(&self) -> f64 {
+    pub(crate) fn interface_npm_sum(&self) -> f64 {
         self.interface_npm_sum as f64
     }
 
     /// Returns the number of class methods sum in a space.
     #[inline(always)]
-    pub fn class_nm_sum(&self) -> f64 {
+    pub(crate) fn class_nm_sum(&self) -> f64 {
         self.class_nm_sum as f64
     }
 
     /// Returns the number of interface methods sum in a space.
     #[inline(always)]
-    pub fn interface_nm_sum(&self) -> f64 {
+    pub(crate) fn interface_nm_sum(&self) -> f64 {
         self.interface_nm_sum as f64
     }
 
@@ -128,7 +104,7 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn class_coa(&self) -> f64 {
+    pub(crate) fn class_coa(&self) -> f64 {
         self.class_npm_sum() / self.class_nm_sum()
     }
 
@@ -142,7 +118,7 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn interface_coa(&self) -> f64 {
+    pub(crate) fn interface_coa(&self) -> f64 {
         // For the Java language it's not necessary to compute the metric value
         // The metric value in Java can only be 1.0 or f64:NAN
         if self.interface_npm_sum == self.interface_nm_sum && self.interface_npm_sum != 0 {
@@ -162,19 +138,19 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn total_coa(&self) -> f64 {
+    pub(crate) fn total_coa(&self) -> f64 {
         self.total_npm() / self.total_nm()
     }
 
     /// Returns the total number of public methods in a space.
     #[inline(always)]
-    pub fn total_npm(&self) -> f64 {
+    pub(crate) fn total_npm(&self) -> f64 {
         self.class_npm_sum() + self.interface_npm_sum()
     }
 
     /// Returns the total number of methods in a space.
     #[inline(always)]
-    pub fn total_nm(&self) -> f64 {
+    pub(crate) fn total_nm(&self) -> f64 {
         self.class_nm_sum() + self.interface_nm_sum()
     }
 
@@ -195,7 +171,7 @@ impl Stats {
     }
 }
 
-pub trait Npm
+pub(crate) trait Npm
 where
     Self: Checker,
 {

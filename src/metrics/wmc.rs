@@ -3,8 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
-use crate::*;
+use crate::metrics::cyclomatic;
+use crate::spaces::SpaceKind;
 
 // FIX ME: New Java switches are not correctly recognised by tree-sitter-java version 0.19.0
 // However, the issue has already been addressed and resolved upstream on the tree-sitter-java GitHub repository
@@ -19,7 +21,7 @@ use crate::*;
 /// Original paper and definition:
 /// <https://www.researchgate.net/publication/3187649_Kemerer_CF_A_metric_suite_for_object_oriented_design_IEEE_Trans_Softw_Eng_206_476-493>
 #[derive(Debug, Clone, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     cyclomatic: f64,
     class_wmc: f64,
     interface_wmc: f64,
@@ -55,7 +57,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Wmc` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         use SpaceKind::*;
 
         // Merges the cyclomatic complexity of a method
@@ -72,33 +74,21 @@ impl Stats {
         self.interface_wmc_sum += other.interface_wmc_sum;
     }
 
-    /// Returns the `Wmc` metric value of the classes in a space.
-    #[inline(always)]
-    pub fn class_wmc(&self) -> f64 {
-        self.class_wmc
-    }
-
-    /// Returns the `Wmc` metric value of the interfaces in a space.
-    #[inline(always)]
-    pub fn interface_wmc(&self) -> f64 {
-        self.interface_wmc
-    }
-
     /// Returns the sum of the `Wmc` metric values of the classes in a space.
     #[inline(always)]
-    pub fn class_wmc_sum(&self) -> f64 {
+    pub(crate) fn class_wmc_sum(&self) -> f64 {
         self.class_wmc_sum
     }
 
     /// Returns the sum of the `Wmc` metric values of the interfaces in a space.
     #[inline(always)]
-    pub fn interface_wmc_sum(&self) -> f64 {
+    pub(crate) fn interface_wmc_sum(&self) -> f64 {
         self.interface_wmc_sum
     }
 
     /// Returns the total `Wmc` metric value in a space.
     #[inline(always)]
-    pub fn total_wmc(&self) -> f64 {
+    pub(crate) fn total_wmc(&self) -> f64 {
         self.class_wmc_sum() + self.interface_wmc_sum()
     }
 
@@ -117,7 +107,7 @@ impl Stats {
     }
 }
 
-pub trait Wmc
+pub(crate) trait Wmc
 where
     Self: Checker,
 {

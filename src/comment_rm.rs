@@ -9,7 +9,7 @@ use crate::traits::*;
 const CR: [u8; 8192] = [b'\n'; 8192];
 
 /// Removes comments from a code.
-pub fn rm_comments<T: ParserTrait>(parser: &T) -> Option<Vec<u8>> {
+pub(crate) fn rm_comments<T: ParserTrait>(parser: &T) -> Option<Vec<u8>> {
     let node = parser.get_root();
     let mut stack = Vec::new();
     let mut cursor = node.cursor();
@@ -63,15 +63,15 @@ fn remove_from_code(code: &[u8], spans: Vec<(usize, usize, usize)>) -> Vec<u8> {
 
 /// Configuration options for removing comments from a code.
 #[derive(Debug)]
-pub struct CommentRmCfg {
+pub(crate) struct CommentRmCfg {
     /// If `true`, the modified code is saved on a file
-    pub in_place: bool,
+    pub(crate) in_place: bool,
     /// Path to output file
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
 }
 
 #[derive(Debug)]
-pub struct CommentRm {
+pub(crate) struct CommentRm {
     _guard: (),
 }
 
@@ -100,7 +100,8 @@ impl Callback for CommentRm {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{ParserTrait, RustParser};
+    use crate::langs::RustParser;
+    use crate::traits::ParserTrait;
 
     use super::rm_comments;
 

@@ -28,12 +28,12 @@ impl Tree {
 /// The inner `tree_sitter::Node` is exposed for advanced use cases
 /// where direct access to the underlying tree-sitter API is needed.
 #[derive(Clone, Copy, Debug)]
-pub struct Node<'a>(pub OtherNode<'a>);
+pub(crate) struct Node<'a>(pub(crate) OtherNode<'a>);
 
 impl<'a> Node<'a> {
     /// Checks if a node represents a syntax error or contains any syntax errors
     /// anywhere within it.
-    pub fn has_error(&self) -> bool {
+    pub(crate) fn has_error(&self) -> bool {
         self.0.has_error()
     }
 
@@ -88,10 +88,6 @@ impl<'a> Node<'a> {
         })
     }
 
-    pub(crate) fn next_sibling(&self) -> Option<Node<'a>> {
-        self.0.next_sibling().map(Node)
-    }
-
     #[inline(always)]
     pub(crate) fn is_child(&self, id: u16) -> bool {
         self.0
@@ -125,7 +121,7 @@ impl<'a> Node<'a> {
         Cursor(self.0.walk())
     }
 
-    pub(crate) fn count_specific_ancestors<T: crate::ParserTrait>(
+    pub(crate) fn count_specific_ancestors<T: crate::traits::ParserTrait>(
         &self,
         check: fn(&Node) -> bool,
         stop: fn(&Node) -> bool,
@@ -163,7 +159,7 @@ impl<'a> Node<'a> {
 
 /// An `AST` cursor.
 #[derive(Clone)]
-pub struct Cursor<'a>(TreeCursor<'a>);
+pub(crate) struct Cursor<'a>(TreeCursor<'a>);
 
 impl<'a> Cursor<'a> {
     pub(crate) fn reset(&mut self, node: &Node<'a>) {

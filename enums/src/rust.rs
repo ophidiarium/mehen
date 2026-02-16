@@ -24,7 +24,14 @@ pub fn generate_rust(output: &Path, file_template: &str) -> std::io::Result<()> 
         let path = output.join(file_name);
         let mut file = File::create(path)?;
 
-        let names = get_token_names(&language, false);
+        let mut names = get_token_names(&language, false);
+        if c_name == "Rust" {
+            for (token_name, _is_duplicate, ts_name) in &mut names {
+                if token_name == "Pub" && ts_name == "pub(crate)" {
+                    *ts_name = "pub".to_string();
+                }
+            }
+        }
 
         let args = RustTemplate { c_name, names };
 

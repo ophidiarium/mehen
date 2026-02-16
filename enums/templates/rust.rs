@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum {{ c_name }} {
+pub(crate) enum {{ c_name }} {
     {% for (name, _, _) in names -%}
     {{ name }} = {{ loop.index0 }},
     {% endfor %}
@@ -42,4 +42,3 @@ impl PartialEq<{{ c_name }}> for u16 {
         *x == *self
     }
 }
-

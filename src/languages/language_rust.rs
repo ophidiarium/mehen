@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Rust {
+pub(crate) enum Rust {
     End = 0,
     Identifier = 1,
     SEMI = 2,

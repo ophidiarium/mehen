@@ -30,7 +30,7 @@ use crate::ops::Ops;
 /// ```
 ///
 /// [`Result`]: #variant.Result
-pub fn dump_ops(ops: &Ops) -> std::io::Result<()> {
+pub(crate) fn dump_ops(ops: &Ops) -> std::io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     dump_space(ops, "", true, &mut stdout)

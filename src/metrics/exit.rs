@@ -3,14 +3,16 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::*;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Python, Rust, Tsx, Typescript};
+use crate::node::Node;
 
 /// The `NExit` metric.
 ///
 /// This metric counts the number of possible exit points
 /// from a function/method.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     exit: usize,
     exit_sum: usize,
     total_space_functions: usize,
@@ -59,26 +61,26 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `NExit` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.exit_max = self.exit_max.max(other.exit_max);
         self.exit_min = self.exit_min.min(other.exit_min);
         self.exit_sum += other.exit_sum;
     }
 
     /// Returns the `NExit` metric value
-    pub fn exit(&self) -> f64 {
+    pub(crate) fn exit(&self) -> f64 {
         self.exit as f64
     }
     /// Returns the `NExit` metric sum value
-    pub fn exit_sum(&self) -> f64 {
+    pub(crate) fn exit_sum(&self) -> f64 {
         self.exit_sum as f64
     }
     /// Returns the `NExit` metric  minimum value
-    pub fn exit_min(&self) -> f64 {
+    pub(crate) fn exit_min(&self) -> f64 {
         self.exit_min as f64
     }
     /// Returns the `NExit` metric maximum value
-    pub fn exit_max(&self) -> f64 {
+    pub(crate) fn exit_max(&self) -> f64 {
         self.exit_max as f64
     }
 
@@ -88,7 +90,7 @@ impl Stats {
     /// for the total number of functions/closures in a space.
     ///
     /// If there are no functions in a code, its value is `NAN`.
-    pub fn exit_average(&self) -> f64 {
+    pub(crate) fn exit_average(&self) -> f64 {
         self.exit_sum() / self.total_space_functions as f64
     }
     #[inline(always)]
@@ -106,7 +108,7 @@ impl Stats {
     }
 }
 
-pub trait Exit
+pub(crate) trait Exit
 where
     Self: Checker,
 {
@@ -162,9 +164,8 @@ impl Exit for GoCode {
 
 #[cfg(test)]
 mod tests {
+    use crate::langs::{GoParser, PythonParser, RustParser};
     use crate::tools::check_metrics;
-
-    use super::*;
 
     #[test]
     fn python_no_exit() {

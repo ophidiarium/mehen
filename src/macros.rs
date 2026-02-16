@@ -67,29 +67,13 @@ macro_rules! mk_lang {
     ( $( ($camel:ident, $name:ident, $display: expr, $description:expr) ),* ) => {
         /// The list of supported languages.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum LANG {
+        pub(crate) enum LANG {
             $(
                 #[doc = $description]
                 $camel,
             )*
         }
         impl LANG {
-            /// Return an iterator over the supported languages.
-            ///
-            /// # Examples
-            ///
-            /// ```
-            /// use mehen::LANG;
-            ///
-            /// for lang in LANG::into_enum_iter() {
-            ///     println!("{:?}", lang);
-            /// }
-            /// ```
-            pub fn into_enum_iter() -> impl Iterator<Item=LANG> {
-                use LANG::*;
-                [$( $camel, )*].into_iter()
-            }
-
             /// Returns the name of a language as a `&str`.
             ///
             /// # Examples
@@ -99,7 +83,7 @@ macro_rules! mk_lang {
             ///
             /// println!("{}", LANG::Rust.get_name());
             /// ```
-            pub fn get_name(&self) -> &'static str {
+            pub(crate) fn get_name(&self) -> &'static str {
                 match self {
                     $(
                         LANG::$camel => $display,
@@ -150,7 +134,7 @@ macro_rules! mk_action {
         ///
         /// [`Callback`]: trait.Callback.html
         #[inline(always)]
-        pub fn action<T: Callback>(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>, cfg: T::Cfg) -> T::Res {
+        pub(crate) fn action<T: Callback>(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>, cfg: T::Cfg) -> T::Res {
             match lang {
                 $(
                     LANG::$camel => {
@@ -179,7 +163,7 @@ macro_rules! mk_action {
         /// get_function_spaces(&language, source_as_vec, &path, None).unwrap();
         /// ```
         #[inline(always)]
-        pub fn get_function_spaces(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<FuncSpace> {
+        pub(crate) fn get_function_spaces(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<FuncSpace> {
             match lang {
                 $(
                     LANG::$camel => {
@@ -210,7 +194,7 @@ macro_rules! mk_action {
         /// # }
         /// ```
         #[inline(always)]
-        pub fn get_ops(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<Ops> {
+        pub(crate) fn get_ops(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<Ops> {
             match lang {
                 $(
                     LANG::$camel => {
@@ -236,7 +220,7 @@ macro_rules! mk_extensions {
         ///
         /// get_from_ext(ext).unwrap();
         /// ```
-        pub fn get_from_ext(ext: &str) -> Option<LANG>{
+        pub(crate) fn get_from_ext(ext: &str) -> Option<LANG>{
             match ext {
                 $(
                     $(
@@ -265,7 +249,7 @@ macro_rules! mk_emacs_mode {
         ///
         /// get_from_emacs_mode(emacs_mode).unwrap();
         /// ```
-        pub fn get_from_emacs_mode(mode: &str) -> Option<LANG>{
+        pub(crate) fn get_from_emacs_mode(mode: &str) -> Option<LANG>{
             match mode {
                 $(
                     $(
@@ -281,7 +265,7 @@ macro_rules! mk_emacs_mode {
 macro_rules! mk_code {
     ( $( ($camel:ident, $code:ident, $parser:ident, $name:ident, $docname:expr) ),* ) => {
         $(
-            pub struct $code { _guard: (), }
+            pub(crate) struct $code { _guard: (), }
 
             impl LanguageInfo for $code {
                 type BaseLang = $camel;
@@ -289,16 +273,12 @@ macro_rules! mk_code {
                 fn get_lang() -> LANG {
                     LANG::$camel
                 }
-
-                fn get_lang_name() -> &'static str {
-                    $docname
-                }
             }
 
             #[doc = "The `"]
             #[doc = $docname]
             #[doc = "` language parser."]
-            pub type $parser = Parser<$code>;
+            pub(crate) type $parser = Parser<$code>;
         )*
     };
 }

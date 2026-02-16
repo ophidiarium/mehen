@@ -280,7 +280,7 @@ jobs:
             BINARY_NAME="mehen.exe"
           fi
 
-          cargo build --release --package mehen-cli --target "$RUST_TARGET"
+          cargo build --release --package mehen --target "$RUST_TARGET"
           BINARY_PATH="target/${RUST_TARGET}/release/${BINARY_NAME}"
 
           mkdir -p "target/npm-binaries/${RUST_TARGET}"

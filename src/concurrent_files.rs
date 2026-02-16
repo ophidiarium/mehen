@@ -124,7 +124,7 @@ where
 
 /// Series of errors that might happen when processing files concurrently.
 #[derive(Debug)]
-pub enum ConcurrentErrors {
+pub(crate) enum ConcurrentErrors {
     /// Producer side error.
     ///
     /// An error occurred inside the producer thread.
@@ -143,19 +143,32 @@ pub enum ConcurrentErrors {
     Thread(String),
 }
 
+impl std::fmt::Display for ConcurrentErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Producer(msg) => write!(f, "producer error: {msg}"),
+            Self::Sender(msg) => write!(f, "sender error: {msg}"),
+            Self::Receiver(msg) => write!(f, "receiver error: {msg}"),
+            Self::Thread(msg) => write!(f, "thread error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for ConcurrentErrors {}
+
 /// Data related to files.
 #[derive(Debug)]
-pub struct FilesData {
+pub(crate) struct FilesData {
     /// Kind of files included in a search.
-    pub include: GlobSet,
+    pub(crate) include: GlobSet,
     /// Kind of files excluded from a search.
-    pub exclude: GlobSet,
+    pub(crate) exclude: GlobSet,
     /// List of file paths.
-    pub paths: Vec<PathBuf>,
+    pub(crate) paths: Vec<PathBuf>,
 }
 
 /// A runner to process files concurrently.
-pub struct ConcurrentRunner<Config> {
+pub(crate) struct ConcurrentRunner<Config> {
     proc_files: Box<ProcFilesFunction<Config>>,
     proc_dir_paths: Box<ProcDirPathsFunction<Config>>,
     proc_path: Box<ProcPathFunction<Config>>,
@@ -176,7 +189,7 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
     /// * `num_jobs` - Number of jobs utilized to process files concurrently.
     /// * `proc_files` - Function that processes each file found during
     ///   the search.
-    pub fn new<ProcFiles>(num_jobs: usize, proc_files: ProcFiles) -> Self
+    pub(crate) fn new<ProcFiles>(num_jobs: usize, proc_files: ProcFiles) -> Self
     where
         ProcFiles: 'static + Fn(PathBuf, &Config) -> std::io::Result<()> + Send + Sync,
     {
@@ -189,35 +202,13 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
         }
     }
 
-    /// Sets the function to process the paths and subpaths contained in a
-    /// directory.
-    #[must_use]
-    pub fn set_proc_dir_paths<ProcDirPaths>(mut self, proc_dir_paths: ProcDirPaths) -> Self
-    where
-        ProcDirPaths:
-            'static + Fn(&mut HashMap<String, Vec<PathBuf>>, &Path, &Config) + Send + Sync,
-    {
-        self.proc_dir_paths = Box::new(proc_dir_paths);
-        self
-    }
-
-    /// Sets the function to process a single path.
-    #[must_use]
-    pub fn set_proc_path<ProcPath>(mut self, proc_path: ProcPath) -> Self
-    where
-        ProcPath: 'static + Fn(&Path, &Config) + Send + Sync,
-    {
-        self.proc_path = Box::new(proc_path);
-        self
-    }
-
     /// Runs the producer-consumer approach to process the files
     /// contained in a directory and in its own subdirectories.
     ///
     /// * `config` - Information used to process a file.
     /// * `files_data` - Information about the files to be included or excluded
     ///   from a search more the number of paths considered in the search.
-    pub fn run(
+    pub(crate) fn run(
         self,
         config: Config,
         files_data: FilesData,

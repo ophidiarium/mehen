@@ -1,98 +1,11 @@
-use crate::*;
+use crate::checker::Checker;
+use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
 
-/// A trait to create a richer `AST` node for a programming language, mainly
-/// thought to be sent on the network.
-pub trait Alterator
-where
-    Self: Checker,
-{
-    /// Creates a new `AST` node containing the code associated to the node,
-    /// its span, and its children.
-    ///
-    /// This function can be overloaded according to the needs of each
-    /// programming language.
-    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
-        Self::get_default(node, code, span, children)
-    }
-
-    /// Gets the code as text and the span associated to a node.
-    fn get_text_span(node: &Node, code: &[u8], span: bool, text: bool) -> (String, Span) {
-        let text = if text {
-            String::from_utf8(code[node.start_byte()..node.end_byte()].to_vec()).unwrap()
-        } else {
-            String::new()
-        };
-        if span {
-            let (spos_row, spos_column) = node.start_position();
-            let (epos_row, epos_column) = node.end_position();
-            (
-                text,
-                Some((spos_row + 1, spos_column + 1, epos_row + 1, epos_column + 1)),
-            )
-        } else {
-            (text, None)
-        }
-    }
-
-    /// Gets a default `AST` node containing the code associated to the node,
-    /// its span, and its children.
-    fn get_default(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
-        let (text, span) = Self::get_text_span(node, code, span, node.child_count() == 0);
-        AstNode::new(node.kind(), text, span, children)
-    }
-
-    /// Gets a new `AST` node if and only if the code is not a comment,
-    /// otherwise [`None`] is returned.
-    fn get_ast_node(
-        node: &Node,
-        code: &[u8],
-        children: Vec<AstNode>,
-        span: bool,
-        comment: bool,
-    ) -> Option<AstNode> {
-        if comment && Self::is_comment(node) {
-            None
-        } else {
-            Some(Self::alter(node, code, span, children))
-        }
-    }
-}
+/// Marker trait for language implementations used by `Parser`.
+pub(crate) trait Alterator: Checker {}
 
 impl Alterator for PythonCode {}
 impl Alterator for GoCode {}
-
-impl Alterator for TypescriptCode {
-    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
-        match Typescript::from(node.kind_id()) {
-            Typescript::String => {
-                let (text, span) = Self::get_text_span(node, code, span, true);
-                AstNode::new(node.kind(), text, span, Vec::new())
-            }
-            _ => Self::get_default(node, code, span, children),
-        }
-    }
-}
-
-impl Alterator for TsxCode {
-    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
-        match Tsx::from(node.kind_id()) {
-            Tsx::String => {
-                let (text, span) = Self::get_text_span(node, code, span, true);
-                AstNode::new(node.kind(), text, span, Vec::new())
-            }
-            _ => Self::get_default(node, code, span, children),
-        }
-    }
-}
-
-impl Alterator for RustCode {
-    fn alter(node: &Node, code: &[u8], span: bool, children: Vec<AstNode>) -> AstNode {
-        match Rust::from(node.kind_id()) {
-            Rust::StringLiteral | Rust::CharLiteral => {
-                let (text, span) = Self::get_text_span(node, code, span, true);
-                AstNode::new(node.kind(), text, span, Vec::new())
-            }
-            _ => Self::get_default(node, code, span, children),
-        }
-    }
-}
+impl Alterator for TypescriptCode {}
+impl Alterator for TsxCode {}
+impl Alterator for RustCode {}

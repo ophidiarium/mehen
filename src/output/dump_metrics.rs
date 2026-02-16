@@ -2,18 +2,18 @@ use std::io::{self, Write};
 
 use owo_colors::OwoColorize;
 
-use crate::abc;
-use crate::cognitive;
-use crate::cyclomatic;
-use crate::exit;
-use crate::halstead;
-use crate::loc;
-use crate::mi;
-use crate::nargs;
-use crate::nom;
-use crate::npa;
-use crate::npm;
-use crate::wmc;
+use crate::metrics::abc;
+use crate::metrics::cognitive;
+use crate::metrics::cyclomatic;
+use crate::metrics::exit;
+use crate::metrics::halstead;
+use crate::metrics::loc;
+use crate::metrics::mi;
+use crate::metrics::nargs;
+use crate::metrics::nom;
+use crate::metrics::npa;
+use crate::metrics::npm;
+use crate::metrics::wmc;
 
 use crate::spaces::{CodeMetrics, FuncSpace};
 
@@ -41,7 +41,7 @@ use crate::spaces::{CodeMetrics, FuncSpace};
 /// ```
 ///
 /// [`Result`]: #variant.Result
-pub fn dump_root(space: &FuncSpace) -> std::io::Result<()> {
+pub(crate) fn dump_root(space: &FuncSpace) -> std::io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     dump_space(space, "", true, &mut stdout)
