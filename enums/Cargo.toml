@@ -5,7 +5,7 @@ authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
 
 [dependencies]
-clap = { version = "^4.0", features = ["derive"] }
+clap = { version = "^4.5", features = ["derive"] }
 askama = "^0.15"
 
 tree-sitter = "=0.26.5"
