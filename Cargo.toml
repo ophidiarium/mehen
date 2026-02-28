@@ -30,7 +30,7 @@ toml = "^1.0"
 walkdir = "^2.3"
 gix = { version = "^0.80", default-features = false, features = ["max-performance-safe", "revision"] }
 
-tree-sitter = "=0.26.5"
+tree-sitter = "=0.26.6"
 tree-sitter-typescript = "=0.23.2"
 tree-sitter-python = "=0.25.0"
 tree-sitter-rust = "=0.24.0"
