@@ -33,7 +33,7 @@ gix = { version = "^0.80", default-features = false, features = ["max-performanc
 tree-sitter = "=0.26.7"
 tree-sitter-typescript = "=0.23.2"
 tree-sitter-python = "=0.25.0"
-tree-sitter-rust = "=0.24.1"
+tree-sitter-rust = "=0.24.2"
 tree-sitter-go = "=0.25.0"
 
 [package.metadata.cargo-machete]
