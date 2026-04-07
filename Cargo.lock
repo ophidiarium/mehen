@@ -1241,6 +1241,7 @@ dependencies = [
  "serde_cbor",
  "serde_json",
  "serde_norway",
+ "tempfile",
  "toml",
  "tree-sitter",
  "tree-sitter-go",
