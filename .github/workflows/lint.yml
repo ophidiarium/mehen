@@ -56,9 +56,6 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Update npm
-        run: npm install -g npm@11
-
       # Prepare output directory for mehen
       - name: Prepare mehen output dir
         run: mkdir -p $HOME/mehen-json
