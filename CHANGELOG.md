@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/ophidiarium/mehen/compare/v0.0.4...v0.0.5) (2026-04-07)
+
+
+### Bug Fixes
+
+* **ci:** remove broken npm@11 global install from static-analysis ([#48](https://github.com/ophidiarium/mehen/issues/48)) ([1774559](https://github.com/ophidiarium/mehen/commit/17745598d764638d2736e2ca539872ff7666c42b))
+
 ## [0.0.4](https://github.com/ophidiarium/mehen/compare/v0.0.3...v0.0.4) (2026-02-16)
 
 
