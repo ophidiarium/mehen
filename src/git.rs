@@ -75,8 +75,8 @@ pub(crate) fn changed_files(
 
     let mut recorder = gix::diff::tree::Recorder::default();
     gix::diff::tree(
-        TreeRefIter::from_bytes(&from_tree.data),
-        TreeRefIter::from_bytes(&to_tree.data),
+        TreeRefIter::from_bytes(&from_tree.data, from_tree.id.kind()),
+        TreeRefIter::from_bytes(&to_tree.data, to_tree.id.kind()),
         gix::diff::tree::State::default(),
         repo.objects.clone(),
         &mut recorder,
