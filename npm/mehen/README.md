@@ -60,35 +60,28 @@ Other supported output formats: YAML, TOML, CBOR.
 
 ## CI Integration
 
-`mehen` works well in CI pipelines. Here is a real-world example from a GitHub Actions workflow that computes metrics on pull requests, compares against the `main` branch, and posts a summary comment:
+`mehen` ships a GitHub Action that computes changed-file metric trends on pull requests, compares against the base branch, and posts a summary comment:
 
 ```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 steps:
   - uses: actions/checkout@v5
     with:
       fetch-depth: 0
 
-  - name: Set up Node.js
-    uses: actions/setup-node@v5
+  - uses: ophidiarium/mehen@v1
     with:
-      node-version: '22'
-
-  # Run mehen on the PR branch
-  - run: mkdir -p $HOME/mehen-json
-  - run: npx -y mehen -m -O json -o "$HOME/mehen-json" -p src
-
-  # Run mehen on main for baseline comparison
-  - uses: actions/checkout@v5
-    with:
-      ref: main
-      path: main
-  - run: mkdir -p $HOME/mehen-json-base
-  - run: npx -y mehen -m -O json -o "$HOME/mehen-json-base" -p main/src
-
-  # Compare and comment on PR (using actions/github-script or similar)
+      paths: src
+      thresholds: |
+        cyclomatic=5
+        cognitive=4
 ```
 
-The JSON output per file contains structured metric data that can be diffed across branches to surface regressions.
+The action is backed by `mehen diff`, so polyglot repositories can pass multiple roots and let `mehen` pick supported languages from changed files.
 
 ## Platforms
 

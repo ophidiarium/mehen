@@ -6,9 +6,13 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '**/*.rs'
+      - '.github/workflows/lint.yml'
+      - 'action.yml'
       - Cargo.lock
+      - 'scripts/**/*.mjs'
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
@@ -41,6 +45,13 @@ jobs:
       - name: Set up Rust toolchain
         run: rustup show
 
+      - name: Check GitHub Action script
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: node --test scripts/github-action.test.mjs
+
       - run: cargo clippy --workspace --all-targets --all-features --locked
 
       - run: cargo fmt --all --check
@@ -51,144 +62,8 @@ jobs:
       - name: Cargo Machete
         uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Publish mehen metrics
+        uses: ./
         with:
-          node-version: '22'
-
-      # Prepare output directory for mehen
-      - name: Prepare mehen output dir
-        run: mkdir -p $HOME/mehen-json
-
-      # Run mehen metrics (pull request)
-      - name: Run mehen metrics on PR
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          npx -y mehen -m -O json -o "$HOME/mehen-json" -p src
-
-      # Run mehen metrics (push to main)
-      - name: Run mehen metrics on all files
-        if: ${{ github.event_name == 'push' }}
-        run: |
-          npx -y mehen -m -O json -o "$HOME/mehen-json" -p src
-
-      - name: Upload mehen json
-        uses: actions/upload-artifact@v4
-        with:
-          name: mehen-json-ubuntu
-          path: ~/mehen-json
-
-      # Generate baseline mehen metrics from main branch
-      - name: Prepare baseline mehen output dir
-        if: ${{ github.event_name == 'pull_request' }}
-        run: mkdir -p $HOME/mehen-json-base
-      - name: Checkout main branch for baseline
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@v5
-        with:
-          ref: main
-          path: main
-      - name: Run mehen on main branch
-        if: ${{ github.event_name == 'pull_request' }}
-        working-directory: main
-        run: |
-          npx -y mehen -m -O json -o "$HOME/mehen-json-base" -p src
-
-      # Comment mehen metrics on pull requests with comparison
-      - name: Comment mehen metrics on PR
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const prDir = `${process.env.HOME}/mehen-json`;
-            const baseDir = `${process.env.HOME}/mehen-json-base`;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const ref = context.payload.pull_request.head.sha;
-            const changedFilesList = await github.paginate(
-              github.rest.pulls.listFiles,
-              { owner, repo, pull_number: context.issue.number }
-            );
-            const changedFiles = new Set(changedFilesList.map(f => f.filename));
-            let rows = [];
-            const collectFiles = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(dirent => {
-              const full = `${d}/${dirent.name}`;
-              return dirent.isDirectory() ? collectFiles(full) : [full];
-            });
-            let prFiles = collectFiles(prDir).filter(f => f.endsWith('.json'));
-            prFiles = prFiles.filter(fullPath => {
-              const rel = fullPath.slice(prDir.length + 1).replace(/\.json$/, '');
-              return changedFiles.has(rel);
-            });
-            prFiles.forEach(fullPath => {
-              const rel = fullPath.slice(prDir.length + 1).replace(/\.json$/, '');
-              const fileLink = `[${rel}](https://github.com/${owner}/${repo}/blob/${ref}/${rel})`;
-              const prRaw = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-              const prItems = Array.isArray(prRaw) ? prRaw : [prRaw];
-              const prCount = prItems.length || 1;
-              const prCyclo = prItems.reduce((s,o)=>s+o.metrics.cyclomatic.sum,0)/prCount;
-              const prCog   = prItems.reduce((s,o)=>s+o.metrics.cognitive.sum,0)/prCount;
-              const prFunc  = prItems.reduce((s,o)=>s+o.metrics.nom.functions,0);
-              const prLloc  = prItems.reduce((s,o)=>s+o.metrics.loc.lloc,0);
-              let baseCyclo = prCyclo, baseCog = prCog, baseFunc = prFunc, baseLloc = prLloc;
-              const basePath = `${baseDir}/${rel}.json`;
-              if (fs.existsSync(basePath)) {
-                const baseRaw = JSON.parse(fs.readFileSync(basePath,'utf8'));
-                const baseItems = Array.isArray(baseRaw)?baseRaw:[baseRaw];
-                const baseCount = baseItems.length||1;
-                baseCyclo = baseItems.reduce((s,o)=>s+o.metrics.cyclomatic.sum,0)/baseCount;
-                baseCog   = baseItems.reduce((s,o)=>s+o.metrics.cognitive.sum,0)/baseCount;
-                baseFunc  = baseItems.reduce((s,o)=>s+o.metrics.nom.functions,0);
-                baseLloc  = baseItems.reduce((s,o)=>s+o.metrics.loc.lloc,0);
-              }
-              const diffFunc = prFunc - baseFunc;
-              const diffCyclo = (prCyclo - baseCyclo).toFixed(1);
-              const diffCog = (prCog - baseCog).toFixed(1);
-              const diffLloc = prLloc - baseLloc;
-              const emoji = d => d>0? '🔴': d<0? '🟢':'⚪';
-              const funcsCell = prFunc === baseFunc
-                ? `${prFunc.toFixed(0)} ${emoji(0)}`
-                : `${prFunc} (main: ${baseFunc}) ${emoji(diffFunc)}`;
-              const cycloCell = prCyclo === baseCyclo
-                ? `${prCyclo.toFixed(0)} ${emoji(0)}`
-                : `${prCyclo.toFixed(0)} (main: ${baseCyclo.toFixed(0)}) ${emoji(diffCyclo)}`;
-              const cogCell = prCog === baseCog
-                ? `${prCog.toFixed(0)} ${emoji(0)}`
-                : `${prCog.toFixed(0)} (main: ${baseCog.toFixed(0)}) ${emoji(diffCog)}`;
-              const llocCell = prLloc === baseLloc
-                ? `${prLloc} ${emoji(0)}`
-                : `${prLloc} (main: ${baseLloc}) ${emoji(diffLloc)}`;
-              rows.push({ file: fileLink, funcsVal: prFunc, funcs: funcsCell, cyclo: cycloCell, cog: cogCell, lloc: llocCell });
-            });
-            rows.sort((a, b) => {
-              const diff = b.funcsVal - a.funcsVal;
-              return diff !== 0 ? diff : a.file.localeCompare(b.file);
-            });
-            const commentTitle = '## [Mehen](https://github.com/ophidiarium/mehen) Summary';
-            let body = commentTitle + ' (this PR vs `main`)\n\n';
-            body += '| File | Functions | [Cyclomatic](https://en.wikipedia.org/wiki/Cyclomatic_complexity) | [Cognitive](https://www.sonarsource.com/blog/cognitive-complexity-because-testability-understandability/) | LLOC |\n';
-            body += '|---|---:|---:|---:|---:|\n';
-            rows.forEach(r => body += `| ${r.file} | ${r.funcs} | ${r.cyclo} | ${r.cog} | ${r.lloc} |\n`);
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const prev = comments.find(c => c.body.startsWith(commentTitle));
-            if (prev) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: prev.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+          install-method: cargo
+          paths: src
