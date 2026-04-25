@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.6](https://github.com/ophidiarium/mehen/compare/v0.0.5...v0.0.6) (2026-04-25)
+
+
+### Features
+
+* add reusable mehen metrics action ([#55](https://github.com/ophidiarium/mehen/issues/55)) ([11c5a52](https://github.com/ophidiarium/mehen/commit/11c5a529e4d006fa74f15cd453fb188c36ab9c40))
+
 ## [0.0.5](https://github.com/ophidiarium/mehen/compare/v0.0.4...v0.0.5) (2026-04-07)
 
 
