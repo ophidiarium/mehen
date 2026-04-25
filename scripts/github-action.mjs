@@ -128,6 +128,7 @@ function prepareMehen() {
     const root = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "mehen-action-cli");
     fs.rmSync(root, { recursive: true, force: true });
     runCommand("cargo", ["install", "--path", actionPath, "--locked", "--root", root], {
+      cwd: actionPath,
       stdio: "inherit",
     });
     const bin = process.platform === "win32" ? "mehen.exe" : "mehen";

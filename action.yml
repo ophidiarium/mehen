@@ -90,6 +90,10 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
+    - name: Set up Rust toolchain
+      if: ${{ inputs.install-method == 'cargo' }}
+      uses: dtolnay/rust-toolchain@stable
+
     - name: Publish mehen metrics
       id: run
       shell: bash
