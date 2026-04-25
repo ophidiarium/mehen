@@ -28,7 +28,7 @@ serde_json = "^1.0"
 serde_norway = "^0.9"
 toml = "^1.1"
 walkdir = "^2.3"
-gix = { version = "^0.82", default-features = false, features = ["max-performance-safe", "revision"] }
+gix = { version = "^0.82", default-features = false, features = ["max-performance-safe", "revision", "sha1"] }
 
 tree-sitter = "=0.26.8"
 tree-sitter-typescript = "=0.23.2"
