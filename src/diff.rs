@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use crate::ci;
 use crate::git::{self, ChangeStatus, GitError};
@@ -9,7 +9,8 @@ use crate::spaces::FuncSpace;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum Polarity {
     LowerIsBetter,
     HigherIsBetter,
@@ -100,7 +101,6 @@ struct MetricDiff {
     current: f64,
     baseline: f64,
     delta: f64,
-    #[serde(skip)]
     polarity: Polarity,
     is_new: bool,
     is_deleted: bool,
@@ -145,6 +145,9 @@ pub(crate) struct DiffOpts {
     /// Prefix with + for higher-is-better, - for lower-is-better.
     #[clap(long, short = 'M', value_delimiter = ',')]
     metrics: Vec<String>,
+    /// Repository-relative files or directories to compare.
+    #[clap(long, short, value_parser, num_args(0..))]
+    paths: Vec<PathBuf>,
     /// Glob to include files.
     #[clap(long, short = 'I', num_args(0..))]
     include: Vec<String>,
@@ -181,13 +184,15 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     // 3. Filter files
     let include = mk_globset(opts.include);
     let exclude = mk_globset(opts.exclude);
+    let paths = normalize_path_filters(&opts.paths);
     let selectors = parse_metric_selectors(&opts.metrics);
 
     let filtered: Vec<_> = changed
         .into_iter()
         .filter(|cf| {
             let p = &cf.path;
-            (include.is_empty() || include.is_match(p))
+            path_is_selected(p, &paths)
+                && (include.is_empty() || include.is_match(p))
                 && (exclude.is_empty() || !exclude.is_match(p))
         })
         .filter(|cf| {
@@ -345,6 +350,34 @@ fn get_changed_files(
     }
 
     git::changed_files(repo, from, to)
+}
+
+fn normalize_path_filters(paths: &[PathBuf]) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .map(|path| normalize_path_filter(path))
+        .collect()
+}
+
+fn normalize_path_filter(path: &Path) -> PathBuf {
+    let mut cleaned = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(part) => cleaned.push(part),
+            other => cleaned.push(other.as_os_str()),
+        }
+    }
+
+    cleaned
+}
+
+fn path_is_selected(path: &Path, paths: &[PathBuf]) -> bool {
+    paths.is_empty()
+        || paths.iter().any(|selected| {
+            selected.as_os_str().is_empty() || path == selected || path.starts_with(selected)
+        })
 }
 
 // ── Markdown output ────────────────────────────────────────────────────
@@ -612,6 +645,7 @@ mod tests {
             from: Some("abc".to_string()),
             to: Some("def".to_string()),
             metrics: vec![],
+            paths: vec![],
             include: vec![],
             exclude: vec![],
             output_format: None,
@@ -628,6 +662,7 @@ mod tests {
             from: None,
             to: None,
             metrics: vec![],
+            paths: vec![],
             include: vec![],
             exclude: vec![],
             output_format: None,
@@ -653,6 +688,7 @@ mod tests {
             from: None,
             to: None,
             metrics: vec![],
+            paths: vec![],
             include: vec![],
             exclude: vec![],
             output_format: None,
@@ -678,6 +714,7 @@ mod tests {
             from: None,
             to: None,
             metrics: vec![],
+            paths: vec![],
             include: vec![],
             exclude: vec![],
             output_format: None,
@@ -686,5 +723,42 @@ mod tests {
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "HEAD~1");
         assert_eq!(to, "def456");
+    }
+
+    #[test]
+    fn test_normalize_path_filters() {
+        let paths = normalize_path_filters(&[
+            PathBuf::from("."),
+            PathBuf::from("./internal"),
+            PathBuf::from("cmd/tally/"),
+        ]);
+
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::new(),
+                PathBuf::from("internal"),
+                PathBuf::from("cmd/tally")
+            ]
+        );
+    }
+
+    #[test]
+    fn test_path_is_selected() {
+        let paths = vec![PathBuf::from("internal"), PathBuf::from("main.go")];
+
+        assert!(path_is_selected(
+            Path::new("internal/config/config.go"),
+            &paths
+        ));
+        assert!(path_is_selected(Path::new("main.go"), &paths));
+        assert!(!path_is_selected(Path::new("internal2/config.go"), &paths));
+        assert!(!path_is_selected(Path::new("cmd/tally/main.go"), &paths));
+
+        let paths_with_root = vec![PathBuf::from("internal"), PathBuf::new()];
+        assert!(path_is_selected(
+            Path::new("cmd/tally/main.go"),
+            &paths_with_root
+        ));
     }
 }

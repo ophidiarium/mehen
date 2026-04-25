@@ -308,12 +308,11 @@ impl Cognitive for RustCode {
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
         match node.kind_id().into() {
-            IfExpression => {
+            IfExpression if !Self::is_else_if(node) => {
                 // Check if a node is not an else-if
-                if !Self::is_else_if(node) {
-                    increase_nesting(stats,&mut nesting, depth, lambda);
-                }
+                increase_nesting(stats, &mut nesting, depth, lambda);
             }
+            IfExpression => {}
             ForExpression | WhileExpression | MatchExpression => {
                 increase_nesting(stats,&mut nesting, depth, lambda);
             }
@@ -354,11 +353,10 @@ macro_rules! js_cognitive {
             let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
             match node.kind_id().into() {
-                IfStatement => {
-                    if !Self::is_else_if(&node) {
-                        increase_nesting(stats,&mut nesting, depth, lambda);
-                    }
+                IfStatement if !Self::is_else_if(&node) => {
+                    increase_nesting(stats, &mut nesting, depth, lambda);
                 }
+                IfStatement => {}
                 ForStatement | ForInStatement | WhileStatement | DoStatement | SwitchStatement | CatchClause | TernaryExpression => {
                     increase_nesting(stats,&mut nesting, depth, lambda);
                 }
@@ -411,11 +409,10 @@ impl Cognitive for GoCode {
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
         match node.kind_id().into() {
-            IfStatement => {
-                if !Self::is_else_if(node) {
-                    increase_nesting(stats, &mut nesting, depth, lambda);
-                }
+            IfStatement if !Self::is_else_if(node) => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
             }
+            IfStatement => {}
             ForStatement | ExpressionSwitchStatement | TypeSwitchStatement | SelectStatement => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
