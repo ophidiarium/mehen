@@ -1,0 +1,467 @@
+#!/usr/bin/env node
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+const MARKER = "<!-- mehen-metrics -->";
+const DEFAULT_TITLE = "## [Mehen](https://github.com/ophidiarium/mehen) Summary";
+const LOWER_IS_BETTER = "lower-is-better";
+const HIGHER_IS_BETTER = "higher-is-better";
+
+const METRIC_ALIASES = new Map([
+  ["functions", "nom.functions"],
+  ["nom", "nom.functions"],
+  ["lloc", "loc.lloc"],
+  ["loc", "loc.lloc"],
+  ["maintainability", "mi"],
+  ["maintainabilityindex", "mi"],
+  ["halsteadvol", "halstead.volume"],
+  ["halsteadvolume", "halstead.volume"],
+]);
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});
+
+async function main() {
+  const thresholds = parseThresholds(input("THRESHOLDS"));
+  const cli = prepareMehen();
+  const diffArgs = buildDiffArgs();
+  const diff = runMehen(cli, diffArgs);
+  const reportsDir = process.env.RUNNER_TEMP || os.tmpdir();
+  const reportJson = path.join(reportsDir, `mehen-diff-${Date.now()}.json`);
+  fs.writeFileSync(reportJson, `${diff.stdout.trim()}\n`, "utf8");
+
+  const diffs = parseDiffJson(diff.stdout);
+  const context = readGithubContext();
+  const violations = collectThresholdViolations(diffs, thresholds);
+  const markdown = renderMarkdown(diffs, context, thresholds, violations);
+  const reportMarkdown = path.join(reportsDir, `mehen-report-${Date.now()}.md`);
+  fs.writeFileSync(reportMarkdown, markdown, "utf8");
+
+  writeStepSummary(markdown);
+  try {
+    await maybeComment(markdown, context);
+  } catch (error) {
+    console.warn(`Unable to publish mehen PR comment: ${error.message}`);
+  }
+
+  setOutput("violations", String(violations.length));
+  setOutput("report_json", reportJson);
+  setOutput("report_markdown", reportMarkdown);
+
+  if (violations.length > 0 && boolInput("FAIL_ON_THRESHOLD", true)) {
+    console.error(`Mehen threshold check failed with ${violations.length} violation(s).`);
+    process.exit(1);
+  }
+}
+
+function input(name, fallback = "") {
+  return process.env[`GHA_MEHEN_${name}`] ?? fallback;
+}
+
+function boolInput(name, fallback) {
+  const value = input(name).trim().toLowerCase();
+  if (!value) {
+    return fallback;
+  }
+  return ["1", "true", "yes", "on"].includes(value);
+}
+
+function parseList(value) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const parts = /[\n,;]/.test(trimmed) ? trimmed.split(/[\n,;]+/) : trimmed.split(/\s+/);
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+function buildDiffArgs() {
+  const args = ["diff", "--output-format", "json"];
+  const from = input("FROM").trim();
+  const to = input("TO").trim();
+  const metrics = input("METRICS").trim();
+  const paths = parseList(input("PATHS"));
+  const include = parseList(input("INCLUDE"));
+  const exclude = parseList(input("EXCLUDE"));
+
+  if (from) {
+    args.push("--from", from);
+  }
+  if (to) {
+    args.push("--to", to);
+  }
+  if (metrics) {
+    args.push("--metrics", metrics);
+  }
+  if (paths.length > 0 && !(paths.length === 1 && paths[0] === ".")) {
+    args.push("--paths", ...paths);
+  }
+  if (include.length > 0) {
+    args.push("--include", ...include);
+  }
+  if (exclude.length > 0) {
+    args.push("--exclude", ...exclude);
+  }
+  if (boolInput("SHOW_UNCHANGED", false)) {
+    args.push("--show-unchanged");
+  }
+
+  return args;
+}
+
+function prepareMehen() {
+  const method = input("INSTALL_METHOD", "npm").trim().toLowerCase();
+
+  if (method === "npm") {
+    const version = input("VERSION").trim();
+    const pkg = version ? `mehen@${version}` : "mehen";
+    return { command: "npx", args: ["-y", pkg] };
+  }
+
+  if (method === "cargo") {
+    const actionPath = process.env.GITHUB_ACTION_PATH || process.cwd();
+    const root = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "mehen-action-cli");
+    fs.rmSync(root, { recursive: true, force: true });
+    runCommand("cargo", ["install", "--path", actionPath, "--locked", "--root", root], {
+      stdio: "inherit",
+    });
+    const bin = process.platform === "win32" ? "mehen.exe" : "mehen";
+    return { command: path.join(root, "bin", bin), args: [] };
+  }
+
+  if (method === "path") {
+    return { command: input("PATH", "mehen").trim() || "mehen", args: [] };
+  }
+
+  throw new Error(`Unsupported mehen install-method '${method}'. Use npm, cargo, or path.`);
+}
+
+function runMehen(cli, args) {
+  console.log(`Running: ${[cli.command, ...cli.args, ...args].join(" ")}`);
+  const result = spawnSync(cli.command, [...cli.args, ...args], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    if (result.stdout) {
+      console.error(result.stdout);
+    }
+    if (result.stderr) {
+      console.error(result.stderr);
+    }
+    throw new Error(`mehen exited with status ${result.status}`);
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+  return result;
+}
+
+function runCommand(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    ...options,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} exited with status ${result.status}`);
+  }
+  return result;
+}
+
+function parseDiffJson(stdout) {
+  try {
+    const parsed = JSON.parse(stdout);
+    if (!Array.isArray(parsed)) {
+      throw new Error("mehen diff JSON output was not an array");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`Failed to parse mehen diff JSON: ${error.message}\n${stdout}`);
+  }
+}
+
+function readGithubContext() {
+  let payload = {};
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (eventPath && fs.existsSync(eventPath)) {
+    payload = JSON.parse(fs.readFileSync(eventPath, "utf8"));
+  }
+
+  const pullRequest = payload.pull_request;
+  return {
+    eventName: process.env.GITHUB_EVENT_NAME || "",
+    repository: process.env.GITHUB_REPOSITORY || "",
+    sha: pullRequest?.head?.sha || process.env.GITHUB_SHA || "",
+    baseLabel: pullRequest?.base?.ref || input("FROM").trim() || "base",
+    prNumber: pullRequest?.number || payload.number || null,
+    token: input("GITHUB_TOKEN").trim() || process.env.GITHUB_TOKEN || "",
+  };
+}
+
+function renderMarkdown(diffs, context, thresholds, violations) {
+  const title = input("COMMENT_TITLE", DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+  const scope =
+    context.eventName === "pull_request" ? ` (this PR vs \`${context.baseLabel}\`)` : "";
+  let body = `${MARKER}\n${title}${scope}\n\n`;
+
+  if (diffs.length === 0) {
+    body += "No metric changes detected.\n";
+  } else {
+    const metrics = diffs[0].metrics || [];
+    body += "| File |";
+    for (const metric of metrics) {
+      body += ` ${escapeCell(metric.label || metric.name)} |`;
+    }
+    body += "\n|---|";
+    for (const _metric of metrics) {
+      body += "---:|";
+    }
+    body += "\n";
+
+    for (const file of diffs) {
+      body += `| ${renderFile(file.path, context)} |`;
+      for (const metric of file.metrics || []) {
+        body += ` ${escapeCell(formatMetricCell(metric, context.baseLabel))} |`;
+      }
+      body += "\n";
+    }
+  }
+
+  if (thresholds.size > 0) {
+    body += "\n### Thresholds\n\n";
+    if (violations.length === 0) {
+      body += "All configured thresholds passed.\n";
+    } else {
+      body += "| File | Metric | Delta | Limit |\n";
+      body += "|---|---|---:|---:|\n";
+      for (const violation of violations) {
+        body += `| ${renderFile(violation.path, context)} | ${escapeCell(violation.label)} | ${formatSigned(violation.delta)} | ${formatNumber(violation.limit)} |\n`;
+      }
+    }
+  }
+
+  return body;
+}
+
+function renderFile(filePath, context) {
+  const escaped = escapeCell(filePath);
+  if (!context.repository || !context.sha) {
+    return escaped;
+  }
+  const urlPath = String(filePath)
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `[${escaped}](https://github.com/${context.repository}/blob/${context.sha}/${urlPath})`;
+}
+
+function formatMetricCell(metric, baseLabel) {
+  const current = formatNumber(metric.current);
+  if (metric.is_new) {
+    return `${current} \u{1F195}`;
+  }
+  if (metric.is_deleted) {
+    return `0 (was: ${formatNumber(metric.baseline)}) ${trendEmoji(metric)}`;
+  }
+  if (Number(metric.delta) === 0) {
+    return `${current} \u{26AA}`;
+  }
+  return `${current} (${baseLabel}: ${formatNumber(metric.baseline)}) ${trendEmoji(metric)}`;
+}
+
+function trendEmoji(metric) {
+  const delta = Number(metric.delta);
+  if (delta === 0) {
+    return "\u{26AA}";
+  }
+  const polarity = metric.polarity || inferPolarity(metric.name);
+  if (polarity === HIGHER_IS_BETTER) {
+    return delta > 0 ? "\u{1F7E2}" : "\u{1F534}";
+  }
+  return delta > 0 ? "\u{1F534}" : "\u{1F7E2}";
+}
+
+function collectThresholdViolations(diffs, thresholds) {
+  const violations = [];
+  if (thresholds.size === 0) {
+    return violations;
+  }
+
+  for (const file of diffs) {
+    for (const metric of file.metrics || []) {
+      const key = canonicalMetricName(metric.name || metric.label || "");
+      const labelKey = canonicalMetricName(metric.label || metric.name || "");
+      const limit = thresholds.get(key) ?? thresholds.get(labelKey);
+      if (limit === undefined) {
+        continue;
+      }
+
+      const adverseDelta = getAdverseDelta(metric);
+      if (adverseDelta > limit) {
+        violations.push({
+          path: file.path,
+          label: metric.label || metric.name,
+          delta: Number(metric.delta),
+          limit,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+function getAdverseDelta(metric) {
+  const delta = Number(metric.delta);
+  const polarity = metric.polarity || inferPolarity(metric.name);
+  if (polarity === HIGHER_IS_BETTER) {
+    return delta < 0 ? Math.abs(delta) : 0;
+  }
+  return delta > 0 ? delta : 0;
+}
+
+function parseThresholds(value) {
+  const thresholds = new Map();
+  for (const raw of parseList(value)) {
+    const match = raw.match(/^([^:=<>]+)\s*(?:<=|=|:)\s*([0-9]+(?:\.[0-9]+)?)$/);
+    if (!match) {
+      throw new Error(`Invalid threshold '${raw}'. Expected metric=number.`);
+    }
+    thresholds.set(canonicalMetricName(match[1]), Number(match[2]));
+  }
+  return thresholds;
+}
+
+function canonicalMetricName(name) {
+  const normalized = String(name).toLowerCase().replace(/[\s_-]+/g, "").replace(/\.+/g, ".");
+  return METRIC_ALIASES.get(normalized) || normalized;
+}
+
+function inferPolarity(name) {
+  return canonicalMetricName(name) === "mi" ? HIGHER_IS_BETTER : LOWER_IS_BETTER;
+}
+
+function formatNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return String(value);
+  }
+  return Number.isInteger(number) ? String(number) : number.toFixed(2);
+}
+
+function formatSigned(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return String(value);
+  }
+  const formatted = formatNumber(number);
+  return number > 0 ? `+${formatted}` : formatted;
+}
+
+function escapeCell(value) {
+  return String(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function writeStepSummary(markdown) {
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (summary) {
+    fs.appendFileSync(summary, `${markdown}\n`, "utf8");
+  }
+}
+
+async function maybeComment(markdown, context) {
+  if (!boolInput("COMMENT", true) || context.eventName !== "pull_request") {
+    return;
+  }
+  if (!context.repository || !context.prNumber) {
+    console.log("Skipping mehen PR comment because pull request context is unavailable.");
+    return;
+  }
+  if (!context.token) {
+    console.log("Skipping mehen PR comment because github-token is unavailable.");
+    return;
+  }
+
+  const [owner, repo] = context.repository.split("/");
+  const comments = await listComments(owner, repo, context.prNumber, context.token);
+  const title = input("COMMENT_TITLE", DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+  const previous = comments.find(
+    (comment) => comment.body?.includes(MARKER) || comment.body?.startsWith(title),
+  );
+
+  if (previous) {
+    await githubRequest(
+      "PATCH",
+      `/repos/${owner}/${repo}/issues/comments/${previous.id}`,
+      context.token,
+      { body: markdown },
+    );
+    console.log(`Updated mehen metrics comment ${previous.id}.`);
+  } else {
+    await githubRequest(
+      "POST",
+      `/repos/${owner}/${repo}/issues/${context.prNumber}/comments`,
+      context.token,
+      { body: markdown },
+    );
+    console.log("Created mehen metrics comment.");
+  }
+}
+
+async function listComments(owner, repo, issueNumber, token) {
+  const comments = [];
+  for (let page = 1; ; page += 1) {
+    const batch = await githubRequest(
+      "GET",
+      `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100&page=${page}`,
+      token,
+    );
+    comments.push(...batch);
+    if (batch.length < 100) {
+      return comments;
+    }
+  }
+}
+
+async function githubRequest(method, apiPath, token, body = undefined) {
+  const response = await fetch(`https://api.github.com${apiPath}`, {
+    method,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "mehen-action",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GitHub API ${method} ${apiPath} failed: ${response.status} ${text}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function setOutput(name, value) {
+  const output = process.env.GITHUB_OUTPUT;
+  if (output) {
+    fs.appendFileSync(output, `${name}=${value}\n`, "utf8");
+  }
+}

@@ -80,6 +80,45 @@ Export metrics as JSON/TOML/YAML/CBOR:
 mehen -m -p src -O json -o ./metrics
 ```
 
+## GitHub Actions
+Use the in-repository action to publish changed-file metric trends on pull
+requests:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+steps:
+  - uses: actions/checkout@v5
+    with:
+      fetch-depth: 0
+
+  - uses: ophidiarium/mehen@v1
+    with:
+      paths: src
+```
+
+For polyglot monorepos, pass each root you want tracked. `mehen` will analyze
+only supported languages in changed files under those roots:
+
+```yaml
+- uses: ophidiarium/mehen@v1
+  with:
+    paths: |
+      crates/api/src
+      apps/web/src
+      tools
+    thresholds: |
+      cyclomatic=5
+      cognitive=4
+      loc.lloc=120
+```
+
+Thresholds are optional. When configured, the action fails if an adverse
+per-file metric delta exceeds the configured limit.
+
 ## Reporting and Integrations
 Current machine-readable outputs:
 
