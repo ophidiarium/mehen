@@ -355,11 +355,11 @@ fn get_changed_files(
 fn normalize_path_filters(paths: &[PathBuf]) -> Vec<PathBuf> {
     paths
         .iter()
-        .filter_map(|path| normalize_path_filter(path))
+        .map(|path| normalize_path_filter(path))
         .collect()
 }
 
-fn normalize_path_filter(path: &Path) -> Option<PathBuf> {
+fn normalize_path_filter(path: &Path) -> PathBuf {
     let mut cleaned = PathBuf::new();
 
     for component in path.components() {
@@ -370,18 +370,14 @@ fn normalize_path_filter(path: &Path) -> Option<PathBuf> {
         }
     }
 
-    if cleaned.as_os_str().is_empty() {
-        None
-    } else {
-        Some(cleaned)
-    }
+    cleaned
 }
 
 fn path_is_selected(path: &Path, paths: &[PathBuf]) -> bool {
     paths.is_empty()
-        || paths
-            .iter()
-            .any(|selected| path == selected || path.starts_with(selected))
+        || paths.iter().any(|selected| {
+            selected.as_os_str().is_empty() || path == selected || path.starts_with(selected)
+        })
 }
 
 // ── Markdown output ────────────────────────────────────────────────────
@@ -739,7 +735,11 @@ mod tests {
 
         assert_eq!(
             paths,
-            vec![PathBuf::from("internal"), PathBuf::from("cmd/tally")]
+            vec![
+                PathBuf::new(),
+                PathBuf::from("internal"),
+                PathBuf::from("cmd/tally")
+            ]
         );
     }
 
@@ -754,5 +754,11 @@ mod tests {
         assert!(path_is_selected(Path::new("main.go"), &paths));
         assert!(!path_is_selected(Path::new("internal2/config.go"), &paths));
         assert!(!path_is_selected(Path::new("cmd/tally/main.go"), &paths));
+
+        let paths_with_root = vec![PathBuf::from("internal"), PathBuf::new()];
+        assert!(path_is_selected(
+            Path::new("cmd/tally/main.go"),
+            &paths_with_root
+        ));
     }
 }

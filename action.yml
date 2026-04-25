@@ -23,15 +23,15 @@ inputs:
     required: false
     default: "22"
   paths:
-    description: "Repository-relative files or directories to compare. Newline, comma, or space separated."
+    description: "Repository-relative files or directories to compare. Newline, comma, or semicolon separated."
     required: false
     default: "."
   include:
-    description: "Glob patterns to include. Newline, comma, or space separated."
+    description: "Glob patterns to include. Newline, comma, or semicolon separated."
     required: false
     default: ""
   exclude:
-    description: "Glob patterns to exclude. Newline, comma, or space separated."
+    description: "Glob patterns to exclude. Newline, comma, or semicolon separated."
     required: false
     default: ""
   metrics:

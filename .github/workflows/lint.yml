@@ -6,7 +6,10 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '**/*.rs'
+      - '.github/workflows/lint.yml'
+      - 'action.yml'
       - Cargo.lock
+      - 'scripts/**/*.mjs'
 
 permissions:
   contents: read
@@ -41,6 +44,13 @@ jobs:
           key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
       - name: Set up Rust toolchain
         run: rustup show
+
+      - name: Check GitHub Action script
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: node --test scripts/github-action.test.mjs
 
       - run: cargo clippy --workspace --all-targets --all-features --locked
 

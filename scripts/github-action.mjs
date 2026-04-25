@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const MARKER = "<!-- mehen-metrics -->";
 const DEFAULT_TITLE = "## [Mehen](https://github.com/ophidiarium/mehen) Summary";
@@ -21,10 +22,19 @@ const METRIC_ALIASES = new Map([
   ["halsteadvolume", "halstead.volume"],
 ]);
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (isEntrypoint()) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
+
+function isEntrypoint() {
+  return (
+    process.argv[1] &&
+    path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  );
+}
 
 async function main() {
   const thresholds = parseThresholds(input("THRESHOLDS"));
@@ -72,11 +82,11 @@ function boolInput(name, fallback) {
 }
 
 function parseList(value) {
-  const trimmed = value.trim();
+  const trimmed = String(value ?? "").trim();
   if (!trimmed) {
     return [];
   }
-  const parts = /[\n,;]/.test(trimmed) ? trimmed.split(/[\n,;]+/) : trimmed.split(/\s+/);
+  const parts = trimmed.split(/\r?\n|[;,]/);
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
@@ -126,13 +136,20 @@ function prepareMehen() {
   if (method === "cargo") {
     const actionPath = process.env.GITHUB_ACTION_PATH || process.cwd();
     const root = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "mehen-action-cli");
-    fs.rmSync(root, { recursive: true, force: true });
-    runCommand("cargo", ["install", "--path", actionPath, "--locked", "--root", root], {
-      cwd: actionPath,
-      stdio: "inherit",
-    });
     const bin = process.platform === "win32" ? "mehen.exe" : "mehen";
-    return { command: path.join(root, "bin", bin), args: [] };
+    const binPath = path.join(root, "bin", bin);
+
+    if (!fs.existsSync(binPath)) {
+      fs.rmSync(root, { recursive: true, force: true });
+      runCommand("cargo", ["install", "--path", actionPath, "--locked", "--root", root], {
+        cwd: actionPath,
+        stdio: "inherit",
+      });
+    } else {
+      console.log(`Using cached mehen binary at ${binPath}.`);
+    }
+
+    return { command: binPath, args: [] };
   }
 
   if (method === "path") {
@@ -466,3 +483,5 @@ function setOutput(name, value) {
     fs.appendFileSync(output, `${name}=${value}\n`, "utf8");
   }
 }
+
+export { parseList, parseThresholds };
