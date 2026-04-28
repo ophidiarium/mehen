@@ -21,7 +21,7 @@ inputs:
   node-version:
     description: "Node.js version used by the action runner."
     required: false
-    default: "22"
+    default: "24"
   paths:
     description: "Repository-relative files or directories to compare. Newline, comma, or semicolon separated."
     required: false
@@ -86,7 +86,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up Node.js
-      uses: actions/setup-node@v5
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
 

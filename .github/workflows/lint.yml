@@ -3,13 +3,13 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
     paths:
-      - '**/*.rs'
-      - '.github/workflows/lint.yml'
-      - 'action.yml'
+      - "**/*.rs"
+      - ".github/workflows/lint.yml"
+      - "action.yml"
       - Cargo.lock
-      - 'scripts/**/*.mjs'
+      - "scripts/**/*.mjs"
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ name: Code Quality Checks
 
 # Make sure CI fails on all warnings, including Clippy lints
 env:
-  RUSTFLAGS: '-Dwarnings'
+  RUSTFLAGS: "-Dwarnings"
   CARGO_TERM_COLOR: always
   CLICOLOR: 1
 
@@ -46,9 +46,9 @@ jobs:
         run: rustup show
 
       - name: Check GitHub Action script
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
 
       - run: node --test scripts/github-action.test.mjs
 
