@@ -316,13 +316,14 @@ impl Getter for GoCode {
             | AMPEQ | PIPEEQ | CARETEQ | LTLTEQ | GTGTEQ | AMPCARETEQ
             // Operators: arithmetic/logic
             | PLUS | DASH | STAR | SLASH | PERCENT | AMP | PIPE | CARET | LTLT | GTGT
-            | AMPAMP | PIPEPIPE | AMPCARET | PLUSPLUS | DASHDASH
+            | AMPAMP | PIPEPIPE | AMPCARET | PLUSPLUS | DASHDASH | LTDASH | TILDE
             | EQEQ | BANGEQ | LT | LTEQ | GT | GTEQ | BANG
             | LPAREN | LBRACK | LBRACE | DOTDOTDOT => HalsteadType::Operator,
             // Operands
-            Identifier | IntLiteral | FloatLiteral | ImaginaryLiteral | RuneLiteral
-            | RawStringLiteral | InterpretedStringLiteral | True | False | Nil
-            | Iota => HalsteadType::Operand,
+            Identifier | Identifier2 | Identifier3 | BlankIdentifier | FieldIdentifier
+            | LabelName | PackageIdentifier | TypeIdentifier | IntLiteral | FloatLiteral
+            | ImaginaryLiteral | RuneLiteral | RawStringLiteral | InterpretedStringLiteral | True
+            | False | Nil | Iota => HalsteadType::Operand,
             _ => HalsteadType::Unknown,
         }
     }
