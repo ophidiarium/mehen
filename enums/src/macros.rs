@@ -24,6 +24,7 @@ macro_rules! mk_get_language {
                 Lang::Python => tree_sitter_python::LANGUAGE.into(),
                 Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
                 Lang::Go => tree_sitter_go::LANGUAGE.into(),
+                Lang::Ruby => tree_sitter_ruby::LANGUAGE.into(),
             }
         }
     };

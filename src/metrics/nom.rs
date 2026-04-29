@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 
@@ -201,11 +201,19 @@ where
     }
 }
 
-implement_metric_trait!([Nom], PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
+implement_metric_trait!(
+    [Nom],
+    PythonCode,
+    TypescriptCode,
+    TsxCode,
+    RustCode,
+    GoCode,
+    RubyCode
+);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RustParser};
+    use crate::langs::{PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -260,6 +268,41 @@ mod tests {
                       "closures_average": 0.25,
                       "total": 3.0,
                       "average": 0.75,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
+                      "closures_min": 0.0,
+                      "closures_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_nom() {
+        check_metrics::<RubyParser>(
+            "def a
+                 1
+             end
+             def b
+                 2
+             end
+             def c
+                 3
+             end
+             x = -> (a) { a + 42 }",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 3.0,
+                      "closures": 1.0,
+                      "functions_average": 0.6,
+                      "closures_average": 0.2,
+                      "total": 4.0,
+                      "average": 0.8,
                       "functions_min": 0.0,
                       "functions_max": 1.0,
                       "closures_min": 0.0,

@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
@@ -114,4 +114,12 @@ where
     fn compute(space_kind: SpaceKind, cyclomatic: &cyclomatic::Stats, stats: &mut Stats);
 }
 
-implement_metric_trait!(Wmc, PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
+implement_metric_trait!(
+    Wmc,
+    PythonCode,
+    TypescriptCode,
+    TsxCode,
+    RustCode,
+    GoCode,
+    RubyCode
+);

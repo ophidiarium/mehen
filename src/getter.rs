@@ -1,5 +1,5 @@
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
@@ -328,4 +328,65 @@ impl Getter for GoCode {
     }
 
     get_operator!(Go);
+}
+
+impl Getter for RubyCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        match node.kind_id().into() {
+            Ruby::Method | Ruby::SingletonMethod | Ruby::Lambda | Ruby::Block | Ruby::DoBlock => {
+                SpaceKind::Function
+            }
+            Ruby::Class | Ruby::Module | Ruby::SingletonClass => SpaceKind::Class,
+            Ruby::Program => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
+        // class / module / method / singleton_method have a `name` field
+        if let Some(name) = node.child_by_field_name("name") {
+            let code = &code[name.start_byte()..name.end_byte()];
+            return std::str::from_utf8(code).ok();
+        }
+        Some("<anonymous>")
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Ruby::*;
+
+        match node.kind_id().into() {
+            // Keywords and structural/control-flow operators.
+            // The enum generator splits duplicate ts_names into numbered variants
+            // (Class2/Module2/If2/...). We include both the named wrappers and
+            // the raw keyword tokens so every surface form is classified.
+            Def | Class2 | Module2 | If2 | Elsif2 | Else2 | Unless2 | While2 | Until2 | For2
+            | In2 | Do2 | Case2 | When2 | Then2 | Begin2 | Ensure2 | Rescue2 | Return3
+            | Yield3 | Break3 | Next3 | Redo2 | Retry2 | Alias2 | Undef2 | BEGIN | END
+            | And | Or | Not | DefinedQMARK | Super
+            // Assignment and arithmetic / comparison / bitwise operators.
+            | EQ | EQ2 | PLUSEQ | DASHEQ | STAREQ | STARSTAREQ | SLASHEQ | PERCENTEQ
+            | PIPEPIPEEQ | AMPAMPEQ | PIPEEQ | AMPEQ | GTGTEQ | LTLTEQ | CARETEQ
+            | PIPEPIPE | AMPAMP | PLUS | DASH | STAR | STARSTAR | SLASH | PERCENT
+            | LTLT | GTGT | AMP | PIPE | CARET | TILDE
+            | LT | GT | LTEQ | GTEQ | EQEQ | BANGEQ | EQEQEQ | LTEQGT | EQTILDE | BANGTILDE
+            | BANG
+            // Structural punctuation.
+            | LPAREN | RPAREN | LBRACE | RBRACE | LBRACK | RBRACK
+            | DOT | AMPDOT | COLONCOLON | COLONCOLON2
+            | COMMA | SEMI | QMARK | COLON | COLON2 | EQGT | DASHGT
+            | DOTDOT | DOTDOTDOT
+            // String/interpolation delimiters act as operators.
+            | DQUOTE | HASHLBRACE | BQUOTE | BQUOTE2 => HalsteadType::Operator,
+
+            // Operands: identifiers, literals and keyword literals.
+            Identifier | Constant | InstanceVariable | ClassVariable | GlobalVariable
+            | Integer | Float | Rational | Complex | Character
+            | String | ChainedString | SimpleSymbol | DelimitedSymbol | HeredocBeginning
+            | True | False | Nil | Nil2 | Zelf | Line | File | Encoding => HalsteadType::Operand,
+
+            _ => HalsteadType::Unknown,
+        }
+    }
+
+    get_operator!(Ruby);
 }

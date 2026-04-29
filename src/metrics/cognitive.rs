@@ -5,8 +5,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, PythonParser, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 // TODO: Find a way to increment the cognitive complexity value
@@ -442,12 +442,77 @@ impl Cognitive for GoCode {
     }
 }
 
+impl Cognitive for RubyCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use Ruby::*;
+
+        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        match node.kind_id().into() {
+            // Nesting-increasing control-flow constructs.
+            If | Unless | While | Until | For | Case | CaseMatch | Conditional => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            // elsif: cost already paid by `if`; +1 without nesting.
+            Elsif => {
+                increment_by_one(stats);
+                stats.boolean_seq.reset();
+            }
+            // else: +1 without nesting.
+            Else => {
+                increment_by_one(stats);
+            }
+            // rescue: treated like `except`, nesting-increasing.
+            Rescue => {
+                nesting += 1;
+                increment(stats);
+            }
+            // Trailing-modifier forms: `expr if cond`, `expr unless cond`,
+            // `expr while cond`, `expr until cond`, `expr rescue expr`.
+            // Each contributes +1 without altering nesting (per Sonar spec).
+            IfModifier | UnlessModifier | WhileModifier | UntilModifier | RescueModifier
+            | RescueModifier2 | RescueModifier3 => {
+                increment_by_one(stats);
+            }
+            // Reset boolean-sequence tracking at statement boundaries.
+            Statement => {
+                stats.boolean_seq.reset();
+            }
+            // Handle `not` / `!` unary forms.
+            Unary | Unary2 | Unary3 | Unary4 | Unary5 => {
+                stats.boolean_seq.not_operator(node.kind_id());
+            }
+            // Sequence of boolean binary operators with sequence collapsing.
+            Binary | Binary2 | Binary3 => {
+                // Collapse `&&`/`and` vs `||`/`or` sequences.
+                compute_booleans::<Ruby>(node, stats, &AMPAMP, &PIPEPIPE);
+                compute_booleans::<Ruby>(node, stats, &And, &Or);
+            }
+            // Blocks and lambdas bump lambda nesting.
+            Lambda | Block | DoBlock => {
+                lambda += 1;
+            }
+            // Method definitions reset structural nesting and bump function depth.
+            Method | SingletonMethod => {
+                nesting = 0;
+                increment_function_depth::<Ruby>(&mut depth, node, &Method);
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 // No languages require empty Cognitive implementations
 // implement_metric_trait!(Cognitive);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RustParser, TypescriptParser};
+    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -1264,6 +1329,104 @@ mod tests {
                 }
             }",
             "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_no_cognitive() {
+        check_metrics::<RubyParser>("a = 42", "foo.rb", |metric| {
+            insta::assert_json_snapshot!(
+                metric.cognitive,
+                @r###"
+                {
+                  "sum": 0.0,
+                  "average": null,
+                  "min": 0.0,
+                  "max": 0.0
+                }"###
+            );
+        });
+    }
+
+    #[test]
+    fn ruby_simple_method() {
+        check_metrics::<RubyParser>(
+            "def f(a, b)
+                 if a && b  # +2 (+1 if, +1 &&)
+                    return 1
+                 end
+                 if c && d  # +2 (+1 if, +1 &&)
+                    return 1
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_nested_if_and_else() {
+        check_metrics::<RubyParser>(
+            "def f(a, b)
+                 if a          # +1
+                    if b        # +2 (nesting = 1)
+                       return 1
+                    else        # +1
+                       return 2
+                    end
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_modifier_and_rescue() {
+        check_metrics::<RubyParser>(
+            "def f(a)
+                 return a if a > 0  # +1 if_modifier
+                 begin
+                    risky!
+                 rescue StandardError  # +1 (nesting +1 because in begin)
+                    retry
+                 end
+             end",
+            "foo.rb",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.cognitive,

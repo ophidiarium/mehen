@@ -24,8 +24,9 @@ Today `mehen` supports:
 - TSX
 - Rust
 - Go
+- Ruby
 
-Planned next: Ruby and PHP.
+Planned next: PHP.
 
 ## What Mehen Computes
 `mehen` provides a broad metric set, including:

@@ -3,9 +3,9 @@ use std::sync::OnceLock;
 use regex::bytes::Regex;
 
 use crate::langs::{
-    GoCode, PythonCode, RustCode, TsxCode, TsxParser, TypescriptCode, TypescriptParser,
+    GoCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser, TypescriptCode, TypescriptParser,
 };
-use crate::languages::{Go, Python, Rust, Tsx, Typescript};
+use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 static RE: OnceLock<Regex> = OnceLock::new();
@@ -391,6 +391,93 @@ impl Checker for GoCode {
         }
         if let Some(parent) = node.parent() {
             return parent.kind_id() == Go::IfStatement;
+        }
+        false
+    }
+
+    fn is_primitive(_id: u16) -> bool {
+        false
+    }
+}
+
+impl Checker for RubyCode {
+    fn is_comment(node: &Node) -> bool {
+        node.kind_id() == Ruby::Comment
+    }
+
+    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
+        false
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        match node.kind_id().into() {
+            Ruby::Program
+            | Ruby::Method
+            | Ruby::SingletonMethod
+            | Ruby::Class
+            | Ruby::Module
+            | Ruby::SingletonClass
+            | Ruby::Lambda
+            | Ruby::DoBlock => true,
+            // `Block` is a closure space on its own only when it is NOT the
+            // direct body of a `Lambda` — otherwise it would double-count
+            // the same callable as both a lambda and an inner block.
+            Ruby::Block => node
+                .parent()
+                .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
+            _ => false,
+        }
+    }
+
+    fn is_func(node: &Node) -> bool {
+        matches!(node.kind_id().into(), Ruby::Method | Ruby::SingletonMethod)
+    }
+
+    fn is_closure(node: &Node) -> bool {
+        match node.kind_id().into() {
+            Ruby::Lambda | Ruby::DoBlock => true,
+            // See `is_func_space`: skip `Block` when it is the lambda's body.
+            Ruby::Block => node
+                .parent()
+                .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
+            _ => false,
+        }
+    }
+
+    fn is_call(node: &Node) -> bool {
+        // The Ruby grammar aliases several production rules to `call`;
+        // the enum generator deduplicates them into Call/Call2/Call3/Call4.
+        // Call5 is the internal `_call` supertype and is not emitted as a node kind.
+        matches!(
+            node.kind_id().into(),
+            Ruby::Call | Ruby::Call2 | Ruby::Call3 | Ruby::Call4
+        )
+    }
+
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Ruby::LPAREN | Ruby::RPAREN | Ruby::COMMA | Ruby::PIPE
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Ruby::String | Ruby::ChainedString | Ruby::HeredocBeginning
+        )
+    }
+
+    #[inline(always)]
+    fn is_else_if(node: &Node) -> bool {
+        // Ruby has a dedicated `elsif` named node so nested `if` in the `else`
+        // branch never appears as an `if` child of another `if`. No special
+        // else-if detection is needed.
+        if node.kind_id() != Ruby::If {
+            return false;
+        }
+        if let Some(parent) = node.parent() {
+            return parent.kind_id() == Ruby::Else;
         }
         false
     }

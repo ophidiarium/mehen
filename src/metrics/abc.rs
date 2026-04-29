@@ -3,7 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::Ruby;
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 
@@ -231,3 +232,66 @@ where
 }
 
 implement_metric_trait!(Abc, PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
+
+impl Abc for RubyCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Ruby::*;
+
+        match node.kind_id().into() {
+            // A: every assignment, including compound ones.
+            Assignment | Assignment2 | OperatorAssignment | OperatorAssignment2 => {
+                stats.assignments += 1.;
+            }
+            // B: every method call and `yield` (transfers control to a block).
+            Call | Call2 | Call3 | Call4 | Yield | Yield2 => {
+                stats.branches += 1.;
+            }
+            // C: every conditional construct and every comparison operator.
+            If | Unless | IfModifier | UnlessModifier | When | InClause | Conditional | Rescue
+            | RescueModifier | RescueModifier2 | RescueModifier3 | EQEQ | BANGEQ | LT | GT
+            | LTEQ | GTEQ | LTEQGT | EQEQEQ | EQTILDE | BANGTILDE => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::langs::RubyParser;
+    use crate::tools::check_metrics;
+
+    #[test]
+    fn ruby_abc_basic() {
+        check_metrics::<RubyParser>(
+            "def f(a, b)
+                 c = a + b    # +1 A
+                 log(c)       # +1 B
+                 return c if c > 0  # +1 B (return) + +1 C (if_modifier) + +1 C (>)
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 1.0,
+                      "branches": 1.0,
+                      "conditions": 2.0,
+                      "magnitude": 2.449489742783178,
+                      "assignments_average": 0.5,
+                      "branches_average": 0.5,
+                      "conditions_average": 1.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 1.0,
+                      "branches_min": 0.0,
+                      "branches_max": 1.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+}

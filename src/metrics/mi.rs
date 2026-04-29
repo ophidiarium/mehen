@@ -7,7 +7,7 @@ use super::halstead;
 use super::loc;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
 
 /// The `Mi` metric.
@@ -118,7 +118,15 @@ where
     }
 }
 
-implement_metric_trait!([Mi], PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
+implement_metric_trait!(
+    [Mi],
+    PythonCode,
+    TypescriptCode,
+    TsxCode,
+    RustCode,
+    GoCode,
+    RubyCode
+);
 
 #[cfg(test)]
 mod tests {
