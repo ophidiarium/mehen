@@ -3,9 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 #[cfg(test)]
-use crate::langs::{PythonParser, RustParser};
+use crate::langs::{PythonParser, RubyParser, RustParser};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::traits::Search;
@@ -219,7 +219,8 @@ implement_metric_trait!(
     TypescriptCode,
     TsxCode,
     RustCode,
-    GoCode
+    GoCode,
+    RubyCode
 );
 
 #[cfg(test)]
@@ -568,6 +569,64 @@ mod tests {
                       "average": 1.5,
                       "functions_min": 0.0,
                       "functions_max": 2.0,
+                      "closures_min": 0.0,
+                      "closures_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_single_method() {
+        check_metrics::<RubyParser>(
+            "def f(a, b)
+                 a + b
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 2.0,
+                      "total_closures": 0.0,
+                      "average_functions": 2.0,
+                      "average_closures": 0.0,
+                      "total": 2.0,
+                      "average": 2.0,
+                      "functions_min": 0.0,
+                      "functions_max": 2.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_block_and_lambda_args() {
+        // `do |a, b| ... end` is a block (closure); `-> (x) { ... }` is a lambda.
+        check_metrics::<RubyParser>(
+            "xs.each do |a, b|
+                 a + b
+             end
+             f = -> (x) { x * 2 }",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 0.0,
+                      "total_closures": 3.0,
+                      "average_functions": 0.0,
+                      "average_closures": 1.5,
+                      "total": 3.0,
+                      "average": 1.5,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
                       "closures_min": 0.0,
                       "closures_max": 2.0
                     }"###

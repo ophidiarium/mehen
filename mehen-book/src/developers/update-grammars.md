@@ -12,9 +12,10 @@ Mehen uses **third-party grammars** published on `crates.io` and maintained by e
 
 ### Current Supported Grammars
 
-- `tree-sitter-go` = "=0.23.4"
-- `tree-sitter-python` = "=0.23.6"
-- `tree-sitter-rust` = "=0.23.2"
+- `tree-sitter-go` = "=0.25.0"
+- `tree-sitter-python` = "=0.25.0"
+- `tree-sitter-ruby` = "=0.23.1"
+- `tree-sitter-rust` = "=0.24.2"
 - `tree-sitter-typescript` = "=0.23.2"
 
 ### Update Process

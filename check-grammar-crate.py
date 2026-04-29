@@ -46,6 +46,7 @@ EXTENSIONS = {
     "tree-sitter-go": ["*.go"],
     "tree-sitter-rust": ["*.rs"],
     "tree-sitter-python": ["*.py"],
+    "tree-sitter-ruby": ["*.rb"],
 }
 
 # Run a subprocess.

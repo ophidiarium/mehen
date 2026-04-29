@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `Cyclomatic` metric.
@@ -183,12 +183,30 @@ impl Cyclomatic for GoCode {
     }
 }
 
+impl Cyclomatic for RubyCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Ruby::*;
+
+        match node.kind_id().into() {
+            // Decision points: if / unless / while / until / for,
+            // their trailing-modifier forms, pattern matching arms, ternary,
+            // rescue branches, and short-circuit boolean operators.
+            If | Elsif | Unless | While | Until | For | IfModifier | UnlessModifier
+            | WhileModifier | UntilModifier | When | InClause | Rescue | RescueModifier
+            | RescueModifier2 | RescueModifier3 | Conditional | AMPAMP | PIPEPIPE | And | Or => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 // No languages require empty Cyclomatic implementations
 // implement_metric_trait!(Cyclomatic);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RustParser};
+    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -344,6 +362,84 @@ mod tests {
             "foo.go",
             |metric| {
                 // nspace = 2 (func and unit)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_simple_method() {
+        check_metrics::<RubyParser>(
+            "def f(a, b) # +2 (+1 unit space)
+                 if a && b # +2 (+1 if, +1 &&)
+                     return 1
+                 end
+                 if c or d # +2 (+1 if, +1 or)
+                     return 1
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 3.0,
+                      "min": 1.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_modifier_forms() {
+        // Each trailing-modifier form contributes +1 like its block form.
+        check_metrics::<RubyParser>(
+            "def f(a)      # +1 unit space +1 method
+                 return a if a > 0   # +1 if_modifier
+                 return -a unless a == 0 # +1 unless_modifier
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 2.0,
+                      "min": 1.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_case_when() {
+        check_metrics::<RubyParser>(
+            "def f(x)      # +1 unit +1 method
+                 case x    # case itself doesn't add; each `when` does
+                 when 1 then 'a' # +1
+                 when 2 then 'b' # +1
+                 when 3 then 'c' # +1
+                 else 'z'
+                 end
+             end",
+            "foo.rb",
+            |metric| {
                 insta::assert_json_snapshot!(
                     metric.cyclomatic,
                     @r###"

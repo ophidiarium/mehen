@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `NExit` metric.
@@ -159,12 +159,27 @@ impl Exit for GoCode {
     }
 }
 
+impl Exit for RubyCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        // Count language-level exits from a method/closure:
+        // `return`, `break`, and `next`. `yield` hands control back to the
+        // caller's block but does not exit the enclosing method, so it is
+        // intentionally excluded.
+        if matches!(
+            node.kind_id().into(),
+            Ruby::Return | Ruby::Return2 | Ruby::Break | Ruby::Break2 | Ruby::Next | Ruby::Next2
+        ) {
+            stats.exit += 1;
+        }
+    }
+}
+
 // No languages require empty Exit implementations
 // implement_metric_trait!(Exit);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RustParser};
+    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -362,6 +377,72 @@ mod tests {
                       "average": 1.0,
                       "min": 0.0,
                       "max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_no_exit() {
+        check_metrics::<RubyParser>("a = 42", "foo.rb", |metric| {
+            insta::assert_json_snapshot!(
+                metric.nexits,
+                @r###"
+                {
+                  "sum": 0.0,
+                  "average": null,
+                  "min": 0.0,
+                  "max": 0.0
+                }"###
+            );
+        });
+    }
+
+    #[test]
+    fn ruby_simple_method() {
+        check_metrics::<RubyParser>(
+            "def f(a, b)
+                 return a if a > b
+                 return b
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_break_and_next() {
+        // Both `break` and `next` are counted as exits; `yield` is not.
+        check_metrics::<RubyParser>(
+            "def f(xs)
+                 xs.each do |x|
+                   next if x.nil?
+                   break if x.stop?
+                   yield x
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
+                      "min": 0.0,
+                      "max": 2.0
                     }"###
                 );
             },

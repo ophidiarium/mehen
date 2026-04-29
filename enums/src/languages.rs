@@ -7,5 +7,6 @@ mk_langs!(
     (Python, tree_sitter_python),
     (Tsx, tree_sitter_tsx),
     (Typescript, tree_sitter_typescript),
-    (Go, tree_sitter_go)
+    (Go, tree_sitter_go),
+    (Ruby, tree_sitter_ruby)
 );

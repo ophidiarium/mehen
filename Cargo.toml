@@ -35,9 +35,10 @@ tree-sitter-typescript = "=0.23.2"
 tree-sitter-python = "=0.25.0"
 tree-sitter-rust = "=0.24.2"
 tree-sitter-go = "=0.25.0"
+tree-sitter-ruby = "=0.23.1"
 
 [package.metadata.cargo-machete]
-ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust"]
+ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby"]
 
 [dev-dependencies]
 insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }
