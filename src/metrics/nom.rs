@@ -312,4 +312,32 @@ mod tests {
             },
         );
     }
+
+    #[test]
+    fn ruby_do_lambda_counts_as_one_closure() {
+        check_metrics::<RubyParser>(
+            "x = -> (a) do
+                 a + 42
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 0.0,
+                      "closures": 1.0,
+                      "functions_average": 0.0,
+                      "closures_average": 0.5,
+                      "total": 1.0,
+                      "average": 0.5,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
 }

@@ -417,12 +417,11 @@ impl Checker for RubyCode {
             | Ruby::Class
             | Ruby::Module
             | Ruby::SingletonClass
-            | Ruby::Lambda
-            | Ruby::DoBlock => true,
-            // `Block` is a closure space on its own only when it is NOT the
-            // direct body of a `Lambda` — otherwise it would double-count
-            // the same callable as both a lambda and an inner block.
-            Ruby::Block => node
+            | Ruby::Lambda => true,
+            // `Block` and `DoBlock` are closure spaces on their own only when
+            // they are NOT the direct body of a `Lambda`; otherwise they would
+            // double-count the same callable.
+            Ruby::Block | Ruby::DoBlock => node
                 .parent()
                 .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
             _ => false,
@@ -435,9 +434,9 @@ impl Checker for RubyCode {
 
     fn is_closure(node: &Node) -> bool {
         match node.kind_id().into() {
-            Ruby::Lambda | Ruby::DoBlock => true,
-            // See `is_func_space`: skip `Block` when it is the lambda's body.
-            Ruby::Block => node
+            Ruby::Lambda => true,
+            // See `is_func_space`: skip lambda-owned blocks.
+            Ruby::Block | Ruby::DoBlock => node
                 .parent()
                 .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
             _ => false,

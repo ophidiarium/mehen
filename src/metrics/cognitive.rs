@@ -208,10 +208,19 @@ fn get_nesting_from_map(
 }
 
 fn increment_function_depth<T: PartialEq + From<u16>>(depth: &mut usize, node: &Node, stop: &T) {
+    increment_function_depth_any(depth, node, std::slice::from_ref(stop));
+}
+
+fn increment_function_depth_any<T: PartialEq + From<u16>>(
+    depth: &mut usize,
+    node: &Node,
+    stops: &[T],
+) {
     // Increase depth function nesting if needed
     let mut child = *node;
     while let Some(parent) = child.parent() {
-        if *stop == parent.kind_id().into() {
+        let parent_kind = parent.kind_id().into();
+        if stops.iter().any(|stop| stop == &parent_kind) {
             *depth += 1;
             break;
         }
@@ -492,14 +501,22 @@ impl Cognitive for RubyCode {
                 compute_booleans::<Ruby>(node, stats, &AMPAMP, &PIPEPIPE);
                 compute_booleans::<Ruby>(node, stats, &And, &Or);
             }
-            // Blocks and lambdas bump lambda nesting.
-            Lambda | Block | DoBlock => {
+            // Blocks and lambdas bump lambda nesting, but a lambda-owned block
+            // is the lambda body, not an additional nested lambda.
+            Lambda => {
+                lambda += 1;
+            }
+            Block | DoBlock
+                if node
+                    .parent()
+                    .is_none_or(|parent| parent.kind_id() != Ruby::Lambda) =>
+            {
                 lambda += 1;
             }
             // Method definitions reset structural nesting and bump function depth.
             Method | SingletonMethod => {
                 nesting = 0;
-                increment_function_depth::<Ruby>(&mut depth, node, &Method);
+                increment_function_depth_any::<Ruby>(&mut depth, node, &[Method, SingletonMethod]);
             }
             _ => {}
         }
@@ -1434,6 +1451,74 @@ mod tests {
                     {
                       "sum": 2.0,
                       "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_rescue_modifier() {
+        check_metrics::<RubyParser>(
+            "def f
+                 value = risky rescue fallback  # +1 rescue_modifier
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 1.0,
+                      "average": 1.0,
+                      "min": 0.0,
+                      "max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_lambda_with_block() {
+        check_metrics::<RubyParser>(
+            "def f
+                 x = -> { if a then 1 end }
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_nested_method_in_singleton_method() {
+        check_metrics::<RubyParser>(
+            "def self.outer
+                 def inner
+                   if x then 1 end
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
                       "min": 0.0,
                       "max": 2.0
                     }"###

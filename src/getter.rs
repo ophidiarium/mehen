@@ -371,7 +371,7 @@ impl Getter for RubyCode {
             | LT | GT | LTEQ | GTEQ | EQEQ | BANGEQ | EQEQEQ | LTEQGT | EQTILDE | BANGTILDE
             | BANG
             // Structural punctuation.
-            | LPAREN | RPAREN | LBRACE | RBRACE | LBRACK | RBRACK
+            | LPAREN | LBRACE | LBRACK
             | DOT | AMPDOT | COLONCOLON | COLONCOLON2
             | COMMA | SEMI | QMARK | COLON | COLON2 | EQGT | DASHGT
             | DOTDOT | DOTDOTDOT

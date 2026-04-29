@@ -268,7 +268,7 @@ mod tests {
             "def f(a, b)
                  c = a + b    # +1 A
                  log(c)       # +1 B
-                 return c if c > 0  # +1 B (return) + +1 C (if_modifier) + +1 C (>)
+                 return c if c > 0  # +1 C (if_modifier) + +1 C (>)
              end",
             "foo.rb",
             |metric| {

@@ -16,4 +16,4 @@ pub(crate) mod language_go;
 pub(crate) use language_go::*;
 
 pub(crate) mod language_ruby;
-pub(crate) use language_ruby::*;
+pub(crate) use language_ruby::Ruby;

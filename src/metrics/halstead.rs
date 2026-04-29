@@ -577,7 +577,7 @@ mod tests {
             "foo.rb",
             |metric| {
                 // Just assert the core counts; full MI/etc. follow from them.
-                // Unique operators: def, end, +, (, ), ,
+                // Unique operators: def, +, (, ,
                 // Unique operands: add, a, b
                 insta::assert_json_snapshot!(
                     metric.halstead,
@@ -593,14 +593,14 @@ mod tests {
                     },
                     @r###"
                     {
-                      "n1": 5.0,
-                      "N1": 5.0,
+                      "n1": 4.0,
+                      "N1": 4.0,
                       "n2": 3.0,
                       "N2": 5.0,
-                      "length": 10.0,
+                      "length": 9.0,
                       "estimated_program_length": "[masked]",
                       "purity_ratio": "[masked]",
-                      "vocabulary": 8.0,
+                      "vocabulary": 7.0,
                       "volume": "[masked]",
                       "difficulty": "[masked]",
                       "level": "[masked]",
