@@ -333,8 +333,7 @@ impl Npm for TypescriptCode {
         };
         let is_public = ts_method_is_public(node, code, |id| match id.into() {
             Typescript::AccessibilityModifier => TsAccessKind::Modifier,
-            Typescript::Private => TsAccessKind::Private,
-            Typescript::Protected => TsAccessKind::Protected,
+            Typescript::PrivatePropertyIdentifier => TsAccessKind::PrivateName,
             _ => TsAccessKind::Other,
         });
         record_method(stats, container, is_public);
@@ -353,8 +352,7 @@ impl Npm for TsxCode {
         };
         let is_public = ts_method_is_public(node, code, |id| match id.into() {
             Tsx::AccessibilityModifier => TsAccessKind::Modifier,
-            Tsx::Private => TsAccessKind::Private,
-            Tsx::Protected => TsAccessKind::Protected,
+            Tsx::PrivatePropertyIdentifier => TsAccessKind::PrivateName,
             _ => TsAccessKind::Other,
         });
         record_method(stats, container, is_public);
@@ -364,22 +362,29 @@ impl Npm for TsxCode {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TsAccessKind {
     Modifier,
-    Private,
-    Protected,
+    /// A `#name` method identifier (ECMAScript private class methods).
+    PrivateName,
     Other,
 }
 
-/// Walks a TS / TSX method definition's children looking for an
-/// `accessibility_modifier` whose inner token text is `private` or
-/// `protected`. Absence of such a modifier means the method is public.
+/// Walks a TS / TSX method definition's children to decide if the method is
+/// public. A method is non-public when either:
+///
+///   - its identifier is a `private_property_identifier` (`#name`), or
+///   - an `accessibility_modifier` spells `private` / `protected`.
+///
+/// Otherwise the method is public (the default / explicit `public`).
 fn ts_method_is_public(node: &Node, code: &[u8], classify: impl Fn(u16) -> TsAccessKind) -> bool {
     for child in node.children() {
-        if classify(child.kind_id()) == TsAccessKind::Modifier {
-            // The text of the modifier is `public`, `private`, or `protected`.
-            let text = &code[child.start_byte()..child.end_byte()];
-            if text == b"private" || text == b"protected" {
-                return false;
+        match classify(child.kind_id()) {
+            TsAccessKind::Modifier => {
+                let text = &code[child.start_byte()..child.end_byte()];
+                if text == b"private" || text == b"protected" {
+                    return false;
+                }
             }
+            TsAccessKind::PrivateName => return false,
+            TsAccessKind::Other => {}
         }
     }
     true
@@ -532,6 +537,40 @@ mod tests {
                   "total": 2.0,
                   "total_methods": 4.0,
                   "average": 0.5
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_npm_counts_ecmascript_private_methods() {
+        // ECMAScript `#name` private methods parse as `method_definition`
+        // nodes whose name child is `private_property_identifier`; they must
+        // be counted as non-public.
+        check_metrics::<TypescriptParser>(
+            "class C {
+                 a() {}
+                 #b() {}
+                 #c() {}
+             }",
+            "foo.ts",
+            |metric| {
+                // 3 methods: public = a only; #b, #c are private.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_methods": 3.0,
+                  "interface_methods": 0.0,
+                  "classes_average": 0.3333333333333333,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_methods": 3.0,
+                  "average": 0.3333333333333333
                 }
                 "#
                 );
