@@ -45,8 +45,17 @@ const KNOWN_METRICS: &[MetricDef] = &[
     ("loc.lloc", "LLOC", Polarity::LowerIsBetter, |s| {
         s.metrics.loc.lloc()
     }),
-    ("mi", "MI", Polarity::HigherIsBetter, |s| {
-        s.metrics.mi.mi_original()
+    (
+        "mi.original",
+        "MI (Original)",
+        Polarity::HigherIsBetter,
+        |s| s.metrics.mi.mi_original(),
+    ),
+    ("mi.sei", "MI (SEI)", Polarity::HigherIsBetter, |s| {
+        s.metrics.mi.mi_sei()
+    }),
+    ("mi.visual_studio", "MI", Polarity::HigherIsBetter, |s| {
+        s.metrics.mi.mi_visual_studio()
     }),
     (
         "halstead.volume",
@@ -59,7 +68,13 @@ const KNOWN_METRICS: &[MetricDef] = &[
     }),
 ];
 
-const DEFAULT_METRICS: &[&str] = &["cyclomatic", "cognitive", "nom.functions", "loc.lloc", "mi"];
+const DEFAULT_METRICS: &[&str] = &[
+    "cyclomatic",
+    "cognitive",
+    "nom.functions",
+    "loc.lloc",
+    "mi.visual_studio",
+];
 
 fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     let specs: Vec<&str> = if specs.is_empty() {
@@ -144,7 +159,8 @@ pub(crate) struct DiffOpts {
     /// Head revision to compare to.
     #[clap(long)]
     to: Option<String>,
-    /// Comma-separated metrics to compare (default: cyclomatic,cognitive,nom.functions,loc.lloc,abc).
+    /// Comma-separated metrics to compare
+    /// (default: cyclomatic,cognitive,nom.functions,loc.lloc,mi.visual_studio).
     /// Prefix with + for higher-is-better, - for lower-is-better.
     #[clap(long, short = 'M', value_delimiter = ',')]
     metrics: Vec<String>,
@@ -505,28 +521,55 @@ mod tests {
         assert_eq!(selectors[1].name, "cognitive");
         assert_eq!(selectors[2].name, "nom.functions");
         assert_eq!(selectors[3].name, "loc.lloc");
-        assert_eq!(selectors[4].name, "mi");
+        assert_eq!(selectors[4].name, "mi.visual_studio");
     }
 
     #[test]
     fn test_parse_metric_selectors_custom() {
-        let specs = vec!["mi".to_string(), "halstead.volume".to_string()];
+        let specs = vec!["mi.original".to_string(), "halstead.volume".to_string()];
         let selectors = parse_metric_selectors(&specs);
         assert_eq!(selectors.len(), 2);
-        assert_eq!(selectors[0].name, "mi");
+        assert_eq!(selectors[0].name, "mi.original");
         assert_eq!(selectors[0].polarity, Polarity::HigherIsBetter);
         assert_eq!(selectors[1].name, "halstead.volume");
         assert_eq!(selectors[1].polarity, Polarity::LowerIsBetter);
     }
 
     #[test]
+    fn test_parse_metric_selectors_all_mi_variants() {
+        let specs = vec![
+            "mi.original".to_string(),
+            "mi.sei".to_string(),
+            "mi.visual_studio".to_string(),
+        ];
+        let selectors = parse_metric_selectors(&specs);
+        assert_eq!(selectors.len(), 3);
+        assert_eq!(selectors[0].name, "mi.original");
+        assert_eq!(selectors[1].name, "mi.sei");
+        assert_eq!(selectors[2].name, "mi.visual_studio");
+        for sel in &selectors {
+            assert_eq!(sel.polarity, Polarity::HigherIsBetter);
+        }
+    }
+
+    #[test]
+    fn test_parse_metric_selectors_bare_mi_is_unknown() {
+        let specs = vec!["mi".to_string()];
+        let selectors = parse_metric_selectors(&specs);
+        assert!(selectors.is_empty());
+    }
+
+    #[test]
     fn test_parse_metric_selectors_polarity_override() {
-        let specs = vec!["+nom.functions".to_string(), "-mi".to_string()];
+        let specs = vec![
+            "+nom.functions".to_string(),
+            "-mi.visual_studio".to_string(),
+        ];
         let selectors = parse_metric_selectors(&specs);
         assert_eq!(selectors.len(), 2);
         assert_eq!(selectors[0].name, "nom.functions");
         assert_eq!(selectors[0].polarity, Polarity::HigherIsBetter);
-        assert_eq!(selectors[1].name, "mi");
+        assert_eq!(selectors[1].name, "mi.visual_studio");
         assert_eq!(selectors[1].polarity, Polarity::LowerIsBetter);
     }
 
