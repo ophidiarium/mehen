@@ -460,6 +460,40 @@ mod tests {
     }
 
     #[test]
+    fn python_npa_counts_annotated_class_attributes() {
+        // PEP-526 class annotations (`x: T = val`, `x: T`) parse as
+        // expression_statement > assignment, so the existing detector should
+        // already cover them. Lock that in: both annotated-with-default and
+        // annotated-only class attributes count as attributes.
+        check_metrics::<PythonParser>(
+            "class C:
+                 a: int = 1
+                 b: int
+                 _c: str = 'x'
+                 __d: bool",
+            "foo.py",
+            |metric| {
+                // 4 attributes total. Public: a, b. Non-public: _c, __d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_attributes": 4.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
     fn typescript_npa_counts_public_fields() {
         check_metrics::<TypescriptParser>(
             "class C {
