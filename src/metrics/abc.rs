@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::Ruby;
+use crate::languages::{Go, Ruby};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 
@@ -231,7 +231,67 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-implement_metric_trait!(Abc, PythonCode, TypescriptCode, TsxCode, RustCode, GoCode);
+implement_metric_trait!(Abc, PythonCode, TypescriptCode, TsxCode, RustCode);
+
+#[inline(always)]
+fn go_expression_list_len(node: &Node) -> f64 {
+    node.children()
+        .filter(|child| !matches!(child.kind_id().into(), Go::COMMA | Go::Comment))
+        .count() as f64
+}
+
+#[inline(always)]
+fn go_assignment_target_count(node: &Node) -> f64 {
+    node.child_by_field_name("left")
+        .map(|child| go_expression_list_len(&child))
+        .unwrap_or(1.)
+}
+
+#[inline(always)]
+fn go_spec_name_count(node: &Node) -> f64 {
+    let mut count: f64 = 0.;
+    for child in node.children() {
+        match child.kind_id().into() {
+            Go::EQ => break,
+            Go::Identifier | Go::Identifier2 | Go::Identifier3 | Go::BlankIdentifier => count += 1.,
+            _ => {}
+        }
+    }
+    count.max(1.)
+}
+
+impl Abc for GoCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use crate::languages::Go::*;
+
+        match node.kind_id().into() {
+            AssignmentStatement | ShortVarDeclaration => {
+                stats.assignments += go_assignment_target_count(node);
+            }
+            ReceiveStatement | RangeClause if node.child_by_field_name("left").is_some() => {
+                stats.assignments += go_assignment_target_count(node);
+            }
+            IncStatement | DecStatement => {
+                stats.assignments += 1.;
+            }
+            ConstSpec => {
+                stats.assignments += go_spec_name_count(node);
+            }
+            VarSpec if node.is_child(EQ as u16) => {
+                stats.assignments += go_spec_name_count(node);
+            }
+            CallExpression => {
+                stats.branches += 1.;
+            }
+            IfStatement | ForStatement | ExpressionCase | DefaultCase | TypeCase
+            | CommunicationCase | EQEQ | BANGEQ | LT | LTEQ | GT | GTEQ | AMPAMP | PIPEPIPE
+            | BANG => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
 
 impl Abc for RubyCode {
     fn compute(node: &Node, stats: &mut Stats) {
@@ -259,8 +319,191 @@ impl Abc for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::RubyParser;
+    use crate::langs::{GoParser, RubyParser};
     use crate::tools::check_metrics;
+
+    #[test]
+    fn go_abc_basic() {
+        check_metrics::<GoParser>(
+            "package main
+
+             func f(a, b int) int {
+                 x, y := a, b
+                 log(x)
+                 if x > y {
+                     return x
+                 }
+                 return y
+             }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 2.0,
+                      "branches": 1.0,
+                      "conditions": 2.0,
+                      "magnitude": 3.0,
+                      "assignments_average": 1.0,
+                      "branches_average": 0.5,
+                      "conditions_average": 1.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 2.0,
+                      "branches_min": 0.0,
+                      "branches_max": 1.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_abc_comments_in_targets_and_logical_conditions() {
+        check_metrics::<GoParser>(
+            "package main
+
+             func f(a, b int) {
+                 x, /* target comment */ y := a, b
+                 _ = !((x > 0 && y > 0) || x == y)
+             }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 3.0,
+                      "branches": 0.0,
+                      "conditions": 6.0,
+                      "magnitude": 6.708203932499369,
+                      "assignments_average": 1.5,
+                      "branches_average": 0.0,
+                      "conditions_average": 3.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 3.0,
+                      "branches_min": 0.0,
+                      "branches_max": 0.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 6.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_abc_receive_assignments() {
+        check_metrics::<GoParser>(
+            "package main
+
+             func f(ch chan int) {
+                 x := <-ch
+                 y, ok := <-ch
+                 <-ch
+             }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 3.0,
+                      "branches": 0.0,
+                      "conditions": 0.0,
+                      "magnitude": 3.0,
+                      "assignments_average": 1.5,
+                      "branches_average": 0.0,
+                      "conditions_average": 0.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 3.0,
+                      "branches_min": 0.0,
+                      "branches_max": 0.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_abc_range_clause_assignments() {
+        check_metrics::<GoParser>(
+            "package main
+
+             func f(m map[string]int) {
+                 for k, v := range m {
+                 }
+                 for k = range m {
+                 }
+                 for range m {
+                 }
+             }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 3.0,
+                      "branches": 0.0,
+                      "conditions": 3.0,
+                      "magnitude": 4.242640687119285,
+                      "assignments_average": 1.5,
+                      "branches_average": 0.0,
+                      "conditions_average": 1.5,
+                      "assignments_min": 0.0,
+                      "assignments_max": 3.0,
+                      "branches_min": 0.0,
+                      "branches_max": 0.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_abc_default_cases() {
+        check_metrics::<GoParser>(
+            "package main
+
+             func f(x int) int {
+                 switch x {
+                 case 1:
+                     return 1
+                 default:
+                     return 0
+                 }
+             }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 0.0,
+                      "branches": 0.0,
+                      "conditions": 2.0,
+                      "magnitude": 2.0,
+                      "assignments_average": 0.0,
+                      "branches_average": 0.0,
+                      "conditions_average": 1.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 0.0,
+                      "branches_min": 0.0,
+                      "branches_max": 0.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
 
     #[test]
     fn ruby_abc_basic() {
