@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::macros::implement_metric_trait;
+use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -71,6 +71,28 @@ impl Stats {
         self.class_na_sum += other.class_na_sum;
         self.interface_na_sum += other.interface_na_sum;
         self.not_applicable |= other.not_applicable;
+    }
+
+    /// Increments the attribute counters on the enclosing class/interface
+    /// space. `container` specifies whether the attribute belongs to a
+    /// class-like (Class / Impl) or interface-like (Interface / Trait) scope.
+    #[inline(always)]
+    pub(crate) fn record_attribute(&mut self, container: SpaceKind, is_public: bool) {
+        match container {
+            SpaceKind::Class | SpaceKind::Impl => {
+                self.class_na += 1;
+                if is_public {
+                    self.class_npa += 1;
+                }
+            }
+            SpaceKind::Interface | SpaceKind::Trait => {
+                self.interface_na += 1;
+                if is_public {
+                    self.interface_npa += 1;
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Returns the number of class public attributes sum in a space.
@@ -170,7 +192,14 @@ impl Stats {
     // Checks if the `Npa` metric is disabled
     #[inline(always)]
     pub(crate) fn is_disabled(&self) -> bool {
-        self.not_applicable || matches!(self.space_kind, SpaceKind::Function | SpaceKind::Unknown)
+        if self.not_applicable {
+            return true;
+        }
+        match self.space_kind {
+            SpaceKind::Function | SpaceKind::Unknown => true,
+            SpaceKind::Unit => self.class_na_sum == 0 && self.interface_na_sum == 0,
+            _ => false,
+        }
     }
 
     /// Marks this metric as not applicable to the current language so it is
@@ -186,21 +215,281 @@ impl Stats {
     pub(crate) fn applies_to(lang: LANG) -> bool {
         !matches!(lang, LANG::Go)
     }
+
+    /// Records the kind of the enclosing space so `merge` can route
+    /// class/interface attribute counts into the right bucket.
+    #[inline(always)]
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
+        self.space_kind = kind;
+    }
 }
 
 pub(crate) trait Npa
 where
     Self: Checker,
 {
-    fn compute(node: &Node, stats: &mut Stats);
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats);
 }
 
-implement_metric_trait!(
-    Npa,
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode,
-    RubyCode
-);
+/// Whether a Python attribute name should be considered public. Dunder names
+/// (e.g. `__init__`) are public by convention; single or double leading
+/// underscore signals non-public.
+fn python_attr_is_public(name: &str) -> bool {
+    if name.starts_with("__") && name.ends_with("__") {
+        return true;
+    }
+    !name.starts_with('_')
+}
+
+impl Npa for PythonCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        // Python class attributes are assignments at the top level of a class
+        // body: `name: T = value`, `name = value`.
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        // Direct child of class body: parent is the `block`, grand-parent is
+        // the class definition.
+        let grand = match parent.parent() {
+            Some(g) => g,
+            None => return,
+        };
+        if grand.kind_id() != Python::ClassDefinition {
+            return;
+        }
+        // The attribute is an `expression_statement` wrapping an `assignment`
+        // whose left side is a bare identifier.
+        if node.kind_id() != Python::ExpressionStatement {
+            return;
+        }
+        let inner = match node.child(0) {
+            Some(c) => c,
+            None => return,
+        };
+        if inner.kind_id() != Python::Assignment {
+            return;
+        }
+        let left = match inner.child_by_field_name("left") {
+            Some(l) => l,
+            None => return,
+        };
+        if left.kind_id() != Python::Identifier {
+            return;
+        }
+        let text = match std::str::from_utf8(&code[left.start_byte()..left.end_byte()]) {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+        stats.record_attribute(SpaceKind::Class, python_attr_is_public(text));
+    }
+}
+
+impl Npa for TypescriptCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        let kind_id = node.kind_id();
+        let container = if kind_id == Typescript::PublicFieldDefinition {
+            SpaceKind::Class
+        } else if kind_id == Typescript::PropertySignature {
+            SpaceKind::Interface
+        } else {
+            return;
+        };
+        let is_public = ts_field_is_public(node, code, |id| match id.into() {
+            Typescript::AccessibilityModifier => TsFieldKind::Modifier,
+            _ => TsFieldKind::Other,
+        });
+        stats.record_attribute(container, is_public);
+    }
+}
+
+impl Npa for TsxCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        let kind_id = node.kind_id();
+        let container = if kind_id == Tsx::PublicFieldDefinition {
+            SpaceKind::Class
+        } else if kind_id == Tsx::PropertySignature {
+            SpaceKind::Interface
+        } else {
+            return;
+        };
+        let is_public = ts_field_is_public(node, code, |id| match id.into() {
+            Tsx::AccessibilityModifier => TsFieldKind::Modifier,
+            _ => TsFieldKind::Other,
+        });
+        stats.record_attribute(container, is_public);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TsFieldKind {
+    Modifier,
+    Other,
+}
+
+fn ts_field_is_public(node: &Node, code: &[u8], classify: impl Fn(u16) -> TsFieldKind) -> bool {
+    for child in node.children() {
+        if classify(child.kind_id()) == TsFieldKind::Modifier {
+            let text = &code[child.start_byte()..child.end_byte()];
+            if text == b"private" || text == b"protected" {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+impl Npa for RustCode {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
+        if node.kind_id() != Rust::FieldDeclaration {
+            return;
+        }
+        // Rust struct fields live in `struct_item`, which is *not* pushed as
+        // a FuncSpace, so these attributes are collected at the containing
+        // unit/impl scope. Attribute-ness is determined by the node kind
+        // alone; visibility is the presence of `pub`.
+        let is_public = node
+            .children()
+            .any(|c| c.kind_id() == Rust::VisibilityModifier);
+        stats.record_attribute(SpaceKind::Class, is_public);
+    }
+}
+
+impl Npa for RubyCode {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
+        if !matches!(stats.space_kind, SpaceKind::Class) {
+            return;
+        }
+        // Ruby attributes exposed through `attr_accessor`, `attr_reader`,
+        // `attr_writer` are public by convention. Detecting those requires a
+        // call-site match — treat any `@instance_variable` assignment that's a
+        // direct statement of the class body as an attribute, and count it as
+        // non-public (encapsulated) by default.
+        if node.kind_id() != Ruby::Assignment {
+            return;
+        }
+        let parent_is_class_body = node.parent().is_some_and(|p| {
+            matches!(
+                p.kind_id().into(),
+                Ruby::Class | Ruby::SingletonClass | Ruby::Module
+            )
+        });
+        if !parent_is_class_body {
+            return;
+        }
+        let left = match node.child_by_field_name("left") {
+            Some(l) => l,
+            None => return,
+        };
+        if left.kind_id() != Ruby::InstanceVariable {
+            return;
+        }
+        stats.record_attribute(SpaceKind::Class, false);
+    }
+}
+
+// Go has no class-like constructs; Npa is not applicable.
+impl Npa for GoCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::langs::{PythonParser, RustParser, TypescriptParser};
+    use crate::tools::check_metrics;
+
+    #[test]
+    fn python_npa_counts_class_body_assignments() {
+        check_metrics::<PythonParser>(
+            "class C:
+                 a = 1
+                 _b = 2
+                 __c = 3",
+            "foo.py",
+            |metric| {
+                // public: a. non-public: _b, __c.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 3.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.3333333333333333,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 3.0,
+                      "average": 0.3333333333333333
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_npa_counts_public_fields() {
+        check_metrics::<TypescriptParser>(
+            "class C {
+                 a: number = 1;
+                 public b: number = 2;
+                 private c: number = 3;
+                 protected d: number = 4;
+             }",
+            "foo.ts",
+            |metric| {
+                // public: a, b. non-public: c, d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_attributes": 4.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_npa_counts_struct_fields() {
+        check_metrics::<RustParser>(
+            "struct S {
+                 pub a: u32,
+                 b: u32,
+             }",
+            "foo.rs",
+            |metric| {
+                // 2 fields, 1 public.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 2.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+}

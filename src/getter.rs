@@ -67,9 +67,8 @@ impl Getter for PythonCode {
             | And | Or | PLUS | DASH | SLASH | PERCENT | SLASHSLASH | STARSTAR | PIPE | AMP
             | CARET | LTLT | TILDE | LT | LTEQ | EQEQ | BANGEQ | GTEQ | GT | LTGT | Is | PLUSEQ
             | DASHEQ | STAREQ | SLASHEQ | ATEQ | SLASHSLASHEQ | PERCENTEQ | STARSTAREQ | GTGTEQ
-            | LTLTEQ | AMPEQ | CARETEQ | PIPEEQ | Yield | Await | Await2 | Print => {
-                HalsteadType::Operator
-            }
+            | LTLTEQ | AMPEQ | CARETEQ | PIPEEQ | Yield | Await | Await2 | Print | LPAREN
+            | LBRACK | LBRACE | COLON | SEMI => HalsteadType::Operator,
             Identifier | Integer | Float | True | False | None => HalsteadType::Operand,
             String => {
                 let mut operator = HalsteadType::Unknown;
@@ -85,9 +84,7 @@ impl Getter for PythonCode {
         }
     }
 
-    fn get_operator_id_as_str(id: u16) -> &'static str {
-        Into::<Python>::into(id).into()
-    }
+    get_operator!(Python);
 }
 
 impl Getter for TypescriptCode {

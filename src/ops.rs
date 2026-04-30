@@ -288,7 +288,7 @@ mod tests {
             "if True:
                  a = 1 + 2",
             "foo.py",
-            &mut ["if", "=", "+"],
+            &mut ["if", ":", "=", "+"],
             &mut ["True", "a", "1", "2"],
         );
     }
@@ -304,7 +304,7 @@ mod tests {
                      b = 2 + a
                  c = 3 + 3",
             "foo.py",
-            &mut ["def", "=", "+"],
+            &mut ["def", "()", ":", "=", "+"],
             &mut ["foo", "bar", "toto", "a", "b", "c", "1", "2", "3"],
         );
     }

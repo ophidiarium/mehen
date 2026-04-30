@@ -345,23 +345,24 @@ mod tests {
                 // operands: foo, bar, toto, a, b, c, 1, 1, 2, a, 3, 3
                 insta::assert_json_snapshot!(
                     metric.halstead,
-                    @r###"
-                    {
-                      "n1": 3.0,
-                      "N1": 9.0,
-                      "n2": 9.0,
-                      "N2": 12.0,
-                      "length": 21.0,
-                      "estimated_program_length": 33.284212515144276,
-                      "purity_ratio": 1.584962500721156,
-                      "vocabulary": 12.0,
-                      "volume": 75.28421251514428,
-                      "difficulty": 2.0,
-                      "level": 0.5,
-                      "effort": 150.56842503028855,
-                      "time": 8.364912501682698,
-                      "bugs": 0.0094341190071077
-                    }"###
+                    @r#"
+                {
+                  "n1": 5.0,
+                  "N1": 15.0,
+                  "n2": 9.0,
+                  "N2": 12.0,
+                  "length": 27.0,
+                  "estimated_program_length": 40.13896548741762,
+                  "purity_ratio": 1.4866283513858378,
+                  "vocabulary": 14.0,
+                  "volume": 102.79858289555531,
+                  "difficulty": 3.3333333333333335,
+                  "level": 0.3,
+                  "effort": 342.6619429851844,
+                  "time": 19.03677461028802,
+                  "bugs": 0.01632259960095138
+                }
+                "#
                 );
             },
         );
@@ -482,23 +483,24 @@ mod tests {
         check_metrics::<PythonParser>("()[]{}", "foo.py", |metric| {
             insta::assert_json_snapshot!(
                 metric.halstead,
-                @r###"
-                    {
-                      "n1": 0.0,
-                      "N1": 0.0,
-                      "n2": 0.0,
-                      "N2": 0.0,
-                      "length": 0.0,
-                      "estimated_program_length": null,
-                      "purity_ratio": null,
-                      "vocabulary": 0.0,
-                      "volume": null,
-                      "difficulty": null,
-                      "level": null,
-                      "effort": null,
-                      "time": null,
-                      "bugs": null
-                    }"###
+                @r#"
+            {
+              "n1": 3.0,
+              "N1": 3.0,
+              "n2": 0.0,
+              "N2": 0.0,
+              "length": 3.0,
+              "estimated_program_length": null,
+              "purity_ratio": null,
+              "vocabulary": 3.0,
+              "volume": 4.754887502163468,
+              "difficulty": null,
+              "level": null,
+              "effort": null,
+              "time": null,
+              "bugs": null
+            }
+            "#
             );
         });
     }
@@ -512,23 +514,24 @@ mod tests {
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.halstead,
-                    @r###"
-                    {
-                      "n1": 2.0,
-                      "N1": 2.0,
-                      "n2": 1.0,
-                      "N2": 1.0,
-                      "length": 3.0,
-                      "estimated_program_length": 2.0,
-                      "purity_ratio": 0.6666666666666666,
-                      "vocabulary": 3.0,
-                      "volume": 4.754887502163468,
-                      "difficulty": 1.0,
-                      "level": 1.0,
-                      "effort": 4.754887502163468,
-                      "time": 0.26416041678685936,
-                      "bugs": 0.0009425525573729414
-                    }"###
+                    @r#"
+                {
+                  "n1": 4.0,
+                  "N1": 4.0,
+                  "n2": 1.0,
+                  "N2": 1.0,
+                  "length": 5.0,
+                  "estimated_program_length": 8.0,
+                  "purity_ratio": 1.6,
+                  "vocabulary": 5.0,
+                  "volume": 11.60964047443681,
+                  "difficulty": 2.0,
+                  "level": 0.5,
+                  "effort": 23.21928094887362,
+                  "time": 1.289960052715201,
+                  "bugs": 0.002712967490108627
+                }
+                "#
                 );
             },
         );

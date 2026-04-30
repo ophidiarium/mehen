@@ -117,7 +117,10 @@ where
 
 impl Exit for PythonCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Python::ReturnStatement) {
+        if matches!(
+            node.kind_id().into(),
+            Python::ReturnStatement | Python::RaiseStatement
+        ) {
             stats.exit += 1;
         }
     }
@@ -125,7 +128,10 @@ impl Exit for PythonCode {
 
 impl Exit for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Typescript::ReturnStatement) {
+        if matches!(
+            node.kind_id().into(),
+            Typescript::ReturnStatement | Typescript::ThrowStatement
+        ) {
             stats.exit += 1;
         }
     }
@@ -133,7 +139,10 @@ impl Exit for TypescriptCode {
 
 impl Exit for TsxCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Tsx::ReturnStatement) {
+        if matches!(
+            node.kind_id().into(),
+            Tsx::ReturnStatement | Tsx::ThrowStatement
+        ) {
             stats.exit += 1;
         }
     }
@@ -179,7 +188,7 @@ impl Exit for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
+    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -408,6 +417,56 @@ mod tests {
              end",
             "foo.rb",
             |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_raise_counts_as_exit() {
+        check_metrics::<PythonParser>(
+            "def f(a):
+                 if a < 0:
+                     raise ValueError('bad')
+                 return a",
+            "foo.py",
+            |metric| {
+                // 1 function, 2 exits (raise + return)
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_throw_counts_as_exit() {
+        check_metrics::<TypescriptParser>(
+            "function f(a: number): number {
+                 if (a < 0) {
+                     throw new Error('bad');
+                 }
+                 return a;
+             }",
+            "foo.ts",
+            |metric| {
+                // 1 function, 2 exits (throw + return)
                 insta::assert_json_snapshot!(
                     metric.nexits,
                     @r###"

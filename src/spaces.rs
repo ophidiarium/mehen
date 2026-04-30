@@ -172,6 +172,8 @@ impl FuncSpace {
 
         let mut metrics = CodeMetrics::default();
         metrics.apply_language_rules(lang);
+        metrics.npa.set_space_kind(kind);
+        metrics.npm.set_space_kind(kind);
 
         Self {
             name: T::get_func_space_name(node, code)
@@ -340,8 +342,8 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
             T::NArgs::compute(&node, &mut last.metrics.nargs);
             T::Exit::compute(&node, &mut last.metrics.nexits);
             T::Abc::compute(&node, &mut last.metrics.abc);
-            T::Npm::compute(&node, &mut last.metrics.npm);
-            T::Npa::compute(&node, &mut last.metrics.npa);
+            T::Npm::compute(&node, code, &mut last.metrics.npm);
+            T::Npa::compute(&node, code, &mut last.metrics.npa);
         }
 
         cursor.reset(&node);
