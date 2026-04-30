@@ -478,7 +478,7 @@ impl Npm for GoCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -571,6 +571,39 @@ mod tests {
                   "total": 1.0,
                   "total_methods": 3.0,
                   "average": 0.3333333333333333
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn tsx_npm_counts_ecmascript_private_methods() {
+        // TSX shares the grammar; lock in the same `#name` -> non-public
+        // classification so a regression doesn't sneak in through the TSX
+        // parser alone.
+        check_metrics::<TsxParser>(
+            "class C {
+                 a() {}
+                 #b() {}
+             }",
+            "foo.tsx",
+            |metric| {
+                // 2 methods: public = a only; #b is private.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_methods": 2.0,
+                  "interface_methods": 0.0,
+                  "classes_average": 0.5,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_methods": 2.0,
+                  "average": 0.5
                 }
                 "#
                 );
