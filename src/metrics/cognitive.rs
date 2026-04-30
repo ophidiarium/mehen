@@ -248,7 +248,12 @@ impl Cognitive for PythonCode {
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
         match node.kind_id().into() {
-            IfStatement | ForStatement | WhileStatement | ConditionalExpression => {
+            IfStatement
+            | ForStatement
+            | WhileStatement
+            | TryStatement
+            | ExceptClause
+            | ConditionalExpression => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             ElifClause => {
@@ -262,10 +267,6 @@ impl Cognitive for PythonCode {
                 // No nesting increment for them because their cost has already
                 // been paid by the if construct
                 increment_by_one(stats);
-            }
-            ExceptClause => {
-                nesting += 1;
-                increment(stats);
             }
             ExpressionList | ExpressionStatement | Tuple => {
                 stats.boolean_seq.reset();
@@ -322,10 +323,15 @@ impl Cognitive for RustCode {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             IfExpression => {}
-            ForExpression | WhileExpression | MatchExpression => {
+            ForExpression | WhileExpression | LoopExpression | MatchExpression => {
                 increase_nesting(stats,&mut nesting, depth, lambda);
             }
             Else /*else-if also */ => {
+                increment_by_one(stats);
+            }
+            TryExpression => {
+                // `?` short-circuits on error; contributes +1 without nesting,
+                // matching labeled break/continue treatment.
                 increment_by_one(stats);
             }
             BreakExpression | ContinueExpression => {
@@ -366,7 +372,7 @@ macro_rules! js_cognitive {
                     increase_nesting(stats, &mut nesting, depth, lambda);
                 }
                 IfStatement => {}
-                ForStatement | ForInStatement | WhileStatement | DoStatement | SwitchStatement | CatchClause | TernaryExpression => {
+                ForStatement | ForInStatement | WhileStatement | DoStatement | SwitchStatement | TryStatement | CatchClause | TernaryExpression => {
                     increase_nesting(stats,&mut nesting, depth, lambda);
                 }
                 Else /* else-if also */ => {
@@ -1062,11 +1068,11 @@ mod tests {
     fn python_try_construct() {
         check_metrics::<PythonParser>(
             "def f(a, b):
-                try:
-                    for foo in bar:  # +1
+                try:                 # +1
+                    for foo in bar:  # +2 (nesting = 1)
                         return a
-                except Exception:  # +1
-                    if a < 0:  # +2
+                except Exception:    # +2 (nesting = 1)
+                    if a < 0:        # +3 (nesting = 2)
                         return a",
             "foo.py",
             |metric| {
@@ -1074,10 +1080,10 @@ mod tests {
                     metric.cognitive,
                     @r###"
                     {
-                      "sum": 4.0,
-                      "average": 4.0,
+                      "sum": 8.0,
+                      "average": 8.0,
                       "min": 0.0,
-                      "max": 4.0
+                      "max": 8.0
                     }"###
                 );
             },
@@ -1247,6 +1253,63 @@ mod tests {
                 return this._processClosing;
             }",
             "foo.ts",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_try_catch_nesting() {
+        check_metrics::<TypescriptParser>(
+            "function f() {
+                 try {                  // +1
+                     if (a) {           // +2 (nesting = 1)
+                         return 1;
+                     }
+                 } catch (e) {          // +2 (nesting = 1)
+                     if (b) {           // +3 (nesting = 2)
+                         throw e;
+                     }
+                 }
+             }",
+            "foo.ts",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 8.0,
+                      "average": 8.0,
+                      "min": 0.0,
+                      "max": 8.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_loop_and_try() {
+        check_metrics::<RustParser>(
+            "fn f() -> Option<i32> {
+                 loop {          // +1
+                     let x = g()?;  // +1 try
+                     if x > 0 {   // +2 (nesting = 1)
+                         return Some(x);
+                     }
+                 }
+             }",
+            "foo.rs",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.cognitive,

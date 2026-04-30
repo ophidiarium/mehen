@@ -59,13 +59,7 @@ const KNOWN_METRICS: &[MetricDef] = &[
     }),
 ];
 
-const DEFAULT_METRICS: &[&str] = &[
-    "cyclomatic",
-    "cognitive",
-    "nom.functions",
-    "loc.lloc",
-    "abc",
-];
+const DEFAULT_METRICS: &[&str] = &["cyclomatic", "cognitive", "nom.functions", "loc.lloc", "mi"];
 
 fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     let specs: Vec<&str> = if specs.is_empty() {
@@ -511,7 +505,7 @@ mod tests {
         assert_eq!(selectors[1].name, "cognitive");
         assert_eq!(selectors[2].name, "nom.functions");
         assert_eq!(selectors[3].name, "loc.lloc");
-        assert_eq!(selectors[4].name, "abc");
+        assert_eq!(selectors[4].name, "mi");
     }
 
     #[test]
