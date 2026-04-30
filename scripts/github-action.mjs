@@ -46,8 +46,6 @@ const METRIC_ALIASES = new Map([
   ["nom", "nom.functions"],
   ["lloc", "loc.lloc"],
   ["loc", "loc.lloc"],
-  ["maintainability", "mi"],
-  ["maintainabilityindex", "mi"],
   ["halsteadvol", "halstead.volume"],
   ["halsteadvolume", "halstead.volume"],
 ]);
@@ -506,7 +504,8 @@ function canonicalMetricName(name) {
 }
 
 function inferPolarity(name) {
-  return canonicalMetricName(name) === "mi"
+  const canonical = canonicalMetricName(name);
+  return canonical === "mi" || canonical.startsWith("mi.")
     ? HIGHER_IS_BETTER
     : LOWER_IS_BETTER;
 }
@@ -641,6 +640,7 @@ export {
   alignFileMetrics,
   collectThresholdViolations,
   formatMetricCell,
+  inferPolarity,
   isNotApplicable,
   parseList,
   parseThresholds,
