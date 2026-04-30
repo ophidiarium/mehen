@@ -423,13 +423,22 @@ impl Npa for RubyCode {
         if node.kind_id() != Ruby::Assignment {
             return;
         }
-        let parent_is_class_body = node.parent().is_some_and(|p| {
+        // Ruby class bodies are wrapped in a `body_statement` node, so walk
+        // one step up if we land on that wrapper. Mirrors the same hop done
+        // in the npm detector.
+        let mut container = node.parent();
+        if let Some(c) = container
+            && matches!(c.kind_id().into(), Ruby::BodyStatement)
+        {
+            container = c.parent();
+        }
+        let in_class = container.is_some_and(|p| {
             matches!(
                 p.kind_id().into(),
                 Ruby::Class | Ruby::SingletonClass | Ruby::Module
             )
         });
-        if !parent_is_class_body {
+        if !in_class {
             return;
         }
         let left = match node.child_by_field_name("left") {
@@ -450,7 +459,7 @@ impl Npa for GoCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RustParser, TypescriptParser};
+    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -632,5 +641,38 @@ mod tests {
                     }"###
             );
         });
+    }
+
+    #[test]
+    fn ruby_npa_counts_instance_variables_under_body_statement() {
+        // Ruby class bodies are wrapped in a `body_statement` node in the
+        // tree-sitter grammar, so the ivar assignment's parent is
+        // `body_statement`, not `class` directly. The detector must hop
+        // through the wrapper.
+        check_metrics::<RubyParser>(
+            "class C
+                 @x = 1
+                 @y = 2
+             end",
+            "foo.rb",
+            |metric| {
+                // 2 ivar attributes, both non-public by convention.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.0,
+                      "interfaces_average": null,
+                      "total": 0.0,
+                      "total_attributes": 2.0,
+                      "average": 0.0
+                    }"###
+                );
+            },
+        );
     }
 }
