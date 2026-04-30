@@ -73,7 +73,7 @@ inputs:
   comment-title:
     description: "Markdown heading used for the sticky pull request comment."
     required: false
-    default: "## Source Code Metrics"
+    default: "## 📊 Source Code Metrics"
 
 outputs:
   violations:
