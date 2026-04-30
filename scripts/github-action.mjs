@@ -294,7 +294,7 @@ function renderMarkdown(diffs, context, thresholds, violations) {
   if (diffs.length === 0) {
     body += "No metric changes detected.\n";
   } else {
-    const metrics = diffs[0].metrics || [];
+    const metrics = unionMetricColumns(diffs);
     body += "| File |";
     for (const metric of metrics) {
       body += ` ${escapeCell(metric.label || metric.name)} |`;
@@ -351,6 +351,23 @@ function renderFile(filePath, context) {
     .map((part) => encodeURIComponent(part))
     .join("/");
   return `[${escaped}](https://github.com/${context.repository}/blob/${context.sha}/${urlPath})`;
+}
+
+// Build the master header as the union of metrics across all files, preserving
+// first-seen order. Using `diffs[0].metrics` alone would silently drop any
+// metric that only appears in later files (e.g. when the first file omits it
+// under the language-applicability rules).
+function unionMetricColumns(diffs) {
+  const seen = new Map();
+  for (const file of diffs) {
+    for (const metric of file.metrics || []) {
+      const key = metric && (metric.name || metric.label);
+      if (key && !seen.has(key)) {
+        seen.set(key, metric);
+      }
+    }
+  }
+  return [...seen.values()];
 }
 
 // Normalize a file's metric list against the header's master list so that a
@@ -627,4 +644,5 @@ export {
   isNotApplicable,
   parseList,
   parseThresholds,
+  unionMetricColumns,
 };

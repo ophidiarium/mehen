@@ -9,6 +9,7 @@ import {
   isNotApplicable,
   parseList,
   parseThresholds,
+  unionMetricColumns,
 } from "./github-action.mjs";
 
 test("parseList uses explicit separators only", () => {
@@ -73,6 +74,27 @@ test("formatMetricCell still renders normal values", () => {
     polarity: "lower-is-better",
   };
   assert.ok(formatMetricCell(metric, "main").startsWith("5 (main: 3)"));
+});
+
+test("unionMetricColumns includes metrics only present in later files", () => {
+  const diffs = [
+    {
+      path: "foo.go",
+      metrics: [{ name: "cyclomatic", label: "Cyclomatic" }],
+    },
+    {
+      path: "bar.py",
+      metrics: [
+        { name: "cyclomatic", label: "Cyclomatic" },
+        { name: "wmc", label: "WMC" },
+      ],
+    },
+  ];
+  const columns = unionMetricColumns(diffs);
+  assert.deepEqual(
+    columns.map((c) => c.name),
+    ["cyclomatic", "wmc"],
+  );
 });
 
 test("alignFileMetrics fills missing metrics with a non-applicable placeholder", () => {
