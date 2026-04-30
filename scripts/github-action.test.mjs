@@ -6,6 +6,7 @@ import {
   alignFileMetrics,
   collectThresholdViolations,
   formatMetricCell,
+  inferPolarity,
   isNotApplicable,
   parseList,
   parseThresholds,
@@ -131,6 +132,13 @@ test("alignFileMetrics preserves existing metrics when present", () => {
   const aligned = alignFileMetrics([source], header);
   assert.equal(aligned.length, 1);
   assert.equal(aligned[0], source);
+});
+
+test("inferPolarity treats MI variants as higher-is-better", () => {
+  assert.equal(inferPolarity("mi.original"), "higher-is-better");
+  assert.equal(inferPolarity("mi.sei"), "higher-is-better");
+  assert.equal(inferPolarity("mi.visual_studio"), "higher-is-better");
+  assert.equal(inferPolarity("cyclomatic"), "lower-is-better");
 });
 
 test("collectThresholdViolations skips non-applicable metrics", () => {
