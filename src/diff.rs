@@ -59,13 +59,7 @@ const KNOWN_METRICS: &[MetricDef] = &[
     }),
 ];
 
-const DEFAULT_METRICS: &[&str] = &[
-    "cyclomatic",
-    "cognitive",
-    "nom.functions",
-    "loc.lloc",
-    "abc",
-];
+const DEFAULT_METRICS: &[&str] = &["cyclomatic", "cognitive", "nom.functions", "loc.lloc", "mi"];
 
 fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     let specs: Vec<&str> = if specs.is_empty() {
