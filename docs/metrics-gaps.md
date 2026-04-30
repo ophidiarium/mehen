@@ -20,15 +20,15 @@ Supported languages in the matrix: R = Rust, Py = Python, G = Go, TS = TypeScrip
 
 ## 3. Language-semantic inconsistencies
 
-- [x] **`halstead` under-classifies Python operators.** Fixed: `LPAREN | LBRACK | LBRACE | COLON | SEMI` are now classified as Python operators, bringing it in line with TS / TSX / Rust / Go / Ruby. The Python `get_operator_id_as_str` now uses the shared `get_operator!` macro so `()` / `[]` / `{}` render correctly in the `ops` output.
+- [x] **`halstead` under-classifies Python operators.** Fixed: `LPAREN | LBRACK | LBRACE | COLON | SEMI` are now classified as Python operators, bringing it in line with TS / TSX / Rust / Go / Ruby.
 - [x] **`cyclomatic` counts Go `DefaultCase` as a decision.** `src/metrics/cyclomatic.rs:172` includes `DefaultCase` in the decision-point set; by the standard McCabe definition `default` is the fallthrough and should not count. This inflates Go cyclomatic relative to other languages.
 - [x] **`cyclomatic` counts Python `With | Assert` as decisions.** `src/metrics/cyclomatic.rs:113` adds `With` and `Assert`, neither of which introduces a branch. This inflates Python cyclomatic relative to other languages.
 - [x] **`cyclomatic` does not count `do…while` in TypeScript / TSX.** `src/metrics/cyclomatic.rs:133` and `:146` enumerate `If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE` but omit `DoStatement`. `while` matches through the `While` token but `do…while` has its own kind and is silently dropped. — Verified: the `While` keyword token fires for `do…while` as well (see `typescript_do_while` test), so no enumeration change is needed.
 
 ## 4. Stubbed predicates feeding real code
 
-- [ ] **`is_primitive` returns `false` for Python, Go, and Ruby.** `src/checker.rs:157`, `:398`, `:484`. These languages have no dedicated "primitive type" AST node; distinguishing `int` / `str` / `bool` from user types would require name-based matching, which needs a signature change to pass node text. Left as-is; only affects the cosmetics of the `ops` output.
-- [ ] **`is_useful_comment` is `false` for TS / TSX / Go / Ruby.** `src/checker.rs:167`, `:226`, `:351`, `:408`. Consumed at `src/comment_rm.rs:21`. Only Python (coding declarations) and Rust (`/// cbindgen:`) preserve meaningful comments during stripping — other languages drop all comments uniformly, even ones that carry metadata. Left as-is pending a concrete use-case.
+- [x] **`is_primitive` — obsolete.** The `--ops` subcommand and its consumer in `src/ops.rs` were removed (along with the `is_primitive` trait method and the `get_operator_id_as_str` Getter hook that only served it). No metric depends on primitive-type detection, so the gap is closed by deletion.
+- [x] **`is_useful_comment` — obsolete.** The `--comments` strip-comments subcommand and `src/comment_rm.rs` were removed (along with the `is_useful_comment` trait method). No remaining path consults this predicate, so the gap is closed by deletion.
 - [x] **`is_else_if` returns `false` for Python.** Verified with `metrics::cognitive::tests::python_nested_if_in_else_is_not_else_if`: Python's dedicated `ElifClause` means a plain `if` in an `else:` block is a real nested `if`, so returning `false` here is correct.
 
 ## 5. Trivial alignments

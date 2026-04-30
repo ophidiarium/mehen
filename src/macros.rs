@@ -174,36 +174,6 @@ macro_rules! mk_action {
             }
         }
 
-        /// Returns all operators and operands of each space in a code.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use std::path::PathBuf;
-        ///
-        /// use mehen::{get_ops, LANG};
-        ///
-        /// # fn main() {
-        /// let source_code = "fn main() { let a = 42; }";
-        /// let language = LANG::Rust;
-        ///
-        /// let path = PathBuf::from("foo.rs");
-        /// let source_as_vec = source_code.as_bytes().to_vec();
-        ///
-        /// get_ops(&language, source_as_vec, &path, None).unwrap();
-        /// # }
-        /// ```
-        #[inline(always)]
-        pub(crate) fn get_ops(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<Ops> {
-            match lang {
-                $(
-                    LANG::$camel => {
-                        let parser = $parser::new(source, &path, pr);
-                        operands_and_operators(&parser, &path)
-                    },
-                )*
-            }
-        }
     };
 }
 
