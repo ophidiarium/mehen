@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(selectors[1].name, "cognitive");
         assert_eq!(selectors[2].name, "nom.functions");
         assert_eq!(selectors[3].name, "loc.lloc");
-        assert_eq!(selectors[4].name, "abc");
+        assert_eq!(selectors[4].name, "mi");
     }
 
     #[test]
