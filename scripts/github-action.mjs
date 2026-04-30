@@ -271,6 +271,8 @@ function renderMarkdown(diffs, context, thresholds, violations) {
     context.eventName === "pull_request" ? ` (this PR vs \`${context.baseLabel}\`)` : "";
   let body = `${MARKER}\n${title}${scope}\n\n`;
 
+  let sawNotApplicable = false;
+
   if (diffs.length === 0) {
     body += "No metric changes detected.\n";
   } else {
@@ -288,6 +290,9 @@ function renderMarkdown(diffs, context, thresholds, violations) {
     for (const file of diffs) {
       body += `| ${renderFile(file.path, context)} |`;
       for (const metric of file.metrics || []) {
+        if (isNotApplicable(metric)) {
+          sawNotApplicable = true;
+        }
         body += ` ${escapeCell(formatMetricCell(metric, context.baseLabel))} |`;
       }
       body += "\n";
@@ -307,6 +312,10 @@ function renderMarkdown(diffs, context, thresholds, violations) {
     }
   }
 
+  if (sawNotApplicable) {
+    body += "\n> `—` indicates the metric does not apply to the file's language.\n";
+  }
+
   body += `\n${FOOTER}\n`;
 
   return body;
@@ -324,7 +333,23 @@ function renderFile(filePath, context) {
   return `[${escaped}](https://github.com/${context.repository}/blob/${context.sha}/${urlPath})`;
 }
 
+function isNotApplicable(metric) {
+  if (!metric) {
+    return true;
+  }
+  if (metric.not_applicable === true) {
+    return true;
+  }
+  const current = metric.current;
+  const baseline = metric.baseline;
+  const missing = (v) => v === null || v === undefined;
+  return missing(current) && missing(baseline);
+}
+
 function formatMetricCell(metric, baseLabel) {
+  if (isNotApplicable(metric)) {
+    return "—";
+  }
   const current = formatNumber(metric.current);
   if (metric.is_new) {
     return `${current} \u{1F195}`;
@@ -358,6 +383,9 @@ function collectThresholdViolations(diffs, thresholds) {
 
   for (const file of diffs) {
     for (const metric of file.metrics || []) {
+      if (isNotApplicable(metric)) {
+        continue;
+      }
       const key = canonicalMetricName(metric.name || metric.label || "");
       const labelKey = canonicalMetricName(metric.label || metric.name || "");
       const limit = thresholds.get(key) ?? thresholds.get(labelKey);
@@ -523,4 +551,11 @@ function setOutput(name, value) {
   }
 }
 
-export { DEFAULT_TEST_EXCLUDES, parseList, parseThresholds };
+export {
+  DEFAULT_TEST_EXCLUDES,
+  collectThresholdViolations,
+  formatMetricCell,
+  isNotApplicable,
+  parseList,
+  parseThresholds,
+};
