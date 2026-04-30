@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, LANG, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 use crate::macros::implement_metric_trait;
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
@@ -28,6 +28,7 @@ pub(crate) struct Stats {
     class_wmc_sum: f64,
     interface_wmc_sum: f64,
     space_kind: SpaceKind,
+    not_applicable: bool,
 }
 
 impl Serialize for Stats {
@@ -72,6 +73,7 @@ impl Stats {
 
         self.class_wmc_sum += other.class_wmc_sum;
         self.interface_wmc_sum += other.interface_wmc_sum;
+        self.not_applicable |= other.not_applicable;
     }
 
     /// Returns the sum of the `Wmc` metric values of the classes in a space.
@@ -103,7 +105,21 @@ impl Stats {
     // Checks if the `Wmc` metric is disabled
     #[inline(always)]
     pub(crate) fn is_disabled(&self) -> bool {
-        matches!(self.space_kind, SpaceKind::Function | SpaceKind::Unknown)
+        self.not_applicable || matches!(self.space_kind, SpaceKind::Function | SpaceKind::Unknown)
+    }
+
+    /// Marks this metric as not applicable to the current language so it is
+    /// omitted from output rather than serialized as a measured zero.
+    #[inline(always)]
+    pub(crate) fn mark_not_applicable(&mut self) {
+        self.not_applicable = true;
+    }
+
+    /// Returns whether the `Wmc` metric is meaningful for the given language.
+    /// Languages without class-like constructs opt out.
+    #[inline(always)]
+    pub(crate) fn applies_to(lang: LANG) -> bool {
+        !matches!(lang, LANG::Go)
     }
 }
 

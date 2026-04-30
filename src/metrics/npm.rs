@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::*;
+use crate::langs::{LANG, *};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 
@@ -22,6 +22,7 @@ pub(crate) struct Stats {
     class_nm_sum: usize,
     interface_nm_sum: usize,
     is_class_space: bool,
+    not_applicable: bool,
 }
 
 impl Serialize for Stats {
@@ -68,6 +69,7 @@ impl Stats {
         self.interface_npm_sum += other.interface_npm_sum;
         self.class_nm_sum += other.class_nm_sum;
         self.interface_nm_sum += other.interface_nm_sum;
+        self.not_applicable |= other.not_applicable;
     }
 
     /// Returns the number of class public methods sum in a space.
@@ -167,7 +169,21 @@ impl Stats {
     // Checks if the `Npm` metric is disabled
     #[inline(always)]
     pub(crate) fn is_disabled(&self) -> bool {
-        !self.is_class_space
+        self.not_applicable || !self.is_class_space
+    }
+
+    /// Marks this metric as not applicable to the current language so it is
+    /// omitted from output rather than serialized as a measured zero.
+    #[inline(always)]
+    pub(crate) fn mark_not_applicable(&mut self) {
+        self.not_applicable = true;
+    }
+
+    /// Returns whether the `Npm` metric is meaningful for the given language.
+    /// Languages without class-like constructs opt out.
+    #[inline(always)]
+    pub(crate) fn applies_to(lang: LANG) -> bool {
+        !matches!(lang, LANG::Go)
     }
 }
 
