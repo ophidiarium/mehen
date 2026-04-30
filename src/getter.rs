@@ -1,23 +1,8 @@
 use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
-
-macro_rules! get_operator {
-    ($language:ident) => {
-        #[inline(always)]
-        fn get_operator_id_as_str(id: u16) -> &'static str {
-            let typ = id.into();
-            match typ {
-                $language::LPAREN => "()",
-                $language::LBRACK => "[]",
-                $language::LBRACE => "{}",
-                _ => typ.into(),
-            }
-        }
-    };
-}
 
 pub(crate) trait Getter {
     fn get_func_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
@@ -41,10 +26,6 @@ pub(crate) trait Getter {
     fn get_op_type(_node: &Node) -> HalsteadType {
         HalsteadType::Unknown
     }
-
-    fn get_operator_id_as_str(_id: u16) -> &'static str {
-        ""
-    }
 }
 
 impl Getter for PythonCode {
@@ -67,9 +48,8 @@ impl Getter for PythonCode {
             | And | Or | PLUS | DASH | SLASH | PERCENT | SLASHSLASH | STARSTAR | PIPE | AMP
             | CARET | LTLT | TILDE | LT | LTEQ | EQEQ | BANGEQ | GTEQ | GT | LTGT | Is | PLUSEQ
             | DASHEQ | STAREQ | SLASHEQ | ATEQ | SLASHSLASHEQ | PERCENTEQ | STARSTAREQ | GTGTEQ
-            | LTLTEQ | AMPEQ | CARETEQ | PIPEEQ | Yield | Await | Await2 | Print => {
-                HalsteadType::Operator
-            }
+            | LTLTEQ | AMPEQ | CARETEQ | PIPEEQ | Yield | Await | Await2 | Print | LPAREN
+            | LBRACK | LBRACE | COLON | SEMI => HalsteadType::Operator,
             Identifier | Integer | Float | True | False | None => HalsteadType::Operand,
             String => {
                 let mut operator = HalsteadType::Unknown;
@@ -83,10 +63,6 @@ impl Getter for PythonCode {
             }
             _ => HalsteadType::Unknown,
         }
-    }
-
-    fn get_operator_id_as_str(id: u16) -> &'static str {
-        Into::<Python>::into(id).into()
     }
 }
 
@@ -155,8 +131,6 @@ impl Getter for TypescriptCode {
             _ => HalsteadType::Unknown,
         }
     }
-
-    get_operator!(Typescript);
 }
 
 impl Getter for TsxCode {
@@ -224,8 +198,6 @@ impl Getter for TsxCode {
             _ => HalsteadType::Unknown,
         }
     }
-
-    get_operator!(Tsx);
 }
 
 impl Getter for RustCode {
@@ -288,8 +260,6 @@ impl Getter for RustCode {
             _ => HalsteadType::Unknown,
         }
     }
-
-    get_operator!(Rust);
 }
 
 impl Getter for GoCode {
@@ -327,8 +297,6 @@ impl Getter for GoCode {
             _ => HalsteadType::Unknown,
         }
     }
-
-    get_operator!(Go);
 }
 
 impl Getter for RubyCode {
@@ -388,6 +356,4 @@ impl Getter for RubyCode {
             _ => HalsteadType::Unknown,
         }
     }
-
-    get_operator!(Ruby);
 }

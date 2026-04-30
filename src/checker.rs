@@ -1,14 +1,8 @@
-use std::sync::OnceLock;
-
-use regex::bytes::Regex;
-
 use crate::langs::{
     GoCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser, TypescriptCode, TypescriptParser,
 };
 use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
-
-static RE: OnceLock<Regex> = OnceLock::new();
 
 macro_rules! check_if_func {
     ($parser: ident, $node: ident) => {
@@ -90,7 +84,6 @@ macro_rules! is_js_func_and_closure_checker {
 
 pub(crate) trait Checker {
     fn is_comment(_: &Node) -> bool;
-    fn is_useful_comment(_: &Node, _: &[u8]) -> bool;
     fn is_func_space(_: &Node) -> bool;
     fn is_func(_: &Node) -> bool;
     fn is_closure(_: &Node) -> bool;
@@ -98,7 +91,6 @@ pub(crate) trait Checker {
     fn is_non_arg(_: &Node) -> bool;
     fn is_string(_: &Node) -> bool;
     fn is_else_if(_: &Node) -> bool;
-    fn is_primitive(_id: u16) -> bool;
 
     fn is_error(node: &Node) -> bool {
         node.has_error()
@@ -108,16 +100,6 @@ pub(crate) trait Checker {
 impl Checker for PythonCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Python::Comment
-    }
-
-    fn is_useful_comment(node: &Node, code: &[u8]) -> bool {
-        // comment containing coding info are useful
-        node.start_row() <= 1
-            && RE
-                .get_or_init(|| {
-                    Regex::new(r"^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)").unwrap()
-                })
-                .is_match(&code[node.start_byte()..node.end_byte()])
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -153,19 +135,11 @@ impl Checker for PythonCode {
     fn is_else_if(_: &Node) -> bool {
         false
     }
-
-    fn is_primitive(_id: u16) -> bool {
-        false
-    }
 }
 
 impl Checker for TypescriptCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Typescript::Comment
-    }
-
-    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
-        false
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -211,20 +185,11 @@ impl Checker for TypescriptCode {
         }
         false
     }
-
-    #[inline(always)]
-    fn is_primitive(id: u16) -> bool {
-        id == Typescript::PredefinedType
-    }
 }
 
 impl Checker for TsxCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Tsx::Comment
-    }
-
-    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
-        false
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -269,27 +234,11 @@ impl Checker for TsxCode {
         }
         false
     }
-
-    #[inline(always)]
-    fn is_primitive(id: u16) -> bool {
-        id == Tsx::PredefinedType
-    }
 }
 
 impl Checker for RustCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Rust::LineComment || node.kind_id() == Rust::BlockComment
-    }
-
-    fn is_useful_comment(node: &Node, code: &[u8]) -> bool {
-        if let Some(parent) = node.parent()
-            && parent.kind_id() == Rust::TokenTree
-        {
-            // A comment could be a macro token
-            return true;
-        }
-        let code = &code[node.start_byte()..node.end_byte()];
-        code.starts_with(b"/// cbindgen:")
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -336,20 +285,11 @@ impl Checker for RustCode {
         }
         false
     }
-
-    #[inline(always)]
-    fn is_primitive(id: u16) -> bool {
-        id == Rust::PrimitiveType
-    }
 }
 
 impl Checker for GoCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Go::Comment
-    }
-
-    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
-        false
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -394,19 +334,11 @@ impl Checker for GoCode {
         }
         false
     }
-
-    fn is_primitive(_id: u16) -> bool {
-        false
-    }
 }
 
 impl Checker for RubyCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Ruby::Comment
-    }
-
-    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
-        false
     }
 
     fn is_func_space(node: &Node) -> bool {
@@ -478,10 +410,6 @@ impl Checker for RubyCode {
         if let Some(parent) = node.parent() {
             return parent.kind_id() == Ruby::Else;
         }
-        false
-    }
-
-    fn is_primitive(_id: u16) -> bool {
         false
     }
 }

@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -63,26 +63,6 @@ pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>
     remove_blank_lines(&mut data);
 
     Ok(Some(data))
-}
-
-/// Writes data to a file.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-///
-/// use mehen::write_file;
-///
-/// let path = Path::new("foo.txt");
-/// let data: [u8; 4] = [0; 4];
-/// write_file(&path, &data).unwrap();
-/// ```
-pub(crate) fn write_file(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    let mut file = File::create(path)?;
-    file.write_all(data)?;
-
-    Ok(())
 }
 
 fn mode_to_str(mode: &[u8]) -> Option<String> {
@@ -258,7 +238,7 @@ mod tests {
             (b"abcdef".to_vec(), Some(b"abcdef\n".to_vec())),
         ];
         for (d, expected) in data {
-            write_file(&tmp_path, &d).unwrap();
+            std::fs::write(&tmp_path, &d).unwrap();
             let res = read_file_with_eol(&tmp_path).unwrap();
             assert_eq!(res, expected);
         }

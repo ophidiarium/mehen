@@ -6,7 +6,6 @@ use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
 use crate::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
-use crate::ops::{Ops, operands_and_operators};
 use crate::parser::Parser;
 use crate::preproc::PreprocResults;
 use crate::spaces::{FuncSpace, metrics};
