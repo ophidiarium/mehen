@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_TEST_EXCLUDES,
+  alignFileMetrics,
   collectThresholdViolations,
   formatMetricCell,
   isNotApplicable,
@@ -72,6 +73,42 @@ test("formatMetricCell still renders normal values", () => {
     polarity: "lower-is-better",
   };
   assert.ok(formatMetricCell(metric, "main").startsWith("5 (main: 3)"));
+});
+
+test("alignFileMetrics fills missing metrics with a non-applicable placeholder", () => {
+  const header = [
+    { name: "cyclomatic", label: "Cyclomatic" },
+    { name: "wmc", label: "WMC", polarity: "lower-is-better" },
+  ];
+  const fileMetrics = [
+    {
+      name: "cyclomatic",
+      label: "Cyclomatic",
+      current: 5,
+      baseline: 3,
+      delta: 2,
+      polarity: "lower-is-better",
+    },
+  ];
+  const aligned = alignFileMetrics(fileMetrics, header);
+  assert.equal(aligned.length, 2);
+  assert.equal(aligned[0].current, 5);
+  assert.equal(isNotApplicable(aligned[1]), true);
+  assert.equal(aligned[1].name, "wmc");
+});
+
+test("alignFileMetrics preserves existing metrics when present", () => {
+  const header = [{ name: "cyclomatic", label: "Cyclomatic" }];
+  const source = {
+    name: "cyclomatic",
+    label: "Cyclomatic",
+    current: 1,
+    baseline: 1,
+    delta: 0,
+  };
+  const aligned = alignFileMetrics([source], header);
+  assert.equal(aligned.length, 1);
+  assert.equal(aligned[0], source);
 });
 
 test("collectThresholdViolations skips non-applicable metrics", () => {

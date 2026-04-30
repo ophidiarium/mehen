@@ -307,7 +307,8 @@ function renderMarkdown(diffs, context, thresholds, violations) {
 
     for (const file of diffs) {
       body += `| ${renderFile(file.path, context)} |`;
-      for (const metric of file.metrics || []) {
+      const row = alignFileMetrics(file.metrics || [], metrics);
+      for (const metric of row) {
         if (isNotApplicable(metric)) {
           sawNotApplicable = true;
         }
@@ -350,6 +351,35 @@ function renderFile(filePath, context) {
     .map((part) => encodeURIComponent(part))
     .join("/");
   return `[${escaped}](https://github.com/${context.repository}/blob/${context.sha}/${urlPath})`;
+}
+
+// Normalize a file's metric list against the header's master list so that a
+// file which omits a metric still produces a cell in the row. Missing metrics
+// are filled with a placeholder that isNotApplicable() recognizes, so they
+// render as `—`.
+function alignFileMetrics(fileMetrics, headerMetrics) {
+  const byKey = new Map();
+  for (const m of fileMetrics) {
+    if (m && (m.name || m.label)) {
+      byKey.set(m.name || m.label, m);
+    }
+  }
+  return headerMetrics.map((h) => {
+    const key = h.name || h.label;
+    const found = byKey.get(key);
+    if (found) {
+      return found;
+    }
+    return {
+      name: h.name,
+      label: h.label,
+      not_applicable: true,
+      current: null,
+      baseline: null,
+      delta: 0,
+      polarity: h.polarity,
+    };
+  });
 }
 
 function isNotApplicable(metric) {
@@ -591,6 +621,7 @@ function setOutput(name, value) {
 
 export {
   DEFAULT_TEST_EXCLUDES,
+  alignFileMetrics,
   collectThresholdViolations,
   formatMetricCell,
   isNotApplicable,
