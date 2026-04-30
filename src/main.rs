@@ -222,8 +222,13 @@ fn run_analyze(opts: AnalyzeOpts) {
     };
 
     let output_is_dir = opts.output.as_ref().map(|p| p.is_dir()).unwrap_or(false);
-    if opts.metrics && opts.output.is_some() && !output_is_dir {
+    if opts.metrics && opts.output_format.is_some() && opts.output.is_some() && !output_is_dir {
         log::error!("The output parameter must be a directory");
+        process::exit(1);
+    }
+
+    if opts.output.is_some() && (!opts.metrics || opts.output_format.is_none()) {
+        log::error!("--output is only supported together with --metrics and --output-format");
         process::exit(1);
     }
 
