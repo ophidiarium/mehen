@@ -17,8 +17,6 @@ mod output;
 
 mod spaces;
 
-mod ops;
-
 mod find;
 
 mod function;
@@ -37,8 +35,6 @@ mod traits;
 
 mod parser;
 
-mod comment_rm;
-
 mod formats;
 
 mod ci;
@@ -54,15 +50,13 @@ use std::thread::available_parallelism;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use crate::comment_rm::{CommentRm, CommentRmCfg};
 use crate::concurrent_files::{ConcurrentRunner, FilesData};
 use crate::count::{Count, CountCfg};
 use crate::diff::DiffOpts;
 use crate::find::{Find, FindCfg};
 use crate::formats::Format;
 use crate::function::{Function, FunctionCfg};
-use crate::langs::{LANG, action, get_from_ext, get_function_spaces, get_ops};
-use crate::ops::{OpsCfg, OpsCode};
+use crate::langs::{LANG, action, get_from_ext, get_function_spaces};
 use crate::output::{Dump, DumpCfg};
 use crate::spaces::{Metrics, MetricsCfg};
 use crate::tools::{guess_language, read_file_with_eol};
@@ -70,14 +64,11 @@ use crate::tools::{guess_language, read_file_with_eol};
 #[derive(Debug)]
 struct Config {
     dump: bool,
-    in_place: bool,
-    comments: bool,
     find_filter: Vec<String>,
     count_filter: Vec<String>,
     language: Option<LANG>,
     function: bool,
     metrics: bool,
-    ops: bool,
     output_format: Option<Format>,
     output: Option<PathBuf>,
     pretty: bool,
@@ -132,23 +123,6 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
             let path = cfg.path.clone();
             action::<Metrics>(&language, source, &path, None, cfg)
         }
-    } else if cfg.ops {
-        if let Some(output_format) = &cfg.output_format {
-            let ops = get_ops(&language, source, &path, None).unwrap();
-            output_format.dump_formats(ops, path, cfg.output.as_ref(), cfg.pretty);
-            Ok(())
-        } else {
-            let cfg = OpsCfg { path };
-            let path = cfg.path.clone();
-            action::<OpsCode>(&language, source, &path, None, cfg)
-        }
-    } else if cfg.comments {
-        let cfg = CommentRmCfg {
-            in_place: cfg.in_place,
-            path,
-        };
-        let path = cfg.path.clone();
-        action::<CommentRm>(&language, source, &path, None, cfg)
     } else if cfg.function {
         let cfg = FunctionCfg { path: path.clone() };
         action::<Function>(&language, source, &path, None, cfg)
@@ -195,9 +169,6 @@ struct AnalyzeOpts {
     /// Output AST to stdout.
     #[clap(long, short)]
     dump: bool,
-    /// Remove comments in the specified files.
-    #[clap(long, short)]
-    comments: bool,
     /// Find nodes of the given type.
     #[clap(long, short, number_of_values = 1)]
     find: Vec<String>,
@@ -210,12 +181,6 @@ struct AnalyzeOpts {
     /// Compute different metrics.
     #[clap(long, short)]
     metrics: bool,
-    /// Retrieve all operands and operators in a code.
-    #[clap(long, conflicts_with = "metrics")]
-    ops: bool,
-    /// Do action in place.
-    #[clap(long, short)]
-    in_place: bool,
     /// Glob to include files.
     #[clap(long, short = 'I', num_args(0..))]
     include: Vec<String>,
@@ -257,8 +222,13 @@ fn run_analyze(opts: AnalyzeOpts) {
     };
 
     let output_is_dir = opts.output.as_ref().map(|p| p.is_dir()).unwrap_or(false);
-    if (opts.metrics || opts.ops) && opts.output.is_some() && !output_is_dir {
+    if opts.metrics && opts.output_format.is_some() && opts.output.is_some() && !output_is_dir {
         log::error!("The output parameter must be a directory");
+        process::exit(1);
+    }
+
+    if opts.output.is_some() && (!opts.metrics || opts.output_format.is_none()) {
+        log::error!("--output is only supported together with --metrics and --output-format");
         process::exit(1);
     }
 
@@ -286,14 +256,11 @@ fn run_analyze(opts: AnalyzeOpts) {
 
     let cfg = Config {
         dump: opts.dump,
-        in_place: opts.in_place,
-        comments: opts.comments,
         find_filter: opts.find,
         count_filter: opts.count,
         language,
         function: opts.function,
         metrics: opts.metrics,
-        ops: opts.ops,
         output_format: opts.output_format,
         pretty: opts.pretty,
         output: opts.output.clone(),

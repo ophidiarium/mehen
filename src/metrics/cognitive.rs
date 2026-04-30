@@ -646,6 +646,35 @@ mod tests {
     }
 
     #[test]
+    fn python_nested_if_in_else_is_not_else_if() {
+        // Python has no `else if`; `elif` is a dedicated grammar node. A plain
+        // `if` inside an `else:` block must therefore be counted as a nested
+        // `if`, not skipped as else-if. This verifies that `is_else_if = false`
+        // for Python is correct.
+        check_metrics::<PythonParser>(
+            "def f(a, b):
+                if a:          # +1
+                    pass
+                else:          # +1 else
+                    if b:      # +2 (+1 if, +1 nesting)
+                        pass",
+            "foo.py",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
     fn python_elif_function() {
         // Boolean expressions containing `And` and `Or` operators were not
         // considered in `elif` statements

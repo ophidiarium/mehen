@@ -4,7 +4,6 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{GoCode, LANG, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::macros::implement_metric_trait;
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
 
@@ -29,6 +28,11 @@ pub(crate) struct Stats {
     interface_wmc_sum: f64,
     space_kind: SpaceKind,
     not_applicable: bool,
+    /// True once any class-like or interface-like space has been observed
+    /// anywhere in the subtree being aggregated. Tracked separately from the
+    /// numeric sums so an *empty* class (no methods, sum = 0.0) still keeps
+    /// unit-level `wmc` visible.
+    has_class_like: bool,
 }
 
 impl Serialize for Stats {
@@ -62,11 +66,13 @@ impl Stats {
         use SpaceKind::*;
 
         // Merges the cyclomatic complexity of a method
-        // into the `Wmc` metric value of a class or interface
+        // into the `Wmc` metric value of a class or interface.
+        // Rust `impl` blocks are class-like for this purpose, and `trait`
+        // blocks are interface-like.
         if other.space_kind == Function {
             match self.space_kind {
-                Class => self.class_wmc += other.cyclomatic,
-                Interface => self.interface_wmc += other.cyclomatic,
+                Class | Impl => self.class_wmc += other.cyclomatic,
+                Interface | Trait => self.interface_wmc += other.cyclomatic,
                 _ => {}
             }
         }
@@ -74,6 +80,7 @@ impl Stats {
         self.class_wmc_sum += other.class_wmc_sum;
         self.interface_wmc_sum += other.interface_wmc_sum;
         self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
     }
 
     /// Returns the sum of the `Wmc` metric values of the classes in a space.
@@ -105,7 +112,17 @@ impl Stats {
     // Checks if the `Wmc` metric is disabled
     #[inline(always)]
     pub(crate) fn is_disabled(&self) -> bool {
-        self.not_applicable || matches!(self.space_kind, SpaceKind::Function | SpaceKind::Unknown)
+        if self.not_applicable {
+            return true;
+        }
+        match self.space_kind {
+            SpaceKind::Function | SpaceKind::Unknown => true,
+            // A unit-level space only reports aggregated WMC if there are
+            // class-like spaces inside. Use the explicit presence flag so an
+            // empty class / trait / impl (sum = 0) is not hidden as "noise".
+            SpaceKind::Unit => !self.has_class_like,
+            _ => false,
+        }
     }
 
     /// Marks this metric as not applicable to the current language so it is
@@ -121,6 +138,21 @@ impl Stats {
     pub(crate) fn applies_to(lang: LANG) -> bool {
         !matches!(lang, LANG::Go)
     }
+
+    /// Records the kind of the enclosing space. Also flags the stats as
+    /// having observed a class-like space if applicable, so unit-level
+    /// aggregation can distinguish "no classes" from "classes with no
+    /// counted methods".
+    #[inline(always)]
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
+        self.space_kind = kind;
+        if matches!(
+            kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            self.has_class_like = true;
+        }
+    }
 }
 
 pub(crate) trait Wmc
@@ -130,12 +162,183 @@ where
     fn compute(space_kind: SpaceKind, cyclomatic: &cyclomatic::Stats, stats: &mut Stats);
 }
 
-implement_metric_trait!(
-    Wmc,
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    GoCode,
-    RubyCode
-);
+macro_rules! impl_wmc {
+    ($($code:ident),+) => (
+        $(
+           impl Wmc for $code {
+               fn compute(
+                   space_kind: SpaceKind,
+                   cyclomatic: &cyclomatic::Stats,
+                   stats: &mut Stats,
+               ) {
+                   stats.set_space_kind(space_kind);
+                   if matches!(space_kind, SpaceKind::Function) {
+                       stats.cyclomatic = cyclomatic.cyclomatic();
+                   }
+               }
+           }
+        )+
+    );
+}
+
+impl_wmc!(PythonCode, TypescriptCode, TsxCode, RustCode, RubyCode);
+
+// Go has no class-like constructs; WMC is not applicable.
+impl Wmc for GoCode {
+    fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::tools::check_metrics;
+
+    #[test]
+    fn python_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<PythonParser>(
+            "class C:
+                 def a(self, x):
+                     if x:
+                         return 1
+                     return 0
+                 def b(self, x):
+                     return x",
+            "foo.py",
+            |metric| {
+                // class wmc = method_a cyclomatic (2) + method_b cyclomatic (1) = 3
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<TypescriptParser>(
+            "class C {
+                 a(x: number) {
+                     if (x) { return 1; }
+                     return 0;
+                 }
+                 b() { return 1; }
+             }",
+            "foo.ts",
+            |metric| {
+                // class C: method a (cyc 2) + method b (cyc 1) = 3
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_wmc_impl_sums_function_cyclomatics() {
+        check_metrics::<RustParser>(
+            "struct S;
+             impl S {
+                 fn a(&self, x: bool) -> u32 {
+                     if x { 1 } else { 0 }
+                 }
+                 fn b(&self) -> u32 { 1 }
+             }",
+            "foo.rs",
+            |metric| {
+                // impl S: a cyc=2, b cyc=1 -> classes = 3
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_wmc_empty_class_still_emitted() {
+        // An empty class has no methods, so the sum is zero. `wmc` must
+        // still be reported at the unit because the file *is* class-oriented.
+        check_metrics::<PythonParser>(
+            "class C:
+                 pass",
+            "foo.py",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "total": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_wmc_empty_impl_still_emitted() {
+        // An `impl` block with no functions sums to zero but is still a
+        // class-like space; the metric must remain visible at the unit.
+        check_metrics::<RustParser>(
+            "struct S;
+             impl S {}",
+            "foo.rs",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "total": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<RubyParser>(
+            "class C
+                 def a(x)
+                     return 1 if x
+                     return 0
+                 end
+                 def b
+                     1
+                 end
+             end",
+            "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+}

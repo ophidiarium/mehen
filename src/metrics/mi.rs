@@ -144,12 +144,13 @@ mod tests {
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.mi,
-                    @r###"
-                    {
-                      "mi_original": 151.2033158832232,
-                      "mi_sei": 142.64306171748976,
-                      "mi_visual_studio": 88.42299174457497
-                    }"###
+                    @r#"
+                {
+                  "mi_original": 146.56146936754593,
+                  "mi_sei": 135.94629276875443,
+                  "mi_visual_studio": 85.70846161844791
+                }
+                "#
                 );
             },
         );
