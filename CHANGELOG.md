@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.1](https://github.com/ophidiarium/mehen/compare/v0.0.6...v0.1.1) (2026-04-30)
+
+
+### Features
+
+* **action:** retitle comment, add ABC default, auto-exclude tests ([#60](https://github.com/ophidiarium/mehen/issues/60)) ([fb470d6](https://github.com/ophidiarium/mehen/commit/fb470d6772c5e46e88ead129e14871ca54afd944))
+* add Ruby language support ([#57](https://github.com/ophidiarium/mehen/issues/57)) ([fb8d53c](https://github.com/ophidiarium/mehen/commit/fb8d53cca1d88a916a15e0d2e9e9297df2f8c145))
+* align Go metrics with language semantics ([#59](https://github.com/ophidiarium/mehen/issues/59)) ([ae3cf53](https://github.com/ophidiarium/mehen/commit/ae3cf53684e78e717457c9edee9b4eaa29640587))
+
+
+### Miscellaneous Chores
+
+* release 0.1.1 ([03018d7](https://github.com/ophidiarium/mehen/commit/03018d76f4978f8e219b93b0c2f625c3f7b922d7))
+
 ## [0.0.6](https://github.com/ophidiarium/mehen/compare/v0.0.5...v0.0.6) (2026-04-25)
 
 
