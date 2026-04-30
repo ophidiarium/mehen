@@ -177,6 +177,17 @@ impl Cyclomatic for GoCode {
             If | For | ExpressionCase | TypeCase | CommunicationCase | AMPAMP | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
+            // `default_case` is shared between switch and select in the Go
+            // grammar. In switch it is fallthrough (no branch), but in
+            // `select` the default branch is an additional executable path
+            // and should count as a decision point.
+            DefaultCase
+                if node
+                    .parent()
+                    .is_some_and(|p| p.kind_id() == SelectStatement as u16) =>
+            {
+                stats.cyclomatic += 1.;
+            }
             _ => {}
         }
     }
@@ -391,6 +402,37 @@ mod tests {
                       "average": 2.5,
                       "min": 1.0,
                       "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_select_default_counts() {
+        // `default` in a `switch` is fallthrough and should NOT count,
+        // but `default` in a `select` is an additional executable
+        // communication branch and SHOULD count.
+        check_metrics::<GoParser>(
+            "package main
+
+            func f(ch chan int) { // +2 (+1 unit space)
+                select { // +1 CommunicationCase
+                case v := <-ch:
+                    _ = v
+                default: // +1 default branch of select
+                }
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 2.0,
+                      "min": 1.0,
+                      "max": 3.0
                     }"###
                 );
             },
