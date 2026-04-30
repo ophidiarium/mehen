@@ -428,6 +428,11 @@ impl Cognitive for GoCode {
             Else /* else-if also */ => {
                 increment_by_one(stats);
             }
+            ExpressionStatement | SendStatement | ReceiveStatement | IncStatement
+            | DecStatement | AssignmentStatement | ShortVarDeclaration | VarSpec | ConstSpec
+            | ReturnStatement => {
+                stats.boolean_seq.reset();
+            }
             UnaryExpression => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
@@ -1355,6 +1360,58 @@ mod tests {
                       "average": 2.0,
                       "min": 0.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_logical_operator_sequences_reset_between_statements() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f(a, b, c, d bool) {
+                _ = a && b
+                _ = c && d
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_logical_operator_sequences_reset_between_declaration_specs() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func f(a, b, c, d bool) {
+                var x = a && b
+                var y = c && d
+                const p = true && false
+                const q = false && true
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
                     }"###
                 );
             },

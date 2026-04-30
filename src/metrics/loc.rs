@@ -731,13 +731,18 @@ impl Loc for GoCode {
             // LLOC: count statements
             ExpressionStatement
             | SendStatement
+            | ReceiveStatement
             | IncStatement
             | DecStatement
             | AssignmentStatement
             | ShortVarDeclaration
-            | VarDeclaration
-            | ConstDeclaration
-            | TypeDeclaration
+            | ImportSpec
+            | VarSpec
+            | ConstSpec
+            | TypeSpec
+            | EmptyStatement
+            | LabeledStatement
+            | LabeledStatement2
             | GoStatement
             | DeferStatement
             | ReturnStatement
@@ -1968,6 +1973,58 @@ mod tests {
                       "ploc_max": 7.0,
                       "lloc_min": 4.0,
                       "lloc_max": 4.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_lloc_counts_go_declaration_specs_and_receive_statements() {
+        check_metrics::<GoParser>(
+            "package main
+
+            import (
+                \"fmt\"
+                _ \"net/http\"
+            )
+
+            var (
+                a = 1
+                b = 2
+            )
+
+            func main(ch chan int) {
+            Loop:
+                <-ch
+                fmt.Println(a, b)
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 17.0,
+                      "ploc": 14.0,
+                      "lloc": 7.0,
+                      "cloc": 0.0,
+                      "blank": 3.0,
+                      "sloc_average": 8.5,
+                      "ploc_average": 7.0,
+                      "lloc_average": 3.5,
+                      "cloc_average": 0.0,
+                      "blank_average": 1.5,
+                      "sloc_min": 5.0,
+                      "sloc_max": 5.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 5.0,
+                      "ploc_max": 5.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###

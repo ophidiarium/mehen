@@ -355,7 +355,7 @@ impl Checker for GoCode {
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
-            Go::SourceFile | Go::FunctionDeclaration | Go::MethodDeclaration
+            Go::SourceFile | Go::FunctionDeclaration | Go::MethodDeclaration | Go::FuncLiteral
         )
     }
 

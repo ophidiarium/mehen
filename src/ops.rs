@@ -336,6 +336,53 @@ mod tests {
     }
 
     #[test]
+    fn go_method_selector_ops() {
+        check_ops(
+            LANG::Go,
+            "package main
+             func (h *Handler) ServeHTTP() {
+                 h.count++
+                 fmt.Println(h.count)
+             }",
+            "foo.go",
+            &mut ["package", "func", "*", "()", "{}", ".", "++"],
+            &mut [
+                "main",
+                "Handler",
+                "ServeHTTP",
+                "h",
+                "count",
+                "fmt",
+                "Println",
+            ],
+        );
+    }
+
+    #[test]
+    fn go_type_constraint_ops_do_not_include_composite_operand() {
+        check_ops(
+            LANG::Go,
+            "package main
+             func identity[T interface{ ~int | string }](v T) T {
+                 return v
+             }",
+            "foo.go",
+            &mut [
+                "package",
+                "func",
+                "[]",
+                "interface",
+                "{}",
+                "~",
+                "|",
+                "()",
+                "return",
+            ],
+            &mut ["main", "identity", "T", "int", "string", "v"],
+        );
+    }
+
+    #[test]
     fn typescript_ops() {
         check_ops(
             LANG::Typescript,
