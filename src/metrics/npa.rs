@@ -24,6 +24,10 @@ pub(crate) struct Stats {
     interface_na_sum: usize,
     space_kind: SpaceKind,
     not_applicable: bool,
+    /// True once any class-like or interface-like space has been observed in
+    /// the subtree being aggregated. Kept separate from the numeric sums so
+    /// an empty class (no attributes) still keeps unit-level `npa` visible.
+    has_class_like: bool,
 }
 
 impl Serialize for Stats {
@@ -71,6 +75,7 @@ impl Stats {
         self.class_na_sum += other.class_na_sum;
         self.interface_na_sum += other.interface_na_sum;
         self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
     }
 
     /// Increments the attribute counters on the enclosing class/interface
@@ -197,7 +202,9 @@ impl Stats {
         }
         match self.space_kind {
             SpaceKind::Function | SpaceKind::Unknown => true,
-            SpaceKind::Unit => self.class_na_sum == 0 && self.interface_na_sum == 0,
+            // Use the presence flag — an empty class (no attributes) is
+            // still class-like and should keep `npa` visible at the unit.
+            SpaceKind::Unit => !self.has_class_like,
             _ => false,
         }
     }
@@ -216,11 +223,19 @@ impl Stats {
         !matches!(lang, LANG::Go)
     }
 
-    /// Records the kind of the enclosing space so `merge` can route
-    /// class/interface attribute counts into the right bucket.
+    /// Records the kind of the enclosing space. Also flags the stats as
+    /// having observed a class-like space if applicable, so unit-level
+    /// aggregation can distinguish "no classes" from "classes with no
+    /// counted attributes".
     #[inline(always)]
     pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
         self.space_kind = kind;
+        if matches!(
+            kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            self.has_class_like = true;
+        }
     }
 }
 

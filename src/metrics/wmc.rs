@@ -28,6 +28,11 @@ pub(crate) struct Stats {
     interface_wmc_sum: f64,
     space_kind: SpaceKind,
     not_applicable: bool,
+    /// True once any class-like or interface-like space has been observed
+    /// anywhere in the subtree being aggregated. Tracked separately from the
+    /// numeric sums so an *empty* class (no methods, sum = 0.0) still keeps
+    /// unit-level `wmc` visible.
+    has_class_like: bool,
 }
 
 impl Serialize for Stats {
@@ -75,6 +80,7 @@ impl Stats {
         self.class_wmc_sum += other.class_wmc_sum;
         self.interface_wmc_sum += other.interface_wmc_sum;
         self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
     }
 
     /// Returns the sum of the `Wmc` metric values of the classes in a space.
@@ -112,8 +118,9 @@ impl Stats {
         match self.space_kind {
             SpaceKind::Function | SpaceKind::Unknown => true,
             // A unit-level space only reports aggregated WMC if there are
-            // class-like spaces inside. Otherwise the metric is noise.
-            SpaceKind::Unit => self.class_wmc_sum == 0.0 && self.interface_wmc_sum == 0.0,
+            // class-like spaces inside. Use the explicit presence flag so an
+            // empty class / trait / impl (sum = 0) is not hidden as "noise".
+            SpaceKind::Unit => !self.has_class_like,
             _ => false,
         }
     }
@@ -130,6 +137,21 @@ impl Stats {
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
         !matches!(lang, LANG::Go)
+    }
+
+    /// Records the kind of the enclosing space. Also flags the stats as
+    /// having observed a class-like space if applicable, so unit-level
+    /// aggregation can distinguish "no classes" from "classes with no
+    /// counted methods".
+    #[inline(always)]
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
+        self.space_kind = kind;
+        if matches!(
+            kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            self.has_class_like = true;
+        }
     }
 }
 
@@ -149,7 +171,7 @@ macro_rules! impl_wmc {
                    cyclomatic: &cyclomatic::Stats,
                    stats: &mut Stats,
                ) {
-                   stats.space_kind = space_kind;
+                   stats.set_space_kind(space_kind);
                    if matches!(space_kind, SpaceKind::Function) {
                        stats.cyclomatic = cyclomatic.cyclomatic();
                    }
@@ -243,6 +265,50 @@ mod tests {
                       "classes": 3.0,
                       "interfaces": 0.0,
                       "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_wmc_empty_class_still_emitted() {
+        // An empty class has no methods, so the sum is zero. `wmc` must
+        // still be reported at the unit because the file *is* class-oriented.
+        check_metrics::<PythonParser>(
+            "class C:
+                 pass",
+            "foo.py",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "total": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_wmc_empty_impl_still_emitted() {
+        // An `impl` block with no functions sums to zero but is still a
+        // class-like space; the metric must remain visible at the unit.
+        check_metrics::<RustParser>(
+            "struct S;
+             impl S {}",
+            "foo.rs",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "total": 0.0
                     }"###
                 );
             },

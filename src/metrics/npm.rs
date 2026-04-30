@@ -42,6 +42,11 @@ pub(crate) struct Stats {
     /// Classification of *this* function-space, set when `Npm::compute`
     /// recognises the node that opens the space as a method.
     method_role: MethodRole,
+    /// True once any class-like or interface-like space has been observed in
+    /// the subtree being aggregated. Kept separate from the numeric sums so
+    /// an empty class / interface (no methods) still keeps unit-level `npm`
+    /// visible.
+    has_class_like: bool,
 }
 
 impl Serialize for Stats {
@@ -113,6 +118,7 @@ impl Stats {
         self.class_nm_sum += other.class_nm_sum;
         self.interface_nm_sum += other.interface_nm_sum;
         self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
     }
 
     /// Returns the number of class public methods sum in a space.
@@ -217,7 +223,9 @@ impl Stats {
         }
         match self.space_kind {
             SpaceKind::Function | SpaceKind::Unknown => true,
-            SpaceKind::Unit => self.class_nm_sum == 0 && self.interface_nm_sum == 0,
+            // Use the presence flag — an empty class / interface (no methods)
+            // is still class-like and should keep `npm` visible at the unit.
+            SpaceKind::Unit => !self.has_class_like,
             _ => false,
         }
     }
@@ -236,11 +244,19 @@ impl Stats {
         !matches!(lang, LANG::Go)
     }
 
-    /// Records the kind of the enclosing space so `merge` can route
-    /// class/interface method counts into the right bucket.
+    /// Records the kind of the enclosing space. Also flags the stats as
+    /// having observed a class-like space if applicable, so unit-level
+    /// aggregation can distinguish "no classes" from "classes with no
+    /// counted methods".
     #[inline(always)]
     pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
         self.space_kind = kind;
+        if matches!(
+            kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            self.has_class_like = true;
+        }
     }
 }
 
