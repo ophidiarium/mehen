@@ -248,7 +248,12 @@ impl Cognitive for PythonCode {
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
         match node.kind_id().into() {
-            IfStatement | ForStatement | WhileStatement | TryStatement | ConditionalExpression => {
+            IfStatement
+            | ForStatement
+            | WhileStatement
+            | TryStatement
+            | ExceptClause
+            | ConditionalExpression => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             ElifClause => {
@@ -262,10 +267,6 @@ impl Cognitive for PythonCode {
                 // No nesting increment for them because their cost has already
                 // been paid by the if construct
                 increment_by_one(stats);
-            }
-            ExceptClause => {
-                nesting += 1;
-                increment(stats);
             }
             ExpressionList | ExpressionStatement | Tuple => {
                 stats.boolean_seq.reset();
