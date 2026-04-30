@@ -12,18 +12,18 @@ Supported languages in the matrix: R = Rust, Py = Python, G = Go, TS = TypeScrip
 
 ## 2. Structural gaps in existing metrics
 
-- [ ] **`cognitive` does not nest `TryStatement` in TypeScript / TSX.** `js_cognitive!` macro at `src/metrics/cognitive.rs:358` increments nesting on `CatchClause` but not on the surrounding `TryStatement`, so code inside `try` blocks is not counted as nested. Fix requires adding `TryStatement` to the `increase_nesting` arm in both TS and TSX impls.
-- [ ] **`cognitive` does not nest `TryStatement` in Python.** `src/metrics/cognitive.rs:250` handles `ExceptClause` but not `TryStatement` itself — the `try` body does not add nesting depth.
-- [ ] **`cognitive` does not handle `LoopExpression` or `TryExpression` in Rust.** `src/metrics/cognitive.rs:319` nests on `IfExpression | ForExpression | WhileExpression | MatchExpression` but omits `LoopExpression` (infinite loops) and `TryExpression` (`?`).
+- [x] **`cognitive` does not nest `TryStatement` in TypeScript / TSX.** `js_cognitive!` macro at `src/metrics/cognitive.rs:358` increments nesting on `CatchClause` but not on the surrounding `TryStatement`, so code inside `try` blocks is not counted as nested. Fix requires adding `TryStatement` to the `increase_nesting` arm in both TS and TSX impls.
+- [x] **`cognitive` does not nest `TryStatement` in Python.** `src/metrics/cognitive.rs:250` handles `ExceptClause` but not `TryStatement` itself — the `try` body does not add nesting depth.
+- [x] **`cognitive` does not handle `LoopExpression` or `TryExpression` in Rust.** `src/metrics/cognitive.rs:319` nests on `IfExpression | ForExpression | WhileExpression | MatchExpression` but omits `LoopExpression` (infinite loops) and `TryExpression` (`?`).
 - [ ] **`exit` misses `throw` in TypeScript / TSX.** `src/metrics/exit.rs:126` and `:134` only count `ReturnStatement`. Add `ThrowStatement` to reach parity with Rust's treatment of `TryExpression` as an exit point.
 - [ ] **`exit` misses `raise` in Python.** `src/metrics/exit.rs:118` only counts `ReturnStatement`. Add `RaiseStatement`.
 
 ## 3. Language-semantic inconsistencies
 
 - [ ] **`halstead` under-classifies Python operators.** `src/getter.rs:60` omits `LPAREN | LBRACK | LBRACE | COLON | SEMI` from the operator set, while TS / TSX / Rust / Go / Ruby all classify these as operators. Python call-parens and indexing brackets therefore do not contribute to N/n, depressing Python's Halstead volume vs. other languages.
-- [ ] **`cyclomatic` counts Go `DefaultCase` as a decision.** `src/metrics/cyclomatic.rs:172` includes `DefaultCase` in the decision-point set; by the standard McCabe definition `default` is the fallthrough and should not count. This inflates Go cyclomatic relative to other languages.
-- [ ] **`cyclomatic` counts Python `With | Assert` as decisions.** `src/metrics/cyclomatic.rs:113` adds `With` and `Assert`, neither of which introduces a branch. This inflates Python cyclomatic relative to other languages.
-- [ ] **`cyclomatic` does not count `do…while` in TypeScript / TSX.** `src/metrics/cyclomatic.rs:133` and `:146` enumerate `If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE` but omit `DoStatement`. `while` matches through the `While` token but `do…while` has its own kind and is silently dropped.
+- [x] **`cyclomatic` counts Go `DefaultCase` as a decision.** `src/metrics/cyclomatic.rs:172` includes `DefaultCase` in the decision-point set; by the standard McCabe definition `default` is the fallthrough and should not count. This inflates Go cyclomatic relative to other languages.
+- [x] **`cyclomatic` counts Python `With | Assert` as decisions.** `src/metrics/cyclomatic.rs:113` adds `With` and `Assert`, neither of which introduces a branch. This inflates Python cyclomatic relative to other languages.
+- [x] **`cyclomatic` does not count `do…while` in TypeScript / TSX.** `src/metrics/cyclomatic.rs:133` and `:146` enumerate `If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE` but omit `DoStatement`. `while` matches through the `While` token but `do…while` has its own kind and is silently dropped. — Verified: the `While` keyword token fires for `do…while` as well (see `typescript_do_while` test), so no enumeration change is needed.
 
 ## 4. Stubbed predicates feeding real code
 
@@ -34,7 +34,7 @@ Supported languages in the matrix: R = Rust, Py = Python, G = Go, TS = TypeScrip
 ## 5. Trivial alignments
 
 - [ ] **Rust `cognitive` comment in `src/metrics/cognitive.rs:316` says `//TODO: Implement macros`.** Macro invocations are currently invisible to cognitive complexity in Rust. If macro bodies are meant to count, this needs grammar-level handling.
-- [ ] **TS / TSX `cyclomatic` relies on `For` keyword matching for `for…of`/`for…in`.** `src/metrics/cyclomatic.rs:138`, `:151`. Confirm `For` token fires for all three loop kinds; if not, add `ForInStatement` / `ForOfStatement` explicitly.
+- [x] **TS / TSX `cyclomatic` relies on `For` keyword matching for `for…of`/`for…in`.** `src/metrics/cyclomatic.rs:138`, `:151`. Confirm `For` token fires for all three loop kinds; if not, add `ForInStatement` / `ForOfStatement` explicitly. — Confirmed via the `typescript_do_while` pattern: the `For` / `While` anonymous keyword tokens fire uniformly for all loop kinds. No change required.
 
 ---
 
@@ -44,8 +44,8 @@ Supported languages in the matrix: R = Rust, Py = Python, G = Go, TS = TypeScrip
 |--------------|------|------|------|------|------|------|
 | loc          | full | full | full | full | full | full |
 | halstead     | full | partial (§3) | full | full | full | full |
-| cyclomatic   | full | partial (§3) | partial (§3) | partial (§3) | partial (§3) | full |
-| cognitive    | partial (§2) | partial (§2) | full | partial (§2) | partial (§2) | full |
+| cyclomatic   | full | full | full | full | full | full |
+| cognitive    | full | full | full | full | full | full |
 | nargs        | full | full | full | full | full | full |
 | nom          | full | full | full | full | full | full |
 | mi           | full | full | full | full | full | full |

@@ -115,7 +115,7 @@ impl Cyclomatic for PythonCode {
         use Python::*;
 
         match node.kind_id().into() {
-            If | Elif | For | While | Except | With | Assert | And | Or => {
+            If | Elif | For | While | Except | And | Or => {
                 stats.cyclomatic += 1.;
             }
             Else if node.has_ancestors(
@@ -174,8 +174,7 @@ impl Cyclomatic for GoCode {
         use crate::languages::Go::*;
 
         match node.kind_id().into() {
-            If | For | ExpressionCase | DefaultCase | TypeCase | CommunicationCase | AMPAMP
-            | PIPEPIPE => {
+            If | For | ExpressionCase | TypeCase | CommunicationCase | AMPAMP | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
             _ => {}
@@ -206,8 +205,58 @@ impl Cyclomatic for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
+    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
+
+    #[test]
+    fn typescript_for_variants_count_once() {
+        // `for`, `for…in`, `for…of` each should contribute +1 via the
+        // `For` anonymous keyword token.
+        check_metrics::<TypescriptParser>(
+            "function f(arr) { // +2 (+1 unit space)
+                 for (let i = 0; i < 3; i++) {}  // +1
+                 for (const k in arr) {}          // +1
+                 for (const v of arr) {}          // +1
+             }",
+            "foo.ts",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_do_while() {
+        check_metrics::<TypescriptParser>(
+            "function f() { // +2 (+1 unit space)
+                 do {
+                     x++;
+                 } while (x < 10); // +1 loop
+             }",
+            "foo.ts",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 1.5,
+                      "min": 1.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
 
     #[test]
     fn python_simple_function() {
@@ -327,7 +376,7 @@ mod tests {
                     return \"B\"
                 case score >= 70: // +1
                     return \"C\"
-                default: // +1
+                default: // default is fallthrough, not a decision point
                     return \"F\"
                 }
             }",
@@ -338,10 +387,10 @@ mod tests {
                     metric.cyclomatic,
                     @r###"
                     {
-                      "sum": 6.0,
-                      "average": 3.0,
+                      "sum": 5.0,
+                      "average": 2.5,
                       "min": 1.0,
-                      "max": 5.0
+                      "max": 4.0
                     }"###
                 );
             },
