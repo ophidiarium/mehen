@@ -5,6 +5,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::checker::Checker;
+use crate::langs::LANG;
 use crate::node::Node;
 
 use crate::getter::Getter;
@@ -105,6 +106,21 @@ impl fmt::Display for CodeMetrics {
 }
 
 impl CodeMetrics {
+    /// Applies per-language applicability rules to the metrics, marking any
+    /// metric that does not make sense for the given language as disabled so
+    /// it is omitted from output (rather than serialized as a measured zero).
+    pub(crate) fn apply_language_rules(&mut self, lang: LANG) {
+        if !wmc::Stats::applies_to(lang) {
+            self.wmc.mark_not_applicable();
+        }
+        if !npa::Stats::applies_to(lang) {
+            self.npa.mark_not_applicable();
+        }
+        if !npm::Stats::applies_to(lang) {
+            self.npm.mark_not_applicable();
+        }
+    }
+
     pub(crate) fn merge(&mut self, other: &CodeMetrics) {
         self.cognitive.merge(&other.cognitive);
         self.cyclomatic.merge(&other.cyclomatic);
@@ -142,7 +158,7 @@ pub(crate) struct FuncSpace {
 }
 
 impl FuncSpace {
-    fn new<T: Getter>(node: &Node, code: &[u8], kind: SpaceKind) -> Self {
+    fn new<T: Getter>(node: &Node, code: &[u8], kind: SpaceKind, lang: LANG) -> Self {
         let (start_position, end_position) = match kind {
             SpaceKind::Unit => {
                 if node.child_count() == 0 {
@@ -154,11 +170,14 @@ impl FuncSpace {
             _ => (node.start_row() + 1, node.end_row() + 1),
         };
 
+        let mut metrics = CodeMetrics::default();
+        metrics.apply_language_rules(lang);
+
         Self {
             name: T::get_func_space_name(node, code)
                 .map(|name| name.split_whitespace().collect::<Vec<_>>().join(" ")),
             spaces: Vec::new(),
-            metrics: CodeMetrics::default(),
+            metrics,
             kind,
             start_line: start_position,
             end_line: end_position,
@@ -301,7 +320,7 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
 
         let new_level = if func_space {
             let state = State {
-                space: FuncSpace::new::<T::Getter>(&node, code, kind),
+                space: FuncSpace::new::<T::Getter>(&node, code, kind, T::get_lang()),
                 halstead_maps: HalsteadMaps::new(),
             };
             state_stack.push(state);
@@ -372,4 +391,49 @@ impl Callback for Metrics {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::langs::{GoParser, PythonParser};
+    use crate::tools::check_func_space;
+
+    fn collect_metric_keys(json: &serde_json::Value, out: &mut std::collections::BTreeSet<String>) {
+        if let Some(metrics) = json.get("metrics").and_then(|m| m.as_object()) {
+            for k in metrics.keys() {
+                out.insert(k.clone());
+            }
+        }
+        if let Some(spaces) = json.get("spaces").and_then(|s| s.as_array()) {
+            for sub in spaces {
+                collect_metric_keys(sub, out);
+            }
+        }
+    }
+
+    #[test]
+    fn go_omits_class_metrics_everywhere() {
+        check_func_space::<GoParser, _>("package main\nfunc f() {}\n", "foo.go", |space| {
+            let json = serde_json::to_value(&space).unwrap();
+            let mut keys = std::collections::BTreeSet::new();
+            collect_metric_keys(&json, &mut keys);
+            for forbidden in ["wmc", "npm", "npa"] {
+                assert!(
+                    !keys.contains(forbidden),
+                    "Go output should not include `{forbidden}`, got keys: {keys:?}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn python_function_omits_class_metrics() {
+        // `wmc`/`npa`/`npm` are also gated by space kind, so a plain function
+        // space should still omit them even in a class-capable language.
+        check_func_space::<PythonParser, _>("def f():\n    pass\n", "foo.py", |space| {
+            let json = serde_json::to_value(&space).unwrap();
+            let mut keys = std::collections::BTreeSet::new();
+            collect_metric_keys(&json, &mut keys);
+            for forbidden in ["wmc", "npm", "npa"] {
+                assert!(!keys.contains(forbidden));
+            }
+        });
+    }
+}

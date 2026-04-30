@@ -1,10 +1,7 @@
 # CLAUDE.md - AI Assistant Guide for Mehen
 
-This file gives coding assistants fast, current context for this repository.
-
 ## Project Scope
 - `mehen` is a **CLI-only** Rust project.
-- Users consume the binary; do not re-introduce a public library API surface.
 - Keep code changes focused on CLI behavior, correctness, and maintainability.
 
 ## Repository Structure (current)
@@ -25,8 +22,7 @@ Only these are supported:
 - Go
 - TypeScript
 - TSX
-
-Do not reference removed language families from upstream history (Java/Kotlin/C/C++/MozJS/etc.) unless explicitly required for migration context.
+- Ruby
 
 ## Build and Lint
 Run from repo root:

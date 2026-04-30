@@ -139,6 +139,11 @@ impl<
         &self.code
     }
 
+    #[inline(always)]
+    fn get_lang() -> crate::langs::LANG {
+        T::get_lang()
+    }
+
     fn get_filters(&self, filters: &[String]) -> Filter {
         let mut res: Vec<Box<FilterFn>> = Vec::new();
         for f in filters {
