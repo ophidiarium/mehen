@@ -54,9 +54,18 @@ const KNOWN_METRICS: &[MetricDef] = &[
         Polarity::LowerIsBetter,
         |s| s.metrics.halstead.volume(),
     ),
+    ("abc", "ABC", Polarity::LowerIsBetter, |s| {
+        s.metrics.abc.magnitude_sum()
+    }),
 ];
 
-const DEFAULT_METRICS: &[&str] = &["cyclomatic", "cognitive", "nom.functions", "loc.lloc"];
+const DEFAULT_METRICS: &[&str] = &[
+    "cyclomatic",
+    "cognitive",
+    "nom.functions",
+    "loc.lloc",
+    "abc",
+];
 
 fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     let specs: Vec<&str> = if specs.is_empty() {
@@ -141,7 +150,7 @@ pub(crate) struct DiffOpts {
     /// Head revision to compare to.
     #[clap(long)]
     to: Option<String>,
-    /// Comma-separated metrics to compare (default: cyclomatic,cognitive,nom.functions,loc.lloc).
+    /// Comma-separated metrics to compare (default: cyclomatic,cognitive,nom.functions,loc.lloc,abc).
     /// Prefix with + for higher-is-better, - for lower-is-better.
     #[clap(long, short = 'M', value_delimiter = ',')]
     metrics: Vec<String>,
@@ -497,11 +506,12 @@ mod tests {
     #[test]
     fn test_parse_metric_selectors_defaults() {
         let selectors = parse_metric_selectors(&[]);
-        assert_eq!(selectors.len(), 4);
+        assert_eq!(selectors.len(), 5);
         assert_eq!(selectors[0].name, "cyclomatic");
         assert_eq!(selectors[1].name, "cognitive");
         assert_eq!(selectors[2].name, "nom.functions");
         assert_eq!(selectors[3].name, "loc.lloc");
+        assert_eq!(selectors[4].name, "abc");
     }
 
     #[test]

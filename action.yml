@@ -34,6 +34,10 @@ inputs:
     description: "Glob patterns to exclude. Newline, comma, or semicolon separated."
     required: false
     default: ""
+  exclude-tests:
+    description: "Exclude common test-file patterns (e.g. *_test.go, **/__tests__/**, *.spec.ts) in addition to any user-provided excludes."
+    required: false
+    default: "true"
   metrics:
     description: "Comma-separated metrics passed to mehen diff."
     required: false
@@ -69,7 +73,7 @@ inputs:
   comment-title:
     description: "Markdown heading used for the sticky pull request comment."
     required: false
-    default: "## [Mehen](https://github.com/ophidiarium/mehen) Summary"
+    default: "## Source Code Metrics"
 
 outputs:
   violations:
@@ -105,6 +109,7 @@ runs:
         GHA_MEHEN_PATHS: ${{ inputs.paths }}
         GHA_MEHEN_INCLUDE: ${{ inputs.include }}
         GHA_MEHEN_EXCLUDE: ${{ inputs.exclude }}
+        GHA_MEHEN_EXCLUDE_TESTS: ${{ inputs.exclude-tests }}
         GHA_MEHEN_METRICS: ${{ inputs.metrics }}
         GHA_MEHEN_FROM: ${{ inputs.from }}
         GHA_MEHEN_TO: ${{ inputs.to }}
