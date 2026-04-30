@@ -6,6 +6,7 @@ use crate::checker::Checker;
 use crate::langs::{LANG, *};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
+use crate::spaces::SpaceKind;
 
 /// The `Npa` metric.
 ///
@@ -21,7 +22,7 @@ pub(crate) struct Stats {
     interface_npa_sum: usize,
     class_na_sum: usize,
     interface_na_sum: usize,
-    is_class_space: bool,
+    space_kind: SpaceKind,
     not_applicable: bool,
 }
 
@@ -169,7 +170,7 @@ impl Stats {
     // Checks if the `Npa` metric is disabled
     #[inline(always)]
     pub(crate) fn is_disabled(&self) -> bool {
-        self.not_applicable || !self.is_class_space
+        self.not_applicable || matches!(self.space_kind, SpaceKind::Function | SpaceKind::Unknown)
     }
 
     /// Marks this metric as not applicable to the current language so it is
