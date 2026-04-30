@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/ophidiarium/mehen/compare/v0.1.1...v0.2.0) (2026-04-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **metrics:** close class-metric gaps, remove --ops/--comments ([#65](https://github.com/ophidiarium/mehen/issues/65))
+* **diff:** `mehen diff --metrics mi` (and the action's `metrics:` / `thresholds:` keys referencing `mi`, `maintainability`, or `maintainabilityindex`) no longer resolve — pick an explicit variant (`mi.original`, `mi.sei`, `mi.visual_studio`). Users relying on the default automatically get `mi.visual_studio` now.
+
+### Features
+
+* **diff:** split mi into mi.original/mi.sei/mi.visual_studio, default to Visual Studio ([#64](https://github.com/ophidiarium/mehen/issues/64)) ([cb22ed6](https://github.com/ophidiarium/mehen/commit/cb22ed6afd0def04b0f8b9336a95389469fcf361))
+* **metrics:** close class-metric gaps, remove --ops/--comments ([#65](https://github.com/ophidiarium/mehen/issues/65)) ([25a8218](https://github.com/ophidiarium/mehen/commit/25a8218f1c67c7d620f19ddc6f7fb70d7e00c7ab))
+* **metrics:** gate wmc/npa/npm by language applicability ([#61](https://github.com/ophidiarium/mehen/issues/61)) ([975726a](https://github.com/ophidiarium/mehen/commit/975726a87c9ee112da7c4a2385ac687c805abd6a))
+
+
+### Bug Fixes
+
+* **metrics:** align cyclomatic and cognitive with language semantics ([#63](https://github.com/ophidiarium/mehen/issues/63)) ([7425460](https://github.com/ophidiarium/mehen/commit/7425460f91c87c360dee2443878d925b2bce0b4f))
+
 ## [0.1.1](https://github.com/ophidiarium/mehen/compare/v0.0.6...v0.1.1) (2026-04-30)
 
 
