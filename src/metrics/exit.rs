@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `NExit` metric.
@@ -168,6 +168,19 @@ impl Exit for GoCode {
     }
 }
 
+impl Exit for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        // Kotlin wraps `return ...`, `throw ...`, `continue`, `break`, and
+        // their labelled forms in a single `jump_expression` named node. Both
+        // non-local returns from lambdas (`return@label`) and rethrows flow
+        // through the same wrapper, so counting that node alone gives one
+        // entry per source-level exit.
+        if node.kind_id() == Kotlin::JumpExpression {
+            stats.exit += 1;
+        }
+    }
+}
+
 impl Exit for RubyCode {
     fn compute(node: &Node, stats: &mut Stats) {
         // Count language-level exits from a method/closure:
@@ -188,7 +201,9 @@ impl Exit for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -467,6 +482,31 @@ mod tests {
             "foo.ts",
             |metric| {
                 // 1 function, 2 exits (throw + return)
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_return_and_throw_count_as_exits() {
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int): Int {
+                 if (a < 0) {
+                     throw IllegalArgumentException(\"bad\")
+                 }
+                 return a
+             }",
+            "foo.kt",
+            |metric| {
                 insta::assert_json_snapshot!(
                     metric.nexits,
                     @r###"

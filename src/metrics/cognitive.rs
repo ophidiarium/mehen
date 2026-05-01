@@ -5,8 +5,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 // TODO: Find a way to increment the cognitive complexity value
@@ -535,12 +537,66 @@ impl Cognitive for RubyCode {
     }
 }
 
+impl Cognitive for KotlinCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use Kotlin::*;
+
+        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        match node.kind_id().into() {
+            IfExpression if !Self::is_else_if(node) => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            IfExpression => {}
+            ForStatement | WhileStatement | DoWhileStatement | WhenExpression | CatchBlock
+            | TryExpression => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            Else /* else-if also */ => {
+                increment_by_one(stats);
+            }
+            Statement => {
+                stats.boolean_seq.reset();
+            }
+            PrefixExpression => {
+                stats.boolean_seq.not_operator(node.kind_id());
+            }
+            ConjunctionExpression => {
+                compute_booleans::<Kotlin>(node, stats, &AMPAMP, &AMPAMP);
+            }
+            DisjunctionExpression => {
+                compute_booleans::<Kotlin>(node, stats, &PIPEPIPE, &PIPEPIPE);
+            }
+            FunctionDeclaration | AnonymousFunction | SecondaryConstructor => {
+                nesting = 0;
+                lambda = 0;
+                increment_function_depth_any::<Kotlin>(
+                    &mut depth,
+                    node,
+                    &[FunctionDeclaration, AnonymousFunction, SecondaryConstructor],
+                );
+            }
+            LambdaLiteral => {
+                lambda += 1;
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 // No languages require empty Cognitive implementations
 // implement_metric_trait!(Cognitive);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -1646,6 +1702,63 @@ mod tests {
                       "average": 1.0,
                       "min": 0.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_nested_if_increments_nesting() {
+        check_metrics::<KotlinParser>(
+            "fun f(a: Boolean, b: Boolean) {
+                 if (a) {      // +1
+                     if (b) {  // +2 (nesting = 1)
+                         println(\"hi\")
+                     }
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_else_if_counts_as_one() {
+        // `else if` in Kotlin parses as an `if_expression` whose parent is
+        // another `if_expression`. It should NOT increase nesting; only the
+        // `else` keyword adds +1, matching other C-style languages.
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int) {
+                 if (a > 0) {          // +1
+                     println(\"pos\")
+                 } else if (a < 0) {   // +1
+                     println(\"neg\")
+                 } else {              // +1
+                     println(\"zero\")
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
                     }"###
                 );
             },

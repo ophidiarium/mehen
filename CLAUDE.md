@@ -23,6 +23,7 @@ Only these are supported:
 - TypeScript
 - TSX
 - Ruby
+- Kotlin
 
 ## Build and Lint
 Run from repo root:

@@ -1,5 +1,5 @@
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
@@ -294,6 +294,76 @@ impl Getter for GoCode {
             | LabelName | PackageIdentifier | TypeIdentifier | IntLiteral | FloatLiteral
             | ImaginaryLiteral | RuneLiteral | RawStringLiteral | InterpretedStringLiteral | True
             | False | Nil | Iota => HalsteadType::Operand,
+            _ => HalsteadType::Unknown,
+        }
+    }
+}
+
+impl Getter for KotlinCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        use Kotlin::*;
+        match node.kind_id().into() {
+            FunctionDeclaration | AnonymousFunction | LambdaLiteral | SecondaryConstructor
+            | Getter | Setter | AnonymousInitializer => SpaceKind::Function,
+            // Kotlin `interface` uses the same `class_declaration` node, but
+            // is still reported here as a class. Interface-specific metrics
+            // disambiguate by inspecting the `interface` keyword child.
+            ClassDeclaration | ObjectDeclaration | CompanionObject => SpaceKind::Class,
+            SourceFile => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
+        if let Some(name) = node.child_by_field_name("name") {
+            let bytes = &code[name.start_byte()..name.end_byte()];
+            return std::str::from_utf8(bytes).ok();
+        }
+        // Kotlin class/interface/object/fun declarations tag the name as a
+        // plain child (simple_identifier/type_identifier) rather than via a
+        // `name` field.
+        for child in node.children() {
+            if matches!(
+                child.kind_id().into(),
+                Kotlin::SimpleIdentifier | Kotlin::TypeIdentifier | Kotlin::Identifier
+            ) {
+                let bytes = &code[child.start_byte()..child.end_byte()];
+                return std::str::from_utf8(bytes).ok();
+            }
+        }
+        Some("<anonymous>")
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Kotlin::*;
+
+        match node.kind_id().into() {
+            // Keywords and control flow.
+            Fun | Val | Var | Class | Interface | Object | Enum | Data | Sealed | Open
+            | Abstract | Final | Override | Private | Public | Protected | Internal | Inner
+            | Companion | Init | Constructor | Typealias | Import | Package | If | Else | When
+            | Try | Catch | Finally | Throw | Return | Continue | Break | For | While | Do
+            | In | Is | As | AsQMARK | By | Where | Suspend | Inline | Infix | Operator
+            | Tailrec | External | Lateinit | Noinline | Crossinline | Vararg | Out
+            // Assignment / augmented assignment.
+            | EQ | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ
+            // Comparison / arithmetic / logical operators.
+            | PLUS | DASH | STAR | SLASH | PERCENT
+            | AMPAMP | PIPEPIPE | BANG | BANGBANG
+            | LT | GT | LTEQ | GTEQ | EQEQ | BANGEQ | EQEQEQ | BANGEQEQ
+            | BANGin | BANGis
+            | QMARKCOLON | QMARKDOT
+            // Structural punctuation.
+            | LPAREN | LBRACE | LBRACK
+            | DOT | COMMA | SEMI | COLON | COLONCOLON
+            | DASHGT | DOTDOT
+            | PLUSPLUS | DASHDASH => HalsteadType::Operator,
+
+            // Operands: identifiers, literals, this/super, null.
+            SimpleIdentifier | Identifier | TypeIdentifier | IntegerLiteral | HexLiteral
+            | BinLiteral | LongLiteral | RealLiteral | UnsignedLiteral | CharacterLiteral
+            | StringLiteral | True | False | BooleanLiteral | NullLiteral | This
+            | ThisExpression | Super | SuperExpression => HalsteadType::Operand,
             _ => HalsteadType::Unknown,
         }
     }

@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 #[cfg(test)]
 use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
 use crate::languages::Go;
@@ -254,7 +254,8 @@ implement_metric_trait!(
     TypescriptCode,
     TsxCode,
     RustCode,
-    RubyCode
+    RubyCode,
+    KotlinCode
 );
 
 #[cfg(test)]

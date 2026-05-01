@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -476,9 +476,56 @@ impl Npm for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
+/// Whether a Kotlin class-body function is public. Defaults to `public`;
+/// explicit `private`/`protected`/`internal` modifiers override.
+fn kotlin_function_is_public(node: &Node, code: &[u8]) -> bool {
+    for child in node.children() {
+        if child.kind_id() != Kotlin::Modifiers {
+            continue;
+        }
+        for m in child.children() {
+            if m.kind_id() != Kotlin::VisibilityModifier {
+                continue;
+            }
+            let text = &code[m.start_byte()..m.end_byte()];
+            if text == b"private" || text == b"protected" || text == b"internal" {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+impl Npm for KotlinCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if node.kind_id() != Kotlin::FunctionDeclaration {
+            return;
+        }
+        // Direct member of a class body or interface body (both are
+        // `class_body` in the Kotlin grammar).
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        if !matches!(
+            parent.kind_id().into(),
+            Kotlin::ClassBody | Kotlin::EnumClassBody
+        ) {
+            return;
+        }
+        record_method(
+            stats,
+            SpaceKind::Class,
+            kotlin_function_is_public(node, code),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser};
+    use crate::langs::{
+        KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -668,6 +715,39 @@ mod tests {
                   "total": 2.0,
                   "total_methods": 2.0,
                   "average": 1.0
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npm_counts_visibility_modifiers() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 fun a() {}
+                 public fun b() {}
+                 private fun c() {}
+                 protected fun d() {}
+                 internal fun e() {}
+             }",
+            "foo.kt",
+            |metric| {
+                // public: a, b. non-public: c, d, e.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 2.0,
+                  "interfaces": 0.0,
+                  "class_methods": 5.0,
+                  "interface_methods": 0.0,
+                  "classes_average": 0.4,
+                  "interfaces_average": null,
+                  "total": 2.0,
+                  "total_methods": 5.0,
+                  "average": 0.4
                 }
                 "#
                 );

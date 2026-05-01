@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `Cyclomatic` metric.
@@ -211,12 +211,31 @@ impl Cyclomatic for RubyCode {
     }
 }
 
+impl Cyclomatic for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Kotlin::*;
+
+        match node.kind_id().into() {
+            // Decision points: `if`, loops, `catch`, `when` branches, and
+            // short-circuit boolean operators. `when` itself doesn't add —
+            // each `when_entry` branch counts once, like `switch`/`case`.
+            IfExpression | ForStatement | WhileStatement | DoWhileStatement | CatchBlock
+            | WhenEntry | AMPAMP | PIPEPIPE => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 // No languages require empty Cyclomatic implementations
 // implement_metric_trait!(Cyclomatic);
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -512,6 +531,84 @@ mod tests {
                       "average": 2.0,
                       "min": 1.0,
                       "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_simple_function() {
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int, b: Int): Int { // +2 (+1 unit space, +1 fun)
+                 if (a > b) { // +1
+                     return a
+                 }
+                 return b
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 1.5,
+                      "min": 1.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_when_branches_count() {
+        // `when` itself doesn't add; each branch (`when_entry`) does.
+        check_metrics::<KotlinParser>(
+            "fun grade(score: Int): String { // +2 (+1 unit, +1 fun)
+                 return when { // +0
+                     score >= 90 -> \"A\" // +1
+                     score >= 80 -> \"B\" // +1
+                     score >= 70 -> \"C\" // +1
+                     else -> \"F\"       // +1 (else is its own when_entry)
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 3.0,
+                      "min": 1.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_logical_operators() {
+        check_metrics::<KotlinParser>(
+            "fun check(a: Boolean, b: Boolean, c: Boolean): Boolean { // +2
+                 if (a && b || c) { // +3 (+1 if, +1 &&, +1 ||)
+                     return true
+                 }
+                 return false
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
                     }"###
                 );
             },

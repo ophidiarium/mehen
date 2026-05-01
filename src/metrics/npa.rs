@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -457,9 +457,57 @@ impl Npa for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
+/// Whether a Kotlin class-body property is public. Kotlin members default to
+/// `public`; explicit `private`/`protected`/`internal` visibility modifiers
+/// override that default.
+fn kotlin_visibility_is_public(node: &Node, code: &[u8]) -> bool {
+    for child in node.children() {
+        if child.kind_id() != Kotlin::Modifiers {
+            continue;
+        }
+        for m in child.children() {
+            if m.kind_id() != Kotlin::VisibilityModifier {
+                continue;
+            }
+            let text = &code[m.start_byte()..m.end_byte()];
+            if text == b"private" || text == b"protected" || text == b"internal" {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+impl Npa for KotlinCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        if node.kind_id() != Kotlin::PropertyDeclaration {
+            return;
+        }
+        // Must be a direct member of a class/object/interface body, not a
+        // local `val`/`var` inside a function.
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        if !matches!(
+            parent.kind_id().into(),
+            Kotlin::ClassBody | Kotlin::EnumClassBody
+        ) {
+            return;
+        }
+        stats.record_attribute(SpaceKind::Class, kotlin_visibility_is_public(node, code));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -641,6 +689,37 @@ mod tests {
                     }"###
             );
         });
+    }
+
+    #[test]
+    fn kotlin_npa_counts_class_properties() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 val a: Int = 1
+                 private val b: Int = 2
+                 protected val c: Int = 3
+                 internal val d: Int = 4
+             }",
+            "foo.kt",
+            |metric| {
+                // public: a. non-public: b, c, d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.25,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
+                    }"###
+                );
+            },
+        );
     }
 
     #[test]

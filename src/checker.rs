@@ -1,7 +1,8 @@
 use crate::langs::{
-    GoCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser, TypescriptCode, TypescriptParser,
+    GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser, TypescriptCode,
+    TypescriptParser,
 };
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 macro_rules! check_if_func {
@@ -331,6 +332,92 @@ impl Checker for GoCode {
         }
         if let Some(parent) = node.parent() {
             return parent.kind_id() == Go::IfStatement;
+        }
+        false
+    }
+}
+
+impl Checker for KotlinCode {
+    fn is_comment(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Kotlin::LineComment | Kotlin::MultilineComment
+        )
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Kotlin::SourceFile
+                | Kotlin::FunctionDeclaration
+                | Kotlin::AnonymousFunction
+                | Kotlin::LambdaLiteral
+                | Kotlin::ClassDeclaration
+                | Kotlin::ObjectDeclaration
+                | Kotlin::CompanionObject
+                | Kotlin::AnonymousInitializer
+                | Kotlin::SecondaryConstructor
+                | Kotlin::Getter
+                | Kotlin::Setter
+        )
+    }
+
+    fn is_func(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Kotlin::FunctionDeclaration
+                | Kotlin::AnonymousFunction
+                | Kotlin::SecondaryConstructor
+                | Kotlin::Getter
+                | Kotlin::Setter
+                | Kotlin::AnonymousInitializer
+        )
+    }
+
+    fn is_closure(node: &Node) -> bool {
+        node.kind_id() == Kotlin::LambdaLiteral
+    }
+
+    fn is_call(node: &Node) -> bool {
+        node.kind_id() == Kotlin::CallExpression
+    }
+
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Kotlin::LPAREN | Kotlin::RPAREN | Kotlin::COMMA
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        node.kind_id() == Kotlin::StringLiteral
+    }
+
+    #[inline(always)]
+    fn is_else_if(node: &Node) -> bool {
+        // Kotlin has no dedicated `else if` node; an `else if` parses as an
+        // inner `if_expression` whose direct parent is a `control_structure_body`
+        // (the braced or single-statement body of the outer `else` branch)
+        // whose own parent is the outer `if_expression`. Distinguishing the
+        // `else` slot from the `if` slot is unnecessary here — either way, an
+        // `if_expression` directly nested under another `if_expression`'s body
+        // is the `else if` chain, and the outer construct has already been
+        // costed.
+        if node.kind_id() != Kotlin::IfExpression {
+            return false;
+        }
+        let Some(parent) = node.parent() else {
+            return false;
+        };
+        // Direct nesting — rare but possible (macro-less raw parse of certain
+        // shapes).
+        if parent.kind_id() == Kotlin::IfExpression {
+            return true;
+        }
+        if parent.kind_id() == Kotlin::ControlStructureBody {
+            return parent
+                .parent()
+                .is_some_and(|g| g.kind_id() == Kotlin::IfExpression);
         }
         false
     }

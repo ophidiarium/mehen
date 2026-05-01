@@ -5,8 +5,8 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `SLoc` metric suite.
@@ -765,6 +765,35 @@ impl Loc for GoCode {
     }
 }
 
+impl Loc for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        use Kotlin::*;
+
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        match node.kind_id().into() {
+            // Containers that should not contribute their own physical line.
+            SourceFile | Statements | StringLiteral => {}
+            LineComment | MultilineComment => {
+                add_cloc_lines(stats, start, end);
+            }
+            // LLOC: declarations and statement-like nodes. Kotlin's `_statement`
+            // supertype covers assignments, loops, declarations, and bare
+            // expressions — only the concrete emitted kinds are listed here.
+            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | SecondaryConstructor
+            | PropertyDeclaration | Assignment | ForStatement | WhileStatement
+            | DoWhileStatement | IfExpression | WhenExpression | TryExpression | JumpExpression
+            | CallExpression => {
+                stats.lloc.logical_lines += 1;
+            }
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
 impl Loc for RubyCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use Ruby::*;
@@ -805,7 +834,7 @@ impl Loc for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
+    use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -2069,6 +2098,23 @@ mod tests {
                       "blank_max": 0.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_simple_loc() {
+        // Inline snapshots don't need hand-counted commentary — the goal
+        // here is to lock down the shape so a grammar or Loc-rule change
+        // won't silently shift Kotlin's SLOC/PLOC/LLOC.
+        check_metrics::<KotlinParser>(
+            "// header
+             fun greet(name: String) {
+                 println(\"hi, \" + name)
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(metric.loc);
             },
         );
     }

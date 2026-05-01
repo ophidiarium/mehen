@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tree_sitter::Language;
 
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -79,6 +79,16 @@ mk_langs!(
         tree_sitter_ruby,
         [rb],
         ["ruby"]
+    ),
+    (
+        Kotlin,
+        "The `Kotlin` language",
+        "kotlin",
+        KotlinCode,
+        KotlinParser,
+        tree_sitter_kotlin,
+        [kt, kts],
+        ["kotlin"]
     )
 );
 
