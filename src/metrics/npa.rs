@@ -478,6 +478,23 @@ fn kotlin_visibility_is_public(node: &Node, code: &[u8]) -> bool {
     true
 }
 
+/// Resolve the class-vs-interface container for a `class_parameter` node
+/// (primary constructor parameter). The parent chain is:
+/// `class_parameter > primary_constructor > class_declaration`.
+fn kotlin_constructor_param_container(node: &Node) -> Option<SpaceKind> {
+    let decl = node.parent()?.parent()?; // class_declaration
+    match decl.kind_id().into() {
+        Kotlin::ClassDeclaration => {
+            if decl.children().any(|c| c.kind_id() == Kotlin::Interface) {
+                Some(SpaceKind::Interface)
+            } else {
+                Some(SpaceKind::Class)
+            }
+        }
+        _ => None,
+    }
+}
+
 impl Npa for KotlinCode {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
         if !matches!(
@@ -486,28 +503,42 @@ impl Npa for KotlinCode {
         ) {
             return;
         }
-        if node.kind_id() != Kotlin::PropertyDeclaration {
-            return;
+        match node.kind_id().into() {
+            Kotlin::PropertyDeclaration => {
+                // Must be a direct member of a class/object/interface body, not a
+                // local `val`/`var` inside a function.
+                let parent = match node.parent() {
+                    Some(p) => p,
+                    None => return,
+                };
+                if !matches!(
+                    parent.kind_id().into(),
+                    Kotlin::ClassBody | Kotlin::EnumClassBody
+                ) {
+                    return;
+                }
+                let Some(container) = crate::metrics::npm::kotlin_member_container(&parent) else {
+                    return;
+                };
+                stats.record_attribute(container, kotlin_visibility_is_public(node, code));
+            }
+            Kotlin::ClassParameter => {
+                // Constructor property: `class C(val x: Int)`. Only parameters
+                // with `val` or `var` (wrapped in a `binding_pattern_kind` node)
+                // are properties; plain parameters are not.
+                if !node
+                    .children()
+                    .any(|c| c.kind_id() == Kotlin::BindingPatternKind)
+                {
+                    return;
+                }
+                let Some(container) = kotlin_constructor_param_container(node) else {
+                    return;
+                };
+                stats.record_attribute(container, kotlin_visibility_is_public(node, code));
+            }
+            _ => {}
         }
-        // Must be a direct member of a class/object/interface body, not a
-        // local `val`/`var` inside a function.
-        let parent = match node.parent() {
-            Some(p) => p,
-            None => return,
-        };
-        if !matches!(
-            parent.kind_id().into(),
-            Kotlin::ClassBody | Kotlin::EnumClassBody
-        ) {
-            return;
-        }
-        // Route the attribute to class vs interface counters based on the
-        // enclosing declaration's keyword (see `kotlin_member_container`),
-        // so Kotlin interfaces don't contaminate class NPA totals.
-        let Some(container) = crate::metrics::npm::kotlin_member_container(&parent) else {
-            return;
-        };
-        stats.record_attribute(container, kotlin_visibility_is_public(node, code));
     }
 }
 
@@ -722,6 +753,37 @@ mod tests {
                       "total": 1.0,
                       "total_attributes": 4.0,
                       "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_counts_constructor_properties() {
+        // Constructor parameters with `val`/`var` are class attributes.
+        // Plain parameters (no val/var) are NOT attributes.
+        check_metrics::<KotlinParser>(
+            "class C(val a: Int, var b: String, c: Double) {
+                 private val d: Int = 0
+             }",
+            "foo.kt",
+            |metric| {
+                // a (public), b (public) from constructor; d (private) from body.
+                // c is a plain param, not an attribute.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 3.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.6666666666666666,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_attributes": 3.0,
+                      "average": 0.6666666666666666
                     }"###
                 );
             },
