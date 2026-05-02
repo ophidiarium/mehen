@@ -355,7 +355,6 @@ impl Checker for KotlinCode {
                 | Kotlin::ClassDeclaration
                 | Kotlin::ObjectDeclaration
                 | Kotlin::CompanionObject
-                | Kotlin::AnonymousInitializer
                 | Kotlin::SecondaryConstructor
                 | Kotlin::Getter
                 | Kotlin::Setter
@@ -370,7 +369,6 @@ impl Checker for KotlinCode {
                 | Kotlin::SecondaryConstructor
                 | Kotlin::Getter
                 | Kotlin::Setter
-                | Kotlin::AnonymousInitializer
         )
     }
 

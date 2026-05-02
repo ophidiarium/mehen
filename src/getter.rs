@@ -304,7 +304,7 @@ impl Getter for KotlinCode {
         use Kotlin::*;
         match node.kind_id().into() {
             FunctionDeclaration | AnonymousFunction | LambdaLiteral | SecondaryConstructor
-            | Getter | Setter | AnonymousInitializer => SpaceKind::Function,
+            | Getter | Setter => SpaceKind::Function,
             // tree-sitter-kotlin uses a single `class_declaration` node for
             // both `class` and `interface`; the only distinguishing signal
             // is the leading keyword child. Route interfaces to

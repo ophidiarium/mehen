@@ -528,7 +528,10 @@ impl Npm for KotlinCode {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
         if !matches!(
             node.kind_id().into(),
-            Kotlin::FunctionDeclaration | Kotlin::SecondaryConstructor
+            Kotlin::FunctionDeclaration
+                | Kotlin::SecondaryConstructor
+                | Kotlin::Getter
+                | Kotlin::Setter
         ) {
             return;
         }
@@ -849,6 +852,43 @@ mod tests {
                   "total": 2.0,
                   "total_methods": 4.0,
                   "average": 0.5
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npm_counts_property_accessors() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 var x: Int = 0
+                     get() = field
+                     private set(value) { field = value }
+             }
+
+             interface I {
+                 val y: Int
+                     get() = 1
+             }",
+            "foo.kt",
+            |metric| {
+                // class C -> public getter + private setter.
+                // interface I -> public getter.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 1.0,
+                  "class_methods": 2.0,
+                  "interface_methods": 1.0,
+                  "classes_average": 0.5,
+                  "interfaces_average": 1.0,
+                  "total": 2.0,
+                  "total_methods": 3.0,
+                  "average": 0.6666666666666666
                 }
                 "#
                 );

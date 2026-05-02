@@ -214,7 +214,7 @@ implement_metric_trait!(
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser};
+    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -336,6 +336,36 @@ mod tests {
                       "functions_max": 0.0,
                       "closures_min": 0.0,
                       "closures_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_init_block_is_not_counted_as_function() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 init {
+                     println(\"ready\")
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 0.0,
+                      "closures": 0.0,
+                      "functions_average": 0.0,
+                      "closures_average": 0.0,
+                      "total": 0.0,
+                      "average": 0.0,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
                     }"###
                 );
             },
