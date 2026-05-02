@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::getter::Getter;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 use crate::node::Node;
 
 /// The `Halstead` metric suite.
@@ -318,13 +318,19 @@ impl Halstead for RubyCode {
     }
 }
 
+impl Halstead for KotlinCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
 // No languages require empty Halstead implementations
 // implement_metric_trait!(Halstead);
 
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -565,6 +571,50 @@ mod tests {
                       "effort": 301.1368500605771,
                       "time": 16.729825003365395,
                       "bugs": 0.014975730436275946
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_operators_and_operands() {
+        check_metrics::<KotlinParser>(
+            "fun add(a: Int, b: Int): Int {
+                 return a + b
+             }",
+            "foo.kt",
+            |metric| {
+                // Only core counts are locked in; derived measures shift with
+                // the vocabulary in ways that aren't meaningful to assert.
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    {
+                        ".estimated_program_length" => "[masked]",
+                        ".purity_ratio" => "[masked]",
+                        ".volume" => "[masked]",
+                        ".difficulty" => "[masked]",
+                        ".level" => "[masked]",
+                        ".effort" => "[masked]",
+                        ".time" => "[masked]",
+                        ".bugs" => "[masked]"
+                    },
+                    @r###"
+                    {
+                      "n1": 7.0,
+                      "N1": 9.0,
+                      "n2": 4.0,
+                      "N2": 8.0,
+                      "length": 17.0,
+                      "estimated_program_length": "[masked]",
+                      "purity_ratio": "[masked]",
+                      "vocabulary": 11.0,
+                      "volume": "[masked]",
+                      "difficulty": "[masked]",
+                      "level": "[masked]",
+                      "effort": "[masked]",
+                      "time": "[masked]",
+                      "bugs": "[masked]"
                     }"###
                 );
             },

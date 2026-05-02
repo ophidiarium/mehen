@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `ABC` metric.
@@ -495,6 +495,34 @@ impl Abc for GoCode {
     }
 }
 
+impl Abc for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Kotlin::*;
+
+        match node.kind_id().into() {
+            // A: assignments. `property_declaration` with an initializer is
+            // also an assignment (`val x = ...`).
+            Assignment => {
+                stats.assignments += 1.;
+            }
+            PropertyDeclaration if node.is_child(EQ as u16) => {
+                stats.assignments += 1.;
+            }
+            // B: function and constructor calls transfer control.
+            CallExpression => {
+                stats.branches += 1.;
+            }
+            // C: every conditional construct and comparison / logical operator.
+            IfExpression | WhenEntry | CatchBlock | ForStatement | WhileStatement
+            | DoWhileStatement | EQEQ | BANGEQ | EQEQEQ | BANGEQEQ | LT | LTEQ | GT | GTEQ
+            | AMPAMP | PIPEPIPE | QMARKCOLON | QMARKDOT | BANGBANG => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Abc for RubyCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Ruby::*;
@@ -521,7 +549,9 @@ impl Abc for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -846,6 +876,24 @@ mod tests {
                       "conditions_max": 2.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_abc_basic() {
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int, b: Int): Int {
+                 val c = a + b        // +1 A (val with initializer)
+                 log(c)               // +1 B
+                 if (c > 0) {         // +1 C (if) + +1 C (>)
+                     return c
+                 }
+                 return 0
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(metric.abc);
             },
         );
     }

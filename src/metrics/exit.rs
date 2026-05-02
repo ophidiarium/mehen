@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `NExit` metric.
@@ -168,6 +168,27 @@ impl Exit for GoCode {
     }
 }
 
+impl Exit for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        // Function exit points in Kotlin are bare `return` and `throw` — both
+        // transfer control out of the enclosing function. The grammar wraps
+        // all jumps (`return`, `throw`, `continue`, `break`, and their `@label`
+        // forms) in a single `jump_expression` named node, so we look at the
+        // lead keyword child to filter out loop-local `continue` / `break` and
+        // lambda-local `return@label`.
+        //
+        // Matches the spirit of mozilla/rust-code-analysis's exit metric for
+        // other languages (e.g. Python counts `return`/`raise`, Rust counts
+        // `return`/`?`, TypeScript counts `return`/`throw`).
+        if node.kind_id() == Kotlin::JumpExpression {
+            let lead = node.child(0).map(|c| c.kind_id().into());
+            if matches!(lead, Some(Kotlin::Return) | Some(Kotlin::Throw)) {
+                stats.exit += 1;
+            }
+        }
+    }
+}
+
 impl Exit for RubyCode {
     fn compute(node: &Node, stats: &mut Stats) {
         // Count language-level exits from a method/closure:
@@ -188,7 +209,9 @@ impl Exit for RubyCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -475,6 +498,55 @@ mod tests {
                       "average": 2.0,
                       "min": 0.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_return_and_throw_count_as_exits() {
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int): Int {
+                 if (a < 0) {
+                     throw IllegalArgumentException(\"bad\")
+                 }
+                 return a
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_labeled_lambda_return_does_not_count_as_function_exit() {
+        check_metrics::<KotlinParser>(
+            "fun f(xs: List<Int>) {
+                 xs.forEach { x ->
+                     if (x < 0) return@forEach
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 0.0,
+                      "average": 0.0,
+                      "min": 0.0,
+                      "max": 0.0
                     }"###
                 );
             },
