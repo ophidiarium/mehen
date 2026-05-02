@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::languages::{Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -457,9 +457,79 @@ impl Npa for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
+/// Resolve the class-vs-interface container for a `class_parameter` node
+/// (primary constructor parameter). The parent chain is:
+/// `class_parameter > primary_constructor > class_declaration`.
+fn kotlin_constructor_param_container(node: &Node) -> Option<SpaceKind> {
+    let decl = node.parent()?.parent()?; // class_declaration
+    match decl.kind_id().into() {
+        Kotlin::ClassDeclaration => {
+            if decl.children().any(|c| c.kind_id() == Kotlin::Interface) {
+                Some(SpaceKind::Interface)
+            } else {
+                Some(SpaceKind::Class)
+            }
+        }
+        _ => None,
+    }
+}
+
+impl Npa for KotlinCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        match node.kind_id().into() {
+            Kotlin::PropertyDeclaration => {
+                // Must be a direct member of a class/object/interface body, not a
+                // local `val`/`var` inside a function.
+                let parent = match node.parent() {
+                    Some(p) => p,
+                    None => return,
+                };
+                if !matches!(
+                    parent.kind_id().into(),
+                    Kotlin::ClassBody | Kotlin::EnumClassBody
+                ) {
+                    return;
+                }
+                let Some(container) = crate::metrics::npm::kotlin_member_container(&parent) else {
+                    return;
+                };
+                stats.record_attribute(
+                    container,
+                    crate::metrics::npm::kotlin_member_is_public(node, code),
+                );
+            }
+            Kotlin::ClassParameter => {
+                // Constructor property: `class C(val x: Int)`. Only parameters
+                // with `val` or `var` (wrapped in a `binding_pattern_kind` node)
+                // are properties; plain parameters are not.
+                if !node
+                    .children()
+                    .any(|c| c.kind_id() == Kotlin::BindingPatternKind)
+                {
+                    return;
+                }
+                let Some(container) = kotlin_constructor_param_container(node) else {
+                    return;
+                };
+                stats.record_attribute(
+                    container,
+                    crate::metrics::npm::kotlin_member_is_public(node, code),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -641,6 +711,105 @@ mod tests {
                     }"###
             );
         });
+    }
+
+    #[test]
+    fn kotlin_npa_counts_class_properties() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 val a: Int = 1
+                 private val b: Int = 2
+                 protected val c: Int = 3
+                 internal val d: Int = 4
+             }",
+            "foo.kt",
+            |metric| {
+                // public: a. non-public: b, c, d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.25,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_counts_constructor_properties() {
+        // Constructor parameters with `val`/`var` are class attributes.
+        // Plain parameters (no val/var) are NOT attributes.
+        check_metrics::<KotlinParser>(
+            "class C(val a: Int, private var b: String, internal val c: Long, d: Double) {
+                 protected val e: Int = 0
+             }",
+            "foo.kt",
+            |metric| {
+                // a is public. b/c are non-public constructor properties, e is
+                // a non-public body property, and d is a plain constructor param.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.25,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_routes_interface_properties_to_interface_counters() {
+        // Same class-vs-interface routing concern as NPM: tree-sitter-kotlin
+        // uses `class_declaration` for both classes and interfaces, so the
+        // container must be decided by the declaration's leading keyword.
+        check_metrics::<KotlinParser>(
+            "interface Foo {
+                 val a: Int
+                 val b: Int
+             }
+
+             class Bar {
+                 val c: Int = 1
+                 private val d: Int = 2
+             }",
+            "foo.kt",
+            |metric| {
+                // class Bar: 2 attrs, 1 public; interface Foo: 2 attrs, 2 public.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 2.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 2.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": 1.0,
+                      "total": 3.0,
+                      "total_attributes": 4.0,
+                      "average": 0.75
+                    }"###
+                );
+            },
+        );
     }
 
     #[test]

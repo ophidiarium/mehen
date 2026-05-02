@@ -9,6 +9,8 @@ use crate::spaces::FuncSpace;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+const LINGUIST_GENERATED_ATTR: &str = "linguist-generated";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Polarity {
@@ -179,6 +181,16 @@ pub(crate) struct DiffOpts {
     /// Show files where all metrics are unchanged.
     #[clap(long)]
     show_unchanged: bool,
+    /// Skip files marked as generated via `linguist-generated` git attributes.
+    #[clap(
+        long,
+        default_value_t = true,
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true"
+    )]
+    ignore_generated: bool,
 }
 
 // ── Orchestration ──────────────────────────────────────────────────────
@@ -205,23 +217,37 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     let exclude = mk_globset(opts.exclude);
     let paths = normalize_path_filters(&opts.paths);
     let selectors = parse_metric_selectors(&opts.metrics);
+    let mut generated_filter = opts
+        .ignore_generated
+        .then(|| GeneratedFilter::new(&repo))
+        .transpose()?;
 
-    let filtered: Vec<_> = changed
-        .into_iter()
-        .filter(|cf| {
-            let p = &cf.path;
-            path_is_selected(p, &paths)
-                && (include.is_empty() || include.is_match(p))
-                && (exclude.is_empty() || !exclude.is_match(p))
-        })
-        .filter(|cf| {
-            cf.path
-                .extension()
-                .and_then(|e| e.to_str())
-                .and_then(get_from_ext)
-                .is_some()
-        })
-        .collect();
+    let mut filtered = Vec::new();
+    for cf in changed {
+        let p = &cf.path;
+        if !path_is_selected(p, &paths)
+            || (!include.is_empty() && !include.is_match(p))
+            || (!exclude.is_empty() && exclude.is_match(p))
+        {
+            continue;
+        }
+
+        if let Some(filter) = generated_filter.as_mut()
+            && filter.is_generated(p)?
+        {
+            continue;
+        }
+
+        if p.extension()
+            .and_then(|e| e.to_str())
+            .and_then(get_from_ext)
+            .is_none()
+        {
+            continue;
+        }
+
+        filtered.push(cf);
+    }
 
     // 4. Compute metrics for each file
     let mut diffs = Vec::new();
@@ -309,6 +335,46 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// ── Generated-file filtering ───────────────────────────────────────────
+
+struct GeneratedFilter<'repo> {
+    attrs: gix::AttributeStack<'repo>,
+    outcome: gix::attrs::search::Outcome,
+}
+
+impl<'repo> GeneratedFilter<'repo> {
+    fn new(repo: &'repo gix::Repository) -> Result<Self, Box<dyn std::error::Error>> {
+        let index = repo.index_or_empty()?;
+        let source = gix::worktree::stack::state::attributes::Source::WorktreeThenIdMapping
+            .adjust_for_bare(repo.is_bare());
+        let attrs = repo.attributes_only(&index, source)?;
+        let outcome = attrs.selected_attribute_matches([LINGUIST_GENERATED_ATTR]);
+        Ok(Self { attrs, outcome })
+    }
+
+    fn is_generated(&mut self, path: &Path) -> std::io::Result<bool> {
+        self.attrs
+            .at_path(path, None)?
+            .matching_attributes(&mut self.outcome);
+        Ok(self
+            .outcome
+            .iter_selected()
+            .next()
+            .is_some_and(|matched| is_linguist_generated_state(matched.assignment.state)))
+    }
+}
+
+fn is_linguist_generated_state(state: gix::attrs::StateRef<'_>) -> bool {
+    match state {
+        gix::attrs::StateRef::Set => true,
+        gix::attrs::StateRef::Value(value) => {
+            let value: &[u8] = value.as_bstr().as_ref();
+            value.eq_ignore_ascii_case(b"true")
+        }
+        gix::attrs::StateRef::Unset | gix::attrs::StateRef::Unspecified => false,
+    }
 }
 
 // ── Ref resolution ─────────────────────────────────────────────────────
@@ -512,6 +578,13 @@ fn print_json(diffs: &[FileDiff]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser as _;
+
+    #[derive(clap::Parser, Debug)]
+    struct TestDiffCli {
+        #[command(flatten)]
+        opts: DiffOpts,
+    }
 
     #[test]
     fn test_parse_metric_selectors_defaults() {
@@ -578,6 +651,24 @@ mod tests {
         let specs = vec!["nonexistent".to_string()];
         let selectors = parse_metric_selectors(&specs);
         assert!(selectors.is_empty());
+    }
+
+    #[test]
+    fn test_ignore_generated_defaults_to_true() {
+        let cli = TestDiffCli::try_parse_from(["mehen"]).unwrap();
+        assert!(cli.opts.ignore_generated);
+    }
+
+    #[test]
+    fn test_ignore_generated_accepts_bare_flag() {
+        let cli = TestDiffCli::try_parse_from(["mehen", "--ignore-generated"]).unwrap();
+        assert!(cli.opts.ignore_generated);
+    }
+
+    #[test]
+    fn test_ignore_generated_can_be_disabled() {
+        let cli = TestDiffCli::try_parse_from(["mehen", "--ignore-generated=false"]).unwrap();
+        assert!(!cli.opts.ignore_generated);
     }
 
     #[test]
@@ -697,6 +788,7 @@ mod tests {
             exclude: vec![],
             output_format: None,
             show_unchanged: false,
+            ignore_generated: true,
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "abc");
@@ -714,6 +806,7 @@ mod tests {
             exclude: vec![],
             output_format: None,
             show_unchanged: false,
+            ignore_generated: true,
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "main");
@@ -740,6 +833,7 @@ mod tests {
             exclude: vec![],
             output_format: None,
             show_unchanged: false,
+            ignore_generated: true,
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "origin/develop");
@@ -766,6 +860,7 @@ mod tests {
             exclude: vec![],
             output_format: None,
             show_unchanged: false,
+            ignore_generated: true,
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "HEAD~1");
@@ -807,5 +902,35 @@ mod tests {
             Path::new("cmd/tally/main.go"),
             &paths_with_root
         ));
+    }
+
+    #[test]
+    fn test_generated_filter_reads_linguist_generated_attributes() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = gix::init(dir.path()).unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(
+            dir.path().join(".gitattributes"),
+            "\
+*.rs linguist-generated
+src/manual.rs -linguist-generated
+src/false.rs linguist-generated=false
+src/unspecified.rs !linguist-generated
+src/value.txt linguist-generated=true
+",
+        )
+        .unwrap();
+
+        let mut filter = GeneratedFilter::new(&repo).unwrap();
+
+        assert!(filter.is_generated(Path::new("src/generated.rs")).unwrap());
+        assert!(!filter.is_generated(Path::new("src/manual.rs")).unwrap());
+        assert!(!filter.is_generated(Path::new("src/false.rs")).unwrap());
+        assert!(
+            !filter
+                .is_generated(Path::new("src/unspecified.rs"))
+                .unwrap()
+        );
+        assert!(filter.is_generated(Path::new("src/value.txt")).unwrap());
     }
 }

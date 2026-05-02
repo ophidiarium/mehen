@@ -3,10 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
 #[cfg(test)]
-use crate::langs::{GoParser, PythonParser, RubyParser, RustParser};
-use crate::languages::Go;
+use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+use crate::languages::{Go, Kotlin};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::traits::Search;
@@ -219,6 +219,31 @@ fn compute_go_args(node: &Node, nargs: &mut usize) {
     }
 }
 
+#[inline(always)]
+fn compute_kotlin_parameter_list(params: &Node, nargs: &mut usize) {
+    params.act_on_child(&mut |n| match n.kind_id().into() {
+        Kotlin::ClassParameter
+        | Kotlin::FunctionValueParameter
+        | Kotlin::Parameter
+        | Kotlin::ParameterWithOptionalType
+        | Kotlin::VariableDeclaration => *nargs += 1,
+        _ => {}
+    });
+}
+
+#[inline(always)]
+fn compute_kotlin_args(node: &Node, nargs: &mut usize) {
+    node.act_on_child(&mut |child| match child.kind_id().into() {
+        Kotlin::FunctionValueParameters | Kotlin::LambdaParameters => {
+            compute_kotlin_parameter_list(child, nargs);
+        }
+        Kotlin::ParameterWithOptionalType if node.kind_id() == Kotlin::Setter => {
+            *nargs += 1;
+        }
+        _ => {}
+    });
+}
+
 pub(crate) trait NArgs
 where
     Self: Checker + Sized,
@@ -244,6 +269,19 @@ impl NArgs for GoCode {
 
         if Self::is_closure(node) {
             compute_go_args(node, &mut stats.closure_nargs);
+        }
+    }
+}
+
+impl NArgs for KotlinCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if Self::is_func(node) {
+            compute_kotlin_args(node, &mut stats.fn_nargs);
+            return;
+        }
+
+        if Self::is_closure(node) {
+            compute_kotlin_args(node, &mut stats.closure_nargs);
         }
     }
 }
@@ -365,6 +403,28 @@ mod tests {
                       "closures_max": 0.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_counts_function_constructor_and_lambda_parameters() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 constructor(a: Int, b: Int)
+             }
+
+             fun f(a: Int, b: String = \"x\", vararg xs: Int) {}
+
+             fun g(items: List<Int>) {
+                 items.map { item -> item + 1 }
+             }",
+            "foo.kt",
+            |metric| {
+                assert_eq!(metric.nargs.fn_args_sum(), 6.0);
+                assert_eq!(metric.nargs.closure_args_sum(), 1.0);
+                assert_eq!(metric.nargs.fn_args_max(), 3.0);
+                assert_eq!(metric.nargs.closure_args_max(), 1.0);
             },
         );
     }

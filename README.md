@@ -25,6 +25,7 @@ Today `mehen` supports:
 - Rust
 - Go
 - Ruby
+- Kotlin
 
 Planned next: PHP.
 

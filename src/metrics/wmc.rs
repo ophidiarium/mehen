@@ -3,7 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, LANG, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{
+    GoCode, KotlinCode, LANG, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
 
@@ -181,7 +183,14 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(PythonCode, TypescriptCode, TsxCode, RustCode, RubyCode);
+impl_wmc!(
+    PythonCode,
+    TypescriptCode,
+    TsxCode,
+    RustCode,
+    RubyCode,
+    KotlinCode
+);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -190,7 +199,7 @@ impl Wmc for GoCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -309,6 +318,31 @@ mod tests {
                       "classes": 0.0,
                       "interfaces": 0.0,
                       "total": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 fun a(x: Int): Int {
+                     return if (x > 0) 1 else 0
+                 }
+                 fun b(): Int { return 1 }
+             }",
+            "foo.kt",
+            |metric| {
+                // class C -> a cyc = 2 (if), b cyc = 1 -> 3
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
                     }"###
                 );
             },

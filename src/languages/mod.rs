@@ -17,3 +17,6 @@ pub(crate) use language_go::*;
 
 pub(crate) mod language_ruby;
 pub(crate) use language_ruby::Ruby;
+
+pub(crate) mod language_kotlin;
+pub(crate) use language_kotlin::*;
