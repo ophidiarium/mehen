@@ -397,29 +397,34 @@ impl Checker for KotlinCode {
     fn is_else_if(node: &Node) -> bool {
         // Kotlin has no dedicated `else if` node; an `else if` parses as an
         // inner `if_expression` whose direct parent is a `control_structure_body`
-        // (the braced or single-statement body of the outer `else` branch)
-        // whose own parent is the outer `if_expression`. Distinguishing the
-        // `else` slot from the `if` slot is unnecessary here — either way, an
-        // `if_expression` directly nested under another `if_expression`'s body
-        // is the `else if` chain, and the outer construct has already been
-        // costed.
+        // (the braced or single-statement body) referenced from the outer
+        // `if_expression`. The tree-sitter-kotlin grammar names the two
+        // branches: `consequence` (then) and `alternative` (else). We only
+        // want to flatten the nesting for the `else if` case, so we check
+        // that the `control_structure_body` we live in is the *alternative*
+        // of the outer `if_expression` — not its consequence. Otherwise a
+        // nested `if` in the then-branch (e.g. `if (a) if (b) ...`) would be
+        // incorrectly treated as an `else if` and undercount cognitive
+        // complexity.
         if node.kind_id() != Kotlin::IfExpression {
             return false;
         }
         let Some(parent) = node.parent() else {
             return false;
         };
-        // Direct nesting — rare but possible (macro-less raw parse of certain
-        // shapes).
-        if parent.kind_id() == Kotlin::IfExpression {
-            return true;
+        if parent.kind_id() != Kotlin::ControlStructureBody {
+            return false;
         }
-        if parent.kind_id() == Kotlin::ControlStructureBody {
-            return parent
-                .parent()
-                .is_some_and(|g| g.kind_id() == Kotlin::IfExpression);
+        let Some(grand) = parent.parent() else {
+            return false;
+        };
+        if grand.kind_id() != Kotlin::IfExpression {
+            return false;
         }
-        false
+        // Must be sitting in the `alternative` (else) slot of the outer if.
+        grand
+            .child_by_field_name("alternative")
+            .is_some_and(|alt| alt.id() == parent.id())
     }
 }
 

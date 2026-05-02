@@ -1853,6 +1853,74 @@ mod tests {
     }
 
     #[test]
+    fn kotlin_nested_if_in_then_branch_is_not_else_if() {
+        // Regression: an unbraced nested `if` in the *then* branch of an
+        // outer `if` parses as `if_expression > control_structure_body >
+        // if_expression`. The grammar also uses `control_structure_body`
+        // for the `else` branch, so `is_else_if` must specifically check
+        // that the body it lives in is the outer if's `alternative`, not
+        // its `consequence`. Otherwise this nested-if is misclassified as
+        // `else if` and cognitive complexity undercounts by 2 (no +1
+        // structural cost and no +1 nesting).
+        check_metrics::<KotlinParser>(
+            "fun f(a: Boolean, b: Boolean) {
+                 if (a)            // +1
+                     if (b)        // +2 (nesting = 1)
+                         println(\"hi\")
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_nested_if_inside_else_if_chain_counts() {
+        // Mixed shape: a nested `if` inside both the then-branch of the
+        // outer `if` AND the body of an `else if`. The outer `if` counts
+        // +1, the nested `if` in the then-branch counts +2 (nesting=1),
+        // the `else if` counts +1 (flattened, no nesting), and its nested
+        // `if` counts +2 (nesting=1) for a total of 6. This locks in that
+        // the fix only flattens the else-branch, not the then-branch.
+        check_metrics::<KotlinParser>(
+            "fun f(a: Int, b: Int) {
+                 if (a > 0) {            // +1
+                     if (b > 0) {        // +2 (nesting = 1)
+                         println(\"x\")
+                     }
+                 } else if (a < 0) {     // +1 (flattened else-if)
+                     if (b > 0) {        // +2 (nesting = 1)
+                         println(\"y\")
+                     }
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 6.0,
+                      "min": 0.0,
+                      "max": 6.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
     fn ruby_nested_method_in_singleton_method() {
         check_metrics::<RubyParser>(
             "def self.outer
