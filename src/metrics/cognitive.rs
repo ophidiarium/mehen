@@ -547,19 +547,39 @@ impl Cognitive for KotlinCode {
 
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
+        // Increment set and nesting model are aligned with SonarKotlin's
+        // `CognitiveComplexity` check. Nesting-incrementing structures:
+        // `if` (not else-if), loops, `when`, `catch`. Note: `try` itself is
+        // NOT a nesting structure — only `catch_block` is. Label-qualified
+        // `break`/`continue` add +1 without nesting. `else` adds +1 without
+        // nesting. Mixed-sequence booleans are handled per conjunction /
+        // disjunction subtree, matching the Sonar "sequence of like
+        // operators" rule.
+        // Reference:
+        //   sonar-kotlin-checks/.../CognitiveComplexity.kt
         match node.kind_id().into() {
             IfExpression if !Self::is_else_if(node) => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             IfExpression => {}
-            ForStatement | WhileStatement | DoWhileStatement | WhenExpression | CatchBlock
-            | TryExpression => {
+            ForStatement | WhileStatement | DoWhileStatement | WhenExpression | CatchBlock => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             Else /* else-if also */ => {
                 increment_by_one(stats);
             }
-            Statement => {
+            // Label-qualified `break@label` / `continue@label` jumps break
+            // the linear flow like a goto and earn +1 without nesting.
+            JumpExpression if matches!(
+                node.child(0).map(|c| c.kind_id().into()),
+                Some(BreakAT) | Some(ContinueAT)
+            ) => {
+                increment_by_one(stats);
+            }
+            // Statement-boundary reset for the boolean-sequence tracker.
+            // Kotlin's grammar aliases `_statement` as an (unemitted)
+            // supertype, so concrete statement-like kinds are listed here.
+            PropertyDeclaration | Assignment | CallExpression | JumpExpression => {
                 stats.boolean_seq.reset();
             }
             PrefixExpression => {
@@ -1728,6 +1748,73 @@ mod tests {
                       "average": 3.0,
                       "min": 0.0,
                       "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_try_catch_nesting() {
+        // SonarKotlin's `CognitiveComplexity` increments and bumps nesting on
+        // `KtCatchClause`, not on the enclosing `try`. An `if` inside the
+        // catch block therefore sees nesting=1 at the +1 structural cost.
+        check_metrics::<KotlinParser>(
+            "fun f() {
+                 try {
+                     if (a) {       // +1 (try itself contributes 0)
+                         println(\"a\")
+                     }
+                 } catch (e: Exception) { // +1 catch
+                     if (b) {               // +2 (nesting = 1 from catch)
+                         println(\"b\")
+                     }
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_labeled_break_and_continue() {
+        // Label-qualified `break@label` / `continue@label` flip the linear
+        // flow and earn +1 each per the Sonar whitepaper. Unlabelled forms
+        // don't.
+        check_metrics::<KotlinParser>(
+            "fun f() {
+                 outer@ for (i in 0..10) {        // +1 for
+                     for (j in 0..10) {           // +2 (nesting=1)
+                         if (i == j) {            // +3 (nesting=2)
+                             continue@outer       // +1 labelled continue
+                         }
+                         if (j > 5) {             // +3 (nesting=2)
+                             break@outer          // +1 labelled break
+                         }
+                     }
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 11.0,
+                      "average": 11.0,
+                      "min": 0.0,
+                      "max": 11.0
                     }"###
                 );
             },

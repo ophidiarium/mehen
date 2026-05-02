@@ -215,12 +215,16 @@ impl Cyclomatic for KotlinCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Kotlin::*;
 
+        // Decision-point set is aligned with SonarKotlin's
+        // `CyclomaticComplexityVisitor`: every `KtIfExpression` (including
+        // else-if branches, because each parses as a nested `if_expression`),
+        // every loop (`for`/`while`/`do-while`), every `when_entry`, and
+        // each short-circuit `&&`/`||`. `catch` is intentionally excluded —
+        // SonarKotlin does not count it towards cyclomatic complexity.
+        // Reference: sonar-kotlin-metrics/.../CyclomaticComplexityVisitor.kt
         match node.kind_id().into() {
-            // Decision points: `if`, loops, `catch`, `when` branches, and
-            // short-circuit boolean operators. `when` itself doesn't add —
-            // each `when_entry` branch counts once, like `switch`/`case`.
-            IfExpression | ForStatement | WhileStatement | DoWhileStatement | CatchBlock
-            | WhenEntry | AMPAMP | PIPEPIPE => {
+            IfExpression | ForStatement | WhileStatement | DoWhileStatement | WhenEntry
+            | AMPAMP | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
             _ => {}
@@ -584,6 +588,37 @@ mod tests {
                       "average": 3.0,
                       "min": 1.0,
                       "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_try_catch_counts_catch_not_try() {
+        // Aligns with SonarKotlin's `CyclomaticComplexityVisitor`: `try`
+        // itself is NOT a decision point, but each `catch` is NOT either —
+        // SonarKotlin counts `catch` only in cognitive complexity, not
+        // cyclomatic. Reference:
+        //   sonar-kotlin-metrics/.../CyclomaticComplexityVisitor.kt
+        check_metrics::<KotlinParser>(
+            "fun f() { // +2 (+1 unit, +1 fun)
+                 try {
+                     risky()
+                 } catch (e: Exception) {
+                     // catch does not add cyclomatic complexity per SonarKotlin
+                 }
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
+                      "min": 1.0,
+                      "max": 1.0
                     }"###
                 );
             },

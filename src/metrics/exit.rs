@@ -170,13 +170,24 @@ impl Exit for GoCode {
 
 impl Exit for KotlinCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        // Kotlin wraps `return ...`, `throw ...`, `continue`, `break`, and
-        // their labelled forms in a single `jump_expression` named node. Both
-        // non-local returns from lambdas (`return@label`) and rethrows flow
-        // through the same wrapper, so counting that node alone gives one
-        // entry per source-level exit.
+        // Function exit points in Kotlin are `return` and `throw` — both
+        // transfer control out of the enclosing function. The grammar wraps
+        // all jumps (`return`, `throw`, `continue`, `break`, and their `@label`
+        // forms) in a single `jump_expression` named node, so we look at the
+        // lead keyword child to filter out `continue` / `break`, which stay
+        // within the loop and don't exit the function.
+        //
+        // Matches the spirit of mozilla/rust-code-analysis's exit metric for
+        // other languages (e.g. Python counts `return`/`raise`, Rust counts
+        // `return`/`?`, TypeScript counts `return`/`throw`).
         if node.kind_id() == Kotlin::JumpExpression {
-            stats.exit += 1;
+            let lead = node.child(0).map(|c| c.kind_id().into());
+            if matches!(
+                lead,
+                Some(Kotlin::Return) | Some(Kotlin::ReturnAT) | Some(Kotlin::Throw)
+            ) {
+                stats.exit += 1;
+            }
         }
     }
 }

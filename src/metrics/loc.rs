@@ -771,18 +771,41 @@ impl Loc for KotlinCode {
 
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
+        // LLOC kind-set is informed by SonarKotlin's `StatementsVisitor`,
+        // which counts (a) non-declaration block statements and (b) single-
+        // expression branches of `if` / `when` / loops as statements. The
+        // tree-sitter grammar surfaces these as concrete named kinds; we
+        // bump LLOC for those kinds and for declarations (`fun`, `class`,
+        // `object`, secondary constructors, properties) as mehen's LLOC is
+        // declaration-inclusive, matching the other languages in this
+        // crate (e.g. Rust counts `let_declaration` and Ruby counts
+        // `method` / `class`).
+        // Reference:
+        //   sonar-kotlin-metrics/.../StatementsVisitor.kt
         match node.kind_id().into() {
-            // Containers that should not contribute their own physical line.
+            // Containers and string internals that should not contribute
+            // their own physical line.
             SourceFile | Statements | StringLiteral => {}
             LineComment | MultilineComment => {
                 add_cloc_lines(stats, start, end);
             }
-            // LLOC: declarations and statement-like nodes. Kotlin's `_statement`
-            // supertype covers assignments, loops, declarations, and bare
-            // expressions — only the concrete emitted kinds are listed here.
-            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | SecondaryConstructor
-            | PropertyDeclaration | Assignment | ForStatement | WhileStatement
-            | DoWhileStatement | IfExpression | WhenExpression | TryExpression | JumpExpression
+            FunctionDeclaration
+            | ClassDeclaration
+            | ObjectDeclaration
+            | SecondaryConstructor
+            | PropertyDeclaration
+            | Assignment
+            | ForStatement
+            | WhileStatement
+            | DoWhileStatement
+            | IfExpression
+            | WhenExpression
+            | TryExpression
+            | JumpExpression
+            // Top-level or statement-position call expressions carry
+            // program behavior that isn't already captured by a
+            // surrounding declaration; count them once. Nested calls
+            // inside an initializer still only contribute PLOC.
             | CallExpression => {
                 stats.lloc.logical_lines += 1;
             }
