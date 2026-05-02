@@ -20,3 +20,5 @@ typs2 = "typs2"
 [default.extend-words]
 # Intentional name of a removed language parser
 Ccomment = "Ccomment"
+"Winn" = "Winn"
+"ALOC" = "ALOC"
