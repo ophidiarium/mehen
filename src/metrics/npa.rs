@@ -501,7 +501,13 @@ impl Npa for KotlinCode {
         ) {
             return;
         }
-        stats.record_attribute(SpaceKind::Class, kotlin_visibility_is_public(node, code));
+        // Route the attribute to class vs interface counters based on the
+        // enclosing declaration's keyword (see `kotlin_member_container`),
+        // so Kotlin interfaces don't contaminate class NPA totals.
+        let Some(container) = crate::metrics::npm::kotlin_member_container(&parent) else {
+            return;
+        };
+        stats.record_attribute(container, kotlin_visibility_is_public(node, code));
     }
 }
 
@@ -716,6 +722,43 @@ mod tests {
                       "total": 1.0,
                       "total_attributes": 4.0,
                       "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_routes_interface_properties_to_interface_counters() {
+        // Same class-vs-interface routing concern as NPM: tree-sitter-kotlin
+        // uses `class_declaration` for both classes and interfaces, so the
+        // container must be decided by the declaration's leading keyword.
+        check_metrics::<KotlinParser>(
+            "interface Foo {
+                 val a: Int
+                 val b: Int
+             }
+
+             class Bar {
+                 val c: Int = 1
+                 private val d: Int = 2
+             }",
+            "foo.kt",
+            |metric| {
+                // class Bar: 2 attrs, 1 public; interface Foo: 2 attrs, 2 public.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 2.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 2.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": 1.0,
+                      "total": 3.0,
+                      "total_attributes": 4.0,
+                      "average": 0.75
                     }"###
                 );
             },

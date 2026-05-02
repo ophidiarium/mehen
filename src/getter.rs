@@ -305,10 +305,19 @@ impl Getter for KotlinCode {
         match node.kind_id().into() {
             FunctionDeclaration | AnonymousFunction | LambdaLiteral | SecondaryConstructor
             | Getter | Setter | AnonymousInitializer => SpaceKind::Function,
-            // Kotlin `interface` uses the same `class_declaration` node, but
-            // is still reported here as a class. Interface-specific metrics
-            // disambiguate by inspecting the `interface` keyword child.
-            ClassDeclaration | ObjectDeclaration | CompanionObject => SpaceKind::Class,
+            // tree-sitter-kotlin uses a single `class_declaration` node for
+            // both `class` and `interface`; the only distinguishing signal
+            // is the leading keyword child. Route interfaces to
+            // `SpaceKind::Interface` so class-vs-interface metrics (WMC,
+            // NPM, NPA) aggregate correctly at the enclosing space.
+            ClassDeclaration => {
+                if node.children().any(|c| c.kind_id() == Kotlin::Interface) {
+                    SpaceKind::Interface
+                } else {
+                    SpaceKind::Class
+                }
+            }
+            ObjectDeclaration | CompanionObject => SpaceKind::Class,
             SourceFile => SpaceKind::Unit,
             _ => SpaceKind::Unknown,
         }

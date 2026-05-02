@@ -496,13 +496,36 @@ fn kotlin_function_is_public(node: &Node, code: &[u8]) -> bool {
     true
 }
 
+/// Returns the `SpaceKind` container for a Kotlin member whose parent node
+/// is a `class_body` / `enum_class_body`. The tree-sitter-kotlin grammar
+/// uses a single `class_declaration` node for classes, interfaces, and
+/// enums, disambiguated only by the `class` / `interface` / `enum`
+/// keyword child — so to tell an interface from a class we have to look
+/// at the declaration's keyword children.
+pub(super) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
+    // `body_parent` is a `class_body` / `enum_class_body`. Its parent is
+    // the `class_declaration` (or `object_declaration`). For interfaces
+    // the declaration contains an `interface` keyword child; otherwise
+    // the member lives in a class-like container.
+    let decl = body_parent.parent()?;
+    match decl.kind_id().into() {
+        Kotlin::ClassDeclaration => {
+            if decl.children().any(|c| c.kind_id() == Kotlin::Interface) {
+                Some(SpaceKind::Interface)
+            } else {
+                Some(SpaceKind::Class)
+            }
+        }
+        Kotlin::ObjectDeclaration | Kotlin::CompanionObject => Some(SpaceKind::Class),
+        _ => None,
+    }
+}
+
 impl Npm for KotlinCode {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
         if node.kind_id() != Kotlin::FunctionDeclaration {
             return;
         }
-        // Direct member of a class body or interface body (both are
-        // `class_body` in the Kotlin grammar).
         let parent = match node.parent() {
             Some(p) => p,
             None => return,
@@ -513,11 +536,10 @@ impl Npm for KotlinCode {
         ) {
             return;
         }
-        record_method(
-            stats,
-            SpaceKind::Class,
-            kotlin_function_is_public(node, code),
-        );
+        let Some(container) = kotlin_member_container(&parent) else {
+            return;
+        };
+        record_method(stats, container, kotlin_function_is_public(node, code));
     }
 }
 
@@ -748,6 +770,46 @@ mod tests {
                   "total": 2.0,
                   "total_methods": 5.0,
                   "average": 0.4
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npm_routes_interface_methods_to_interface_counters() {
+        // tree-sitter-kotlin parses `class` and `interface` into the same
+        // `class_declaration` node; only the leading keyword child
+        // distinguishes them. Interface methods must land in the
+        // interface_methods / interfaces counters, not class_methods /
+        // classes. Regression for PR review comment requesting proper
+        // class-vs-interface routing.
+        check_metrics::<KotlinParser>(
+            "interface Foo {
+                 fun a()
+                 fun b(): Int
+             }
+
+             class Bar {
+                 fun c() {}
+                 fun d() {}
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 2.0,
+                  "interfaces": 2.0,
+                  "class_methods": 2.0,
+                  "interface_methods": 2.0,
+                  "classes_average": 1.0,
+                  "interfaces_average": 1.0,
+                  "total": 4.0,
+                  "total_methods": 4.0,
+                  "average": 1.0
                 }
                 "#
                 );
