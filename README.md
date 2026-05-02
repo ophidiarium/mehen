@@ -5,18 +5,21 @@
 It is designed for fast, deterministic analysis over large codebases, helping both human and AI engineers track how complexity evolves over time.
 
 ## What is Mehen?
+
 In Ophidiarium projects, names matter.
 
 **Mehen** is a mythical ancient Egyptian serpent associated with guarding Ra. In the same spirit, `mehen` helps guard your codebase from slowly collapsing under complexity.
 
 ## Why Teams Use Mehen
+
 Most common usage patterns we see:
 
 - CI jobs that compute metrics for changed files and publish trend reports
 - Pre-PR / pre-CR hooks that provide immediate quality feedback
-- Automation workflows that enrich pull request templates with metric deltas
+- Automation workflows that enrich pull request templates with a glance view of metric deltas
 
 ## Current Language Support
+
 Today `mehen` supports:
 
 - Python
@@ -27,9 +30,14 @@ Today `mehen` supports:
 - Ruby
 - Kotlin
 
-Planned next: PHP.
+Planned next: PowerShell, Zig, Starlark and PHP.
+
+A dedicated research effort is underway to expand support to Markdown documentation, with metrics like readability and structural complexity.
+
+We also providing comprehensive support for polyglot monorepos, with per-file language detection and reporting.
 
 ## What Mehen Computes
+
 `mehen` provides a broad metric set, including:
 
 - Cyclomatic complexity
@@ -42,13 +50,16 @@ Planned next: PHP.
 - NPA / NPM / WMC
 
 ## Distribution
+
 `mehen` ships native binaries through both ecosystems:
 
 - npm (`mehen` + platform packages)
 - PyPI (`mehen` via maturin binary packaging)
 
 ## Quick Start
+
 ### Run without installation
+
 From npm ecosystem:
 
 ```bash
@@ -70,6 +81,7 @@ cargo run -- --help
 ```
 
 ### Typical examples
+
 Analyze metrics for a directory:
 
 ```bash
@@ -83,6 +95,7 @@ mehen -m -p src -O json -o ./metrics
 ```
 
 ## GitHub Actions
+
 Use the in-repository action to publish changed-file metric trends on pull
 requests:
 
@@ -122,6 +135,7 @@ Thresholds are optional. When configured, the action fails if an adverse
 per-file metric delta exceeds the configured limit.
 
 ## Reporting and Integrations
+
 Current machine-readable outputs:
 
 - JSON
@@ -136,6 +150,7 @@ Roadmap direction:
 - More polished console reporting for local developer loops
 
 ## Implementation Notes
+
 Internally, `mehen` is built on:
 
 - [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for parsing
@@ -144,6 +159,7 @@ Internally, `mehen` is built on:
 `mehen` continues in its own CLI-focused direction while preserving and evolving that foundation.
 
 ## Development
+
 Build and check:
 
 ```bash
@@ -168,9 +184,11 @@ cargo insta test --all-features --check --unreferenced reject --test-runner next
 See `mehen-book/src/developers/` for developer docs, including language and grammar updates.
 
 ## Contributing
+
 Contributions are welcome via issues and pull requests:
 
 - https://github.com/ophidiarium/mehen/issues
 
 ## License
+
 `mehen` is released under the [Mozilla Public License v2.0](https://www.mozilla.org/MPL/2.0/).
