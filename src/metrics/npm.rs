@@ -476,11 +476,14 @@ impl Npm for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
-/// Whether a Kotlin class-body function is public. Defaults to `public`;
-/// explicit `private`/`protected`/`internal` modifiers override.
-fn kotlin_function_is_public(node: &Node, code: &[u8]) -> bool {
+/// Whether a Kotlin class member is public. Defaults to `public`; explicit
+/// `private`/`protected`/`internal` modifiers override.
+pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
     for child in node.children() {
-        if child.kind_id() != Kotlin::Modifiers {
+        if !matches!(
+            child.kind_id().into(),
+            Kotlin::Modifiers | Kotlin::ParameterModifiers
+        ) {
             continue;
         }
         for m in child.children() {
@@ -502,7 +505,7 @@ fn kotlin_function_is_public(node: &Node, code: &[u8]) -> bool {
 /// enums, disambiguated only by the `class` / `interface` / `enum`
 /// keyword child — so to tell an interface from a class we have to look
 /// at the declaration's keyword children.
-pub(super) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
+pub(crate) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
     // `body_parent` is a `class_body` / `enum_class_body`. Its parent is
     // the `class_declaration` (or `object_declaration`). For interfaces
     // the declaration contains an `interface` keyword child; otherwise
@@ -523,7 +526,10 @@ pub(super) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
 
 impl Npm for KotlinCode {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        if node.kind_id() != Kotlin::FunctionDeclaration {
+        if !matches!(
+            node.kind_id().into(),
+            Kotlin::FunctionDeclaration | Kotlin::SecondaryConstructor
+        ) {
             return;
         }
         let parent = match node.parent() {
@@ -539,7 +545,7 @@ impl Npm for KotlinCode {
         let Some(container) = kotlin_member_container(&parent) else {
             return;
         };
-        record_method(stats, container, kotlin_function_is_public(node, code));
+        record_method(stats, container, kotlin_member_is_public(node, code));
     }
 }
 
@@ -810,6 +816,39 @@ mod tests {
                   "total": 4.0,
                   "total_methods": 4.0,
                   "average": 1.0
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npm_counts_secondary_constructors() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 constructor()
+                 private constructor(x: Int)
+                 internal constructor(y: String)
+                 fun visible() {}
+             }",
+            "foo.kt",
+            |metric| {
+                // public: default-visible constructor and visible().
+                // non-public: private/internal secondary constructors.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 2.0,
+                  "interfaces": 0.0,
+                  "class_methods": 4.0,
+                  "interface_methods": 0.0,
+                  "classes_average": 0.5,
+                  "interfaces_average": null,
+                  "total": 2.0,
+                  "total_methods": 4.0,
+                  "average": 0.5
                 }
                 "#
                 );

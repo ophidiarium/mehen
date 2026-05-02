@@ -457,27 +457,6 @@ impl Npa for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
-/// Whether a Kotlin class-body property is public. Kotlin members default to
-/// `public`; explicit `private`/`protected`/`internal` visibility modifiers
-/// override that default.
-fn kotlin_visibility_is_public(node: &Node, code: &[u8]) -> bool {
-    for child in node.children() {
-        if child.kind_id() != Kotlin::Modifiers {
-            continue;
-        }
-        for m in child.children() {
-            if m.kind_id() != Kotlin::VisibilityModifier {
-                continue;
-            }
-            let text = &code[m.start_byte()..m.end_byte()];
-            if text == b"private" || text == b"protected" || text == b"internal" {
-                return false;
-            }
-        }
-    }
-    true
-}
-
 /// Resolve the class-vs-interface container for a `class_parameter` node
 /// (primary constructor parameter). The parent chain is:
 /// `class_parameter > primary_constructor > class_declaration`.
@@ -520,7 +499,10 @@ impl Npa for KotlinCode {
                 let Some(container) = crate::metrics::npm::kotlin_member_container(&parent) else {
                     return;
                 };
-                stats.record_attribute(container, kotlin_visibility_is_public(node, code));
+                stats.record_attribute(
+                    container,
+                    crate::metrics::npm::kotlin_member_is_public(node, code),
+                );
             }
             Kotlin::ClassParameter => {
                 // Constructor property: `class C(val x: Int)`. Only parameters
@@ -535,7 +517,10 @@ impl Npa for KotlinCode {
                 let Some(container) = kotlin_constructor_param_container(node) else {
                     return;
                 };
-                stats.record_attribute(container, kotlin_visibility_is_public(node, code));
+                stats.record_attribute(
+                    container,
+                    crate::metrics::npm::kotlin_member_is_public(node, code),
+                );
             }
             _ => {}
         }
@@ -764,26 +749,26 @@ mod tests {
         // Constructor parameters with `val`/`var` are class attributes.
         // Plain parameters (no val/var) are NOT attributes.
         check_metrics::<KotlinParser>(
-            "class C(val a: Int, var b: String, c: Double) {
-                 private val d: Int = 0
+            "class C(val a: Int, private var b: String, internal val c: Long, d: Double) {
+                 protected val e: Int = 0
              }",
             "foo.kt",
             |metric| {
-                // a (public), b (public) from constructor; d (private) from body.
-                // c is a plain param, not an attribute.
+                // a is public. b/c are non-public constructor properties, e is
+                // a non-public body property, and d is a plain constructor param.
                 insta::assert_json_snapshot!(
                     metric.npa,
                     @r###"
                     {
-                      "classes": 2.0,
+                      "classes": 1.0,
                       "interfaces": 0.0,
-                      "class_attributes": 3.0,
+                      "class_attributes": 4.0,
                       "interface_attributes": 0.0,
-                      "classes_average": 0.6666666666666666,
+                      "classes_average": 0.25,
                       "interfaces_average": null,
-                      "total": 2.0,
-                      "total_attributes": 3.0,
-                      "average": 0.6666666666666666
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
                     }"###
                 );
             },

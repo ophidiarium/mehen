@@ -789,24 +789,20 @@ impl Loc for KotlinCode {
             LineComment | MultilineComment => {
                 add_cloc_lines(stats, start, end);
             }
-            FunctionDeclaration
-            | ClassDeclaration
-            | ObjectDeclaration
-            | SecondaryConstructor
-            | PropertyDeclaration
-            | Assignment
-            | ForStatement
-            | WhileStatement
-            | DoWhileStatement
-            | IfExpression
-            | WhenExpression
-            | TryExpression
-            | JumpExpression
+            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | SecondaryConstructor
+            | PropertyDeclaration | Assignment | ForStatement | WhileStatement
+            | DoWhileStatement | IfExpression | WhenExpression | TryExpression | JumpExpression => {
+                stats.lloc.logical_lines += 1;
+            }
             // Top-level or statement-position call expressions carry
             // program behavior that isn't already captured by a
             // surrounding declaration; count them once. Nested calls
             // inside an initializer still only contribute PLOC.
-            | CallExpression => {
+            CallExpression
+                if node.parent().is_some_and(|parent| {
+                    matches!(parent.kind_id().into(), Statements | ControlStructureBody)
+                }) =>
+            {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -2138,6 +2134,45 @@ mod tests {
             "foo.kt",
             |metric| {
                 insta::assert_json_snapshot!(metric.loc);
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_nested_calls_do_not_add_extra_lloc() {
+        check_metrics::<KotlinParser>(
+            "fun f() {
+                 val x = foo(bar())
+                 foo(bar())
+             }",
+            "foo.kt",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 4.0,
+                      "ploc": 4.0,
+                      "lloc": 3.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 2.0,
+                      "ploc_average": 2.0,
+                      "lloc_average": 1.5,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 4.0,
+                      "sloc_max": 4.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 4.0,
+                      "ploc_max": 4.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
             },
         );
     }
