@@ -476,9 +476,8 @@ impl Npm for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
-/// Whether a Kotlin class member is public. Defaults to `public`; explicit
-/// `private`/`protected`/`internal` modifiers override.
-pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
+/// Explicit Kotlin visibility on a declaration-like node.
+pub(crate) fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
     for child in node.children() {
         if !matches!(
             child.kind_id().into(),
@@ -492,11 +491,42 @@ pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
             }
             let text = &code[m.start_byte()..m.end_byte()];
             if text == b"private" || text == b"protected" || text == b"internal" {
-                return false;
+                return Some(false);
+            }
+            if text == b"public" {
+                return Some(true);
             }
         }
     }
-    true
+    None
+}
+
+/// Whether a Kotlin class member is public. Defaults to `public`; explicit
+/// `private`/`protected`/`internal` modifiers override.
+pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
+    kotlin_member_visibility(node, code).unwrap_or(true)
+}
+
+fn kotlin_previous_property_visibility(node: &Node, code: &[u8]) -> Option<bool> {
+    let parent = node.parent()?;
+    let mut property_visibility = None;
+
+    for child in parent.children() {
+        if child.id() == node.id() {
+            break;
+        }
+        if child.kind_id() == Kotlin::PropertyDeclaration {
+            property_visibility = kotlin_member_visibility(&child, code);
+        }
+    }
+
+    property_visibility
+}
+
+fn kotlin_accessor_is_public(node: &Node, code: &[u8]) -> bool {
+    kotlin_member_visibility(node, code)
+        .or_else(|| kotlin_previous_property_visibility(node, code))
+        .unwrap_or(true)
 }
 
 /// Returns the `SpaceKind` container for a Kotlin member whose parent node
@@ -548,7 +578,12 @@ impl Npm for KotlinCode {
         let Some(container) = kotlin_member_container(&parent) else {
             return;
         };
-        record_method(stats, container, kotlin_member_is_public(node, code));
+        let public = if matches!(node.kind_id().into(), Kotlin::Getter | Kotlin::Setter) {
+            kotlin_accessor_is_public(node, code)
+        } else {
+            kotlin_member_is_public(node, code)
+        };
+        record_method(stats, container, public);
     }
 }
 
@@ -866,6 +901,10 @@ mod tests {
                  var x: Int = 0
                      get() = field
                      private set(value) { field = value }
+
+                 private var hidden: Int = 0
+                     get() = field
+                     set(value) { field = value }
              }
 
              interface I {
@@ -874,7 +913,8 @@ mod tests {
              }",
             "foo.kt",
             |metric| {
-                // class C -> public getter + private setter.
+                // class C -> public getter + private setter, plus two private
+                // accessors inheriting from private property visibility.
                 // interface I -> public getter.
                 insta::assert_json_snapshot!(
                     metric.npm,
@@ -882,13 +922,13 @@ mod tests {
                 {
                   "classes": 1.0,
                   "interfaces": 1.0,
-                  "class_methods": 2.0,
+                  "class_methods": 4.0,
                   "interface_methods": 1.0,
-                  "classes_average": 0.5,
+                  "classes_average": 0.25,
                   "interfaces_average": 1.0,
                   "total": 2.0,
-                  "total_methods": 3.0,
-                  "average": 0.6666666666666666
+                  "total_methods": 5.0,
+                  "average": 0.4
                 }
                 "#
                 );

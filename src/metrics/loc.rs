@@ -789,9 +789,10 @@ impl Loc for KotlinCode {
             LineComment | MultilineComment => {
                 add_cloc_lines(stats, start, end);
             }
-            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | SecondaryConstructor
-            | PropertyDeclaration | Assignment | ForStatement | WhileStatement
-            | DoWhileStatement | IfExpression | WhenExpression | TryExpression | JumpExpression => {
+            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | CompanionObject
+            | SecondaryConstructor | PropertyDeclaration | Getter | Setter | Assignment
+            | ForStatement | WhileStatement | DoWhileStatement | IfExpression | WhenExpression
+            | TryExpression | JumpExpression => {
                 stats.lloc.logical_lines += 1;
             }
             // Top-level or statement-position call expressions carry
@@ -2173,6 +2174,25 @@ mod tests {
                       "blank_max": 0.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_counts_companion_and_accessors_as_lloc() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 companion object {
+                     fun make() = C()
+                 }
+
+                 var x: Int = 0
+                     get() = field
+                     set(value) { field = value }
+             }",
+            "foo.kt",
+            |metric| {
+                assert_eq!(metric.loc.lloc(), 7.0);
             },
         );
     }

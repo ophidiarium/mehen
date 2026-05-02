@@ -353,7 +353,7 @@ impl Getter for KotlinCode {
             | Companion | Init | Constructor | Typealias | Import | Package | If | Else | When
             | Try | Catch | Finally | Throw | Return | Continue | Break | For | While | Do
             | In | Is | As | AsQMARK | By | Where | Suspend | Inline | Infix | Operator
-            | Tailrec | External | Lateinit | Noinline | Crossinline | Vararg | Out
+            | Tailrec | External | Lateinit | Noinline | Crossinline | Vararg | Out | Get | Set
             // Assignment / augmented assignment.
             | EQ | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ
             // Comparison / arithmetic / logical operators.
@@ -372,7 +372,7 @@ impl Getter for KotlinCode {
             SimpleIdentifier | Identifier | TypeIdentifier | IntegerLiteral | HexLiteral
             | BinLiteral | LongLiteral | RealLiteral | UnsignedLiteral | CharacterLiteral
             | StringLiteral | True | False | BooleanLiteral | NullLiteral | This
-            | ThisExpression | Super | SuperExpression => HalsteadType::Operand,
+            | ThisExpression | Super | SuperExpression | Field => HalsteadType::Operand,
             _ => HalsteadType::Unknown,
         }
     }
@@ -434,5 +434,58 @@ impl Getter for RubyCode {
 
             _ => HalsteadType::Unknown,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::node::Tree;
+    use crate::traits::Search;
+
+    use super::*;
+
+    #[test]
+    fn kotlin_accessor_tokens_are_classified_for_halstead() {
+        let tree = Tree::new::<KotlinCode>(
+            b"class C {
+                @field:JvmField
+                var x: Int = 0
+                    get() = field
+                    set(value) { field = value }
+            }",
+        );
+        let mut saw_get = false;
+        let mut saw_set = false;
+        let mut saw_field = false;
+
+        tree.get_root()
+            .act_on_node(&mut |node| match node.kind_id().into() {
+                Kotlin::Get => {
+                    saw_get = true;
+                    assert!(matches!(
+                        KotlinCode::get_op_type(node),
+                        HalsteadType::Operator
+                    ));
+                }
+                Kotlin::Set => {
+                    saw_set = true;
+                    assert!(matches!(
+                        KotlinCode::get_op_type(node),
+                        HalsteadType::Operator
+                    ));
+                }
+                Kotlin::Field => {
+                    saw_field = true;
+                    assert!(matches!(
+                        KotlinCode::get_op_type(node),
+                        HalsteadType::Operand
+                    ));
+                }
+                _ => {}
+            });
+
+        assert!(saw_get);
+        assert!(saw_set);
+        assert!(saw_field);
     }
 }
