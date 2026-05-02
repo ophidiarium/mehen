@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/ophidiarium/mehen/compare/v0.2.0...v0.3.0) (2026-05-02)
+
+
+### Features
+
+* **metrics:** add Kotlin language support ([#66](https://github.com/ophidiarium/mehen/issues/66)) ([028f93b](https://github.com/ophidiarium/mehen/commit/028f93b802241d742e16d4952d798dc980a8535a))
+
+
+### Miscellaneous Chores
+
+* release 0.3.0 ([8b6dad6](https://github.com/ophidiarium/mehen/commit/8b6dad68dc3668a55666e46498b539dff073dd4f))
+
 ## [0.2.0](https://github.com/ophidiarium/mehen/compare/v0.1.1...v0.2.0) (2026-04-30)
 
 
