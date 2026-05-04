@@ -250,6 +250,17 @@ impl Cyclomatic for PowershellCode {
         // `Catch`, `While`, `For`, `Switch` tokens, extended with
         // `foreach` / `do` loops and v7's `?` / `??`.
         //
+        // `-xor` is intentionally NOT counted. Sonar's cyclomatic rule
+        // counts only *short-circuit* boolean operators across every
+        // language it analyzes (JS/TS/PHP/C#/Java/Dart list `&&`/`||`
+        // explicitly; VB.NET lists `AndAlso`/`OrElse`, not `And`/`Or`).
+        // PowerShell's `-xor` always evaluates both operands — by
+        // definition it cannot introduce a new control-flow path — so
+        // it doesn't meet the cyclomatic criterion. It IS counted in ABC
+        // conditions and cognitive boolean-sequence scoring, where the
+        // relevant axis is "boolean operator occurrence" rather than
+        // "new linearly independent path".
+        //
         // tree-sitter-pwsh v0.37+ only emits the operator-level expression
         // kinds (`ternary_expression`, `null_coalesce_expression`, ...)
         // when the operator is actually present, so matching on the kind
@@ -894,6 +905,39 @@ mod tests {
                       "average": 2.0,
                       "min": 1.0,
                       "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_xor_is_not_a_cyclomatic_decision_point() {
+        // Regression: `-xor` is intentionally excluded from the cyclomatic
+        // decision-point set. Sonar's cyclomatic rule counts only
+        // *short-circuit* boolean operators across every language it
+        // analyzes; `-xor` always evaluates both operands so it cannot
+        // introduce a new control-flow path. `-and` / `-or` are counted
+        // because they short-circuit.
+        //
+        // The test locks in the expected sum for:
+        //   base +1 (unit) + function +1 + if +1 + -and +1  = 4
+        //   but NOT +1 for `-xor` (would be 5 if it were miscounted).
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 if ($a -xor $b) { }        # +1 if, NOT +1 -xor
+                 if ($a -and $b) { }        # +1 if, +1 -and
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
                     }"###
                 );
             },
