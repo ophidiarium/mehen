@@ -151,6 +151,22 @@ fn compute_booleans<T: PartialEq + From<u16>>(
     }
 }
 
+/// Same-operator sequence collapser for nodes that may expose more than two
+/// boolean operators (e.g. PowerShell's `logical_expression` carrying
+/// `-and` / `-or` / `-xor`). Each direct child whose kind matches any
+/// element of `typs` feeds the `BoolSequence` tracker, so mixed sequences
+/// still get +1 per transition and same-operator runs collapse to +1.
+fn compute_booleans_in<T: PartialEq + From<u16>>(node: &Node, stats: &mut Stats, typs: &[T]) {
+    for child in node.children() {
+        let child_kind: T = child.kind_id().into();
+        if typs.contains(&child_kind) {
+            stats.structural = stats
+                .boolean_seq
+                .eval_based_on_prev(child.kind_id(), stats.structural);
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 struct BoolSequence {
     boolean_op: Option<u16>,
@@ -673,11 +689,13 @@ impl Cognitive for PowershellCode {
             // Collapse same-operator sequences. `logical_expression` and its
             // argument-form twin `logical_argument_expression` both always
             // carry at least one `-and` / `-or` / `-xor` operator when
-            // emitted. `pipeline_chain` surfaces `&&` / `||` only when real
-            // pipeline short-circuit tails exist; the guard avoids running
-            // the tracker on every statement's pipeline_chain wrapper.
+            // emitted — all three participate in sequence collapsing so
+            // mixed chains score +1 per transition. `pipeline_chain`
+            // surfaces `&&` / `||` only when real pipeline short-circuit
+            // tails exist; the guard avoids running the tracker on every
+            // statement's pipeline_chain wrapper.
             LogicalExpression | LogicalArgumentExpression => {
-                compute_booleans::<Powershell>(node, stats, &DASHand, &DASHor);
+                compute_booleans_in::<Powershell>(node, stats, &[DASHand, DASHor, DASHxor]);
             }
             PipelineChain
                 if node
@@ -2279,6 +2297,38 @@ mod tests {
                       "average": 3.0,
                       "min": 0.0,
                       "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_cognitive_xor_participates_in_boolean_sequence() {
+        // Regression: `-xor` is emitted as a direct child of
+        // `logical_expression` alongside `-and` / `-or`. It must
+        // participate in the boolean-sequence tracker so that
+        //   (a) a standalone `-xor` adds +1, and
+        //   (b) mixed chains like `-and`/`-xor`/`-or` add +1 per
+        //       operator-transition, matching the Sonar whitepaper.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c, $d) {
+                 if ($a -xor $b) { 'x' }             # +1 if +1 -xor
+                 if ($a -xor $b -xor $c) { 'y' }     # +1 if +1 (same-op sequence)
+                 if ($a -and $b -xor $c -or $d) {    # +1 if +1 -and +1 -xor +1 -or
+                     'z'
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 8.0,
+                      "average": 8.0,
+                      "min": 0.0,
+                      "max": 8.0
                     }"###
                 );
             },
