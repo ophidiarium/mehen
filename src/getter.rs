@@ -517,9 +517,31 @@ impl Getter for PowershellCode {
             | DASHlt | DASHilt | DASHclt | DASHle | DASHile | DASHcle
             | DASHgt | DASHigt | DASHcgt | DASHge | DASHige | DASHcge
             | LT | GT
-            // Operator-like comparison wrapper.
-            | ComparisonOperator | AssignmentOperator | FormatOperator
-            | FileRedirectionOperator | MergingRedirectionOperator => HalsteadType::Operator,
+            // File / merging redirection leaf tokens (e.g. `2>`, `2>>`,
+            // `2>&1`, `*>`, `3>&2`). The grammar wraps each under a
+            // `file_redirection_operator` / `merging_redirection_operator`
+            // rule node, but we must classify the *leaf tokens* here —
+            // the wrapper rule kinds are intentionally excluded below to
+            // avoid double-counting (see comment at the bottom of the
+            // match).
+            | GTGT | STARGT | STARGTGT | STARGTAMP1 | STARGTAMP2
+            | N2GT | N2GTGT | N2GTAMP1
+            | N3GT | N3GTGT | N3GTAMP1 | N3GTAMP2
+            | N4GT | N4GTGT | N4GTAMP1 | N4GTAMP2
+            | N5GT | N5GTGT | N5GTAMP1 | N5GTAMP2
+            | N6GT | N6GTGT | N6GTAMP1 | N6GTAMP2
+            | N1GTAMP2 => HalsteadType::Operator,
+
+            // Wrapper rule kinds (`assignment_operator`, `comparison_operator`,
+            // `format_operator`, `file_redirection_operator`,
+            // `merging_redirection_operator`) are NOT classified here:
+            // tree-sitter-pwsh nests the individual operator leaf token
+            // inside its matching wrapper rule, so
+            // `T::Halstead::compute`, which visits every named and
+            // anonymous child exhaustively (see spaces.rs), would
+            // otherwise count each operator twice — once for the wrapper
+            // and once for the leaf. Classifying only the leaves gives
+            // the correct Halstead N1.
 
             // Operands: identifiers, variables, literals.
             SimpleName | TypeIdentifier | Variable | Variable2 | BracedVariable | GenericToken

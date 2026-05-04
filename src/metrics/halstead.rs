@@ -338,7 +338,8 @@ impl Halstead for PowershellCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -672,5 +673,34 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn powershell_operator_wrappers_do_not_double_count() {
+        // Regression for coderabbitai flag on PR #69:
+        // tree-sitter-pwsh nests every operator leaf token (e.g. `-eq`,
+        // `-f`, `=`, `2>`) inside a named wrapper rule
+        // (`comparison_operator`, `format_operator`, `assignment_operator`,
+        // `file_redirection_operator`, `merging_redirection_operator`).
+        // `Halstead::compute` walks every named and anonymous child, so
+        // classifying BOTH the leaf and the wrapper as `Operator` would
+        // double-count. `get_op_type` classifies only the leaves; this
+        // test locks that invariant in by asserting the semantically
+        // correct operator counts.
+        check_metrics::<PowershellParser>("$x = $a -eq $b", "foo.ps1", |metric| {
+            // Operators: `=` and `-eq` → 2 distinct, 2 total.
+            // Operands: `$x`, `$a`, `$b` → 3 distinct, 3 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+            assert_eq!(metric.halstead.u_operands(), 3.0);
+            assert_eq!(metric.halstead.operands(), 3.0);
+        });
+
+        // Same invariant for the format operator `-f`.
+        check_metrics::<PowershellParser>("$s = \"{0}\" -f $a", "foo.ps1", |metric| {
+            // Operators: `=` and `-f` → 2 distinct, 2 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+        });
     }
 }
