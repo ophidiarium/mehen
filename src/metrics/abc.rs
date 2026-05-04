@@ -582,6 +582,18 @@ impl Abc for PowershellCode {
             // `[Foo]::Bar($a -eq $b)`). Those argument-form variants carry
             // the same decision-point semantics as the regular forms, so
             // we match both families here.
+            //
+            // Note: `LogicalExpression` and `LogicalArgumentExpression`
+            // (and `PipelineChain` for `&&` / `||`) are intentionally
+            // *not* matched as node kinds here. Unlike the comparison /
+            // ternary / null-coalesce pairs — which each wrap a single
+            // operator — a single `logical_expression` node can contain
+            // *multiple* `-and` / `-or` / `-xor` leaf tokens (e.g.
+            // `$a -and $b -and $c` is one wrapper with two `-and` leaves).
+            // We want each operator occurrence to contribute +1, so we
+            // match the leaf tokens (`DASHand` / `DASHor` / `DASHxor` /
+            // `AMPAMP` / `PIPEPIPE`) directly. Adding the wrapper kinds
+            // would double-count every logical operator.
             IfStatement
             | ElseifClause
             | ForStatement
@@ -1031,6 +1043,37 @@ mod tests {
                       "conditions_max": 3.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_abc_logical_operators_are_not_double_counted() {
+        // Regression: the ABC conditions arm intentionally matches only
+        // the *leaf* logical-operator tokens (`DASHand`, `DASHor`,
+        // `DASHxor`, `AMPAMP`, `PIPEPIPE`) and NOT the `LogicalExpression`
+        // / `LogicalArgumentExpression` wrapper kinds. tree-sitter-pwsh
+        // emits a single wrapper that can hold multiple operator leaves
+        // (e.g. `$a -and $b -and $c` is one `logical_expression` with
+        // two `-and` leaves). Counting both wrapper and leaves would
+        // double-count every logical operator; this test locks that
+        // contract in so the next reviewer who eyes the comparison /
+        // ternary / null-coalesce pairs doesn't mistakenly add the
+        // logical wrappers to the arm.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 # statement-form logical: 1 wrapper, 2 leaves -> +2
+                 if ($a -and $b -and $c) { 'x' }   # +1 if + 2 -and leaves
+                 # argument-form logical: 1 wrapper, 1 leaf -> +1
+                 [Foo]::Bar($a -or $b)              # +1 B + 1 -or leaf
+             }",
+            "foo.ps1",
+            |metric| {
+                // Conditions: 1 (if) + 2 (-and, -and) + 1 (-or) = 4.
+                // If the wrappers were also matched, it would be 6.
+                assert_eq!(metric.abc.conditions_sum(), 4.0);
+                assert_eq!(metric.abc.branches_sum(), 1.0);
+                assert_eq!(metric.abc.assignments_sum(), 0.0);
             },
         );
     }
