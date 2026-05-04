@@ -477,22 +477,22 @@ impl Npm for GoCode {
 }
 
 /// Whether a PowerShell class member (method or property) is considered
-/// public. Members are public by default; only a `hidden` class-attribute
-/// marks a member as non-public (the `static` attribute does not change
-/// visibility). This mirrors how PowerShell's own `[System.Reflection]`
-/// reports `IsHidden`.
-pub(crate) fn powershell_member_is_public(node: &Node, code: &[u8]) -> bool {
-    for child in node.children() {
-        if child.kind_id() != Powershell::ClassAttribute {
-            continue;
-        }
-        let text = &code[child.start_byte()..child.end_byte()];
-        // `class_attribute` leaf text may carry the attribute keyword
-        // directly (e.g. `hidden`, `static`). Lowercase compare to be safe.
-        if text.eq_ignore_ascii_case(b"hidden") {
-            return false;
-        }
-    }
+/// public. PowerShell has no true access modifier: the `hidden` keyword
+/// only suppresses a member from default `Get-Member` / IntelliSense /
+/// tab-completion output and has *no effect on accessibility* — hidden
+/// members remain publicly callable from any scope. Per the Microsoft
+/// docs on `about_Hidden`:
+///
+/// > Like all language keywords in PowerShell, `hidden` is not
+/// > case-sensitive, and hidden members are still public. The `hidden`
+/// > keyword has no effect on how you can view or make changes to
+/// > members of a class.
+///
+/// <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_hidden>
+///
+/// Therefore every PowerShell class method and property counts as
+/// public for the purposes of NPM / NPA.
+pub(crate) fn powershell_member_is_public(_node: &Node, _code: &[u8]) -> bool {
     true
 }
 
@@ -1005,7 +1005,12 @@ mod tests {
     }
 
     #[test]
-    fn powershell_npm_counts_hidden_methods_as_non_public() {
+    fn powershell_npm_counts_all_methods_as_public_including_hidden() {
+        // PowerShell has no access-modifier equivalent to `private` /
+        // `protected`. The `hidden` keyword only suppresses a member from
+        // default `Get-Member` / IntelliSense output; the member is still
+        // publicly callable. Per about_Hidden: "hidden members are still
+        // public". NPM therefore counts every method as public.
         check_metrics::<PowershellParser>(
             "class C {
                  [void] A() { }
@@ -1015,20 +1020,20 @@ mod tests {
              }",
             "foo.ps1",
             |metric| {
-                // 4 methods, 2 public (A, Cm), 2 hidden (B, D).
+                // 4 methods, all public (A, B, Cm, D).
                 insta::assert_json_snapshot!(
                     metric.npm,
                     @r###"
                     {
-                      "classes": 2.0,
+                      "classes": 4.0,
                       "interfaces": 0.0,
                       "class_methods": 4.0,
                       "interface_methods": 0.0,
-                      "classes_average": 0.5,
+                      "classes_average": 1.0,
                       "interfaces_average": null,
-                      "total": 2.0,
+                      "total": 4.0,
                       "total_methods": 4.0,
-                      "average": 0.5
+                      "average": 1.0
                     }"###
                 );
             },
