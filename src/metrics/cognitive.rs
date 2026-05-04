@@ -682,8 +682,16 @@ impl Cognitive for PowershellCode {
             Pipeline | AssignmentExpression => {
                 stats.boolean_seq.reset();
             }
-            // `-not` / `!` — track for the boolean-sequence collapsing logic.
-            ExpressionWithUnaryOperator => {
+            // `-not` / `!` / `-bnot` — track in the boolean-sequence
+            // collapsing logic so that a leading negation doesn't trick
+            // the tracker into counting the first real boolean operator
+            // as a transition. The grammar wraps every unary form in
+            // `expression_with_unary_operator` (including `+$x`, `-$x`,
+            // `[int]$x`, `,$x`, `++$x`, `-split $x`, ...), so matching the
+            // wrapper kind would feed `BoolSequence` a non-boolean token
+            // and any subsequent `-and` / `-or` comparison would miss.
+            // Only the actual negation tokens belong here.
+            DASHnot | BANG | DASHbnot => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
             // Collapse same-operator sequences. `logical_expression` and its
@@ -2329,6 +2337,77 @@ mod tests {
                       "average": 8.0,
                       "min": 0.0,
                       "max": 8.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_cognitive_unary_wrappers_do_not_break_boolean_collapsing() {
+        // Regression: `expression_with_unary_operator` is the grammar
+        // wrapper for *all* unary forms (`+$x`, `-$x`, `[int]$x`, `,$x`,
+        // `++$x`, `-split $x`, ...), not just `-not` / `!`. Storing the
+        // wrapper's kind_id as the "previous boolean" in `BoolSequence`
+        // would poison subsequent same-operator collapsing: the tracker
+        // would see `-and` != wrapper_kind and increment on every
+        // operator even in a runs-of-one-kind chain. Only the actual
+        // negation token kinds (`-not` / `!` / `-bnot`) should feed
+        // `not_operator`.
+        //
+        // The cases below all contain a unary prefix before the first
+        // operand of an `-and` chain; if the old arm misbehaved, each of
+        // these would score +1 higher than the expected value. Observed
+        // = Expected = 2 for each, summed = 8.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 # baseline: no unary, same-op collapses to +1
+                 if ($a -and $b -and $c) { }            # +1 if +1 -and
+                 # plus-unary prefix
+                 if (+$a -and $b -and $c) { }           # +1 if +1 -and
+                 # cast-unary prefix
+                 if ([int]$a -and $b -and $c) { }       # +1 if +1 -and
+                 # comma-unary prefix (array form)
+                 if (,$a -and $b -and $c) { }           # +1 if +1 -and
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 8.0,
+                      "average": 8.0,
+                      "min": 0.0,
+                      "max": 8.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_cognitive_not_negation_still_tracked() {
+        // The restricted `DASHnot | BANG | DASHbnot` arm must still feed
+        // `BoolSequence::not_operator` so that real negation chains work.
+        // `if (-not $a -and -not $b)` has two same-shape negated operands
+        // joined by a single `-and` — Sonar whitepaper: the negation
+        // doesn't add a transition, so the total is +1 if +1 -and.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b) {
+                 if (-not $a -and -not $b) { }    # +1 if +1 -and
+                 if (!$a -or !$b -or !$c) { }     # +1 if +1 -or (collapsed)
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 4.0,
+                      "min": 0.0,
+                      "max": 4.0
                     }"###
                 );
             },
