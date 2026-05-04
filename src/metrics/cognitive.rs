@@ -676,6 +676,14 @@ impl Cognitive for PowershellCode {
             }
             ElseClause | FinallyClause | TrapStatement => {
                 increment_by_one(stats);
+                // Reset the boolean-sequence tracker to mirror
+                // `ElseifClause`'s behavior. In practice the
+                // `Pipeline | AssignmentExpression` arm also resets at
+                // statement boundaries, so this is currently
+                // load-bearing only as defense-in-depth: it keeps the
+                // invariant local to the clause itself rather than
+                // relying on a descendant pipeline to restore it.
+                stats.boolean_seq.reset();
             }
             // Statement-boundary resets for the boolean-sequence tracker so
             // `-and` / `-or` sequences don't bleed across statements.
