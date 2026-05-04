@@ -736,4 +736,45 @@ mod tests {
             assert_eq!(metric.halstead.operands(), 1.0);
         });
     }
+
+    #[test]
+    fn powershell_string_literals_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69:
+        // double-quoted ("expandable") and here-string double-quoted
+        // literals have no content-leaf node (their text lives inside
+        // the wrapper's byte range directly), so they landed in
+        // `HalsteadType::Unknown` and were dropped from N2. Verbatim
+        // (single-quoted) strings have a `verbatim_string_characters`
+        // leaf, so those were already counted.
+        //
+        // The fix classifies the `expandable_string_literal` /
+        // `expandable_here_string_literal` wrapper kinds themselves as
+        // operands (empty or not), matching the verbatim branch.
+        //
+        // This script has 4 distinct strings plus 4 `$` variables;
+        // expected n2 = 8 (it was 6 before the fix because both
+        // `""` / `"world"` fell into Unknown).
+        check_metrics::<PowershellParser>(
+            "$a = ''
+             $b = \"\"
+             $c = 'hello'
+             $d = \"world\"",
+            "foo.ps1",
+            |metric| {
+                assert_eq!(metric.halstead.u_operands(), 8.0);
+                assert_eq!(metric.halstead.operands(), 8.0);
+            },
+        );
+
+        // Empty expandable `""` on its own — n2 = 1 (just the string),
+        // and N2 = 1. Pre-fix: n2 = 0, N2 = 0.
+        check_metrics::<PowershellParser>("$x = \"\"", "foo.ps1", |metric| {
+            // Operators: `=` → n1=1, N1=1.
+            // Operands: `$x`, `""` → n2=2, N2=2.
+            assert_eq!(metric.halstead.u_operators(), 1.0);
+            assert_eq!(metric.halstead.operators(), 1.0);
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+    }
 }

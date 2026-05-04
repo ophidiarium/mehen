@@ -571,6 +571,17 @@ impl Getter for PowershellCode {
             | DecimalIntegerLiteral | HexadecimalIntegerLiteral | RealLiteral
             | VerbatimStringCharacters | VerbatimStringCharacters2
             | VerbatimHereStringCharacters
+            // Expandable (double-quoted) string literals are wrappers in
+            // the grammar: their text content is embedded in the
+            // wrapper's byte range rather than in a separate content
+            // leaf (unlike `verbatim_string_characters`). Classifying
+            // the wrapper itself is therefore the only way to count
+            // `""`, `"plain"`, and interpolated `"hello $name"` as
+            // operands. The wrapper's interpolation children
+            // (`variable`, `sub_expression`) are classified separately
+            // as operands / operator territory on their own merits, so
+            // the wrapper only contributes one count per literal.
+            | ExpandableStringLiteral | ExpandableHereStringLiteral
             | FunctionName | CommandName | PathCommandNameToken
             | CommandParameter => HalsteadType::Operand,
 
