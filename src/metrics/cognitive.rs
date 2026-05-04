@@ -685,9 +685,37 @@ impl Cognitive for PowershellCode {
                 // relying on a descendant pipeline to restore it.
                 stats.boolean_seq.reset();
             }
-            // Statement-boundary resets for the boolean-sequence tracker so
-            // `-and` / `-or` sequences don't bleed across statements.
-            Pipeline | AssignmentExpression => {
+            // Statement-boundary reset for the boolean-sequence tracker
+            // so `-and` / `-or` sequences don't bleed across statements.
+            // After the reset, scan the pipeline's `pipeline_chain_tail`
+            // children (if any) for `&&` / `||` operators so mixed or
+            // same-operator short-circuit chains score correctly. In
+            // tree-sitter-pwsh, `cmd1 && cmd2 || cmd3` parses as one
+            // `pipeline` containing alternating `pipeline_chain` /
+            // `pipeline_chain_tail` children, where each
+            // `pipeline_chain_tail` wraps a single `&&` or `||` token.
+            Pipeline => {
+                stats.boolean_seq.reset();
+                // Each `pipeline_chain_tail` is a direct child of
+                // `pipeline` and its single child is the `&&` or `||`
+                // token. Feed the tracker one `eval_based_on_prev` call
+                // per operator so same-op runs collapse to +1 and mixed
+                // chains add +1 per transition (matching the Sonar
+                // whitepaper).
+                for child in node.children() {
+                    if child.kind_id() != PipelineChainTail {
+                        continue;
+                    }
+                    if let Some(op) = child.child(0)
+                        && matches!(op.kind_id().into(), AMPAMP | PIPEPIPE)
+                    {
+                        stats.structural = stats
+                            .boolean_seq
+                            .eval_based_on_prev(op.kind_id(), stats.structural);
+                    }
+                }
+            }
+            AssignmentExpression => {
                 stats.boolean_seq.reset();
             }
             // `-not` / `!` / `-bnot` — track in the boolean-sequence
@@ -706,19 +734,14 @@ impl Cognitive for PowershellCode {
             // argument-form twin `logical_argument_expression` both always
             // carry at least one `-and` / `-or` / `-xor` operator when
             // emitted — all three participate in sequence collapsing so
-            // mixed chains score +1 per transition. `pipeline_chain`
-            // surfaces `&&` / `||` only when real pipeline short-circuit
-            // tails exist; the guard avoids running the tracker on every
-            // statement's pipeline_chain wrapper.
+            // mixed chains score +1 per transition.
+            //
+            // Short-circuit `&&` / `||` operators are handled by the
+            // `Pipeline` arm above because they live inside
+            // `pipeline_chain_tail` children of `pipeline`, not under
+            // `pipeline_chain` itself.
             LogicalExpression | LogicalArgumentExpression => {
                 compute_booleans_in::<Powershell>(node, stats, &[DASHand, DASHor, DASHxor]);
-            }
-            PipelineChain
-                if node
-                    .children()
-                    .any(|c| matches!(c.kind_id().into(), AMPAMP | PIPEPIPE)) =>
-            {
-                compute_booleans::<Powershell>(node, stats, &AMPAMP, &PIPEPIPE);
             }
             // Function-like spaces reset structural nesting and bump depth.
             FunctionStatement | ClassMethodDefinition => {
@@ -2416,6 +2439,46 @@ mod tests {
                       "average": 4.0,
                       "min": 0.0,
                       "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_cognitive_pipeline_chain_tail_operators_count() {
+        // Regression: in tree-sitter-pwsh, `cmd1 && cmd2 || cmd3` parses
+        // as one `pipeline` containing alternating `pipeline_chain` /
+        // `pipeline_chain_tail` children, where each
+        // `pipeline_chain_tail` wraps a single `&&` or `||` token. The
+        // `&&` / `||` are therefore NOT direct children of
+        // `pipeline_chain`; they live under `pipeline_chain_tail` nested
+        // inside the `pipeline`.
+        //
+        // The PowerShell Cognitive::compute `Pipeline` arm scans the
+        // pipeline's `pipeline_chain_tail` children for `&&` / `||`
+        // operators, feeding them into the boolean-sequence tracker so
+        // mixed chains add +1 per transition and same-op runs collapse
+        // to +1.
+        check_metrics::<PowershellParser>(
+            "function f {
+                 # Mixed: && then || → +1 && +1 || = +2
+                 Get-Thing && Write-Host 'ok' || Write-Error 'bad'
+                 # Same-op sequence: && && → +1 (collapsed)
+                 Get-A && Get-B && Get-C
+                 # Plain pipeline, no short-circuit tails: no contribution
+                 Get-D
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
                     }"###
                 );
             },
