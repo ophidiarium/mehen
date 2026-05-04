@@ -292,14 +292,25 @@ impl NArgs for KotlinCode {
 fn compute_powershell_args(node: &Node, nargs: &mut usize) {
     use Powershell::*;
 
-    // PowerShell parameter declarations can appear in two places:
+    // PowerShell parameter declarations can appear in three shapes:
     //   1. `function_statement` > `function_parameter_declaration` >
     //      `parameter_list` > `script_parameter` (each `script_parameter`
     //      is one named `$var`).
-    //   2. For script-block closures: the `script_block` (or `script_block_expression`)
-    //      > `param_block` > `parameter_list` > `script_parameter`.
+    //   2. For script-block closures: `script_block_expression` >
+    //      `param_block` > `parameter_list` > `script_parameter`.
     //   3. For class methods: `class_method_definition` >
     //      `class_method_parameter_list` > `class_method_parameter`.
+    //
+    // The walker recurses *only* through the immediate structural
+    // wrappers that sit between the entry node and the parameter list
+    // (`function_parameter_declaration` for functions, `param_block` for
+    // closures). It deliberately does NOT recurse into the body
+    // `script_block` / `script_block_body` / `statement_list`: each
+    // nested function or closure inside a body is its own FuncSpace and
+    // its own call to `NArgs::compute`, so descending into the body
+    // would double-count nested params against the enclosing
+    // function / closure. Regression test:
+    // `powershell_nested_closure_params_do_not_count_toward_outer_fn`.
     enum Kind {
         Script,
         Method,
@@ -326,13 +337,13 @@ fn compute_powershell_args(node: &Node, nargs: &mut usize) {
                         }
                     }
                 }
-                // Recurse into nested structural wrappers so that both the
-                // `function_parameter_declaration > parameter_list` shape
-                // and the `script_block > param_block > parameter_list`
-                // shape are handled by one traversal.
-                Powershell::FunctionParameterDeclaration
-                | Powershell::ParamBlock
-                | Powershell::ScriptBlock => walk(&child, nargs, kind),
+                // Recurse only into the thin structural wrappers that
+                // directly enclose the parameter list. See the comment
+                // above for why the body `script_block` is intentionally
+                // excluded.
+                Powershell::FunctionParameterDeclaration | Powershell::ParamBlock => {
+                    walk(&child, nargs, kind)
+                }
                 _ => {}
             }
         }
@@ -941,6 +952,46 @@ mod tests {
                       "average": 2.0,
                       "functions_min": 0.0,
                       "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_nested_closure_params_do_not_count_toward_outer_fn() {
+        // Regression: `compute_powershell_args` must not recurse into
+        // the body `script_block` of a `function_statement` or
+        // `script_block_expression`, or the `param_block` of a nested
+        // closure inside the body would leak into the outer function's
+        // arg count. For `function f($a) { $sb = { param($x, $y) ... } }`,
+        // `f` owns 1 function arg and the inner closure owns 2 closure
+        // args; neither should leak into the other's counters.
+        check_metrics::<crate::langs::PowershellParser>(
+            "function f($a) {
+                 $sb = { param($x, $y) $x + $y }
+             }",
+            "foo.ps1",
+            |metric| {
+                // At the outer function's space, the aggregated counts
+                // are: 1 function arg (f's $a) + 2 closure args (the
+                // inner scriptblock's $x, $y). Neither bleeds into the
+                // other counter. `functions_max = 1` (not 3) pins that
+                // f itself owns exactly 1 arg.
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 1.0,
+                      "total_closures": 2.0,
+                      "average_functions": 1.0,
+                      "average_closures": 2.0,
+                      "total": 3.0,
+                      "average": 1.5,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
                       "closures_min": 0.0,
                       "closures_max": 2.0
                     }"###
