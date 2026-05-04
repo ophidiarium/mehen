@@ -649,7 +649,9 @@ impl Cognitive for PowershellCode {
             | SwitchStatement
             | CatchClause
             | TernaryExpression
-            | NullCoalesceExpression => {
+            | TernaryArgumentExpression
+            | NullCoalesceExpression
+            | NullCoalesceArgumentExpression => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             ElseifClause => {
@@ -668,12 +670,13 @@ impl Cognitive for PowershellCode {
             ExpressionWithUnaryOperator => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
-            // Collapse same-operator sequences. `logical_expression` now
-            // always carries at least one `-and` / `-or` / `-xor` operator.
-            // `pipeline_chain` surfaces `&&` / `||` only when real pipeline
-            // short-circuit tails exist; the guard avoids running the
-            // tracker on every statement's pipeline_chain wrapper.
-            LogicalExpression => {
+            // Collapse same-operator sequences. `logical_expression` and its
+            // argument-form twin `logical_argument_expression` both always
+            // carry at least one `-and` / `-or` / `-xor` operator when
+            // emitted. `pipeline_chain` surfaces `&&` / `||` only when real
+            // pipeline short-circuit tails exist; the guard avoids running
+            // the tracker on every statement's pipeline_chain wrapper.
+            LogicalExpression | LogicalArgumentExpression => {
                 compute_booleans::<Powershell>(node, stats, &DASHand, &DASHor);
             }
             PipelineChain
@@ -2246,6 +2249,36 @@ mod tests {
                       "average": 5.0,
                       "min": 0.0,
                       "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_cognitive_counts_argument_form_decision_operators() {
+        // Regression: tree-sitter-pwsh emits a parallel family of
+        // `*_argument_expression` kinds for expressions that live inside a
+        // method-invocation `argument_list`. The argument-form ternary and
+        // null-coalesce must be nesting-increasing, and argument-form
+        // `logical_argument_expression` must participate in same-operator
+        // sequence collapsing exactly like the regular form.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $cond, $x) {
+                 [Foo]::Baz($cond ? 1 : 2)          # +1 ternary (arg form)
+                 [Foo]::Qux($x ?? 3)                # +1 null-coalesce (arg form)
+                 [Foo]::Zig($a -and $b -and $cond)  # +1 (collapsed sequence of -and, arg form)
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
                     }"###
                 );
             },

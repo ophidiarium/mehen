@@ -254,7 +254,11 @@ impl Cyclomatic for PowershellCode {
         // kinds (`ternary_expression`, `null_coalesce_expression`, ...)
         // when the operator is actually present, so matching on the kind
         // is sufficient — no operator-token guard is needed. See
-        // wharflab/tree-sitter-powershell#56.
+        // wharflab/tree-sitter-powershell#56. The grammar also emits a
+        // parallel family of `*_argument_expression` kinds for the same
+        // operators when they appear inside a method-invocation
+        // `argument_list` (e.g. `[Foo]::Bar($cond ? 1 : 2)`), so we match
+        // both families.
         match node.kind_id().into() {
             IfStatement
             | ElseifClause
@@ -266,7 +270,9 @@ impl Cyclomatic for PowershellCode {
             | CatchClause
             | TrapStatement
             | TernaryExpression
+            | TernaryArgumentExpression
             | NullCoalesceExpression
+            | NullCoalesceArgumentExpression
             | AMPAMP
             | PIPEPIPE
             | DASHand
@@ -858,6 +864,35 @@ mod tests {
                       "sum": 3.0,
                       "average": 3.0,
                       "min": 3.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_argument_form_ternary_and_null_coalesce_count() {
+        // Regression: tree-sitter-pwsh emits a parallel family of
+        // `*_argument_expression` kinds for expressions that live inside a
+        // method-invocation `argument_list` (e.g. `[Foo]::Bar($cond ? 1 : 2)`).
+        // Those argument-form decision operators must count the same as
+        // their regular-form twins.
+        check_metrics::<PowershellParser>(
+            "function F($a, $b, $x, $cond) { # +2 (+1 unit, +1 function)
+                 [Foo]::Bar($a -eq $b)        # comparison: no decision
+                 [Foo]::Baz($cond ? 1 : 2)    # +1 ternary
+                 [Foo]::Qux($x ?? 3)          # +1 null-coalesce
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 2.0,
+                      "min": 1.0,
                       "max": 3.0
                     }"###
                 );

@@ -576,7 +576,12 @@ impl Abc for PowershellCode {
             }
             // C: every structural conditional construct, every comparison,
             // and every short-circuit / logical / ternary / null-coalesce
-            // operator.
+            // operator. tree-sitter-pwsh emits a parallel family of
+            // `*_argument_expression` kinds for expressions that appear
+            // inside a method-invocation `argument_list` (e.g.
+            // `[Foo]::Bar($a -eq $b)`). Those argument-form variants carry
+            // the same decision-point semantics as the regular forms, so
+            // we match both families here.
             IfStatement
             | ElseifClause
             | ForStatement
@@ -587,8 +592,11 @@ impl Abc for PowershellCode {
             | CatchClause
             | TrapStatement
             | TernaryExpression
+            | TernaryArgumentExpression
             | NullCoalesceExpression
+            | NullCoalesceArgumentExpression
             | ComparisonExpression
+            | ComparisonArgumentExpression
             | AMPAMP
             | PIPEPIPE
             | DASHand
@@ -982,6 +990,45 @@ mod tests {
                       "branches_max": 1.0,
                       "conditions_min": 0.0,
                       "conditions_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_abc_counts_argument_form_decision_operators() {
+        // Regression: tree-sitter-pwsh emits a parallel family of
+        // `*_argument_expression` kinds for expressions that live inside a
+        // method-invocation `argument_list` (e.g. `[Foo]::Bar($a -eq $b)`).
+        // The argument-form comparison / ternary / null-coalesce /
+        // logical operators must contribute to ABC conditions the same as
+        // their regular-form twins.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $cond, $x) {
+                 [Foo]::Bar($a -eq $b)     # +1 C comparison (arg form)
+                 [Foo]::Baz($cond ? 1 : 2) # +1 C ternary (arg form)
+                 [Foo]::Qux($x ?? 3)       # +1 C null-coalesce (arg form)
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 0.0,
+                      "branches": 3.0,
+                      "conditions": 3.0,
+                      "magnitude": 4.242640687119285,
+                      "assignments_average": 0.0,
+                      "branches_average": 1.5,
+                      "conditions_average": 1.5,
+                      "assignments_min": 0.0,
+                      "assignments_max": 0.0,
+                      "branches_min": 0.0,
+                      "branches_max": 3.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 3.0
                     }"###
                 );
             },
