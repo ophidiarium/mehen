@@ -1,5 +1,7 @@
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
@@ -431,6 +433,101 @@ impl Getter for RubyCode {
             | Integer | Float | Rational | Complex | Character
             | String | ChainedString | SimpleSymbol | DelimitedSymbol | HeredocBeginning
             | True | False | Nil | Nil2 | Zelf | Line | File | Encoding => HalsteadType::Operand,
+
+            _ => HalsteadType::Unknown,
+        }
+    }
+}
+
+impl Getter for PowershellCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        use Powershell::*;
+        match node.kind_id().into() {
+            FunctionStatement | ClassMethodDefinition | ScriptBlockExpression => {
+                SpaceKind::Function
+            }
+            ClassStatement => SpaceKind::Class,
+            Program => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
+        // In the tree-sitter-pwsh grammar, neither `function_statement` nor
+        // `class_method_definition` tags the name via a `name` field. Walk
+        // the children to find the first identifier-shaped child.
+        match node.kind_id().into() {
+            Powershell::FunctionStatement => {
+                for child in node.children() {
+                    if child.kind_id() == Powershell::FunctionName {
+                        let bytes = &code[child.start_byte()..child.end_byte()];
+                        return std::str::from_utf8(bytes).ok();
+                    }
+                }
+                Some("<anonymous>")
+            }
+            Powershell::ClassMethodDefinition | Powershell::ClassStatement => {
+                for child in node.children() {
+                    if child.kind_id() == Powershell::SimpleName {
+                        let bytes = &code[child.start_byte()..child.end_byte()];
+                        return std::str::from_utf8(bytes).ok();
+                    }
+                }
+                Some("<anonymous>")
+            }
+            _ => Some("<anonymous>"),
+        }
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Powershell::*;
+
+        match node.kind_id().into() {
+            // Keywords and structural/control-flow markers act as operators.
+            Function | Filter | Workflow | If | Elseif | Else | Switch | For
+            | Foreach | In | While | Do | Until | Break | Continue | Return | Throw | Exit
+            | Try | Catch | Finally | Trap | Param | Using | Namespace | Module | Assembly
+            | Static | This | Base | Begin | Process | End2 | Clean | Dynamicparam | Data
+            | Inlinescript | Parallel | Sequence
+            // Punctuation-like operators.
+            | LPAREN | LBRACE | LBRACK | COMMA | SEMI | DOT | DOT2 | COLON | COLONCOLON
+            | ATLPAREN | ATLBRACE | DOLLARLPAREN
+            // Assignment family.
+            | EQ | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ | QMARKQMARKEQ
+            // Arithmetic / bitwise / unary.
+            | PLUS | DASH | STAR | SLASH | PERCENT | BSLASH | DOTDOT
+            | PLUSPLUS | DASHDASH | BANG
+            // Short-circuit / null-coalesce / ternary.
+            | AMPAMP | PIPEPIPE | QMARK | QMARKQMARK
+            // Pipeline / invocation / redirection tokens.
+            | PIPE | AMP
+            // PowerShell's word-form logical / comparison / typing operators
+            // (dash-prefixed). The grammar exposes each as its own anonymous
+            // token; we classify them all as operators.
+            | DASHand | DASHor | DASHxor | DASHnot | DASHband | DASHbor | DASHbxor | DASHbnot
+            | DASHas | DASHis | DASHisnot | DASHf | DASHjoin
+            | DASHshl | DASHshr | DASHsplit | DASHisplit | DASHcsplit
+            | DASHreplace | DASHireplace | DASHcreplace
+            | DASHmatch | DASHimatch | DASHcmatch | DASHnotmatch | DASHinotmatch | DASHcnotmatch
+            | DASHlike | DASHilike | DASHclike | DASHnotlike | DASHinotlike | DASHcnotlike
+            | DASHcontains | DASHicontains | DASHccontains
+            | DASHnotcontains | DASHinotcontains | DASHcnotcontains
+            | DASHin | DASHnotin
+            | DASHeq | DASHieq | DASHceq | DASHne | DASHine | DASHcne
+            | DASHlt | DASHilt | DASHclt | DASHle | DASHile | DASHcle
+            | DASHgt | DASHigt | DASHcgt | DASHge | DASHige | DASHcge
+            | LT | GT
+            // Operator-like comparison wrapper.
+            | ComparisonOperator | AssignementOperator | FormatOperator
+            | FileRedirectionOperator | MergingRedirectionOperator => HalsteadType::Operator,
+
+            // Operands: identifiers, variables, literals.
+            SimpleName | TypeIdentifier | Variable | Variable2 | BracedVariable | GenericToken
+            | GenericToken2 | GenericToken3 | GenericToken4 | GenericToken5
+            | DecimalIntegerLiteral | HexadecimalIntegerLiteral | RealLiteral
+            | VerbatimStringCharacters | VerbatimStringCharacters2
+            | VerbatimHereStringCharacters
+            | CommandParameter => HalsteadType::Operand,
 
             _ => HalsteadType::Unknown,
         }

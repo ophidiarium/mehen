@@ -37,9 +37,10 @@ tree-sitter-rust = "=0.24.2"
 tree-sitter-go = "=0.25.0"
 tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
+tree-sitter-pwsh = "=0.37.0"
 
 [package.metadata.cargo-machete]
-ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby", "tree-sitter-kotlin"]
+ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby", "tree-sitter-kotlin", "tree-sitter-pwsh"]
 
 [dev-dependencies]
 insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }

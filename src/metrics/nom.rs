@@ -3,7 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 
@@ -209,12 +211,13 @@ implement_metric_trait!(
     RustCode,
     GoCode,
     RubyCode,
-    KotlinCode
+    KotlinCode,
+    PowershellCode
 );
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser};
+    use crate::langs::{KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser};
     use crate::tools::check_metrics;
 
     #[test]
@@ -366,6 +369,38 @@ mod tests {
                       "functions_max": 0.0,
                       "closures_min": 0.0,
                       "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_nom_counts_functions_methods_and_script_block_closures() {
+        check_metrics::<PowershellParser>(
+            "function f1 { }
+             function f2 { }
+             class C {
+                 [void] M() { }
+             }
+             $sb = { param($x) $x + 1 }",
+            "foo.ps1",
+            |metric| {
+                // 3 functions (f1, f2, M) + 1 closure (the `{ ... }` scriptblock).
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 3.0,
+                      "closures": 1.0,
+                      "functions_average": 0.5,
+                      "closures_average": 0.16666666666666666,
+                      "total": 4.0,
+                      "average": 0.6666666666666666,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
+                      "closures_min": 0.0,
+                      "closures_max": 1.0
                     }"###
                 );
             },

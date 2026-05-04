@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -476,6 +476,26 @@ impl Npm for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
+/// Whether a PowerShell class member (method or property) is considered
+/// public. Members are public by default; only a `hidden` class-attribute
+/// marks a member as non-public (the `static` attribute does not change
+/// visibility). This mirrors how PowerShell's own `[System.Reflection]`
+/// reports `IsHidden`.
+pub(crate) fn powershell_member_is_public(node: &Node, code: &[u8]) -> bool {
+    for child in node.children() {
+        if child.kind_id() != Powershell::ClassAttribute {
+            continue;
+        }
+        let text = &code[child.start_byte()..child.end_byte()];
+        // `class_attribute` leaf text may carry the attribute keyword
+        // directly (e.g. `hidden`, `static`). Lowercase compare to be safe.
+        if text.eq_ignore_ascii_case(b"hidden") {
+            return false;
+        }
+    }
+    true
+}
+
 /// Explicit Kotlin visibility on a declaration-like node.
 pub(crate) fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
     for child in node.children() {
@@ -587,10 +607,29 @@ impl Npm for KotlinCode {
     }
 }
 
+impl Npm for PowershellCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if node.kind_id() != Powershell::ClassMethodDefinition {
+            return;
+        }
+        // A class_method_definition is a direct child of its enclosing
+        // class_statement in the tree-sitter-pwsh grammar.
+        let in_class = node
+            .parent()
+            .is_some_and(|p| p.kind_id() == Powershell::ClassStatement);
+        if !in_class {
+            return;
+        }
+        let public = powershell_member_is_public(node, code);
+        record_method(stats, SpaceKind::Class, public);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
+        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -960,6 +999,37 @@ mod tests {
                   "average": 1.0
                 }
                 "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_npm_counts_hidden_methods_as_non_public() {
+        check_metrics::<PowershellParser>(
+            "class C {
+                 [void] A() { }
+                 hidden [void] B() { }
+                 [void] Cm() { }
+                 hidden [void] D() { }
+             }",
+            "foo.ps1",
+            |metric| {
+                // 4 methods, 2 public (A, Cm), 2 hidden (B, D).
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_methods": 4.0,
+                      "interface_methods": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_methods": 4.0,
+                      "average": 0.5
+                    }"###
                 );
             },
         );

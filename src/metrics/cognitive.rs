@@ -6,9 +6,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode, TypescriptCode,
+    GoCode, KotlinCode, PowershellCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 // TODO: Find a way to increment the cognitive complexity value
@@ -612,10 +613,100 @@ impl Cognitive for KotlinCode {
 // No languages require empty Cognitive implementations
 // implement_metric_trait!(Cognitive);
 
+impl Cognitive for PowershellCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use Powershell::*;
+
+        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        // Cognitive complexity scoring aligned with the Sonar white paper:
+        //   - Nesting-increasing: `if` / loops / `switch` / `catch` /
+        //     `ternary` / null-coalesce — each adds `nesting + 1`.
+        //   - Non-nesting +1: `elseif`, `else`, `finally`, `trap`, plus
+        //     same-type boolean sequences (collapsed via the existing
+        //     `BoolSequence` helper).
+        //   - Function-depth: `function_statement` / `class_method_definition`
+        //     reset structural nesting and bump `depth`. `script_block_expression`
+        //     (closure-like script blocks) bump `lambda`.
+        //
+        // tree-sitter-pwsh v0.37+ only emits operator-level expression
+        // kinds (`ternary_expression`, `null_coalesce_expression`,
+        // `logical_expression`) when an actual operator is present, so
+        // matching on the kind directly is sufficient. See
+        // wharflab/tree-sitter-powershell#56. `pipeline_chain` still needs
+        // a guard because every statement wraps its expression in one,
+        // whether or not `&&` / `||` are present.
+        match node.kind_id().into() {
+            IfStatement
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | SwitchStatement
+            | CatchClause
+            | TernaryExpression
+            | NullCoalesceExpression => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            ElseifClause => {
+                increment_by_one(stats);
+                stats.boolean_seq.reset();
+            }
+            ElseClause | FinallyClause | TrapStatement => {
+                increment_by_one(stats);
+            }
+            // Statement-boundary resets for the boolean-sequence tracker so
+            // `-and` / `-or` sequences don't bleed across statements.
+            Pipeline | AssignmentExpression => {
+                stats.boolean_seq.reset();
+            }
+            // `-not` / `!` — track for the boolean-sequence collapsing logic.
+            ExpressionWithUnaryOperator => {
+                stats.boolean_seq.not_operator(node.kind_id());
+            }
+            // Collapse same-operator sequences. `logical_expression` now
+            // always carries at least one `-and` / `-or` / `-xor` operator.
+            // `pipeline_chain` surfaces `&&` / `||` only when real pipeline
+            // short-circuit tails exist; the guard avoids running the
+            // tracker on every statement's pipeline_chain wrapper.
+            LogicalExpression => {
+                compute_booleans::<Powershell>(node, stats, &DASHand, &DASHor);
+            }
+            PipelineChain
+                if node
+                    .children()
+                    .any(|c| matches!(c.kind_id().into(), AMPAMP | PIPEPIPE)) =>
+            {
+                compute_booleans::<Powershell>(node, stats, &AMPAMP, &PIPEPIPE);
+            }
+            // Function-like spaces reset structural nesting and bump depth.
+            FunctionStatement | ClassMethodDefinition => {
+                nesting = 0;
+                lambda = 0;
+                increment_function_depth_any::<Powershell>(
+                    &mut depth,
+                    node,
+                    &[FunctionStatement, ClassMethodDefinition],
+                );
+            }
+            ScriptBlockExpression => {
+                lambda += 1;
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -1942,5 +2033,158 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn powershell_nested_if_increments_nesting() {
+        check_metrics::<PowershellParser>(
+            "function f($a, $b) {
+                 if ($a) {      # +1
+                     if ($b) {  # +2 (nesting = 1)
+                         Write-Host \"hi\"
+                     }
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_try_catch_nesting() {
+        // `try` itself does NOT add; each `catch` does and also bumps nesting.
+        // `finally` adds +1 without nesting.
+        check_metrics::<PowershellParser>(
+            "function f {
+                 try {
+                     if ($a) {    # +1 (try itself contributes 0)
+                         Write-Host \"a\"
+                     }
+                 } catch {       # +1 catch
+                     if ($b) {    # +2 (nesting = 1 from catch)
+                         throw
+                     }
+                 } finally {      # +1 finally (no nesting)
+                     Write-Host \"done\"
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 5.0,
+                      "min": 0.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_elseif_and_else_flatten() {
+        check_metrics::<PowershellParser>(
+            "function f($a) {
+                 if ($a -gt 0) {          # +1
+                     'pos'
+                 } elseif ($a -lt 0) {    # +1 (elseif, flat)
+                     'neg'
+                 } else {                 # +1 (else, flat)
+                     'zero'
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_same_op_boolean_sequence_collapses() {
+        // Sequences of the same boolean operator should collapse to +1.
+        // Mixed operators add one each.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 if ($a -and $b -and $c) { # +2 (+1 if, +1 sequence of -and)
+                     'ok'
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 if ($a -and $b -or $c) { # +3 (+1 if, +1 -and, +1 -or)
+                     'ok'
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_wrappers_without_operators_do_not_false_trigger() {
+        // Regression: `$a + $b` passes through `ternary_expression` and
+        // `null_coalesce_expression` wrappers. Cognitive complexity must be
+        // zero because neither `?` nor `??` are actually present.
+        check_metrics::<PowershellParser>("function Plain { $x = $a + $b }", "foo.ps1", |metric| {
+            insta::assert_json_snapshot!(
+                metric.cognitive,
+                @r###"
+                    {
+                      "sum": 0.0,
+                      "average": 0.0,
+                      "min": 0.0,
+                      "max": 0.0
+                    }"###
+            );
+        });
     }
 }

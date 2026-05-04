@@ -3,8 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `ABC` metric.
@@ -547,10 +549,63 @@ impl Abc for RubyCode {
     }
 }
 
+impl Abc for PowershellCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Powershell::*;
+
+        // tree-sitter-pwsh v0.37+ only emits operator-level expression kinds
+        // (`ternary_expression`, `null_coalesce_expression`,
+        // `comparison_expression`) when an actual operator is present, so
+        // matching on the kind directly is sufficient. See
+        // wharflab/tree-sitter-powershell#56.
+        match node.kind_id().into() {
+            // A: every assignment expression. The grammar wraps augmented
+            // assignments (`+=`, `-=`, ...) inside `assignment_expression`
+            // as well. `++` / `--` mutate state and also count.
+            AssignmentExpression
+            | PreIncrementExpression
+            | PreDecrementExpression
+            | PostIncrementExpression
+            | PostDecrementExpression => {
+                stats.assignments += 1.;
+            }
+            // B: every command invocation (cmdlet/function call) and every
+            // method-style invocation (`$obj.Method(...)`).
+            Command | InvokationExpression => {
+                stats.branches += 1.;
+            }
+            // C: every structural conditional construct, every comparison,
+            // and every short-circuit / logical / ternary / null-coalesce
+            // operator.
+            IfStatement
+            | ElseifClause
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | SwitchClause
+            | CatchClause
+            | TrapStatement
+            | TernaryExpression
+            | NullCoalesceExpression
+            | ComparisonExpression
+            | AMPAMP
+            | PIPEPIPE
+            | DASHand
+            | DASHor
+            | DASHxor => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -894,6 +949,41 @@ mod tests {
             "foo.kt",
             |metric| {
                 insta::assert_json_snapshot!(metric.abc);
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_abc_basic() {
+        check_metrics::<PowershellParser>(
+            "function f($a, $b) {
+                 $c = $a + $b            # +1 A
+                 Write-Host $c           # +1 B (cmdlet call)
+                 if ($c -gt 0) {         # +1 C (if) + +1 C (comparison)
+                     return $c
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.abc,
+                    @r###"
+                    {
+                      "assignments": 1.0,
+                      "branches": 1.0,
+                      "conditions": 2.0,
+                      "magnitude": 2.449489742783178,
+                      "assignments_average": 0.5,
+                      "branches_average": 0.5,
+                      "conditions_average": 1.0,
+                      "assignments_min": 0.0,
+                      "assignments_max": 1.0,
+                      "branches_min": 0.0,
+                      "branches_max": 1.0,
+                      "conditions_min": 0.0,
+                      "conditions_max": 2.0
+                    }"###
+                );
             },
         );
     }
