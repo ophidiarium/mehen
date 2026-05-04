@@ -2187,4 +2187,68 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn powershell_boolean_sequence_does_not_leak_across_else() {
+        // Regression: the outer `if ($a -and $b)`'s boolean-sequence
+        // tracker must not bleed into an inner `if ($c -and $d)` sitting
+        // in the `else` body. `ElseClause` does NOT reset `boolean_seq`
+        // directly because the inner `if`'s condition is wrapped in a
+        // `pipeline` node and the `Pipeline` arm already resets the
+        // tracker there. This test pins that invariant down.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c, $d) {
+                 if ($a -and $b) {       # +1 if +1 -and
+                     'x'
+                 } else {                 # +1 else (no nesting)
+                     if ($c -and $d) {   # +2 if (+1 nesting) +1 -and
+                         'y'
+                     }
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 6.0,
+                      "min": 0.0,
+                      "max": 6.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_boolean_sequence_does_not_leak_across_finally() {
+        // Same invariant as `powershell_boolean_sequence_does_not_leak_across_else`
+        // but for `finally`. Neither `try` nor `finally` reset `boolean_seq`
+        // directly; the reset comes from the `pipeline` wrapping the inner
+        // `if`'s condition.
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c, $d) {
+                 try {
+                     if ($a -and $b) { 'x' }  # +1 if +1 -and
+                 } finally {                   # +1 finally
+                     if ($c -and $d) { 'y' }   # +1 if +1 -and
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cognitive,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 5.0,
+                      "min": 0.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
 }
