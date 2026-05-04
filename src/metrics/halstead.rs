@@ -703,4 +703,37 @@ mod tests {
             assert_eq!(metric.halstead.operators(), 2.0);
         });
     }
+
+    #[test]
+    fn powershell_function_and_command_names_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69: the
+        // PowerShell operand set must include the identifier leaves that
+        // drive function declarations (`function_name`) and command
+        // invocations (`command_name`, `path_command_name_token`).
+        // Without these, Halstead N2 and volume are suppressed for a
+        // normal cmdlet-heavy script, and downstream MI degrades.
+        //
+        // Simple cmdlet call: `Get-Item /tmp` → operands are
+        // `Get-Item` and `/tmp` (a generic_token argument).
+        check_metrics::<PowershellParser>("Get-Item /tmp", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Path-style command: `./build.sh arg1` → operands are
+        // `./build.sh` (a path_command_name_token leaf) and `arg1`.
+        // Must not double-count the `path_command_name` wrapper.
+        check_metrics::<PowershellParser>("./build.sh arg1", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Function declaration: the function_name leaf counts once per
+        // declaration. `function Greet { }` → one unique operand `Greet`.
+        // The function body `{ }` contributes no operands.
+        check_metrics::<PowershellParser>("function Greet { }", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 1.0);
+            assert_eq!(metric.halstead.operands(), 1.0);
+        });
+    }
 }

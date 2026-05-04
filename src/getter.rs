@@ -543,12 +543,35 @@ impl Getter for PowershellCode {
             // and once for the leaf. Classifying only the leaves gives
             // the correct Halstead N1.
 
-            // Operands: identifiers, variables, literals.
+            // Operands: identifiers, variables, literals, and the name
+            // identifiers that drive function declarations and command
+            // invocations.
+            //
+            // `function_name`, `command_name`, and `path_command_name_token`
+            // are the leaf identifier nodes emitted by tree-sitter-pwsh
+            // for `function Greet { … }` / `Get-Item /tmp` /
+            // `./build.sh arg` respectively. They carry the actual
+            // declared-name or invoked-name text, so they are the
+            // natural operands for a PowerShell script (normal programs
+            // are dominated by command calls; omitting them suppresses
+            // Halstead N2 and any downstream metric that depends on it,
+            // like volume and MI).
+            //
+            // The named *wrappers* `command_name_expr` (the choice over
+            // `command_name` / `path_command_name` / `_primary_expression`)
+            // and `path_command_name` (which holds one or more
+            // `path_command_name_token` leaves) are intentionally NOT
+            // classified here: tree-sitter-pwsh nests the leaves inside
+            // these wrappers, and `T::Halstead::compute` walks every
+            // node exhaustively, so matching both wrapper and leaf would
+            // double-count. Same rule the operator classification uses
+            // for `assignment_operator` / `comparison_operator`.
             SimpleName | TypeIdentifier | Variable | Variable2 | BracedVariable | GenericToken
             | GenericToken2 | GenericToken3 | GenericToken4 | GenericToken5
             | DecimalIntegerLiteral | HexadecimalIntegerLiteral | RealLiteral
             | VerbatimStringCharacters | VerbatimStringCharacters2
             | VerbatimHereStringCharacters
+            | FunctionName | CommandName | PathCommandNameToken
             | CommandParameter => HalsteadType::Operand,
 
             _ => HalsteadType::Unknown,
