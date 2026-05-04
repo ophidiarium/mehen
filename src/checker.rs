@@ -536,10 +536,10 @@ impl Checker for PowershellCode {
     fn is_call(node: &Node) -> bool {
         // PowerShell has two call forms:
         //   - `command`: cmdlet / command-style invocation (`Get-Thing -Arg x`)
-        //   - `invokation_expression`: method / `::` / member call
+        //   - `invocation_expression`: method / `::` / member call
         matches!(
             node.kind_id().into(),
-            Powershell::Command | Powershell::InvokationExpression
+            Powershell::Command | Powershell::InvocationExpression
         )
     }
 

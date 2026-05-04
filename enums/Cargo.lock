@@ -432,9 +432,9 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-pwsh"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8809d2a9227e0c413ecc6081267a46ab37c94cc254d811aec674efffb633c8b"
+checksum = "a9bde9b178dbe1aa9f9f756cf2a2090a427a453b287af30225811727b4af74d2"
 dependencies = [
  "cc",
  "tree-sitter-language",

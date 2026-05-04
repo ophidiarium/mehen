@@ -518,7 +518,7 @@ impl Getter for PowershellCode {
             | DASHgt | DASHigt | DASHcgt | DASHge | DASHige | DASHcge
             | LT | GT
             // Operator-like comparison wrapper.
-            | ComparisonOperator | AssignementOperator | FormatOperator
+            | ComparisonOperator | AssignmentOperator | FormatOperator
             | FileRedirectionOperator | MergingRedirectionOperator => HalsteadType::Operator,
 
             // Operands: identifiers, variables, literals.

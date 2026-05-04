@@ -571,7 +571,7 @@ impl Abc for PowershellCode {
             }
             // B: every command invocation (cmdlet/function call) and every
             // method-style invocation (`$obj.Method(...)`).
-            Command | InvokationExpression => {
+            Command | InvocationExpression => {
                 stats.branches += 1.;
             }
             // C: every structural conditional construct, every comparison,
