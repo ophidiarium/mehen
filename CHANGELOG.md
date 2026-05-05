@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/ophidiarium/mehen/compare/v0.3.0...v0.4.0) (2026-05-05)
+
+
+### Features
+
+* **metrics:** add PowerShell language support ([#69](https://github.com/ophidiarium/mehen/issues/69)) ([7a34436](https://github.com/ophidiarium/mehen/commit/7a344361c086214f0b98730e6bae10f02b0ab22a))
+
+
+### Miscellaneous Chores
+
+* release 0.4.0 ([5a3a699](https://github.com/ophidiarium/mehen/commit/5a3a69986f6193a17bfbbed0831d8c648075c0b7))
+
 ## [0.3.0](https://github.com/ophidiarium/mehen/compare/v0.2.0...v0.3.0) (2026-05-02)
 
 
