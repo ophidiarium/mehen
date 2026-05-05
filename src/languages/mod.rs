@@ -20,3 +20,6 @@ pub(crate) use language_ruby::Ruby;
 
 pub(crate) mod language_kotlin;
 pub(crate) use language_kotlin::*;
+
+pub(crate) mod language_powershell;
+pub(crate) use language_powershell::*;

@@ -3,10 +3,12 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
 #[cfg(test)]
 use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
-use crate::languages::{Go, Kotlin};
+use crate::languages::{Go, Kotlin, Powershell};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::traits::Search;
@@ -282,6 +284,87 @@ impl NArgs for KotlinCode {
 
         if Self::is_closure(node) {
             compute_kotlin_args(node, &mut stats.closure_nargs);
+        }
+    }
+}
+
+#[inline(always)]
+fn compute_powershell_args(node: &Node, nargs: &mut usize) {
+    use Powershell::*;
+
+    // PowerShell parameter declarations can appear in three shapes:
+    //   1. `function_statement` > `function_parameter_declaration` >
+    //      `parameter_list` > `script_parameter` (each `script_parameter`
+    //      is one named `$var`).
+    //   2. For script-block closures: `script_block_expression` >
+    //      `param_block` > `parameter_list` > `script_parameter`.
+    //   3. For class methods: `class_method_definition` >
+    //      `class_method_parameter_list` > `class_method_parameter`.
+    //
+    // The walker recurses *only* through the immediate structural
+    // wrappers that sit between the entry node and the parameter list
+    // (`function_parameter_declaration` for functions, `param_block` for
+    // closures). It deliberately does NOT recurse into the body
+    // `script_block` / `script_block_body` / `statement_list`: each
+    // nested function or closure inside a body is its own FuncSpace and
+    // its own call to `NArgs::compute`, so descending into the body
+    // would double-count nested params against the enclosing
+    // function / closure. Regression test:
+    // `powershell_nested_closure_params_do_not_count_toward_outer_fn`.
+    enum Kind {
+        Script,
+        Method,
+    }
+
+    fn walk(node: &Node, nargs: &mut usize, kind: &Kind) {
+        for child in node.children() {
+            match child.kind_id().into() {
+                Powershell::ParameterList => {
+                    if matches!(kind, Kind::Script) {
+                        for p in child.children() {
+                            if p.kind_id() == Powershell::ScriptParameter {
+                                *nargs += 1;
+                            }
+                        }
+                    }
+                }
+                Powershell::ClassMethodParameterList => {
+                    if matches!(kind, Kind::Method) {
+                        for p in child.children() {
+                            if p.kind_id() == Powershell::ClassMethodParameter {
+                                *nargs += 1;
+                            }
+                        }
+                    }
+                }
+                // Recurse only into the thin structural wrappers that
+                // directly enclose the parameter list. See the comment
+                // above for why the body `script_block` is intentionally
+                // excluded.
+                Powershell::FunctionParameterDeclaration | Powershell::ParamBlock => {
+                    walk(&child, nargs, kind)
+                }
+                _ => {}
+            }
+        }
+    }
+
+    match node.kind_id().into() {
+        FunctionStatement | ScriptBlockExpression => walk(node, nargs, &Kind::Script),
+        ClassMethodDefinition => walk(node, nargs, &Kind::Method),
+        _ => {}
+    }
+}
+
+impl NArgs for PowershellCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if Self::is_func(node) {
+            compute_powershell_args(node, &mut stats.fn_nargs);
+            return;
+        }
+
+        if Self::is_closure(node) {
+            compute_powershell_args(node, &mut stats.closure_nargs);
         }
     }
 }
@@ -783,6 +866,132 @@ mod tests {
                       "average": 1.5,
                       "functions_min": 0.0,
                       "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_function_counts_script_parameters() {
+        check_metrics::<crate::langs::PowershellParser>(
+            "function Add($a, $b) {
+                 $a + $b
+             }",
+            "foo.ps1",
+            |metric| {
+                // 1 function with 2 parameters.
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 2.0,
+                      "total_closures": 0.0,
+                      "average_functions": 2.0,
+                      "average_closures": 0.0,
+                      "total": 2.0,
+                      "average": 2.0,
+                      "functions_min": 0.0,
+                      "functions_max": 2.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_class_method_counts_method_parameters() {
+        check_metrics::<crate::langs::PowershellParser>(
+            "class C {
+                 [int] Add([int]$a, [int]$b, [int]$c) {
+                     return $a + $b + $c
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                // 1 method with 3 parameters.
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 3.0,
+                      "total_closures": 0.0,
+                      "average_functions": 3.0,
+                      "average_closures": 0.0,
+                      "total": 3.0,
+                      "average": 3.0,
+                      "functions_min": 0.0,
+                      "functions_max": 3.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_script_block_with_param_counts_as_closure() {
+        check_metrics::<crate::langs::PowershellParser>(
+            "$sb = { param($x, $y) $x + $y }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 0.0,
+                      "total_closures": 2.0,
+                      "average_functions": 0.0,
+                      "average_closures": 2.0,
+                      "total": 2.0,
+                      "average": 2.0,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_nested_closure_params_do_not_count_toward_outer_fn() {
+        // Regression: `compute_powershell_args` must not recurse into
+        // the body `script_block` of a `function_statement` or
+        // `script_block_expression`, or the `param_block` of a nested
+        // closure inside the body would leak into the outer function's
+        // arg count. For `function f($a) { $sb = { param($x, $y) ... } }`,
+        // `f` owns 1 function arg and the inner closure owns 2 closure
+        // args; neither should leak into the other's counters.
+        check_metrics::<crate::langs::PowershellParser>(
+            "function f($a) {
+                 $sb = { param($x, $y) $x + $y }
+             }",
+            "foo.ps1",
+            |metric| {
+                // At the outer function's space, the aggregated counts
+                // are: 1 function arg (f's $a) + 2 closure args (the
+                // inner scriptblock's $x, $y). Neither bleeds into the
+                // other counter. `functions_max = 1` (not 3) pins that
+                // f itself owns exactly 1 arg.
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 1.0,
+                      "total_closures": 2.0,
+                      "average_functions": 1.0,
+                      "average_closures": 2.0,
+                      "total": 3.0,
+                      "average": 1.5,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
                       "closures_min": 0.0,
                       "closures_max": 2.0
                     }"###

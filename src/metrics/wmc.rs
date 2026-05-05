@@ -4,7 +4,8 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, LANG, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    GoCode, KotlinCode, LANG, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
@@ -189,7 +190,8 @@ impl_wmc!(
     TsxCode,
     RustCode,
     RubyCode,
-    KotlinCode
+    KotlinCode,
+    PowershellCode
 );
 
 // Go has no class-like constructs; WMC is not applicable.
@@ -199,7 +201,9 @@ impl Wmc for GoCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -363,6 +367,34 @@ mod tests {
              end",
             "foo.rb",
             |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<PowershellParser>(
+            "class C {
+                 [int] A([int]$x) {
+                     if ($x -gt 0) {
+                         return 1
+                     }
+                     return 0
+                 }
+                 [int] B() { return 1 }
+             }",
+            "foo.ps1",
+            |metric| {
+                // class C: A cyc = 2 (if), B cyc = 1 -> classes = 3.
                 insta::assert_json_snapshot!(
                     metric.wmc,
                     @r###"

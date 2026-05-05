@@ -3,8 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `Cyclomatic` metric.
@@ -235,10 +237,69 @@ impl Cyclomatic for KotlinCode {
 // No languages require empty Cyclomatic implementations
 // implement_metric_trait!(Cyclomatic);
 
+impl Cyclomatic for PowershellCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Powershell::*;
+
+        // Decision-point set aligned with Sonar's language-agnostic
+        // cyclomatic definition: every `if`, `elseif`, loop, `switch`
+        // clause, `catch`, `trap`, real ternary / null-coalesce, and each
+        // short-circuit (`&&` / `||`) or logical (`-and` / `-or`) operator
+        // adds one. Matches the standard Sonar rule and the community
+        // `Get-CyclomaticComplexity` helper that counts `If`, `ElseIf`,
+        // `Catch`, `While`, `For`, `Switch` tokens, extended with
+        // `foreach` / `do` loops and v7's `?` / `??`.
+        //
+        // `-xor` is intentionally NOT counted. Sonar's cyclomatic rule
+        // counts only *short-circuit* boolean operators across every
+        // language it analyzes (JS/TS/PHP/C#/Java/Dart list `&&`/`||`
+        // explicitly; VB.NET lists `AndAlso`/`OrElse`, not `And`/`Or`).
+        // PowerShell's `-xor` always evaluates both operands — by
+        // definition it cannot introduce a new control-flow path — so
+        // it doesn't meet the cyclomatic criterion. It IS counted in ABC
+        // conditions and cognitive boolean-sequence scoring, where the
+        // relevant axis is "boolean operator occurrence" rather than
+        // "new linearly independent path".
+        //
+        // tree-sitter-pwsh v0.37+ only emits the operator-level expression
+        // kinds (`ternary_expression`, `null_coalesce_expression`, ...)
+        // when the operator is actually present, so matching on the kind
+        // is sufficient — no operator-token guard is needed. See
+        // wharflab/tree-sitter-powershell#56. The grammar also emits a
+        // parallel family of `*_argument_expression` kinds for the same
+        // operators when they appear inside a method-invocation
+        // `argument_list` (e.g. `[Foo]::Bar($cond ? 1 : 2)`), so we match
+        // both families.
+        match node.kind_id().into() {
+            IfStatement
+            | ElseifClause
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | SwitchClause
+            | CatchClause
+            | TrapStatement
+            | TernaryExpression
+            | TernaryArgumentExpression
+            | NullCoalesceExpression
+            | NullCoalesceArgumentExpression
+            | AMPAMP
+            | PIPEPIPE
+            | DASHand
+            | DASHor => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -662,6 +723,212 @@ mod tests {
                  end
              end",
             "foo.rb",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_simple_function() {
+        check_metrics::<PowershellParser>(
+            "function Greet($name) { # +2 (+1 unit, +1 function)
+                 if ($name) {         # +1
+                     Write-Host \"hi, $name\"
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 1.5,
+                      "min": 1.0,
+                      "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_counts_each_switch_clause() {
+        // The `switch` statement itself does NOT add a decision; each
+        // `switch_clause` does. Aligns with Sonar's general cyclomatic rule.
+        //
+        // In the tree-sitter-pwsh grammar, every `{ ... }` script block is
+        // a `script_block_expression`, which mehen treats as its own
+        // closure-like function space (the same convention Kotlin uses for
+        // `lambda_literal`). Each clause body and predicate therefore opens
+        // a fresh space with a base cyclomatic of 1, and the sum is the
+        // aggregate across all of them.
+        check_metrics::<PowershellParser>(
+            "function Grade($score) {
+                 switch ($score) {
+                     1 { 'A' }
+                     2 { 'B' }
+                     3 { 'C' }
+                     default { 'F' }
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                // Decisions: 4 switch clauses. Base 1s at unit, function
+                // (no extra spaces because literal clause conditions do
+                // not introduce an additional `script_block_expression`;
+                // the result body `{ 'A' }` is parsed as the clause's
+                // `statement_block`, not a closure space).
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 3.0,
+                      "min": 1.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_short_circuit_and_word_form_boolean_operators() {
+        // PowerShell has two boolean operator pairs:
+        //   - short-circuit `&&` / `||` (inside `pipeline_chain`)
+        //   - logical `-and` / `-or` / `-xor` (inside `logical_expression`)
+        // Each occurrence contributes +1.
+        check_metrics::<PowershellParser>(
+            "function Check($a, $b, $c) { # +2 (+1 unit, +1 function)
+                 if ($a -and $b -or $c) { # +3 (+1 if, +1 -and, +1 -or)
+                     return $true
+                 }
+                 return $false
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 5.0,
+                      "average": 2.5,
+                      "min": 1.0,
+                      "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_ternary_and_null_coalesce_wrappers_do_not_false_trigger() {
+        // Regression: the tree-sitter-pwsh grammar emits `ternary_expression`,
+        // `null_coalesce_expression`, and `logical_expression` as wrapper
+        // kinds in the precedence cascade even for plain expressions like
+        // `$a + $b`. Those wrappers must NOT contribute to cyclomatic;
+        // only the real `?` / `??` / `-and` / `-or` operator tokens do.
+        check_metrics::<PowershellParser>(
+            "function Plain { # +2 (+1 unit, +1 function)
+                 $x = $a + $b  # no decision point
+                 return $x     # no decision point
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 1.0,
+                      "min": 1.0,
+                      "max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_real_ternary_and_null_coalesce_count() {
+        // Real `?` / `??` expressions add one decision each.
+        check_metrics::<PowershellParser>(
+            "$a = $cond ? 1 : 2   # +1 ternary
+             $b = $x ?? 0         # +1 null-coalesce",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 3.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_argument_form_ternary_and_null_coalesce_count() {
+        // Regression: tree-sitter-pwsh emits a parallel family of
+        // `*_argument_expression` kinds for expressions that live inside a
+        // method-invocation `argument_list` (e.g. `[Foo]::Bar($cond ? 1 : 2)`).
+        // Those argument-form decision operators must count the same as
+        // their regular-form twins.
+        check_metrics::<PowershellParser>(
+            "function F($a, $b, $x, $cond) { # +2 (+1 unit, +1 function)
+                 [Foo]::Bar($a -eq $b)        # comparison: no decision
+                 [Foo]::Baz($cond ? 1 : 2)    # +1 ternary
+                 [Foo]::Qux($x ?? 3)          # +1 null-coalesce
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 4.0,
+                      "average": 2.0,
+                      "min": 1.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_xor_is_not_a_cyclomatic_decision_point() {
+        // Regression: `-xor` is intentionally excluded from the cyclomatic
+        // decision-point set. Sonar's cyclomatic rule counts only
+        // *short-circuit* boolean operators across every language it
+        // analyzes; `-xor` always evaluates both operands so it cannot
+        // introduce a new control-flow path. `-and` / `-or` are counted
+        // because they short-circuit.
+        //
+        // The test locks in the expected sum for:
+        //   base +1 (unit) + function +1 + if +1 + -and +1  = 4
+        //   but NOT +1 for `-xor` (would be 5 if it were miscounted).
+        check_metrics::<PowershellParser>(
+            "function f($a, $b, $c) {
+                 if ($a -xor $b) { }        # +1 if, NOT +1 -xor
+                 if ($a -and $b) { }        # +1 if, +1 -and
+             }",
+            "foo.ps1",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.cyclomatic,

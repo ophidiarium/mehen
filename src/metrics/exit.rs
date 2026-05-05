@@ -3,8 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::checker::Checker;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `NExit` metric.
@@ -207,10 +209,31 @@ impl Exit for RubyCode {
 // No languages require empty Exit implementations
 // implement_metric_trait!(Exit);
 
+impl Exit for PowershellCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        // In the tree-sitter-pwsh grammar, `return`, `throw`, and `exit` all
+        // become a `flow_control_statement` whose first keyword child is the
+        // specific jump. `break` / `continue` are local loop-flow controls,
+        // not function exits, so they are intentionally excluded — mirroring
+        // how mehen classifies Ruby's `break` / `next` vs. `return`.
+        if node.kind_id() != Powershell::FlowControlStatement {
+            return;
+        }
+        let lead = node.child(0).map(|c| c.kind_id().into());
+        if matches!(
+            lead,
+            Some(Powershell::Return) | Some(Powershell::Throw) | Some(Powershell::Exit)
+        ) {
+            stats.exit += 1;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -574,6 +597,62 @@ mod tests {
                       "average": 1.0,
                       "min": 0.0,
                       "max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_return_throw_and_exit_count_as_exits() {
+        check_metrics::<PowershellParser>(
+            "function f($a) {
+                 if ($a -lt 0) {
+                     throw 'bad'
+                 }
+                 if ($a -gt 100) {
+                     exit 1
+                 }
+                 return $a
+             }",
+            "foo.ps1",
+            |metric| {
+                // 3 exits: throw + exit + return.
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 3.0,
+                      "average": 3.0,
+                      "min": 0.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_break_and_continue_do_not_count_as_exits() {
+        // Like other languages in mehen, `break` / `continue` are loop-local
+        // control flow and must not count as function exits.
+        check_metrics::<PowershellParser>(
+            "function f {
+                 foreach ($x in 1..10) {
+                     if ($x -eq 5) { break }
+                     if ($x -eq 3) { continue }
+                 }
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 0.0,
+                      "average": 0.0,
+                      "min": 0.0,
+                      "max": 0.0
                     }"###
                 );
             },

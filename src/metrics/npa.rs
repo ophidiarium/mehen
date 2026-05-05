@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{LANG, *};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::spaces::SpaceKind;
 
@@ -527,9 +527,27 @@ impl Npa for KotlinCode {
     }
 }
 
+impl Npa for PowershellCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        // Only record attributes when we're already inside a class-like
+        // space. PowerShell doesn't have interfaces, so we only route to
+        // `SpaceKind::Class`.
+        if !matches!(stats.space_kind, SpaceKind::Class) {
+            return;
+        }
+        if node.kind_id() != Powershell::ClassPropertyDefinition {
+            return;
+        }
+        let public = crate::metrics::npm::powershell_member_is_public(node, code);
+        stats.record_attribute(SpaceKind::Class, public);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::langs::{KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser};
+    use crate::langs::{
+        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -839,6 +857,43 @@ mod tests {
                       "total": 0.0,
                       "total_attributes": 2.0,
                       "average": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_npa_counts_all_properties_as_public_including_hidden() {
+        // PowerShell has no access-modifier equivalent to `private` /
+        // `protected`. The `hidden` keyword only suppresses a property
+        // from default `Get-Member` / IntelliSense output; the property
+        // is still publicly accessible. Per about_Hidden: "hidden
+        // members are still public". NPA therefore counts every property
+        // as public.
+        check_metrics::<PowershellParser>(
+            "class C {
+                 [int]$a = 1
+                 hidden [int]$b = 2
+                 [int]$c = 3
+                 hidden [int]$d = 4
+             }",
+            "foo.ps1",
+            |metric| {
+                // 4 attributes, all public (a, b, c, d).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 4.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 1.0,
+                      "interfaces_average": null,
+                      "total": 4.0,
+                      "total_attributes": 4.0,
+                      "average": 1.0
                     }"###
                 );
             },

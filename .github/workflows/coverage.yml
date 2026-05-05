@@ -42,7 +42,7 @@ jobs:
           RUSTFLAGS: '-C instrument-coverage'
         run: |
           mkdir -p target/llvm-cov
-          cargo llvm-cov nextest --workspace --locked --no-fail-fast --all-features --lcov --output-path target/llvm-cov/lcov-branch.info
+          cargo llvm-cov nextest --workspace --locked --no-fail-fast --all-features --ignore-filename-regex 'src/languages/language_.*\.rs$' --lcov --output-path target/llvm-cov/lcov-branch.info
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

@@ -1,8 +1,8 @@
 use crate::langs::{
-    GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser, TypescriptCode,
-    TypescriptParser,
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
+    TypescriptCode, TypescriptParser,
 };
-use crate::languages::{Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 macro_rules! check_if_func {
@@ -500,6 +500,70 @@ impl Checker for RubyCode {
         if let Some(parent) = node.parent() {
             return parent.kind_id() == Ruby::Else;
         }
+        false
+    }
+}
+
+impl Checker for PowershellCode {
+    fn is_comment(node: &Node) -> bool {
+        node.kind_id() == Powershell::Comment
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Powershell::Program
+                | Powershell::FunctionStatement
+                | Powershell::ClassStatement
+                | Powershell::ClassMethodDefinition
+                | Powershell::ScriptBlockExpression
+        )
+    }
+
+    fn is_func(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Powershell::FunctionStatement | Powershell::ClassMethodDefinition
+        )
+    }
+
+    fn is_closure(node: &Node) -> bool {
+        // Anonymous script block like `{ param(...) ... }` used as a value or
+        // command argument — PowerShell's closest equivalent to a lambda.
+        node.kind_id() == Powershell::ScriptBlockExpression
+    }
+
+    fn is_call(node: &Node) -> bool {
+        // PowerShell has two call forms:
+        //   - `command`: cmdlet / command-style invocation (`Get-Thing -Arg x`)
+        //   - `invocation_expression`: method / `::` / member call
+        matches!(
+            node.kind_id().into(),
+            Powershell::Command | Powershell::InvocationExpression
+        )
+    }
+
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Powershell::LPAREN | Powershell::RPAREN | Powershell::COMMA
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Powershell::StringLiteral
+                | Powershell::ExpandableStringLiteral
+                | Powershell::ExpandableHereStringLiteral
+        )
+    }
+
+    #[inline(always)]
+    fn is_else_if(_node: &Node) -> bool {
+        // PowerShell has a dedicated `elseif_clause` named node, so a nested
+        // `if_statement` never appears as the body of another `if_statement`.
+        // No flattening needed.
         false
     }
 }
