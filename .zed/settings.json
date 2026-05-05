@@ -1,0 +1,25 @@
+{
+  "tasks": {
+    "prefer_lsp": true,
+  },
+  "project_name": "Mehen - Code Quality Watcher",
+  "semantic_tokens": "combined",
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "check": {
+          "command": "clippy"
+        },
+        "cargo": {
+          "allFeatures": true
+        }
+      },
+      "enable_lsp_tasks": true,
+    },
+    "pkl": {
+      "enable_lsp_tasks": true,
+    },
+  },
+  "format_on_save": "on",
+  "formatter": "language_server",
+}

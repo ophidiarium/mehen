@@ -1,4 +1,4 @@
-name: "mehen"
+name: "mehen Source Metrics"
 description: "Publish source code metric trends for pull requests"
 author: "Ophidiarium"
 branding:

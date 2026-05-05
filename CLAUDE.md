@@ -1,8 +1,8 @@
 # CLAUDE.md - AI Assistant Guide for Mehen
 
 ## Project Scope
-- `mehen` is a **CLI-only** Rust project.
-- Keep code changes focused on CLI behavior, correctness, and maintainability.
+- `mehen` is a **CLI-only** Rust project focused on code analysis and metrics.
+- It is **not** a library or API for external use; all code is internal to the CLI tool.
 
 ## Repository Structure (current)
 - `src/main.rs`: CLI entry point, command routing.
@@ -14,16 +14,6 @@
 - `src/output/`: dump/metrics/ops output.
 - `enums/`: grammar enum generator crate.
 - `mehen-book/`: mdBook documentation.
-
-## Supported Languages
-Only these are supported:
-- Rust
-- Python
-- Go
-- TypeScript
-- TSX
-- Ruby
-- Kotlin
 
 ## Build and Lint
 Run from repo root:
