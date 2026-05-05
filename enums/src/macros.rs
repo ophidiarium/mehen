@@ -26,6 +26,7 @@ macro_rules! mk_get_language {
                 Lang::Go => tree_sitter_go::LANGUAGE.into(),
                 Lang::Ruby => tree_sitter_ruby::LANGUAGE.into(),
                 Lang::Kotlin => tree_sitter_kotlin::LANGUAGE.into(),
+                Lang::Powershell => tree_sitter_pwsh::LANGUAGE.into(),
             }
         }
     };

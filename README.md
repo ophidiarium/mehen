@@ -29,8 +29,9 @@ Today `mehen` supports:
 - Go
 - Ruby
 - Kotlin
+- PowerShell
 
-Planned next: PowerShell, Zig, Starlark and PHP.
+Planned next: Zig, Starlark and PHP.
 
 A dedicated research effort is underway to expand support to Markdown documentation, with metrics like readability and structural complexity.
 

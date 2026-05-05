@@ -6,7 +6,9 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::getter::Getter;
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
 use crate::node::Node;
 
 /// The `Halstead` metric suite.
@@ -324,13 +326,20 @@ impl Halstead for KotlinCode {
     }
 }
 
+impl Halstead for PowershellCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
 // No languages require empty Halstead implementations
 // implement_metric_trait!(Halstead);
 
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -664,5 +673,108 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn powershell_operator_wrappers_do_not_double_count() {
+        // Regression for coderabbitai flag on PR #69:
+        // tree-sitter-pwsh nests every operator leaf token (e.g. `-eq`,
+        // `-f`, `=`, `2>`) inside a named wrapper rule
+        // (`comparison_operator`, `format_operator`, `assignment_operator`,
+        // `file_redirection_operator`, `merging_redirection_operator`).
+        // `Halstead::compute` walks every named and anonymous child, so
+        // classifying BOTH the leaf and the wrapper as `Operator` would
+        // double-count. `get_op_type` classifies only the leaves; this
+        // test locks that invariant in by asserting the semantically
+        // correct operator counts.
+        check_metrics::<PowershellParser>("$x = $a -eq $b", "foo.ps1", |metric| {
+            // Operators: `=` and `-eq` → 2 distinct, 2 total.
+            // Operands: `$x`, `$a`, `$b` → 3 distinct, 3 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+            assert_eq!(metric.halstead.u_operands(), 3.0);
+            assert_eq!(metric.halstead.operands(), 3.0);
+        });
+
+        // Same invariant for the format operator `-f`.
+        check_metrics::<PowershellParser>("$s = \"{0}\" -f $a", "foo.ps1", |metric| {
+            // Operators: `=` and `-f` → 2 distinct, 2 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+        });
+    }
+
+    #[test]
+    fn powershell_function_and_command_names_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69: the
+        // PowerShell operand set must include the identifier leaves that
+        // drive function declarations (`function_name`) and command
+        // invocations (`command_name`, `path_command_name_token`).
+        // Without these, Halstead N2 and volume are suppressed for a
+        // normal cmdlet-heavy script, and downstream MI degrades.
+        //
+        // Simple cmdlet call: `Get-Item /tmp` → operands are
+        // `Get-Item` and `/tmp` (a generic_token argument).
+        check_metrics::<PowershellParser>("Get-Item /tmp", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Path-style command: `./build.sh arg1` → operands are
+        // `./build.sh` (a path_command_name_token leaf) and `arg1`.
+        // Must not double-count the `path_command_name` wrapper.
+        check_metrics::<PowershellParser>("./build.sh arg1", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Function declaration: the function_name leaf counts once per
+        // declaration. `function Greet { }` → one unique operand `Greet`.
+        // The function body `{ }` contributes no operands.
+        check_metrics::<PowershellParser>("function Greet { }", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 1.0);
+            assert_eq!(metric.halstead.operands(), 1.0);
+        });
+    }
+
+    #[test]
+    fn powershell_string_literals_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69:
+        // double-quoted ("expandable") and here-string double-quoted
+        // literals have no content-leaf node (their text lives inside
+        // the wrapper's byte range directly), so they landed in
+        // `HalsteadType::Unknown` and were dropped from N2. Verbatim
+        // (single-quoted) strings have a `verbatim_string_characters`
+        // leaf, so those were already counted.
+        //
+        // The fix classifies the `expandable_string_literal` /
+        // `expandable_here_string_literal` wrapper kinds themselves as
+        // operands (empty or not), matching the verbatim branch.
+        //
+        // This script has 4 distinct strings plus 4 `$` variables;
+        // expected n2 = 8 (it was 6 before the fix because both
+        // `""` / `"world"` fell into Unknown).
+        check_metrics::<PowershellParser>(
+            "$a = ''
+             $b = \"\"
+             $c = 'hello'
+             $d = \"world\"",
+            "foo.ps1",
+            |metric| {
+                assert_eq!(metric.halstead.u_operands(), 8.0);
+                assert_eq!(metric.halstead.operands(), 8.0);
+            },
+        );
+
+        // Empty expandable `""` on its own — n2 = 1 (just the string),
+        // and N2 = 1. Pre-fix: n2 = 0, N2 = 0.
+        check_metrics::<PowershellParser>("$x = \"\"", "foo.ps1", |metric| {
+            // Operators: `=` → n1=1, N1=1.
+            // Operands: `$x`, `""` → n2=2, N2=2.
+            assert_eq!(metric.halstead.u_operators(), 1.0);
+            assert_eq!(metric.halstead.operators(), 1.0);
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
     }
 }

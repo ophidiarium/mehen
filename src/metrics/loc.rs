@@ -5,8 +5,10 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 /// The `SLoc` metric suite.
@@ -852,9 +854,66 @@ impl Loc for RubyCode {
     }
 }
 
+impl Loc for PowershellCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        use Powershell::*;
+
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        match node.kind_id().into() {
+            // Containers that must not be counted as a physical line.
+            Program | ScriptBlock | ScriptBlockBody | StatementList | StatementBlock
+            | NamedBlockList | NamedBlock | ParamBlock | ElseifClauses | CatchClauses
+            | SwitchBody | SwitchClauses => {}
+
+            // The only comment kind in tree-sitter-pwsh is `comment` (which
+            // also covers `<# ... #>` block comments as they are lexed by
+            // the same rule).
+            Comment => {
+                add_cloc_lines(stats, start, end);
+            }
+
+            // LLOC: each statement-shaped node bumps LLOC once. In
+            // tree-sitter-pwsh v0.37+ the assignment RHS is a dedicated
+            // `assignment_value` node (not a nested `pipeline`), so
+            // counting every visible `pipeline` once is safe — each is the
+            // statement-forming pipeline for its enclosing statement list.
+            // See wharflab/tree-sitter-powershell#56.
+            //
+            // Control-flow statements, function / class declarations, and
+            // flow-control jumps are counted directly.
+            Pipeline
+            | IfStatement
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | SwitchStatement
+            | TryStatement
+            | TrapStatement
+            | FunctionStatement
+            | ClassStatement
+            | EnumStatement
+            | DataStatement
+            | FlowControlStatement
+            | ClassMethodDefinition
+            | ClassPropertyDefinition => {
+                stats.lloc.logical_lines += 1;
+            }
+
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+    use crate::langs::{
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+    };
     use crate::tools::check_metrics;
 
     #[test]
@@ -2193,6 +2252,62 @@ mod tests {
             "foo.kt",
             |metric| {
                 assert_eq!(metric.loc.lloc(), 7.0);
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_simple_loc() {
+        // Snapshot locks in SLOC / PLOC / LLOC / CLOC for a canonical
+        // function. Intentional changes should be reviewed via `cargo insta`.
+        check_metrics::<PowershellParser>(
+            "# header
+             function Greet($name) {
+                 Write-Host \"hi, $name\"
+             }",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(metric.loc);
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_comment_and_block_comment_are_counted_as_cloc() {
+        // `#` line comments and `<# ... #>` block comments both surface as
+        // the named `comment` node in tree-sitter-pwsh.
+        check_metrics::<PowershellParser>(
+            "<#
+             Doc comment
+             #>
+             # inline comment
+             $x = 1 # trailing comment",
+            "foo.ps1",
+            |metric| {
+                insta::assert_json_snapshot!(metric.loc);
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_assignment_counts_as_one_lloc() {
+        // Regression guard for the grammar flattening shipped in
+        // tree-sitter-pwsh v0.37 (wharflab/tree-sitter-powershell#56).
+        //
+        // Before the fix, `$x = 1` parsed as
+        // `pipeline > assignment_expression > ... > pipeline`, so every
+        // assignment produced two `pipeline` nodes and naïvely counting
+        // `Pipeline` bumped LLOC twice. If the grammar ever regresses,
+        // this test flips back to LLOC = 2 for a single assignment and
+        // fails — signaling that we need to reinstate the parent-of-
+        // StatementList gate in `Loc::compute`.
+        check_metrics::<PowershellParser>(
+            "$x = 1
+             $y = 2
+             $z = 3",
+            "foo.ps1",
+            |metric| {
+                assert_eq!(metric.loc.lloc(), 3.0);
             },
         );
     }

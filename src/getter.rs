@@ -1,5 +1,7 @@
-use crate::langs::{GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode};
-use crate::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::langs::{
+    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+};
+use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
@@ -431,6 +433,157 @@ impl Getter for RubyCode {
             | Integer | Float | Rational | Complex | Character
             | String | ChainedString | SimpleSymbol | DelimitedSymbol | HeredocBeginning
             | True | False | Nil | Nil2 | Zelf | Line | File | Encoding => HalsteadType::Operand,
+
+            _ => HalsteadType::Unknown,
+        }
+    }
+}
+
+impl Getter for PowershellCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        use Powershell::*;
+        match node.kind_id().into() {
+            FunctionStatement | ClassMethodDefinition | ScriptBlockExpression => {
+                SpaceKind::Function
+            }
+            ClassStatement => SpaceKind::Class,
+            Program => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
+        // In the tree-sitter-pwsh grammar, neither `function_statement` nor
+        // `class_method_definition` tags the name via a `name` field. Walk
+        // the children to find the first identifier-shaped child.
+        match node.kind_id().into() {
+            Powershell::FunctionStatement => {
+                for child in node.children() {
+                    if child.kind_id() == Powershell::FunctionName {
+                        let bytes = &code[child.start_byte()..child.end_byte()];
+                        return std::str::from_utf8(bytes).ok();
+                    }
+                }
+                Some("<anonymous>")
+            }
+            Powershell::ClassMethodDefinition | Powershell::ClassStatement => {
+                for child in node.children() {
+                    if child.kind_id() == Powershell::SimpleName {
+                        let bytes = &code[child.start_byte()..child.end_byte()];
+                        return std::str::from_utf8(bytes).ok();
+                    }
+                }
+                Some("<anonymous>")
+            }
+            _ => Some("<anonymous>"),
+        }
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Powershell::*;
+
+        match node.kind_id().into() {
+            // Keywords and structural/control-flow markers act as operators.
+            Function | Filter | Workflow | If | Elseif | Else | Switch | For
+            | Foreach | In | While | Do | Until | Break | Continue | Return | Throw | Exit
+            | Try | Catch | Finally | Trap | Param | Using | Namespace | Module | Assembly
+            | Static | This | Base | Begin | Process | End2 | Clean | Dynamicparam | Data
+            | Inlinescript | Parallel | Sequence
+            // Punctuation-like operators.
+            | LPAREN | LBRACE | LBRACK | COMMA | SEMI | DOT | DOT2 | COLON | COLONCOLON
+            | ATLPAREN | ATLBRACE | DOLLARLPAREN
+            // Assignment family.
+            | EQ | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ | QMARKQMARKEQ
+            // Arithmetic / bitwise / unary.
+            | PLUS | DASH | STAR | SLASH | PERCENT | BSLASH | DOTDOT
+            | PLUSPLUS | DASHDASH | BANG
+            // Short-circuit / null-coalesce / ternary.
+            | AMPAMP | PIPEPIPE | QMARK | QMARKQMARK
+            // Pipeline / invocation / redirection tokens.
+            | PIPE | AMP
+            // PowerShell's word-form logical / comparison / typing operators
+            // (dash-prefixed). The grammar exposes each as its own anonymous
+            // token; we classify them all as operators.
+            | DASHand | DASHor | DASHxor | DASHnot | DASHband | DASHbor | DASHbxor | DASHbnot
+            | DASHas | DASHis | DASHisnot | DASHf | DASHjoin
+            | DASHshl | DASHshr | DASHsplit | DASHisplit | DASHcsplit
+            | DASHreplace | DASHireplace | DASHcreplace
+            | DASHmatch | DASHimatch | DASHcmatch | DASHnotmatch | DASHinotmatch | DASHcnotmatch
+            | DASHlike | DASHilike | DASHclike | DASHnotlike | DASHinotlike | DASHcnotlike
+            | DASHcontains | DASHicontains | DASHccontains
+            | DASHnotcontains | DASHinotcontains | DASHcnotcontains
+            | DASHin | DASHnotin
+            | DASHeq | DASHieq | DASHceq | DASHne | DASHine | DASHcne
+            | DASHlt | DASHilt | DASHclt | DASHle | DASHile | DASHcle
+            | DASHgt | DASHigt | DASHcgt | DASHge | DASHige | DASHcge
+            | LT | GT
+            // File / merging redirection leaf tokens (e.g. `2>`, `2>>`,
+            // `2>&1`, `*>`, `3>&2`). The grammar wraps each under a
+            // `file_redirection_operator` / `merging_redirection_operator`
+            // rule node, but we must classify the *leaf tokens* here —
+            // the wrapper rule kinds are intentionally excluded below to
+            // avoid double-counting (see comment at the bottom of the
+            // match).
+            | GTGT | STARGT | STARGTGT | STARGTAMP1 | STARGTAMP2
+            | N2GT | N2GTGT | N2GTAMP1
+            | N3GT | N3GTGT | N3GTAMP1 | N3GTAMP2
+            | N4GT | N4GTGT | N4GTAMP1 | N4GTAMP2
+            | N5GT | N5GTGT | N5GTAMP1 | N5GTAMP2
+            | N6GT | N6GTGT | N6GTAMP1 | N6GTAMP2
+            | N1GTAMP2 => HalsteadType::Operator,
+
+            // Wrapper rule kinds (`assignment_operator`, `comparison_operator`,
+            // `format_operator`, `file_redirection_operator`,
+            // `merging_redirection_operator`) are NOT classified here:
+            // tree-sitter-pwsh nests the individual operator leaf token
+            // inside its matching wrapper rule, so
+            // `T::Halstead::compute`, which visits every named and
+            // anonymous child exhaustively (see spaces.rs), would
+            // otherwise count each operator twice — once for the wrapper
+            // and once for the leaf. Classifying only the leaves gives
+            // the correct Halstead N1.
+
+            // Operands: identifiers, variables, literals, and the name
+            // identifiers that drive function declarations and command
+            // invocations.
+            //
+            // `function_name`, `command_name`, and `path_command_name_token`
+            // are the leaf identifier nodes emitted by tree-sitter-pwsh
+            // for `function Greet { … }` / `Get-Item /tmp` /
+            // `./build.sh arg` respectively. They carry the actual
+            // declared-name or invoked-name text, so they are the
+            // natural operands for a PowerShell script (normal programs
+            // are dominated by command calls; omitting them suppresses
+            // Halstead N2 and any downstream metric that depends on it,
+            // like volume and MI).
+            //
+            // The named *wrappers* `command_name_expr` (the choice over
+            // `command_name` / `path_command_name` / `_primary_expression`)
+            // and `path_command_name` (which holds one or more
+            // `path_command_name_token` leaves) are intentionally NOT
+            // classified here: tree-sitter-pwsh nests the leaves inside
+            // these wrappers, and `T::Halstead::compute` walks every
+            // node exhaustively, so matching both wrapper and leaf would
+            // double-count. Same rule the operator classification uses
+            // for `assignment_operator` / `comparison_operator`.
+            SimpleName | TypeIdentifier | Variable | Variable2 | BracedVariable | GenericToken
+            | GenericToken2 | GenericToken3 | GenericToken4 | GenericToken5
+            | DecimalIntegerLiteral | HexadecimalIntegerLiteral | RealLiteral
+            | VerbatimStringCharacters | VerbatimStringCharacters2
+            | VerbatimHereStringCharacters
+            // Expandable (double-quoted) string literals are wrappers in
+            // the grammar: their text content is embedded in the
+            // wrapper's byte range rather than in a separate content
+            // leaf (unlike `verbatim_string_characters`). Classifying
+            // the wrapper itself is therefore the only way to count
+            // `""`, `"plain"`, and interpolated `"hello $name"` as
+            // operands. The wrapper's interpolation children
+            // (`variable`, `sub_expression`) are classified separately
+            // as operands / operator territory on their own merits, so
+            // the wrapper only contributes one count per literal.
+            | ExpandableStringLiteral | ExpandableHereStringLiteral
+            | FunctionName | CommandName | PathCommandNameToken
+            | CommandParameter => HalsteadType::Operand,
 
             _ => HalsteadType::Unknown,
         }

@@ -1,5 +1,5 @@
-use std::collections::hash_map::{Entry, HashMap};
 use std::collections::BTreeMap;
+use std::collections::hash_map::{Entry, HashMap};
 use tree_sitter::Language;
 
 pub fn capitalize(s: &str) -> String {
@@ -26,11 +26,7 @@ pub fn sanitize_identifier(name: &str) -> String {
 
     let mut result = String::with_capacity(name.len());
     for c in name.chars() {
-        if ('a'..='z').contains(&c)
-            || ('A'..='Z').contains(&c)
-            || ('0'..='9').contains(&c)
-            || c == '_'
-        {
+        if c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_' {
             result.push(c);
         } else {
             let replacement = match c {
@@ -89,6 +85,14 @@ pub fn sanitize_identifier(name: &str) -> String {
                 .collect::<Vec<_>>()
                 .join("_");
         }
+    }
+
+    // Rust identifiers cannot start with a digit. Some tree-sitter grammars
+    // expose tokens whose first character is a digit (e.g. PowerShell's
+    // redirection operators `2>`, `3>&1`). Prefix such identifiers with `N`
+    // so the generated enum variant compiles.
+    if result.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        result.insert(0, 'N');
     }
 
     result
