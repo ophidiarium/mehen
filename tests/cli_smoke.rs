@@ -90,3 +90,153 @@ fn metrics_file_output_writes_valid_json() {
 
     assert!(parsed.is_array() || parsed.is_object());
 }
+
+#[test]
+fn top_offenders_json_ranks_files_by_metric() {
+    // Run against the mehen source tree itself: guaranteed to contain several
+    // Rust files with measurable LOC, so ranking will produce a non-empty list.
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args([
+            "top-offenders",
+            "--metric",
+            "loc.lloc",
+            "--metric",
+            "cognitive",
+            "--max-results",
+            "3",
+            "--output-format",
+            "json",
+            "src",
+        ])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        output.status.success(),
+        "mehen top-offenders failed: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout was not UTF-8");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON output: {e}\n---\n{stdout}"));
+
+    let arr = parsed
+        .as_array()
+        .expect("top-offenders JSON must be an array");
+    assert!(!arr.is_empty(), "expected at least one offender from src/");
+    assert!(
+        arr.len() <= 3,
+        "expected at most 3 offenders, got {}",
+        arr.len()
+    );
+
+    // Each entry carries `path` and a non-empty `metrics` array whose names
+    // match the `--metric` order the CLI was given.
+    for entry in arr {
+        assert!(entry.get("path").and_then(|p| p.as_str()).is_some());
+        let metrics = entry
+            .get("metrics")
+            .and_then(|m| m.as_array())
+            .expect("each offender has a metrics array");
+        assert_eq!(metrics.len(), 2);
+        assert_eq!(
+            metrics[0].get("name").and_then(|n| n.as_str()),
+            Some("loc.lloc")
+        );
+        assert_eq!(
+            metrics[1].get("name").and_then(|n| n.as_str()),
+            Some("cognitive")
+        );
+    }
+
+    // Primary metric is lower-is-better: LLOC must be non-increasing down the list.
+    let lloc_values: Vec<f64> = arr
+        .iter()
+        .map(|e| {
+            e["metrics"][0]["value"]
+                .as_f64()
+                .expect("loc.lloc value must be numeric")
+        })
+        .collect();
+    for pair in lloc_values.windows(2) {
+        assert!(
+            pair[0] >= pair[1],
+            "ranking must be non-increasing on primary metric: {lloc_values:?}"
+        );
+    }
+}
+
+#[test]
+fn top_offenders_requires_metric() {
+    // No --metric provided: clap should reject the command.
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args(["top-offenders", "src"])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        !output.status.success(),
+        "top-offenders without --metric should fail"
+    );
+}
+
+#[test]
+fn top_offenders_accepts_hyphen_prefixed_metric_values() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args([
+            "top-offenders",
+            "--metric",
+            "-mi.visual_studio",
+            "--max-results",
+            "1",
+            "--output-format",
+            "json",
+            "src/main.rs",
+        ])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        output.status.success(),
+        "hyphen-prefixed metric value should be accepted: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout was not UTF-8");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON output: {e}\n---\n{stdout}"));
+    let metrics = parsed[0]["metrics"]
+        .as_array()
+        .expect("top offender must contain metrics");
+    assert_eq!(
+        metrics[0].get("name").and_then(|n| n.as_str()),
+        Some("mi.visual_studio")
+    );
+}
+
+#[test]
+fn top_offenders_rejects_unknown_language_type() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args([
+            "top-offenders",
+            "--metric",
+            "loc.lloc",
+            "--language-type",
+            "not-a-language",
+            "src/main.rs",
+        ])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        !output.status.success(),
+        "unknown top-offenders language type should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr was not UTF-8");
+    assert!(
+        stderr.contains("Unknown language type 'not-a-language'."),
+        "unexpected stderr: {stderr}"
+    );
+}
