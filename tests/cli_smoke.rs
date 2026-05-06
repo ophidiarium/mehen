@@ -180,3 +180,29 @@ fn top_offenders_requires_metric() {
         "top-offenders without --metric should fail"
     );
 }
+
+#[test]
+fn top_offenders_rejects_unknown_language_type() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args([
+            "top-offenders",
+            "--metric",
+            "loc.lloc",
+            "--language-type",
+            "not-a-language",
+            "src/main.rs",
+        ])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        !output.status.success(),
+        "unknown top-offenders language type should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr was not UTF-8");
+    assert!(
+        stderr.contains("Unknown language type 'not-a-language'."),
+        "unexpected stderr: {stderr}"
+    );
+}

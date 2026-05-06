@@ -228,6 +228,10 @@ fn format_value(v: f64) -> String {
     }
 }
 
+fn resolve_num_jobs(requested: Option<usize>, available: Option<usize>) -> usize {
+    requested.unwrap_or_else(|| available.unwrap_or(2))
+}
+
 // ── Orchestration ──────────────────────────────────────────────────────
 
 pub(crate) fn run_top_offenders(opts: TopOffendersOpts) {
@@ -239,23 +243,21 @@ pub(crate) fn run_top_offenders(opts: TopOffendersOpts) {
         process::exit(1);
     }
 
-    let language = opts
-        .language_type
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .and_then(get_from_ext);
+    let language = match opts.language_type.as_deref().filter(|s| !s.is_empty()) {
+        Some(raw) => match get_from_ext(raw) {
+            Some(language) => Some(language),
+            None => {
+                log::error!("Unknown language type '{raw}'.");
+                process::exit(1);
+            }
+        },
+        None => None,
+    };
 
-    let num_jobs = opts
-        .num_jobs
-        .map(|n| std::cmp::max(2, n) - 1)
-        .unwrap_or_else(|| {
-            std::cmp::max(
-                2,
-                available_parallelism()
-                    .expect("Unrecoverable: Failed to get thread count")
-                    .get(),
-            ) - 1
-        });
+    let num_jobs = resolve_num_jobs(
+        opts.num_jobs,
+        available_parallelism().ok().map(|threads| threads.get()),
+    );
 
     let include = mk_globset(opts.include);
     let exclude = mk_globset(opts.exclude);
@@ -411,5 +413,15 @@ mod tests {
         assert_eq!(format_value(0.0), "0");
         assert_eq!(format_value(1.5), "1.50");
         assert_eq!(format_value(100.567), "100.57");
+    }
+
+    #[test]
+    fn explicit_num_jobs_is_not_predecremented() {
+        assert_eq!(resolve_num_jobs(Some(8), Some(16)), 8);
+    }
+
+    #[test]
+    fn num_jobs_falls_back_to_conservative_thread_count() {
+        assert_eq!(resolve_num_jobs(None, None), 2);
     }
 }
