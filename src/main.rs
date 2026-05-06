@@ -40,6 +40,8 @@ mod formats;
 mod ci;
 mod diff;
 mod git;
+mod metric_selector;
+mod top_offenders;
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -60,6 +62,7 @@ use crate::langs::{LANG, action, get_from_ext, get_function_spaces};
 use crate::output::{Dump, DumpCfg};
 use crate::spaces::{Metrics, MetricsCfg};
 use crate::tools::{guess_language, read_file_with_eol};
+use crate::top_offenders::TopOffendersOpts;
 
 #[derive(Debug)]
 struct Config {
@@ -159,6 +162,8 @@ struct Cli {
 enum Command {
     /// Compare metrics between two git revisions.
     Diff(DiffOpts),
+    /// Rank files by one or more metrics (worst offenders first).
+    TopOffenders(TopOffendersOpts),
 }
 
 #[derive(clap::Args, Debug)]
@@ -295,6 +300,7 @@ fn main() {
 
     match cli.command {
         Some(Command::Diff(opts)) => diff::run_diff(opts),
+        Some(Command::TopOffenders(opts)) => top_offenders::run_top_offenders(opts),
         None => run_analyze(cli.analyze),
     }
 }

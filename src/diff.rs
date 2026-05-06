@@ -4,112 +4,17 @@ use std::path::{Component, Path, PathBuf};
 use crate::ci;
 use crate::git::{self, ChangeStatus, GitError};
 use crate::langs::{get_from_ext, get_function_spaces};
+use crate::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
 use crate::mk_globset;
-use crate::spaces::FuncSpace;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
 const LINGUIST_GENERATED_ATTR: &str = "linguist-generated";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum Polarity {
-    LowerIsBetter,
-    HigherIsBetter,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum DiffFormat {
     Markdown,
     Json,
-}
-
-#[derive(Debug, Clone)]
-struct MetricSelector {
-    name: &'static str,
-    label: &'static str,
-    polarity: Polarity,
-    extract: fn(&FuncSpace) -> f64,
-}
-
-type MetricDef = (&'static str, &'static str, Polarity, fn(&FuncSpace) -> f64);
-
-const KNOWN_METRICS: &[MetricDef] = &[
-    ("cyclomatic", "Cyclomatic", Polarity::LowerIsBetter, |s| {
-        s.metrics.cyclomatic.cyclomatic_sum()
-    }),
-    ("cognitive", "Cognitive", Polarity::LowerIsBetter, |s| {
-        s.metrics.cognitive.cognitive_sum()
-    }),
-    ("nom.functions", "Functions", Polarity::LowerIsBetter, |s| {
-        s.metrics.nom.functions_sum()
-    }),
-    ("loc.lloc", "LLOC", Polarity::LowerIsBetter, |s| {
-        s.metrics.loc.lloc()
-    }),
-    (
-        "mi.original",
-        "MI (Original)",
-        Polarity::HigherIsBetter,
-        |s| s.metrics.mi.mi_original(),
-    ),
-    ("mi.sei", "MI (SEI)", Polarity::HigherIsBetter, |s| {
-        s.metrics.mi.mi_sei()
-    }),
-    ("mi.visual_studio", "MI", Polarity::HigherIsBetter, |s| {
-        s.metrics.mi.mi_visual_studio()
-    }),
-    (
-        "halstead.volume",
-        "Halstead Vol",
-        Polarity::LowerIsBetter,
-        |s| s.metrics.halstead.volume(),
-    ),
-    ("abc", "ABC", Polarity::LowerIsBetter, |s| {
-        s.metrics.abc.magnitude_sum()
-    }),
-];
-
-const DEFAULT_METRICS: &[&str] = &[
-    "cyclomatic",
-    "cognitive",
-    "nom.functions",
-    "loc.lloc",
-    "mi.visual_studio",
-];
-
-fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
-    let specs: Vec<&str> = if specs.is_empty() {
-        DEFAULT_METRICS.to_vec()
-    } else {
-        specs.iter().map(|s| s.as_str()).collect()
-    };
-
-    let mut selectors = Vec::new();
-    for spec in specs {
-        let (polarity_override, name) = if let Some(rest) = spec.strip_prefix('+') {
-            (Some(Polarity::HigherIsBetter), rest)
-        } else if let Some(rest) = spec.strip_prefix('-') {
-            (Some(Polarity::LowerIsBetter), rest)
-        } else {
-            (None, spec)
-        };
-
-        if let Some(&(n, label, default_polarity, extract)) =
-            KNOWN_METRICS.iter().find(|(n, ..)| *n == name)
-        {
-            selectors.push(MetricSelector {
-                name: n,
-                label,
-                polarity: polarity_override.unwrap_or(default_polarity),
-                extract,
-            });
-        } else {
-            log::warn!("Unknown metric '{name}', skipping.");
-        }
-    }
-
-    selectors
 }
 
 // ── Per-file diff data ─────────────────────────────────────────────────
