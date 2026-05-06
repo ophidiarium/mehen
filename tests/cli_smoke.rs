@@ -182,6 +182,40 @@ fn top_offenders_requires_metric() {
 }
 
 #[test]
+fn top_offenders_accepts_hyphen_prefixed_metric_values() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args([
+            "top-offenders",
+            "--metric",
+            "-mi.visual_studio",
+            "--max-results",
+            "1",
+            "--output-format",
+            "json",
+            "src/main.rs",
+        ])
+        .output()
+        .expect("failed to run mehen top-offenders");
+
+    assert!(
+        output.status.success(),
+        "hyphen-prefixed metric value should be accepted: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout was not UTF-8");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON output: {e}\n---\n{stdout}"));
+    let metrics = parsed[0]["metrics"]
+        .as_array()
+        .expect("top offender must contain metrics");
+    assert_eq!(
+        metrics[0].get("name").and_then(|n| n.as_str()),
+        Some("mi.visual_studio")
+    );
+}
+
+#[test]
 fn top_offenders_rejects_unknown_language_type() {
     let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args([

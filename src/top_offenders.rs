@@ -46,7 +46,13 @@ pub(crate) struct TopOffendersOpts {
     /// is used. Known names: `cyclomatic`, `cognitive`, `nom.functions`,
     /// `loc.lloc`, `mi.original`, `mi.sei`, `mi.visual_studio`,
     /// `halstead.volume`, `abc`.
-    #[clap(long = "metric", short = 'M', required = true, num_args = 1)]
+    #[clap(
+        long = "metric",
+        short = 'M',
+        required = true,
+        num_args = 1,
+        allow_hyphen_values = true
+    )]
     metrics: Vec<String>,
 
     /// Maximum number of offenders to return.
