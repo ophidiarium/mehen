@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/ophidiarium/mehen/compare/v0.4.0...v0.4.1) (2026-05-07)
+
+
+### Features
+
+* **cli:** add top-offenders subcommand ([#71](https://github.com/ophidiarium/mehen/issues/71)) ([e07c061](https://github.com/ophidiarium/mehen/commit/e07c061463ed55fa5736b9e71f09979eba1d39a4))
+
 ## [0.4.0](https://github.com/ophidiarium/mehen/compare/v0.3.0...v0.4.0) (2026-05-05)
 
 
