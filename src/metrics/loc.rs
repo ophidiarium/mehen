@@ -1482,11 +1482,20 @@ mod tests {
              }
              fn call() {
                  foo()
+             }
+             fn assign() {
+                 x = y
+             }
+             fn compound_assign() {
+                 x += y
+             }
+             fn block_tail() {
+                 { foo() }
              }",
             "foo.rs",
             |metric| {
-                assert_eq!(metric.loc.lloc(), 2.0);
-                assert_eq!(metric.loc.lloc_max(), 1.0);
+                assert_eq!(metric.loc.lloc(), 6.0);
+                assert_eq!(metric.loc.lloc_max(), 2.0);
             },
         );
     }

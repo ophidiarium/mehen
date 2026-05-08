@@ -57,6 +57,8 @@ pub(crate) fn is_rust_tail_expression(node: &Node) -> bool {
                 | Rust::TryExpression
                 | Rust::ReferenceExpression
                 | Rust::BinaryExpression
+                | Rust::AssignmentExpression
+                | Rust::CompoundAssignmentExpr
                 | Rust::TypeCastExpression
                 | Rust::ReturnExpression
                 | Rust::YieldExpression
@@ -71,6 +73,7 @@ pub(crate) fn is_rust_tail_expression(node: &Node) -> bool {
                 | Rust::WhileExpression
                 | Rust::LoopExpression
                 | Rust::ForExpression
+                | Rust::Block
                 | Rust::ConstBlock
                 | Rust::ClosureExpression
                 | Rust::BreakExpression
