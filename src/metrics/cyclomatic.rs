@@ -8,6 +8,7 @@ use crate::langs::{
 };
 use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
+use crate::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
 /// The `Cyclomatic` metric.
 #[derive(Debug, Clone)]
@@ -162,8 +163,16 @@ impl Cyclomatic for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Rust::*;
 
+        if is_inside_rust_macro_tokens(node) {
+            return;
+        }
+
         match node.kind_id().into() {
-            If | For | While | Loop | MatchArm | MatchArm2 | TryExpression | AMPAMP | PIPEPIPE => {
+            IfExpression | ForExpression | WhileExpression | LoopExpression | MatchArm
+            | MatchArm2 | TryExpression => {
+                stats.cyclomatic += 1.;
+            }
+            _ if is_rust_logical_operator(node) => {
                 stats.cyclomatic += 1.;
             }
             _ => {}
@@ -426,6 +435,21 @@ mod tests {
                       "max": 4.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_macro_tokens_are_opaque_for_cyclomatic() {
+        check_metrics::<RustParser>(
+            "fn f() {
+                 maybe!(a && b, if c { d() });
+             }",
+            "foo.rs",
+            |metric| {
+                // Unit + function baselines only; macro token-tree control
+                // tokens are not parsed Rust control flow.
+                assert_eq!(metric.cyclomatic.cyclomatic_sum(), 2.0);
             },
         );
     }
