@@ -41,6 +41,7 @@ mod ci;
 mod diff;
 mod git;
 mod metric_selector;
+mod rust_metric_helpers;
 mod top_offenders;
 
 use std::io::{self, Write};

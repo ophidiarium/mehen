@@ -10,6 +10,7 @@ use crate::langs::{
 };
 use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
+use crate::rust_metric_helpers::is_rust_tail_expression;
 
 /// The `SLoc` metric suite.
 #[derive(Debug, Clone)]
@@ -675,6 +676,13 @@ impl Loc for RustCode {
         use Rust::*;
 
         let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        if is_rust_tail_expression(node) {
+            check_comment_ends_on_code_line(stats, start);
+            stats.ploc.lines.insert(start);
+            stats.lloc.logical_lines += 1;
+            return;
+        }
 
         match node.kind_id().into() {
             StringLiteral
@@ -1424,7 +1432,8 @@ mod tests {
             },
         );
 
-        // LLOC returns three because there is an empty Rust statement
+        // LLOC counts the let declaration, the if expression statement, the
+        // trailing semicolon as an empty statement, and both branch tails.
         check_metrics::<RustParser>(
             "let a = 42;
              if true {
@@ -1441,12 +1450,12 @@ mod tests {
                     {
                       "sloc": 6.0,
                       "ploc": 6.0,
-                      "lloc": 3.0,
+                      "lloc": 5.0,
                       "cloc": 0.0,
                       "blank": 0.0,
                       "sloc_average": 6.0,
                       "ploc_average": 6.0,
-                      "lloc_average": 3.0,
+                      "lloc_average": 5.0,
                       "cloc_average": 0.0,
                       "blank_average": 0.0,
                       "sloc_min": 6.0,
@@ -1455,12 +1464,29 @@ mod tests {
                       "cloc_max": 0.0,
                       "ploc_min": 6.0,
                       "ploc_max": 6.0,
-                      "lloc_min": 3.0,
-                      "lloc_max": 3.0,
+                      "lloc_min": 5.0,
+                      "lloc_max": 5.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_tail_expressions_are_lloc() {
+        check_metrics::<RustParser>(
+            "fn literal() -> i32 {
+                 42
+             }
+             fn call() {
+                 foo()
+             }",
+            "foo.rs",
+            |metric| {
+                assert_eq!(metric.loc.lloc(), 2.0);
+                assert_eq!(metric.loc.lloc_max(), 1.0);
             },
         );
     }
@@ -1885,12 +1911,12 @@ mod tests {
                     {
                       "sloc": 3.0,
                       "ploc": 3.0,
-                      "lloc": 3.0,
+                      "lloc": 4.0,
                       "cloc": 3.0,
                       "blank": 0.0,
                       "sloc_average": 1.0,
                       "ploc_average": 1.0,
-                      "lloc_average": 1.0,
+                      "lloc_average": 1.3333333333333333,
                       "cloc_average": 1.0,
                       "blank_average": 0.0,
                       "sloc_min": 1.0,
@@ -1900,7 +1926,7 @@ mod tests {
                       "ploc_min": 1.0,
                       "ploc_max": 1.0,
                       "lloc_min": 0.0,
-                      "lloc_max": 0.0,
+                      "lloc_max": 1.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###
