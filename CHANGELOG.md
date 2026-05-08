@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/ophidiarium/mehen/compare/v0.4.1...v0.4.2) (2026-05-08)
+
+
+### Bug Fixes
+
+* Rust metric edge cases ([#73](https://github.com/ophidiarium/mehen/issues/73)) ([8bccab4](https://github.com/ophidiarium/mehen/commit/8bccab409c6e8cac29e737b085baebbf4ba14d61))
+
 ## [0.4.1](https://github.com/ophidiarium/mehen/compare/v0.4.0...v0.4.1) (2026-05-07)
 
 
