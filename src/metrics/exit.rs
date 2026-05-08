@@ -8,6 +8,7 @@ use crate::langs::{
 };
 use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
+use crate::rust_metric_helpers::is_inside_rust_macro_tokens;
 
 /// The `NExit` metric.
 ///
@@ -152,11 +153,14 @@ impl Exit for TsxCode {
 
 impl Exit for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
+        if is_inside_rust_macro_tokens(node) {
+            return;
+        }
+
         if matches!(
             node.kind_id().into(),
             Rust::ReturnExpression | Rust::TryExpression
-        ) || Self::is_func(node) && node.child_by_field_name("return_type").is_some()
-        {
+        ) {
             stats.exit += 1;
         }
     }
@@ -289,6 +293,24 @@ mod tests {
     }
 
     #[test]
+    fn rust_return_type_is_not_an_exit() {
+        check_metrics::<RustParser>(
+            "fn typed() -> () {}
+             fn explicit() {
+                 return;
+             }
+             fn question() {
+                 a?;
+             }",
+            "foo.rs",
+            |metric| {
+                assert_eq!(metric.nexits.exit_sum(), 2.0);
+                assert_eq!(metric.nexits.exit_max(), 1.0);
+            },
+        );
+    }
+
+    #[test]
     fn python_simple_function() {
         check_metrics::<PythonParser>(
             "def f(a, b):
@@ -296,7 +318,6 @@ mod tests {
                      return a",
             "foo.py",
             |metric| {
-                println!("{:?}", metric.nexits);
                 // 1 function
                 insta::assert_json_snapshot!(
                     metric.nexits,

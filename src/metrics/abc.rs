@@ -8,6 +8,9 @@ use crate::langs::{
 };
 use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
+use crate::rust_metric_helpers::{
+    is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
+};
 
 /// The `ABC` metric.
 ///
@@ -236,6 +239,10 @@ impl Abc for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Rust::*;
 
+        if is_inside_rust_macro_tokens(node) {
+            return;
+        }
+
         match node.kind_id().into() {
             // A: assignments (`=`), compound assignments (`+=`, `-=`, ...) and
             // `let` bindings with an initializer.
@@ -251,8 +258,10 @@ impl Abc for RustCode {
             }
             // C: conditional constructs, `?`, match arms, and comparison/logical operators.
             IfExpression | MatchExpression | WhileExpression | LoopExpression | ForExpression
-            | MatchArm | MatchArm2 | TryExpression | EQEQ | BANGEQ | LT | GT | LTEQ | GTEQ
-            | AMPAMP | PIPEPIPE => {
+            | MatchArm | MatchArm2 | TryExpression => {
+                stats.conditions += 1.;
+            }
+            _ if is_rust_comparison_operator(node) || is_rust_logical_operator(node) => {
                 stats.conditions += 1.;
             }
             _ => {}
@@ -845,6 +854,37 @@ mod tests {
                       "conditions_max": 2.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_abc_scopes_type_and_macro_tokens() {
+        check_metrics::<RustParser>(
+            "fn generic(a: Option<i32>, b: Result<u8, E>) {}
+             fn macro_call() {
+                 maybe!(a && b, if c { d() });
+             }",
+            "foo.rs",
+            |metric| {
+                assert_eq!(metric.abc.conditions_sum(), 0.0);
+                assert_eq!(metric.abc.branches_sum(), 1.0);
+            },
+        );
+    }
+
+    #[test]
+    fn rust_abc_counts_let_chain_operators_in_conditions() {
+        check_metrics::<RustParser>(
+            "fn f(a: Option<i32>, b: Option<i32>) {
+                 if let Some(x) = a && let Some(y) = b && x > y {
+                     work();
+                 }
+             }",
+            "foo.rs",
+            |metric| {
+                assert_eq!(metric.abc.conditions_sum(), 4.0);
+                assert_eq!(metric.abc.branches_sum(), 1.0);
             },
         );
     }

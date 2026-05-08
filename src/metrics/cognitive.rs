@@ -11,6 +11,7 @@ use crate::langs::{
 };
 use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
+use crate::rust_metric_helpers::is_inside_rust_macro_tokens;
 
 // TODO: Find a way to increment the cognitive complexity value
 // for recursive code. For some kind of languages, such as C++, it is pretty
@@ -333,8 +334,12 @@ impl Cognitive for RustCode {
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
         use Rust::*;
-        //TODO: Implement macros
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        if is_inside_rust_macro_tokens(node) {
+            nesting_map.insert(node.id(), (nesting, depth, lambda));
+            return;
+        }
 
         match node.kind_id().into() {
             IfExpression if !Self::is_else_if(node) => {
@@ -343,7 +348,7 @@ impl Cognitive for RustCode {
             }
             IfExpression => {}
             ForExpression | WhileExpression | LoopExpression | MatchExpression => {
-                increase_nesting(stats,&mut nesting, depth, lambda);
+                increase_nesting(stats, &mut nesting, depth, lambda);
             }
             Else /*else-if also */ => {
                 increment_by_one(stats);
@@ -366,7 +371,10 @@ impl Cognitive for RustCode {
             BinaryExpression => {
                 compute_booleans::<Rust>(node, stats, &AMPAMP, &PIPEPIPE);
             }
-            FunctionItem  => {
+            LetChain | LetChain2 => {
+                compute_booleans::<Rust>(node, stats, &AMPAMP, &PIPEPIPE);
+            }
+            FunctionItem => {
                 nesting = 0;
                 // Increase depth function nesting if needed
                 increment_function_depth::<Rust>(&mut depth, node, &FunctionItem);
@@ -1157,6 +1165,35 @@ mod tests {
                       "max": 3.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_let_chain_boolean_sequence() {
+        check_metrics::<RustParser>(
+            "fn f(a: Option<i32>, b: Option<i32>) {
+                 if let Some(x) = a && let Some(y) = b && x > y {
+                     work();
+                 }
+             }",
+            "foo.rs",
+            |metric| {
+                // +1 for the if, +1 for the same-operator `&&` let-chain.
+                assert_eq!(metric.cognitive.cognitive_sum(), 2.0);
+            },
+        );
+    }
+
+    #[test]
+    fn rust_macro_tokens_are_opaque_for_cognitive() {
+        check_metrics::<RustParser>(
+            "fn f() {
+                 maybe!(a && b, if c { d() });
+             }",
+            "foo.rs",
+            |metric| {
+                assert_eq!(metric.cognitive.cognitive_sum(), 0.0);
             },
         );
     }
