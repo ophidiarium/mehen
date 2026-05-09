@@ -26,7 +26,7 @@ function detectMusl() {
     }
 
     return false;
-  } catch (error) {
+  } catch  {
     return false;
   }
 }
@@ -83,7 +83,7 @@ function main() {
     let binPath;
     try {
       binPath = require.resolve(`${pkgName}/bin/${binName}`);
-    } catch (resolveError) {
+    } catch  {
       console.error(`Error: Could not find mehen binary for your platform (${pkgName}).`);
       console.error('');
       console.error('This usually means:');
@@ -119,8 +119,21 @@ function main() {
         windowsHide: false
       });
     } catch (execError) {
-      if (execError.status !== undefined) {
+      if (typeof execError.status === 'number') {
         process.exit(execError.status);
+      }
+      if (execError.code === 'EACCES') {
+        console.error(`Error: mehen binary at ${binPath} is not executable.`);
+        console.error('This is likely a packaging bug — please report it at:');
+        console.error('  https://github.com/ophidiarium/mehen/issues');
+        console.error('');
+        console.error(`Workaround: chmod +x "${binPath}"`);
+        process.exit(126);
+      }
+      if (execError.code === 'ENOENT') {
+        console.error(`Error: mehen binary not found at ${binPath}.`);
+        console.error('Try reinstalling mehen.');
+        process.exit(127);
       }
       console.error(`Error executing mehen binary: ${execError.message}`);
       process.exit(1);
