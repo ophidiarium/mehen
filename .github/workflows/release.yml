@@ -797,6 +797,27 @@ jobs:
           name: npm-packages-${{ github.run_id }}
           path: npm-dist/
 
+      - name: Restore executable bit on platform binaries
+        shell: bash
+        run: |
+          # actions/upload-artifact@v4 does not preserve Unix file modes, so
+          # the 0755 bits set by generate-npm-packages.js are lost during the
+          # upload/download round-trip. Re-apply +x before `npm publish` packs
+          # the tarballs — otherwise users get a silent permission-denied when
+          # the platform binary runs.
+          shopt -s nullglob
+          fixed=0
+          for bin in npm-dist/@mehen/*/bin/mehen npm-dist/@mehen/*/bin/mehen.exe; do
+            chmod 0755 "$bin"
+            ls -la "$bin"
+            fixed=$((fixed + 1))
+          done
+          if [[ "$fixed" -eq 0 ]]; then
+            echo "::error::No platform binaries found under npm-dist/@mehen/*/bin/"
+            exit 1
+          fi
+          echo "Restored execute bit on ${fixed} platform binaries."
+
       - name: Download version info
         uses: actions/download-artifact@v5
         with:
