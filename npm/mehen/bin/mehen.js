@@ -123,11 +123,18 @@ function main() {
         process.exit(execError.status);
       }
       if (execError.code === 'EACCES') {
-        console.error(`Error: mehen binary at ${binPath} is not executable.`);
-        console.error('This is likely a packaging bug — please report it at:');
-        console.error('  https://github.com/ophidiarium/mehen/issues');
-        console.error('');
-        console.error(`Workaround: chmod +x "${binPath}"`);
+        if (process.platform === 'win32') {
+          console.error(`Error: access denied when launching mehen binary at ${binPath}.`);
+          console.error('On Windows this usually means the file is locked by another process');
+          console.error('(e.g. antivirus scan) or was quarantined. Try rerunning the command,');
+          console.error('and if it persists, reinstall mehen or whitelist the binary.');
+        } else {
+          console.error(`Error: mehen binary at ${binPath} is not executable.`);
+          console.error('This is likely a packaging bug — please report it at:');
+          console.error('  https://github.com/ophidiarium/mehen/issues');
+          console.error('');
+          console.error(`Workaround: chmod +x "${binPath}"`);
+        }
         process.exit(126);
       }
       if (execError.code === 'ENOENT') {
