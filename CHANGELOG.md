@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/ophidiarium/mehen/compare/v0.4.2...v0.4.3) (2026-05-09)
+
+
+### Bug Fixes
+
+* **npm:** restore +x on platform binaries and surface spawn errors ([#75](https://github.com/ophidiarium/mehen/issues/75)) ([e12549e](https://github.com/ophidiarium/mehen/commit/e12549eb9bcccb586f424101a5d1ee50a41aec6d))
+
 ## [0.4.2](https://github.com/ophidiarium/mehen/compare/v0.4.1...v0.4.2) (2026-05-08)
 
 
