@@ -878,13 +878,24 @@ impl Loc for CCode {
                 add_cloc_lines(stats, start, end);
             }
             // LLOC: count statement-shaped nodes and declarations exactly
-            // once.
-            Declaration | ExpressionStatement | ExpressionStatement2 | IfStatement
-            | SwitchStatement | CaseStatement | WhileStatement | DoStatement | ForStatement
-            | ReturnStatement | BreakStatement | ContinueStatement | GotoStatement
-            | LabeledStatement | SehTryStatement | SehLeaveStatement | FunctionDefinition
-            | FunctionDefinition2 | PreprocInclude | PreprocDef | PreprocFunctionDef
-            | PreprocCall => {
+            // once. `type_definition` (typedefs) are declarations like the
+            // rest, and preprocessor conditional containers
+            // (`#if` / `#ifdef` / `#else` / `#elif` and their variants)
+            // each represent a structural directive that contributes one
+            // logical line. The tree-sitter-c grammar emits positional
+            // duplicate variants (`PreprocIfdef2/3/4`, `PreprocElse2/3/4`,
+            // ...) that alias the same rule; each occurrence is one node,
+            // so enumerating every variant is safe and complete.
+            Declaration | TypeDefinition | ExpressionStatement | ExpressionStatement2
+            | IfStatement | SwitchStatement | CaseStatement | WhileStatement | DoStatement
+            | ForStatement | ReturnStatement | BreakStatement | ContinueStatement
+            | GotoStatement | LabeledStatement | SehTryStatement | SehLeaveStatement
+            | FunctionDefinition | FunctionDefinition2 | PreprocInclude | PreprocDef
+            | PreprocFunctionDef | PreprocCall | PreprocIf | PreprocIf2 | PreprocIf3
+            | PreprocIf4 | PreprocIfdef | PreprocIfdef2 | PreprocIfdef3 | PreprocIfdef4
+            | PreprocElse | PreprocElse2 | PreprocElse3 | PreprocElse4 | PreprocElif
+            | PreprocElif2 | PreprocElif3 | PreprocElif4 | PreprocElifdef | PreprocElifdef2
+            | PreprocElifdef3 | PreprocElifdef4 => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -953,7 +964,7 @@ impl Loc for PowershellCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
     };
     use crate::tools::check_metrics;
 
@@ -2376,6 +2387,44 @@ mod tests {
             "foo.ps1",
             |metric| {
                 assert_eq!(metric.loc.lloc(), 3.0);
+            },
+        );
+    }
+
+    #[test]
+    fn c_typedef_counts_as_lloc() {
+        // `typedef` is a declaration like `int x;` and must contribute one
+        // logical line. Together with the `int x;` declaration this gives
+        // an LLOC of 2.
+        check_metrics::<CParser>(
+            "typedef unsigned int u32;
+int x;",
+            "foo.c",
+            |metric| {
+                assert_eq!(metric.loc.lloc(), 2.0);
+            },
+        );
+    }
+
+    #[test]
+    fn c_preproc_conditionals_count_as_lloc() {
+        // `#ifdef FOO ... #else ... #endif` exposes two preprocessor
+        // conditional containers (`preproc_ifdef` and a nested
+        // `preproc_else`). Combined with the two inner `int x = …;`
+        // declarations, LLOC must reach 4:
+        //   +1 preproc_ifdef  (the `#ifdef FOO` branch)
+        //   +1 declaration    (`int x = 1;`)
+        //   +1 preproc_else   (the `#else` branch)
+        //   +1 declaration    (`int y = 2;`)
+        check_metrics::<CParser>(
+            "#ifdef FOO
+int x = 1;
+#else
+int y = 2;
+#endif",
+            "foo.c",
+            |metric| {
+                assert_eq!(metric.loc.lloc(), 4.0);
             },
         );
     }
