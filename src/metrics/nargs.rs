@@ -371,20 +371,43 @@ impl NArgs for PowershellCode {
 }
 
 #[inline(always)]
+fn is_c_function_declarator(kind: u16) -> bool {
+    // The tree-sitter-c grammar emits `function_declarator` under five
+    // distinct IDs (context-dependent alternates for nested / abstract /
+    // attributed declarators). All alias the same rule, so any of them
+    // can hold our `parameter_list`.
+    matches!(
+        C::from(kind),
+        C::FunctionDeclarator
+            | C::FunctionDeclarator2
+            | C::FunctionDeclarator3
+            | C::FunctionDeclarator4
+            | C::FunctionDeclarator5
+    )
+}
+
+#[inline(always)]
+fn is_c_parameter_list(kind: u16) -> bool {
+    matches!(C::from(kind), C::ParameterList | C::ParameterList2)
+}
+
+#[inline(always)]
 fn compute_c_args(node: &Node, code: &[u8], nargs: &mut usize) {
     // tree-sitter-c nests the parameter list under the innermost
     // `function_declarator`: `function_definition > function_declarator >
     // parameter_list`. Pointer (`int (*f)(...)`) and attributed declarators
     // wrap the `function_declarator`, so walk inward via the `declarator`
     // field until we find the `function_declarator` whose direct child is
-    // the `parameter_list`.
+    // the `parameter_list`. Both the declarator and parameter-list rules
+    // expose multiple positional IDs (231..=235 / 259) alongside the
+    // canonical 230 / 258; any of them is a valid match.
     let mut cur = node.0.child_by_field_name("declarator");
     while let Some(current) = cur {
-        if current.kind_id() == C::FunctionDeclarator {
+        if is_c_function_declarator(current.kind_id()) {
             let mut cursor = current.walk();
             let Some(param_list) = current
                 .children(&mut cursor)
-                .find(|c| c.kind_id() == C::ParameterList)
+                .find(|c| is_c_parameter_list(c.kind_id()))
             else {
                 return;
             };
