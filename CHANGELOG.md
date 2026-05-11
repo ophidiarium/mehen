@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/ophidiarium/mehen/compare/v0.4.3...v0.5.0) (2026-05-11)
+
+
+### Features
+
+* **cli:** add --version --json and surface version in action footer ([#77](https://github.com/ophidiarium/mehen/issues/77)) ([199e37d](https://github.com/ophidiarium/mehen/commit/199e37d31bfb1fec1746f78f484330b0056614ea))
+* **langs:** add C language support ([#80](https://github.com/ophidiarium/mehen/issues/80)) ([783a1e8](https://github.com/ophidiarium/mehen/commit/783a1e886cf43907f8370693f6bf09e859dcc508))
+* **langs:** route JavaScript/JSX through TypeScript/TSX grammars ([#79](https://github.com/ophidiarium/mehen/issues/79)) ([a6fb345](https://github.com/ophidiarium/mehen/commit/a6fb345898ea965bfb7f77983c774d6558b842a6))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([b9f81c3](https://github.com/ophidiarium/mehen/commit/b9f81c3ee5223736d72f21fbf933724e86000945))
+
 ## [0.4.3](https://github.com/ophidiarium/mehen/compare/v0.4.2...v0.4.3) (2026-05-09)
 
 
