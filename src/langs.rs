@@ -42,23 +42,23 @@ mk_langs!(
     ),
     (
         Tsx,
-        "The `Tsx` language incorporates the `JSX` syntax inside `TypeScript`",
+        "The `Tsx` language incorporates the `JSX` syntax inside `TypeScript`. Also used for `JSX` files since `TypeScript` is a superset of `JavaScript`.",
         "typescript",
         TsxCode,
         TsxParser,
         tree_sitter_tsx,
-        [tsx],
+        [tsx, jsx],
         []
     ),
     (
         Typescript,
-        "The `TypeScript` language",
+        "The `TypeScript` language. Also used for `JavaScript` files since `TypeScript` is a superset of `JavaScript`.",
         "typescript",
         TypescriptCode,
         TypescriptParser,
         tree_sitter_typescript,
-        [ts, jsw, jsmw],
-        ["typescript"]
+        [ts, mts, cts, js, mjs, cjs],
+        ["typescript", "javascript", "js"]
     ),
     (
         Go,
