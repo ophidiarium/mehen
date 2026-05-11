@@ -10,6 +10,8 @@ import {
   isNotApplicable,
   parseList,
   parseThresholds,
+  parseVersionOutput,
+  renderFooter,
   unionMetricColumns,
 } from "./github-action.mjs";
 
@@ -139,6 +141,37 @@ test("inferPolarity treats MI variants as higher-is-better", () => {
   assert.equal(inferPolarity("mi.sei"), "higher-is-better");
   assert.equal(inferPolarity("mi.visual_studio"), "higher-is-better");
   assert.equal(inferPolarity("cyclomatic"), "lower-is-better");
+});
+
+test("parseVersionOutput extracts version from --version --json payload", () => {
+  assert.equal(
+    parseVersionOutput('{"name":"mehen","version":"0.4.3"}'),
+    "0.4.3",
+  );
+  assert.equal(
+    parseVersionOutput('  {"name":"mehen","version":"1.2.3-beta.1"}  \n'),
+    "1.2.3-beta.1",
+  );
+});
+
+test("parseVersionOutput returns empty string for unparsable input", () => {
+  assert.equal(parseVersionOutput(""), "");
+  assert.equal(parseVersionOutput("mehen 0.4.3"), "");
+  assert.equal(parseVersionOutput("{}"), "");
+});
+
+test("renderFooter includes version when provided", () => {
+  const footer = renderFooter("0.4.3");
+  assert.ok(footer.includes("mehen"));
+  assert.ok(footer.includes("v0.4.3"));
+  assert.ok(footer.includes("code quality watcher"));
+});
+
+test("renderFooter omits version suffix when missing", () => {
+  const footer = renderFooter("");
+  assert.ok(footer.includes("mehen"));
+  assert.ok(!footer.includes(" v "));
+  assert.ok(!/v\d/.test(footer));
 });
 
 test("collectThresholdViolations skips non-applicable metrics", () => {

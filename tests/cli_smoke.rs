@@ -1,6 +1,45 @@
 use std::process::Command;
 
 #[test]
+fn json_flag_requires_version() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .arg("--json")
+        .output()
+        .expect("failed to run mehen --json");
+
+    assert!(
+        !output.status.success(),
+        "--json without --version should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr was not UTF-8");
+    assert!(
+        stderr.contains("--version"),
+        "expected error to mention --version, got: {stderr}"
+    );
+}
+
+#[test]
+fn version_json_emits_structured_payload() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args(["--version", "--json"])
+        .output()
+        .expect("failed to run mehen --version --json");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout was not UTF-8");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON from --version --json: {e}\n---\n{stdout}"));
+
+    assert_eq!(parsed.get("name").and_then(|n| n.as_str()), Some("mehen"));
+    assert_eq!(
+        parsed.get("version").and_then(|v| v.as_str()),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn help_succeeds() {
     let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .arg("--help")
