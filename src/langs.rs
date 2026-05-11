@@ -58,7 +58,7 @@ mk_langs!(
         TypescriptParser,
         tree_sitter_typescript,
         [ts, mts, cts, js, mjs, cjs],
-        ["typescript", "javascript"]
+        ["typescript", "javascript", "js"]
     ),
     (
         Go,
