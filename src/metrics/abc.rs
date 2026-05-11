@@ -652,8 +652,11 @@ impl Abc for CCode {
                 stats.branches += 1.;
             }
             // C: structural conditionals, switch cases, comparison and
-            // short-circuit boolean operators.
+            // short-circuit boolean operators. `else_clause` also contributes
+            // per Fitzpatrick's original ABC specification, matching how
+            // Python / TypeScript / Tsx treat `ElseClause` in this crate.
             IfStatement
+            | ElseClause
             | CaseStatement
             | ForStatement
             | WhileStatement
@@ -678,7 +681,7 @@ impl Abc for CCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
@@ -1159,6 +1162,32 @@ mod tests {
                 assert_eq!(metric.abc.conditions_sum(), 4.0);
                 assert_eq!(metric.abc.branches_sum(), 1.0);
                 assert_eq!(metric.abc.assignments_sum(), 0.0);
+            },
+        );
+    }
+
+    #[test]
+    fn c_abc_counts_else_clause_in_conditions() {
+        // Per Fitzpatrick (1997), `else` is a branch-point that contributes
+        // to the `C` (Conditions) component. tree-sitter-c exposes it as a
+        // dedicated `else_clause` named node, so an `if (x > 0) {...} else
+        // {...}` should yield: +1 if + 1 `>` comparison + 1 else = 3
+        // conditions. Matches how Python / TypeScript / Tsx treat
+        // `ElseClause` in this file.
+        check_metrics::<CParser>(
+            "int f(int x) {
+                 if (x > 0) {
+                     return 1;
+                 } else {
+                     return 0;
+                 }
+             }",
+            "foo.c",
+            |metric| {
+                // A: 0 (no assignments). B: 0 (no calls). C: 3 (if + `>` + else).
+                assert_eq!(metric.abc.assignments_sum(), 0.0);
+                assert_eq!(metric.abc.branches_sum(), 0.0);
+                assert_eq!(metric.abc.conditions_sum(), 3.0);
             },
         );
     }
