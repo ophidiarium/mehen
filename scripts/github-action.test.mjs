@@ -154,7 +154,7 @@ test("parseVersionOutput extracts version from --version --json payload", () => 
   );
 });
 
-test("parseVersionOutput returns empty string for unparseable input", () => {
+test("parseVersionOutput returns empty string for unparsable input", () => {
   assert.equal(parseVersionOutput(""), "");
   assert.equal(parseVersionOutput("mehen 0.4.3"), "");
   assert.equal(parseVersionOutput("{}"), "");
