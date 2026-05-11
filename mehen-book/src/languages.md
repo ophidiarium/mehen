@@ -8,5 +8,9 @@
 - [x] **Python** (.py) - via tree-sitter-python v0.25.0
 - [x] **Ruby** (.rb) - via tree-sitter-ruby v0.23.1
 - [x] **Rust** (.rs) - via tree-sitter-rust v0.24.2
-- [x] **TypeScript** (.ts, .jsw, .jsmw) - via tree-sitter-typescript v0.23.2
-- [x] **TSX** (.tsx) - via tree-sitter-typescript v0.23.2
+- [x] **TypeScript / JavaScript** (.ts, .mts, .cts, .js, .mjs, .cjs) - via tree-sitter-typescript v0.23.2
+- [x] **TSX / JSX** (.tsx, .jsx) - via tree-sitter-typescript v0.23.2
+
+TypeScript is a superset of JavaScript, so `mehen` uses the TypeScript grammar
+to analyze both `.ts` and `.js` source files, and the TSX grammar for `.tsx`
+and `.jsx` files.

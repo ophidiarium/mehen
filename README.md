@@ -23,13 +23,16 @@ Most common usage patterns we see:
 Today `mehen` supports:
 
 - Python
-- TypeScript
-- TSX
+- TypeScript / JavaScript (`.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`)
+- TSX / JSX (`.tsx`, `.jsx`)
 - Rust
 - Go
 - Ruby
 - Kotlin
 - PowerShell
+
+Because TypeScript is a superset of JavaScript, `mehen` analyzes `.js`/`.mjs`/`.cjs`
+files through the TypeScript grammar and `.jsx` files through the TSX grammar.
 
 Planned next: Zig, Starlark and PHP.
 
