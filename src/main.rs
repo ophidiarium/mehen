@@ -150,8 +150,21 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
 }
 
 #[derive(clap::Parser, Debug)]
-#[clap(name = "mehen", version, author, about = "Analyze source code.")]
+#[clap(
+    name = "mehen",
+    author,
+    about = "Analyze source code.",
+    disable_version_flag = true
+)]
 struct Cli {
+    /// Print version information.
+    #[clap(long, short = 'V', global = true)]
+    version: bool,
+
+    /// Emit output as JSON (currently only supported with --version).
+    #[clap(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Option<Command>,
 
@@ -299,9 +312,38 @@ fn main() {
     env_logger::init();
     let cli = <Cli as clap::Parser>::parse();
 
+    if cli.version {
+        print_version(cli.json);
+        return;
+    }
+
     match cli.command {
         Some(Command::Diff(opts)) => diff::run_diff(opts),
         Some(Command::TopOffenders(opts)) => top_offenders::run_top_offenders(opts),
         None => run_analyze(cli.analyze),
+    }
+}
+
+fn print_version(as_json: bool) {
+    let mut stdout = io::stdout().lock();
+    if as_json {
+        let payload = serde_json::json!({
+            "name": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION"),
+        });
+        writeln!(
+            stdout,
+            "{}",
+            serde_json::to_string(&payload).expect("serialize version payload")
+        )
+        .expect("failed to write version payload");
+    } else {
+        writeln!(
+            stdout,
+            "{} {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        )
+        .expect("failed to write version");
     }
 }
