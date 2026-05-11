@@ -8,7 +8,8 @@ use super::loc;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 use crate::macros::implement_metric_trait;
 
@@ -129,7 +130,8 @@ implement_metric_trait!(
     GoCode,
     RubyCode,
     KotlinCode,
-    PowershellCode
+    PowershellCode,
+    CCode
 );
 
 #[cfg(test)]

@@ -6,9 +6,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::is_rust_tail_expression;
 
@@ -854,6 +855,38 @@ impl Loc for RubyCode {
                 stats.lloc.logical_lines += 1;
             }
 
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
+impl Loc for CCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        use C::*;
+
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        match node.kind_id().into() {
+            // Containers and string internals must not contribute their own
+            // physical line on their own.
+            TranslationUnit | StringLiteral | ConcatenatedString | CharLiteral
+            | CompoundStatement | StringContent | EscapeSequence => {}
+            Comment => {
+                add_cloc_lines(stats, start, end);
+            }
+            // LLOC: count statement-shaped nodes and declarations exactly
+            // once.
+            Declaration | ExpressionStatement | ExpressionStatement2 | IfStatement
+            | SwitchStatement | CaseStatement | WhileStatement | DoStatement | ForStatement
+            | ReturnStatement | BreakStatement | ContinueStatement | GotoStatement
+            | LabeledStatement | SehTryStatement | SehLeaveStatement | FunctionDefinition
+            | FunctionDefinition2 | PreprocInclude | PreprocDef | PreprocFunctionDef
+            | PreprocCall => {
+                stats.lloc.logical_lines += 1;
+            }
             _ => {
                 check_comment_ends_on_code_line(stats, start);
                 stats.ploc.lines.insert(start);

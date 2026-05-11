@@ -220,7 +220,7 @@ impl Stats {
     /// Languages without class-like constructs opt out.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
-        !matches!(lang, LANG::Go)
+        !matches!(lang, LANG::Go | LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -454,6 +454,11 @@ impl Npa for RubyCode {
 
 // Go has no class-like constructs; Npa is not applicable.
 impl Npa for GoCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+// C has no class-like constructs; Npa is not applicable.
+impl Npa for CCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 

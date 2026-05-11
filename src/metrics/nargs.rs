@@ -4,7 +4,8 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 #[cfg(test)]
 use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
@@ -375,7 +376,8 @@ implement_metric_trait!(
     TypescriptCode,
     TsxCode,
     RustCode,
-    RubyCode
+    RubyCode,
+    CCode
 );
 
 #[cfg(test)]

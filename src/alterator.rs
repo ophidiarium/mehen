@@ -1,6 +1,7 @@
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 
 /// Marker trait for language implementations used by `Parser`.
@@ -14,3 +15,4 @@ impl Alterator for RustCode {}
 impl Alterator for RubyCode {}
 impl Alterator for KotlinCode {}
 impl Alterator for PowershellCode {}
+impl Alterator for CCode {}

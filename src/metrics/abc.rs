@@ -4,9 +4,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::{
     is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
@@ -623,6 +624,50 @@ impl Abc for PowershellCode {
             | DASHand
             | DASHor
             | DASHxor => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Abc for CCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use C::*;
+
+        match node.kind_id().into() {
+            // A: assignments, compound assignments, `init_declarator` with
+            // initializer (`int x = 1`), and increment/decrement.
+            AssignmentExpression => {
+                stats.assignments += 1.;
+            }
+            InitDeclarator if node.is_child(EQ as u16) => {
+                stats.assignments += 1.;
+            }
+            UpdateExpression => {
+                stats.assignments += 1.;
+            }
+            // B: every function/method call.
+            CallExpression | CallExpression2 => {
+                stats.branches += 1.;
+            }
+            // C: structural conditionals, switch cases, comparison and
+            // short-circuit boolean operators.
+            IfStatement
+            | CaseStatement
+            | ForStatement
+            | WhileStatement
+            | DoStatement
+            | ConditionalExpression
+            | EQEQ
+            | BANGEQ
+            | LT
+            | LTEQ
+            | GT
+            | GTEQ
+            | AMPAMP
+            | PIPEPIPE
+            | BANG => {
                 stats.conditions += 1.;
             }
             _ => {}
