@@ -34,6 +34,12 @@ The core proposed metrics are:
 | Evidence Coverage Score | How well sections are supported by links, code, diagrams, tables, references, or repo artifacts. |
 | Filler / Lazy Structure Risk | AI-era metric for detecting large, generic, weakly grounded documentation. |
 | Review Criticality Index | Whether a document deserves careful human review even if it is short. |
+| Prose Readability Suite (EN) | Language-aware readability ensemble (FKGL, Gunning Fog, ARI, Coleman-Liau, SMOG, New Dale-Chall, FORCAST) with a short-document guard. |
+| Prose Readability Suite (JA) | Tateishi (1988) simplified RS, Jōyō-grade proxy, optional Lee–Hasebe jReadability replica, sentence-length in characters. |
+| Lexical Diversity | MATTR, MTLD, HD-D, Yule's K, hapax ratio, lexical density. |
+| Wording Quality Score | Passive, hedge, weasel, wordy-phrase, adverb, nominalization, expletive, cliché, and repetition detectors. |
+| Inclusive Language Score | alex / retext-equality-style checks for gendered, ableist, and exclusionary terms. |
+| Japanese Style Conformance | JTF-rule and textlint-preset-ja-technical-writing heuristics: fullwidth/halfwidth consistency, mixed keitai/jōtai, over-kanji runs, doubled joshi, weak phrases. |
 
 The intended output should allow judgments such as:
 
@@ -133,8 +139,9 @@ The proposed metric is named **Filler / Lazy Structure Risk**, not AI Probabilit
 1. **Do not strip technical containers.**  
    Code fences, diagrams, math, raw HTML, MDX, images, tables, links, and footnotes are part of the document and should contribute to metrics.
 
-2. **Keep linguistics opaque.**  
-   The core system should not rely on grammar quality, sentiment, topic models, syllables, or language-specific readability formulas. It may count word-like tokens, numeric tokens, identifier-like tokens, path-like tokens, and punctuation classes.
+2. **Keep the core language-agnostic; add language-aware metrics as a dedicated layer.**  
+   The core structural layer (LOC family, MRPC, MCC, Halstead, DMI, link debt, table burden, grounding, evidence coverage, filler risk, RCI) must remain language-opaque and compute from AST structure, token classes, and punctuation classes only. Grammar quality, sentiment, topic models, and deep NLP remain out of scope.
+   However, a separate, optional **language-aware prose layer** (§§29–38) MAY compute readability formulas, lexical diversity, and wording heuristics for English and Japanese. Language-aware metrics are reported as clearly labelled sub-scores, never folded silently into structural scores, and never block CI unless the user explicitly opts in.
 
 3. **Use AST-driven analysis.**  
    The system should rely on a Markdown AST from Tree-sitter or a compatible parser, not regex-only scanning.
@@ -1938,6 +1945,886 @@ This design keeps the Markdown extension compatible with `mehen`'s code-metric c
 
 ---
 
+## 29. Language-Aware Prose Metric Layer
+
+The structural metrics above (§§5–28) are intentionally language-opaque: they depend on the AST, token classes, and punctuation classes, not on grammar or lexicon. That design survives scrutiny and should remain the core.
+
+However, software repositories contain real prose — READMEs, ADRs, tutorials, runbooks — written primarily in English and, for a large share of the ecosystem (JP-based vendors, OSS with Japanese localization, Nikkei-backed projects), Japanese. A prose metric layer adds value that structural metrics cannot:
+
+- Sentence-length and word-length signals that correlate with reader effort at the paragraph level.
+- Style-guide enforcement (passive voice, weasel words, hedges) that catches real quality regressions.
+- Locale-specific conformance (JTF rules, Jōyō kanji grade, keitai/jōtai consistency) that catches defects invisible to English-trained tools.
+
+### 29.1 Architectural constraints
+
+1. **Layered, not folded.** Prose metrics are reported as a *separate* top-level section in the output schema. They never modify DMI, MCC, MRPC, or FillerLazyRisk weights silently. A user reading a DMI score must be able to reproduce it without running the prose layer.
+2. **Per-block language tag.** Language is detected per Markdown block (paragraph, heading, list item, blockquote), not per document. A Japanese blog post that cites an English RFC paragraph should score each block under the appropriate locale.
+3. **Structural artifacts stay excluded.** Code fences, inline code, link destinations, image alt-text, YAML/TOML/JSON front-matter, HTML blocks, MDX, table delimiters, and autolinks are stripped before any readability or wording calculation. This mirrors the retext/remark AST approach.
+4. **Short-text refusal.** Grade-level formulas are suppressed when (post-strip word count < 100) or (sentence count < 5); the tool reports raw counts and a `short_doc_warning` instead of a meaningless grade.
+5. **Feature-gated dictionaries.** Dictionary-dependent features (Lindera for Japanese morphology, CMU for English syllables, Dale-Chall/NGSL familiar-word lists) ship behind Cargo `--features` flags so the default binary stays small.
+6. **Deterministic and reproducible.** No network access, no cloud services, no nondeterministic sampling. Embedded data is versioned alongside the binary.
+
+### 29.2 Output shape
+
+Prose metrics extend the YAML schema from §23:
+
+```yaml
+markdown:
+  prose:
+    language_detection:
+      dominant_language: en | ja | other | mixed
+      blocks:
+        - {range: [start, end], language: en, confidence: 0.97}
+    english:
+      readability:
+        flesch_reading_ease: 0.0
+        flesch_kincaid_grade: 0.0
+        gunning_fog: 0.0
+        smog: 0.0         # null if sentences < 30
+        ari: 0.0
+        coleman_liau: 0.0
+        dale_chall_new: 0.0
+        forcast: 0.0
+        ensemble_grade_band: [low, high]
+      lexical:
+        mattr_50: 0.0
+        mtld: 0.0
+        hdd_42: 0.0
+        yule_k: 0.0
+        hapax_ratio: 0.0
+        lexical_density: 0.0
+        avg_sentence_words: 0.0
+        p90_sentence_words: 0
+        avg_word_chars: 0.0
+      wording:
+        passive_ratio: 0.0
+        hedge_density: 0.0
+        weasel_density: 0.0
+        wordy_density: 0.0
+        adverb_density: 0.0
+        nominalization_density: 0.0
+        expletive_count: 0
+        lexical_illusions: 0
+        cliche_density: 0.0
+        nonword_count: 0
+        long_sentence_count: 0
+      inclusive_language:
+        flags: []
+    japanese:
+      script_composition:
+        kanji_ratio: 0.0
+        hiragana_ratio: 0.0
+        katakana_ratio: 0.0
+        latin_ratio: 0.0
+        digit_ratio: 0.0
+        script_entropy: 0.0
+      readability:
+        tateishi_rs: 0.0
+        jouyou_grade_mean: 0.0
+        hyougai_ratio: 0.0
+        jreadability: 0.0         # null without UniDic
+        shibasaki_grade: 0.0      # null without tokenizer
+      lexical:
+        avg_sentence_chars: 0.0
+        p90_sentence_chars: 0
+        comma_period_ratio: 0.0
+        jukugo_density: 0.0
+      wording:
+        politeness_dominant: desumasu | dearu | mixed
+        keitai_jotai_mix_count: 0
+        weak_phrase_count: 0
+        redundant_expression_count: 0
+        doubled_joshi_count: 0
+        long_kanji_run_count: 0
+      style_conformance:
+        jtf_violations: []
+  meta:
+    short_doc_warning: false
+    words_counted: 0
+    sentences_counted: 0
+    blocks_stripped: [code, frontmatter, html, alt_text]
+```
+
+### 29.3 Interaction with existing scores
+
+- **DMI (§10):** unaffected by default; when the user opts in with `--with-prose-penalty`, a bounded term `0.05 * (1 − WordingQualityScore)` may be subtracted. The default weights in §10.2 are unchanged.
+- **FillerLazyRisk (§17):** can optionally consume a `specificity_density_en` sub-score that uses stopword ratios in place of the purely character-class `specificity_density`. This remains opt-in behind a Cargo feature so the base metric stays reproducible.
+- **Review Criticality Index (§18):** the ensemble readability grade of changed paragraphs contributes as an additive, explicit sub-term when the prose layer is enabled; never when it is disabled.
+
+---
+
+## 30. Language Detection for Markdown Blocks
+
+Language identification happens once per Markdown block so that metric dispatch can choose the correct locale pipeline. The requirements are narrow: distinguish English, Japanese, and "other" with high precision on paragraph-sized inputs, no network access, and minimal binary cost.
+
+### 30.1 Zero-dependency Unicode-block heuristic (default)
+
+For the English-vs-Japanese split, Unicode-block ratios outperform trigram language models on short inputs. Chinese has no hiragana/katakana, so any non-zero kana presence is a strong positive for Japanese. The rule:
+
+```text
+let total = non_whitespace_non_punct_chars
+let kana = hiragana_chars + katakana_chars
+let cjk  = kana + han_chars
+let latin = ascii_letter_chars + fullwidth_latin_letter_chars
+
+if kana / total >= 0.15:                language = ja
+elif cjk / total >= 0.40 and kana == 0: language = zh (treat as "other")
+elif latin / total >= 0.80:             language = en
+else:                                   language = other
+```
+
+False positives on Japanese↔English are essentially zero because Chinese has zero kana, and pure Japanese blocks cannot have 80% Latin letters. Mixed Latin-code + Japanese prose (common in software docs) is assigned Japanese as long as kana ≥ 15%, which is the behavior we want for running prose with embedded identifiers.
+
+This path uses only the `unicode-script` crate (UAX #24 script lookups) and adds on the order of 100 KB to the binary. See https://crates.io/crates/unicode-script and https://www.unicode.org/reports/tr24/.
+
+### 30.2 Opt-in trigram classifier
+
+When the user needs finer granularity (e.g., distinguishing French from Spanish), enable one of two Cargo features:
+
+- `whatlang` — pure Rust, 70 languages, trigram, MIT, ~80 KB crate (https://crates.io/crates/whatlang). Reliable above ~120 characters; returns a reliability score.
+- `lingua` — Rust port of Lingua; highest accuracy in published benchmarks (https://github.com/pemistahl/lingua-rs). Supports a low-accuracy trigram-only mode. Full model is multi-megabyte; restricting to `[English, Japanese]` reduces it to a few MB. Apache-2.0.
+
+`whichlang` (Quickwit, https://github.com/quickwit-oss/whichlang, MIT) is a third option; 16 languages, competitive with whatlang on short text.
+
+`cld3` is not recommended — it requires a C++ toolchain and protobuf, defeating the offline/pure-Rust story.
+
+### 30.3 Block-level tagging rules
+
+- A block inherits its parent heading's language if its own kana/Latin signal is inconclusive (below 15 characters, for instance).
+- Code fences, inline code, link targets, image targets, YAML/TOML front-matter, and HTML blocks are tagged `none` and excluded from prose metrics.
+- A document with both English and Japanese blocks is labelled `mixed` at the document level; each block still gets its own tag for metric routing.
+
+---
+
+## 31. English Prose Readability Suite
+
+The English readability layer implements a peer-reviewed ensemble of classical formulas, reported side-by-side. Grade-level scales are not interchangeable (§31.8), so the tool emits every number and a median band rather than averaging.
+
+### 31.1 Flesch Reading Ease (Flesch 1948)
+
+```text
+FRES = 206.835 − 1.015 * (words / sentences) − 84.6 * (syllables / words)
+```
+
+Output: 0–100, higher = easier. Bands: 90–100 = 5th grade, 60–70 ≈ 8th–9th grade, 0–30 = college / academic. Original: Flesch (1948), *Journal of Applied Psychology* 32(3):221–233.
+
+### 31.2 Flesch-Kincaid Grade Level (Kincaid et al. 1975)
+
+```text
+FKGL = 0.39 * (words / sentences) + 11.8 * (syllables / words) − 15.59
+```
+
+Output: U.S. grade level. Calibrated on Navy technical manuals; adopted via MIL-M-38784A. Primary source: Kincaid, Fishburne, Rogers & Chissom, *Derivation of New Readability Formulas for Navy Enlisted Personnel*, Research Branch Report 8-75 (1975), DTIC ADA006655.
+
+### 31.3 Gunning Fog Index (Gunning 1952)
+
+```text
+Fog = 0.4 * [(words / sentences) + 100 * (complex_words / words)]
+```
+
+`complex_word` = 3+ syllables, excluding proper nouns, familiar compound words, and words made 3-syllable only by inflectional suffixes `-es`, `-ed`, `-ing`. Practical approximation: strip those suffixes before counting syllables; capitalize-mid-sentence filter for proper nouns. Target for business writing: grade 7–12.
+
+### 31.4 SMOG Index (McLaughlin 1969)
+
+```text
+SMOG = 1.0430 * sqrt(polysyllables * 30 / sentences) + 3.1291
+```
+
+`polysyllable` = any word with ≥3 syllables, counted with repetition. Recommended minimum: 30 sentences; mehen returns `null` below that. SMOG targets 100% comprehension, so its grade runs 2–3 levels higher than FKGL on the same text.
+
+### 31.5 Automated Readability Index (Smith & Senter 1967)
+
+```text
+ARI = 4.71 * (characters / words) + 0.5 * (words / sentences) − 21.43
+```
+
+`character` = ASCII letter or digit. Syllable-free, deterministic. Known pathology: long CamelCase or snake_case identifiers inflate `characters/words`; keep them stripped.
+
+### 31.6 Coleman-Liau Index (Coleman & Liau 1975)
+
+```text
+L   = 100 * letters / words
+S   = 100 * sentences / words
+CLI = 0.0588 * L − 0.296 * S − 15.8
+```
+
+Also syllable-free. Same identifier-length caveat as ARI.
+
+### 31.7 New Dale-Chall (Chall & Dale 1995)
+
+```text
+PDW = 100 * difficult_words / words
+ASL = words / sentences
+Raw = 0.1579 * PDW + 0.0496 * ASL  (+ 3.6365 if PDW > 5%)
+```
+
+`difficult_word` = a word not on the 3000-item Dale-Chall familiar list, after inflectional stripping. Because Dale-Chall's list is not openly licensed, mehen defaults to the **NGSL 1.2** (New General Service List, Browne et al. 2013, http://www.newgeneralservicelist.com/, CC BY) with 2,800 headwords as the familiar baseline. The tool notes which list was used in its output provenance.
+
+### 31.8 FORCAST (Caylor et al. 1973)
+
+```text
+FORCAST = 20 − (N / 10)
+```
+
+where N = single-syllable words in a 150-word sample. Unique among classical formulas in targeting **non-narrative** text (manuals, specs, forms). Does not use sentence length — robust when lists, tables, or headings violate running-prose assumptions. For API-reference pages and parameter tables, FORCAST is often the only defensible classical score. Primary: Caylor, Sticht, Fox & Ford, HumRRO TR 73-5 (1973).
+
+### 31.9 LIX and RIX (Björnsson 1968; Anderson 1983)
+
+```text
+LIX = (words / sentences) + 100 * (long_words / words)   // long_word = ≥ 7 letters
+RIX = long_words / sentences
+```
+
+Language-agnostic, syllable-free. Useful as a sanity check; over-penalizes common 7+-letter English words like "business".
+
+### 31.10 Ensemble reporting and interpretation
+
+Two formulas on the same text routinely disagree by 2–4 grade levels; averaging them is statistically wrong because they target different comprehension thresholds (SMOG ≈ 100% comprehension; FKGL ≈ 75%; Dale-Chall in between) (see Schriver, "Readability Formulas in the New Millennium", 2000, https://www.karenschriverassociates.com/wp-content/uploads/2020/03/8-Schriver-Readability-formulas-whats-the-use.pdf).
+
+Mehen therefore:
+
+1. Emits every formula's raw score with provenance.
+2. Computes an **ensemble grade band** as `[min(FKGL, Fog, ARI, CLI), max(FKGL, Fog, ARI, CLI)]` — the interval where those four "running-prose" formulas agree.
+3. Emits FORCAST separately as the preferred single score for non-narrative docs.
+4. Reports SMOG only when `sentences >= 30`.
+5. Reports Dale-Chall only with an explicit `list: ngsl-1.2` or `list: dale-chall-new-1995` provenance tag.
+
+Retext's majority-vote rule (flag a sentence when ≥4 of 7 formulas agree it is above the target grade) is used internally for per-sentence highlighting, following `retext-readability` (https://github.com/retextjs/retext-readability).
+
+### 31.11 Syllable counting
+
+A pure-heuristic vowel-group counter is the Tier-0 default:
+
+```rust
+fn count_syllables(word: &str) -> usize {
+    let w: String = word.to_ascii_lowercase()
+        .chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    if w.is_empty() { return 0; }
+    let vowels = ['a','e','i','o','u','y'];
+    let mut count = 0usize;
+    let mut prev_vowel = false;
+    for c in w.chars() {
+        let is_v = vowels.contains(&c);
+        if is_v && !prev_vowel { count += 1; }
+        prev_vowel = is_v;
+    }
+    if w.ends_with('e') && !w.ends_with("le") && count > 1 { count -= 1; }
+    if w.ends_with("ed") && count > 1 {
+        let second_last = w.chars().rev().nth(2);
+        if !matches!(second_last, Some('t') | Some('d')) { count -= 1; }
+    }
+    count.max(1)
+}
+```
+
+Expected agreement with CMU-backed counters: ~85% on open-domain text. Behind `--features syllables-cmu`, mehen links the CMU Pronouncing Dictionary (via `syllarust`, https://lib.rs/crates/syllarust) for exact counts on ~134k in-vocabulary words with the heuristic as OOV fallback. The `hyphenation` crate (Knuth-Liang patterns, https://crates.io/crates/hyphenation) is a third option but is biased on silent-`e` words.
+
+### 31.12 Sentence segmentation for English
+
+UAX #29 (via `unicode-segmentation`, https://crates.io/crates/unicode-segmentation) is the Tier-0 default; known weaknesses on `Mr.`, `Dr.`, `e.g.`, `i.e.`, `U.S.`, `v1.2.3`, `file.ext`, and URLs are mitigated by:
+
+- A bundled ~150-entry English abbreviation list (non-breaking period contexts).
+- Never splitting when the period is followed by a lowercase letter, a digit, or `<space><digit>`.
+- Treating Markdown block boundaries (blank line, heading line, fence open/close, list-item start) as **hard** sentence terminators regardless of punctuation.
+- Stripping inline code (`` ` ` ``), fenced blocks, URLs, image alt-text, YAML/TOML/JSON front-matter, and HTML before segmentation.
+
+Palmer & Hearst (1997) report ~0.2% error on declarative sentences for careful classification trees versus 3–10% for naive period-space-capital (https://people.ischool.berkeley.edu/~hearst/papers/cl-palmer.pdf).
+
+### 31.13 Thresholds by document type
+
+| Doc type | FKGL target | Fog target | Passive max | Max sentence words |
+|---|---:|---:|---:|---:|
+| README / overview | ≤ 10 | ≤ 12 | 15 % | 30 |
+| Tutorial / how-to | ≤ 9 | ≤ 11 | 10 % | 25 |
+| API reference | ≤ 12 | ≤ 14 | 20 % | 35 |
+| ADR / design doc | ≤ 12 | ≤ 14 | 25 % | 40 |
+| Error messages | ≤ 7 | ≤ 9 | 5 % | 15 |
+| Release notes / CHANGELOG | ≤ 11 | ≤ 13 | 15 % | 30 |
+
+These synthesize Google's and Microsoft's developer-style guides, 18F Content Guide, and Hemingway defaults. They are conventions, not peer-reviewed numbers, and are exposed as tunable profile defaults.
+
+---
+
+## 32. English Lexical Diversity and Density
+
+These metrics are formula-independent indicators of vocabulary richness and content-word saturation. They do not depend on syllable counts and are robust across document types.
+
+### 32.1 Lexical density (Ure 1971; Halliday 1985)
+
+```text
+LD = content_words / total_words
+```
+
+Without POS tagging, approximate as `LD ≈ 1 − stopwords / tokens`, using the 175-entry NLTK English stopword list. Typical ranges: spoken English ~0.40, written ~0.52, academic ~0.60. High LD is legitimate in technical prose; very low LD flags conversational or templatic text.
+
+### 32.2 Moving-Average Type-Token Ratio (MATTR)
+
+```text
+MATTR(w) = mean of TTR over sliding windows of size w tokens
+```
+
+Window size `w = 50` is standard (Covington & McFall 2010). Length-invariant by construction and cheap to compute. MTLD (McCarthy 2005) and HD-D (McCarthy & Jarvis 2010) are reported as alternative diversity measures behind `--features lexical-diversity`. Primary reference: McCarthy & Jarvis, "MTLD, vocd-D, and HD-D: A validation study", *Behavior Research Methods* 42(2):381–392 (2010), https://pmc.ncbi.nlm.nih.gov/articles/PMC3813439/.
+
+### 32.3 Yule's K (Yule 1944)
+
+```text
+K = 10000 * (sum over i of i^2 * V(i, N) − N) / N^2
+```
+
+where V(i, N) = types occurring exactly i times in a text of N tokens. Length-invariant in the strict sense demonstrated by Tanaka-Ishii & Aihara (2015, https://direct.mit.edu/coli/article/41/3/481/1519/). Optional; MATTR is usually sufficient.
+
+### 32.4 Hapax and dis-legomena ratios
+
+```text
+HapaxRatio = V_1 / V         // types occurring exactly once
+DisRatio   = V_2 / V         // types occurring exactly twice
+```
+
+Zipf's law predicts HapaxRatio ≈ 0.5 on natural prose. Extremely high values (> 0.6) flag "laundry-list" reference dumps; very low values flag repetitive template content.
+
+### 32.5 Sentence-length and word-length moments
+
+Report `avg_sentence_words`, `p90_sentence_words`, `max_sentence_words`, `stddev_sentence_words`, `avg_word_chars`, `p90_word_chars`. These drive the §31 formulas but are reported individually so writers can see the levers directly.
+
+---
+
+## 33. English Wording and Style Quality
+
+### 33.1 Passive voice (write-good / retext-passive pattern)
+
+Regex approximation:
+
+```text
+\b(am|are|were|being|is|been|was|be)\b\s*(\w+ed|<irregular_past_participle>)\b
+```
+
+where `<irregular_past_participle>` is a ~175-entry list from `passive-voice@0.1.0` (https://github.com/btford/write-good). Per-paragraph `passive_ratio = passive_sentences / total_sentences`. Threshold by doc type from §31.13. False positives on predicative adjectives ("was happy") are the main error mode; scoring uses ratios, not hard counts.
+
+### 33.2 Hedge words (Hyland 2005; proselint)
+
+Static list of ~165 hedges: `appears`, `approximately`, `could`, `essentially`, `generally`, `likely`, `may`, `maybe`, `might`, `often`, `perhaps`, `possibly`, `probably`, `rather`, `seems`, `some`, `somewhat`, `suggest`, `tend`, `typically`, `usually`, etc. (canonical list at https://github.com/words/hedges).
+
+```text
+hedge_density = hedge_matches / words
+```
+
+Threshold: flag when > 3% in non-narrative docs. API docs legitimately hedge around `null` returns; suppress in sentences containing backtick-wrapped identifiers or `returns` keywords.
+
+### 33.3 Weasel words (write-good)
+
+Static list: `are a number`, `clearly`, `completely`, `exceedingly`, `excellent`, `extremely`, `fairly`, `few`, `huge`, `interestingly`, `largely`, `many`, `mostly`, `obviously`, `quite`, `relatively`, `remarkably`, `several`, `significantly`, `substantially`, `surprisingly`, `tiny`, `various`, `vast`, `very` (with `too many`/`too few` exceptions).
+
+### 33.4 Wordy phrases (too-wordy, retext-simplify)
+
+Dictionary of ~240 verbose phrases with simpler alternatives: `in order to → to`, `due to the fact that → because`, `at this point in time → now`, `utilize → use`, `facilitate → help`, `in the event that → if`, `a number of → many`, `commence → start`, `terminate → end`. Canonical list at https://github.com/retextjs/retext-simplify/blob/main/lib/patterns.js. Per-match count normalized per 100 words.
+
+### 33.5 Adverb density (-ly endings)
+
+```text
+adverb_density = (ly_words − non_adverb_ly_exceptions) / words
+```
+
+Exception list: `only`, `reply`, `apply`, `supply`, `family`, `early`, `likely`, `lovely`, `silly`, `holy`, `daily`, `weekly`, `monthly`, `yearly`, etc. Hemingway's informal budget: ≤ 1 per 100 words.
+
+### 33.6 Nominalizations
+
+Suffix-pattern matcher flags content-word tokens ending in `-tion`, `-sion`, `-ment`, `-ence`, `-ance`, `-ity`, `-ness`, `-ism`. Threshold: flag paragraph when > 10% of content words. Based on Williams, *Style: Toward Clarity and Grace* (1990).
+
+### 33.7 Expletive constructions
+
+```text
+/^\s*(there|it)\s+(is|are|was|were)\b/i
+```
+
+applied to each sentence start after segmentation. Count per 100 sentences; informational for reference docs, flagged for tutorials.
+
+### 33.8 Lexical illusions (doubled words)
+
+Token pairs `(t[i-1], t[i])` where `lower(t[i-1]) == lower(t[i])` and the token matches `\w+`. Canonical from Matt Might's shell script (http://matt.might.net/articles/shell-scripts-for-passive-voice-weasel-words-duplicates/). Zero-tolerance defect.
+
+### 33.9 Cliché and non-word lists (proselint)
+
+- `no-cliches` list (~700 entries, https://github.com/words/no-cliches) → `cliche_density` per 1000 words.
+- `nonwords` list (~32 entries: `irregardless→regardless`, `thusly→thus`, `analyzation→analysis`, etc.) → `nonword_count`, flagged at error level.
+
+### 33.10 Long-sentence flagging
+
+Default: flag sentences with > 30 words (warning) or > 40 words (error). Hemingway's app uses 14 / 21; Microsoft Writing Style Guide recommends ≤ 25; Google Developer Documentation Style Guide recommends ≤ 20. Profile-specific defaults match §31.13.
+
+### 33.11 Wording Quality Score composition
+
+```text
+WordingQualityScore = clamp01(
+    1
+  - 0.18 * sat(passive_ratio; 0.25, 0.60)
+  - 0.15 * sat(hedge_density; 0.02, 0.08)
+  - 0.12 * sat(weasel_density; 0.01, 0.05)
+  - 0.12 * sat(wordy_density; 0.01, 0.05)
+  - 0.10 * sat(adverb_density; 0.02, 0.06)
+  - 0.08 * sat(nominalization_density; 0.08, 0.20)
+  - 0.08 * sat(long_sentence_rate; 0.05, 0.30)
+  - 0.07 * sat(cliche_density; 0.002, 0.02)
+  - 0.05 * (lexical_illusions > 0 ? 1 : 0)
+  - 0.05 * (nonword_count > 0 ? 1 : 0)
+)
+```
+
+Reported as a 0–1 score with sub-score breakdown. Deliberately orthogonal to FillerLazyRisk (§17), which covers repetition and specificity; WordingQualityScore covers style/register.
+
+### 33.12 Inclusive Language Score
+
+alex / retext-equality-style (https://github.com/retextjs/retext-equality) checks against a bundled list covering:
+
+- Gendered defaults: `mankind→humanity`, `manhole→maintenance-hole`, `fireman→firefighter`.
+- Ableist idioms: `crazy`, `insane`, `lame`, `dumb`, `blind to`, `tone deaf`.
+- Exclusionary tech terms: `master/slave → primary/replica`, `whitelist/blacklist → allowlist/denylist`, `grandfather clause → legacy exception`, `sanity check → spot check`.
+- Condescending: `obviously`, `just`, `simply`, `easy`, `of course`.
+
+Representative exclusionary-tech-term substitutions:
+
+| Don't use | Use instead |
+|---|---|
+| master | primary, main, leader, controller |
+| slave | replica, secondary, follower, responder |
+| whitelist | allowlist, approved list, inclusion list |
+| blacklist | denylist, blocklist, exclusion list |
+
+Output is a per-document `InclusiveLanguageScore` and a list of flags with source spans.
+
+### 33.13 Known tools and references
+
+- vale (https://vale.sh) — Go prose linter with 12 extension points; mehen's rule schema is designed for selective compatibility (see §37.4).
+- write-good (https://github.com/btford/write-good) — passive, weasel, too-wordy, so, there-is, cliches, adverbs.
+- proselint (https://github.com/amperser/proselint) — hedges, cliches, jargon, redundancy, sexism, nonwords.
+- retext family (https://github.com/retextjs/retext/blob/master/doc/plugins.md) — retext-readability, retext-simplify, retext-passive, retext-equality, retext-repeated-words, retext-indefinite-article, retext-contractions, retext-intensify, retext-profanities.
+- alex (https://alexjs.com) — inclusive-language wrapper.
+- Hemingway Editor algorithm analysis — https://medium.com/free-code-camp/deconstructing-the-hemingway-app-8098e22d878d.
+- harper-core (https://github.com/Automattic/harper) — Rust grammar checker with 200+ lint modules including many prose-quality checks; useful reference for idiomatic Rust implementations.
+- cargo-spellcheck + nlprule (https://crates.io/crates/cargo-spellcheck) — Rust spell + LanguageTool-derived grammar rules.
+
+---
+
+## 34. Japanese Prose: Character-Composition Metrics (Tier 0)
+
+Japanese is unusual among major languages: script-composition alone carries enough information to produce defensible readability scores without a tokenizer. This is the foundational insight of Tateishi, Ono & Yamada (1988) and remains the basis for mehen's Tier-0 Japanese layer.
+
+### 34.1 Unicode script classification
+
+Each grapheme cluster is classified into one of:
+
+| Class | Primary block | Notes |
+|---|---|---|
+| Hiragana | U+3040–U+309F | + Small Kana Extension U+1B130–U+1B16F |
+| Katakana | U+30A0–U+30FF | + Phonetic Extensions U+31F0–U+31FF, Halfwidth U+FF65–U+FF9F |
+| Kanji (Han) | U+4E00–U+9FFF | + Ext A U+3400–U+4DBF, Ext B U+20000–U+2A6DF, Compatibility U+F900–U+FAFF |
+| CJK punctuation | U+3000–U+303F | Includes `。` U+3002, `、` U+3001, `「」` U+300C–U+300D |
+| Latin | U+0020–U+007E | + Fullwidth U+FF01–U+FF5E |
+| Digit | 0–9, U+FF10–U+FF19 | |
+
+### 34.2 Primary ratios
+
+```text
+kanji_ratio      = kanji_chars    / visible_chars
+hiragana_ratio   = hiragana_chars / visible_chars
+katakana_ratio   = katakana_chars / visible_chars
+latin_ratio      = latin_chars    / visible_chars
+digit_ratio      = digit_chars    / visible_chars
+script_entropy   = Shannon entropy over the five classes above
+```
+
+`visible_chars` excludes whitespace and CJK/ASCII punctuation.
+
+### 34.3 Register bands
+
+Corpus evidence (https://www.japanesestudies.org.uk/ejcjs/vol12/iss3/premaratne.html, https://www.kanshudo.com/grammar/sentence_length, https://scriptin.github.io/kanji-frequency/):
+
+| Kanji ratio | Likely register |
+|---|---|
+| < 20 % | Children's writing, conversation, elementary textbook |
+| 20–30 % | Casual prose, novels, blogs, user-facing content |
+| 30–40 % | Newspaper, business writing, standard non-fiction |
+| 40–50 % | Technical, legal, academic, whitepaper |
+| > 50 % | Classical/literary, dense Sino-Japanese specialist text |
+
+Katakana ratio > 15 % typically signals technical software documentation (loanwords like `データベース`, `インターフェース`) or marketing copy. Hiragana ratio > 75 % indicates text aimed at small children or machine-translated output.
+
+### 34.4 Script-run features (Tateishi inputs)
+
+A "run" is a maximal substring of same-script characters. Per document:
+
+```text
+la = mean chars per alphabet run
+lh = mean chars per hiragana run
+lc = mean chars per kanji run
+lk = mean chars per katakana run
+pa, ph, pc, pk = percentage of each run type among all runs
+ls = mean chars per sentence
+cp = ten (、) per kuten (。)
+```
+
+These are the exact inputs the Tateishi formula needs. Script-run segmentation also approximates bunsetsu boundaries: in `設定ファイルを編集します`, the five runs (`設定 | ファイル | を | 編集 | します`) align closely with UniDic SUW morphemes, giving a usable tokenizer-free word-count proxy.
+
+### 34.5 Sentence segmentation for Japanese
+
+Primary terminators: `。` (U+3002), `！`, `？`, and their half-width equivalents `.!?` when the surrounding context is Japanese. Splitting rules:
+
+- Do not split when the terminator is inside `「…」`, `『…』`, `（…）`, `(...)` (track bracket depth).
+- Treat `\n\n` (blank-line paragraph boundary) as a sentence boundary even without a terminator.
+- Treat Markdown block boundaries (list items, headings, fence open/close) as hard terminators.
+- Ellipsis `…` / `‥` / `...` is not a terminator.
+- Mid-sentence Latin prose does not re-enable `.?!` splitting for surrounding Japanese.
+
+See W3C JLREQ for normative bracket classes (https://www.w3.org/TR/jlreq/?lang=en).
+
+### 34.6 Sentence-length thresholds
+
+Corpus-cited norms (https://wordrabbit.jp/blog/102, https://www.kanshudo.com/grammar/sentence_length, https://daib-log.com/character-length/, https://www.w3.org/TR/jlreq/):
+
+| Source | Recommended chars/sentence |
+|---|---:|
+| Hirosaki University やさしい日本語 | ≤ 24 |
+| Kanshudo Wikipedia+Tatoeba avg | ~18 |
+| Nakamura Akira, 名文作法 | ~30 avg |
+| Tatsuno Kazuo, 文章の書き方 | 30–35 |
+| Yasumoto Biten, 説得の文章術 | ≤ 40–50 |
+| Arase Yasuji, 科学論文作成上のルール | 50–60 |
+| 公用文作成の要領 | 50–60 |
+| Wasabi JPN style guide | ~40 |
+
+Mehen defaults: flag sentences > 60 characters (warning), > 90 (hard-to-read), > 120 (error). Warn when mean sentence length > 60.
+
+---
+
+## 35. Japanese Prose: Readability Formulas
+
+### 35.1 Tateishi, Ono & Yamada (1988) — canonical Japanese formula
+
+Published at COLING 1988 (https://aclanthology.org/C88-2135/). Principal-component analysis on 77 adult-technical-text samples. The full 10-variable form:
+
+```text
+RS = 0.06 * pa + 0.25 * ph − 0.19 * pc − 0.61 * pk
+   − 1.34 * ls − 1.35 * la + 7.52 * lh − 22.1 * lc − 5.3 * lk
+   − 3.87 * cp − 109.1
+```
+
+Simplified 6-variable form (Tateisi, IPSJ SIG Note DPHI 18(4), 1988; reproduced in Sato, Matsuyoshi & Kondoh, LREC 2008, https://www.cs.brandeis.edu/~marc/misc/proceedings/lrec-2008/pdf/165_paper.pdf):
+
+```text
+RS = −0.12 * ls − 1.37 * la + 7.4 * lh − 23.18 * lc − 5.4 * lk − 4.67 * cp + 115.79
+```
+
+Calibrated so mean = 50, SD = 10, **higher = easier**. Mehen emits the simplified form as `tateishi_rs` with sanity guards: refuse when `hiragana_ratio > 0.90` (formula is gamed upward) or when character count < 300.
+
+Tateishi's formula is the best fit for mehen's Tier-0 Japanese layer because it needs sentence boundaries and script runs — both computable without a tokenizer.
+
+### 35.2 Jōyō grade proxy
+
+The Ministry of Education's 2010 **Jōyō kanji** list contains 2,136 characters (https://migaku.com/blog/japanese/joyo-kanji-complete-guide). Of those, 1,026 are **Kyōiku kanji** with assigned elementary-school grades 1–6; the remaining 1,110 are "secondary" (junior high + high school). Non-Jōyō kanji are 表外漢字 (hyōgai), immediate difficulty flags.
+
+Mehen ships a static `jouyou_grades.rs` table mapping each char to a grade 1–8 (1–6 elementary, 7 = secondary Jōyō, 8 = non-Jōyō). Size: ~6 KB uncompressed.
+
+```text
+jouyou_grade_mean = mean(grade(c) for each kanji c in text)
+hyougai_ratio     = non_jouyou_kanji_chars / kanji_chars
+```
+
+`jouyou_grade_mean` is a direct Japanese-school-grade analogue to Flesch-Kincaid. Values < 3 indicate elementary-school reading; > 6 indicates high-school+ technical prose.
+
+### 35.3 JLPT word/kanji bands (optional)
+
+Behind `--features japanese-jlpt`, mehen loads bundled JLPT N5–N1 word and kanji lists (~12k word entries, ~300 KB; sources https://www17408ui.sakura.ne.jp/tatsum/J-LEX/, https://www.kanshudo.com/collections/wikipedia_jlpt). Each token is tagged with its JLPT band (5 = easiest N5, 1 = hardest N1, 0 = outside N1). Reports `jlpt_band_distribution` and `above_n1_ratio`.
+
+### 35.4 Shibasaki & Hara (2010) — school-grade predictor
+
+KAKENHI-19300277 multiple-linear regression:
+
+```text
+Grade = −0.148 * Hp + 1.585 * Pc − 0.117 * Cs − 0.126 * Bs + 15.581
+```
+
+`Hp` = % hiragana chars, `Pc` = mean predicates per sentence, `Cs` = mean chars per sentence, `Bs` = mean bunsetsu boundaries per sentence. Output: Japanese school grade 1–9. `Pc` and `Bs` require a morphological analyzer. Emitted when `--features japanese-morph` is enabled.
+
+Reference: KAKENHI project 19300277, https://kaken.nii.ac.jp/en/grant/KAKENHI-PROJECT-19300277/.
+
+### 35.5 Lee & Hasebe jReadability (2015, 2020) — current state of the art
+
+Stepwise linear regression on 958 1,000-character passages from 100 JFL textbooks, R² = 0.896. Formula (Lee & Hasebe 2020, http://jhlee.sakura.ne.jp/papers/lee-et-al2016rb.pdf):
+
+```text
+Readability = 11.724
+            − 0.056 * mean_sentence_words
+            − 0.126 * percent_kango
+            − 0.042 * percent_wago
+            − 0.145 * percent_verbs
+            − 0.044 * percent_aux_particles
+```
+
+Higher = easier. Six-level mapping (https://github.com/joshdavham/jreadability):
+
+| Score range | Level (approximately JLPT-aligned) |
+|---|---|
+| [5.5, 6.5) | Lower-elementary (easiest) |
+| [4.5, 5.5) | Upper-elementary |
+| [3.5, 4.5) | Lower-intermediate |
+| [2.5, 3.5) | Upper-intermediate |
+| [1.5, 2.5) | Lower-advanced |
+| [0.5, 1.5) | Upper-advanced (hardest) |
+
+Requires UniDic's `goshu` (word-origin) attribute to split 漢語 (Sino-Japanese) from 和語 (native Japanese) and 外来語 (loanwords). Proper nouns and gairaigo are excluded. Accordingly, jReadability is a Tier-2 feature behind `--features japanese-unidic` (Vibrato + UniDic, or Lindera-UniDic).
+
+### 35.6 Obi / Obi2 (Sato et al. 2008, 2014)
+
+Character-n-gram language-model-based readability trained on a 1,478-passage grade-labeled corpus spanning elementary G1 through college (https://www.cs.brandeis.edu/~marc/misc/proceedings/lrec-2008/pdf/165_paper.pdf, http://www.lrec-conf.org/proceedings/lrec2014/pdf/633_Paper.pdf). Mehen does not reimplement Obi directly — the LM requires a training corpus mehen cannot redistribute — but Obi's T13 grade scale is the reference interpretation for `jouyou_grade_mean`.
+
+### 35.7 Mizuno/Goda JLPT-grounded sentence difficulty (optional)
+
+```text
+S = (w1 * vg + w2 * kg) / sl
+```
+
+`vg` = sentence's JLPT vocabulary level (0 = unlisted, 1–4 = bands), `kg` = JLPT kanji level, `sl` = sentence chars. Higher = easier. Useful when JLPT features are enabled; available at the sentence level for per-paragraph highlighting.
+
+---
+
+## 36. Japanese Prose: Wording, Style, and JTF Conformance
+
+### 36.1 Comma/period ratio (tōten/kuten)
+
+```text
+cp = count(、) / count(。)
+```
+
+Already an input to the Tateishi formula; reported as a standalone clause-complexity signal. Higher `cp` = longer, more subordinated sentences.
+
+### 36.2 Jukugo density
+
+Jukugo (熟語) are kanji compounds ≥ 2 characters. Without a tokenizer:
+
+```text
+jukugo_density = kanji_runs_with_len_ge_2 / total_kanji_runs
+```
+
+High jukugo density indicates formal / technical / Sino-Japanese register. With a tokenizer, refine to noun morphemes whose surface is ≥ 2 kanji.
+
+### 36.3 Kango / wago / gairaigo split
+
+Available only with UniDic's `goshu` attribute (`--features japanese-unidic`):
+
+- High `percent_gairaigo` (外来語, katakana loanwords) → trendy / IT / marketing register.
+- High `percent_kango` (漢語, Sino-Japanese) → formal / technical / bureaucratic.
+- High `percent_wago` (和語, native Japanese) → conversational / literary.
+
+Imbalance (e.g., documented policy says `kango ≤ 40 %` but the text is 60 %) is a style flag.
+
+### 36.4 Politeness level (keitai/jōtai)
+
+Simple suffix matching on sentence-final morphemes classifies each sentence without a tokenizer:
+
+- **です・ます (keitai / polite)**: `です`, `ます`, `でした`, `ました`, `ません`, `でしょう`, `ましょう`.
+- **だ・である (jōtai / plain)**: `だ`, `である`, `だった`, `であった`, sentence-final i-adjective.
+- **Honorific (sonkeigo/kenjōgo)**: `いらっしゃる`, `召し上がる`, `おります`, `ございます`, `お〜ください`, `ご〜いただく`.
+
+```text
+politeness_dominant          = majority class
+keitai_jotai_mix_count       = sentences of the non-majority class
+```
+
+JTF rule #1 requires consistency; mehen flags mixed-register documents unless the user explicitly opts in (e.g., textlint preset splits headers, body, and lists into different register zones).
+
+### 36.5 JTF Japanese Style Guide violations
+
+The Japan Translation Federation's 12 rules (https://www.jtf.jp/tips/styleguide, English https://www.jtf.jp/pdf/jtf_style_guide_e.pdf) are mechanically checkable:
+
+| Rule | Check | Severity |
+|---|---|---|
+| 1 | keitai/jōtai consistency | warn |
+| 2 | `、` / `。` used as punctuation | info |
+| 3 | Stick to Jōyō kanji (flag hyōgai) | warn |
+| 4 | Okurigana per official rules | info |
+| 5 | Trailing long-vowel mark on katakana compound endings (`コンピューター` not `コンピュータ`) | warn |
+| 6 | Long katakana compounds broken with `・` or half-width space | info |
+| 7 | Kanji / hiragana / katakana full-width | error |
+| 8 | Digits and Latin alphabet half-width | warn |
+| 9 | Symbols full-width | info |
+| 10 | No space between full-width and half-width | info |
+| 11 | `.`, `,`, spaces half-width | info |
+| 12 | Standardize unit notation | info |
+
+### 36.6 textlint preset-ja-technical-writing heuristics
+
+Mehen ports a subset of `textlint-rule-preset-ja-technical-writing` (https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing) with their documented defaults:
+
+| Rule | Default | What it checks |
+|---|---|---|
+| `sentence-length` | ≤ 100 chars | Long-sentence flag |
+| `max-comma` | ≤ 3 `,` / sentence | Over-comma'd sentences |
+| `max-ten` | ≤ 3 `、` / sentence | Over-reading-marked sentences |
+| `max-kanji-continuous-len` | ≤ 6 consecutive kanji | Hard-to-read kanji runs |
+| `no-mix-dearu-desumasu` | zone-aware | JTF rule 1 |
+| `ja-no-mixed-period` | `。` | Sentence terminator consistency |
+| `no-double-negative-ja` | — | `ないではない` |
+| `no-doubled-joshi` | min_interval: 1 | Repeated particles (`を…を`) |
+| `no-doubled-conjunctive-particle-ga` | — | Repeated `が` |
+| `no-doubled-conjunction` | — | `しかし…しかし` |
+| `no-dropping-the-ra` | — | Colloquial `見れる` for `見られる` |
+| `no-hankaku-kana` | — | Halfwidth kana forbidden |
+| `no-exclamation-question-mark` | — | `!` / `?` in technical docs |
+| `ja-no-weak-phrase` | — | `かもしれない`, `と思います` |
+| `ja-no-successive-word` | — | Repeated words |
+| `ja-no-abusage` | — | Misused kanji |
+| `ja-no-redundant-expression` | — | `することができる` → `できる` |
+| `ja-unnatural-alphabet` | — | IME miscarriages |
+
+All thresholds are user-tunable via profile configuration.
+
+### 36.7 Japanese Wording Quality Score
+
+```text
+WordingQualityScore_ja = clamp01(
+    1
+  - 0.15 * sat(long_sentence_rate;          0.05, 0.30)
+  - 0.12 * sat(weak_phrase_density;         0.01, 0.05)
+  - 0.12 * sat(redundant_expression_rate;   0.01, 0.05)
+  - 0.10 * sat(doubled_joshi_count / sentences;  0.02, 0.10)
+  - 0.10 * sat(long_kanji_run_rate;         0.05, 0.25)
+  - 0.10 * (keitai_jotai_mix_count > 0 ? sat(mix_ratio; 0.02, 0.20) : 0)
+  - 0.08 * sat(max_comma_violation_rate;    0.02, 0.15)
+  - 0.08 * sat(hyougai_ratio;               0.02, 0.10)
+  - 0.07 * sat(jtf_violation_density;       0.5,  5.0)   // per 1000 chars
+  - 0.08 * sat(gairaigo_excess;             0.30, 0.60)
+)
+```
+
+Reported as a 0–1 score with sub-score breakdown. The coefficients are seed heuristics and will be re-tuned against real corpora per §26.
+
+### 36.8 Integration with existing mehen metric families
+
+| Family | Japanese extension |
+|---|---|
+| **MCC** (§8) | Contributes `keitai_jotai_mix_count` and over-kanji-run penalties. |
+| **DMI** (§10) | `WordingQualityScore_ja` replaces the English `WordingQualityScore` when the document is JA-dominant. |
+| **FillerLazyRisk** (§17) | Adds JA filler/weak-phrase patterns (`とても`, `すごく`, `なんとなく`, `〜的な`, `感じ`, `させていただく`, `〜のほう`, `〜という形で`). |
+| **Review Criticality Index** (§18) | Uses `jouyou_grade_mean` as a density contributor when JA. |
+
+---
+
+## 37. Implementation and Integration
+
+### 37.1 Tiered feature strategy
+
+| Tier | Cargo features | What you get | Binary cost |
+|---|---|---|---|
+| 0 (default) | none | Unicode-block language detection; UAX #29 sentence/word segmentation; vowel-group English syllables; Tateishi simplified RS; all wording heuristics that run off static lists; all JTF mechanical checks | ~100–300 KB |
+| 1a | `syllables-cmu` | CMU Pronouncing Dictionary for English syllables | +1–2 MB |
+| 1b | `japanese-jouyou` | Jōyō grade proxy, hyōgai ratio | +10 KB |
+| 1c | `japanese-jlpt` | JLPT N5–N1 word and kanji bands | +300 KB |
+| 1d | `lingua` | High-accuracy trigram language detection (EN + JA only) | +2–5 MB |
+| 2a | `japanese-morph` (Lindera + embedded IPADIC) | Bunsetsu counts, POS tags, Shibasaki grade, Jukugo morphological refinement | +50 MB |
+| 2b | `japanese-unidic` (Vibrato + external UniDic) | jReadability replica, kango/wago/gairaigo split | external dict |
+| 2c | `lexical-diversity` | MTLD, HD-D, Yule's K | +50 KB |
+| 2d | `vale-rules` | Parser for vale-compatible YAML rule packs (existence, substitution, occurrence, repetition, capitalization primitives) | +200 KB |
+
+### 37.2 Recommended crate dependencies
+
+- `unicode-script` (MIT/Apache-2.0, https://crates.io/crates/unicode-script) — UAX #24 script lookups. Tier 0.
+- `unicode-segmentation` (MIT/Apache-2.0, https://crates.io/crates/unicode-segmentation) — UAX #29 boundaries. Tier 0.
+- `unicode-properties` (https://docs.rs/unicode-properties) — general category & emoji props. Tier 0.
+- `regex` (Apache-2.0, Unicode-aware) — for passive-voice, hedge-word, abbreviation-trap handling. Tier 0.
+- `syllarust` (MIT, https://lib.rs/crates/syllarust) — CMU-backed English syllables. Tier 1a.
+- `whatlang` (MIT, https://crates.io/crates/whatlang) — lightweight trigram language detection. Optional tier 1d alternative.
+- `lingua` (Apache-2.0, https://github.com/pemistahl/lingua-rs) — high-accuracy trigram. Tier 1d.
+- `lindera` (MIT, https://github.com/lindera/lindera) with `embed-ipadic` + `compress` features. Tier 2a.
+- `vibrato` (MIT/Apache-2.0, https://github.com/daac-tools/vibrato) with external UniDic. Tier 2b.
+- `icu_segmenter` (https://crates.io/crates/icu_segmenter) — alternative sentence segmentation with locale tailoring, if the UAX #29 defaults prove insufficient.
+
+`cld3` is not used (C++ toolchain dependency). `yoin` is not used (unmaintained). `franc-rs` is not used (lags canonical franc).
+
+### 37.3 Dictionary licensing
+
+- **NGSL 1.2** (Browne et al. 2013, http://www.newgeneralservicelist.com/) — CC BY; embed freely with attribution.
+- **Dale-Chall 3000-word list** — copyright Jeanne Chall and Edgar Dale's heirs; do not bundle. Use NGSL as the default familiar-word source; allow the user to point to a locally obtained Dale-Chall list via `--dale-chall-list <path>`.
+- **Jōyō kanji list** — Japanese Ministry of Education public-domain policy document; bundle freely.
+- **JLPT word/kanji lists** — no official release from JEES/JF; community lists under various licenses. Mehen bundles J-LEX-derived lists with attribution.
+- **IPADIC** — IPA/IPAdic license; bundled via Lindera's `embed-ipadic` feature; NOTICE file propagation required.
+- **UniDic** — BSD-like with NINJAL credit; external dict via Vibrato.
+- **CMU Pronouncing Dictionary** — public domain; bundled via `syllarust`.
+
+A `LICENSE-THIRD-PARTY` file must accompany any binary with Tier-1 or Tier-2 features enabled.
+
+### 37.4 vale-rule compatibility surface
+
+Vale's 12 extension points (https://vale.sh/docs/checks/existence) cleanly map onto mehen's wording layer:
+
+| Vale extension | Mehen equivalent |
+|---|---|
+| `existence` | Direct regex/token flag |
+| `substitution` | Preferred-form map (already the model for retext-simplify) |
+| `occurrence` | Min/max pattern count per scope |
+| `repetition` | Already used for lexical illusions |
+| `consistency` | Oxford comma, contraction, quote style |
+| `conditional` | Used for jargon-introduction rules |
+| `capitalization` | Heading / term case |
+| `metric` | User-defined formulas over counts |
+| `readability` | Subset of §31 formulas |
+| `spelling` | Tier-2; opt-in Hunspell |
+| `sequence` | Tier-2; requires POS tagging |
+| `script` | Explicitly excluded (no Tengo / embedded scripting) |
+
+Behind `--features vale-rules`, mehen parses vale YAML for the first nine primitives and emits flags through the same reporting pipeline. `sequence` and `script` are rejected with a clear error. This lets users adopt the Microsoft, Google, proselint, and alex vale packs without running the vale binary.
+
+### 37.5 Anti-gaming defenses
+
+Carrying over from §26.4, the prose layer must resist:
+
+- **Code-block exfiltration of metrics**: prose heuristics never count content of `fenced_code_block`, `inline_code`, `link destinations`, `image_block` targets, `html_block`, `mdx_jsx_block`, `front_matter`, or `table_cell` delimiters.
+- **Identifier inflation**: a long CamelCase or snake_case identifier is one word; its character contribution to ARI / Coleman-Liau is capped (`min(identifier_len, 20)`) when it appears in running prose.
+- **Citation padding**: quoted-literal blockquotes count toward structural metrics but not toward weasel/hedge detection.
+- **Short-doc gaming**: grade-level scores are suppressed when `words < 100` or `sentences < 5`; a `short_doc_warning` is emitted instead of a (manipulable) grade.
+- **Abbreviation splitting**: the bundled abbreviation list suppresses sentence breaks after `Mr.`, `e.g.`, `i.e.`, `U.S.`, `vs.`, `approx.`, `fig.`, `ver.`, `ch.`, etc.
+
+### 37.6 Validation plan addendum
+
+Extending §26, the prose layer needs its own validity checks:
+
+1. **Construct validity**: each readability formula matches its published grade scale on a held-out McCall-Crabbs or JLPT-aligned sample.
+2. **Criterion validity**: scores correlate with human-labelled readability on a mehen-collected corpus of open-source READMEs and ADRs (targeting Spearman ρ ≥ 0.5 between FKGL and human grade labels).
+3. **Cross-language validity**: a bilingual document (EN + JA) produces two coherent sub-scores; switching dominant language flips the active pipeline cleanly.
+4. **Short-doc behavior**: a 40-word README produces no grade-level numbers, only raw counts and a warning.
+5. **Tier equivalence**: Tier-0 Japanese (Tateishi) results correlate (ρ ≥ 0.7) with Tier-2 (jReadability) on the same text, so users without morphology dictionaries still get a useful signal.
+6. **Anti-gaming**: none of the gaming attacks above shift the overall `WordingQualityScore` by more than 0.05.
+
+---
+
+## 38. Final Recommendation (Prose Layer)
+
+The minimum strong first release of the prose layer should implement, in order:
+
+```text
+Tier 0:
+  Unicode-script block-ratio language detection
+  UAX #29 sentence/word segmentation with abbreviation list
+  Vowel-group English syllables
+  English readability suite: FRES, FKGL, Fog, ARI, Coleman-Liau
+  English wording: passive, hedges, weasels, wordy-phrases, adverbs,
+                   nominalizations, expletives, lexical illusions, nonwords,
+                   long sentences, inclusive-language flags
+  English lexical: MATTR, hapax ratio, lexical density
+  Japanese script composition and register bands
+  Japanese sentence splitter with bracket awareness
+  Tateishi (1988) simplified RS
+  JTF rules 1, 3, 5, 7, 8, 11 (mechanically checkable)
+  textlint defaults: sentence-length, max-comma, max-ten,
+                     max-kanji-continuous-len, no-doubled-joshi,
+                     ja-no-weak-phrase, ja-no-redundant-expression
+  Politeness (keitai/jōtai) classification
+```
+
+This delivers ~80% of the observable readability and wording signal with zero large-dictionary dependencies. Tiers 1–2 can follow as feature flags for users who need CMU-exact English syllables, Jōyō grade, JLPT bands, or Lindera/Vibrato morphology.
+
+The prose layer never silently changes structural scores; it is always an additional, explicitly-labelled reporting surface that writers and reviewers can act on.
+
+---
+
 ## References
 
 1. McCabe, T. J. "A Complexity Measure." *IEEE Transactions on Software Engineering*, 1976. https://doi.org/10.1109/TSE.1976.233837
@@ -1955,3 +2842,78 @@ This design keeps the Markdown extension compatible with `mehen`'s code-metric c
 13. Liang, W. et al. "GPT detectors are biased against non-native English writers." *Patterns*, 2023. https://doi.org/10.1016/j.patter.2023.100779
 14. Walters, W. H., and Wilder, E. I. "Fabrication and errors in the bibliographic citations generated by ChatGPT." *Scientific Reports*, 2023. https://www.nature.com/articles/s41598-023-41032-5
 15. Brysbaert, M. "How many words do we read per minute? A review and meta-analysis of reading rate." *Journal of Memory and Language*, 2019. https://doi.org/10.1016/j.jml.2019.104047
+
+### English readability formulas
+
+16. Flesch, R. "A new readability yardstick." *Journal of Applied Psychology* 32(3):221–233, 1948. https://psycnet.apa.org/doi/10.1037/h0057532
+17. Kincaid, J. P., Fishburne, R. P., Rogers, R. L., & Chissom, B. S. *Derivation of New Readability Formulas (Automated Readability Index, Fog Count and Flesch Reading Ease Formula) for Navy Enlisted Personnel.* Research Branch Report 8-75, Chief of Naval Technical Training, 1975. https://apps.dtic.mil/sti/tr/pdf/ADA006655.pdf
+18. Gunning, R. *The Technique of Clear Writing.* McGraw-Hill, 1952.
+19. McLaughlin, G. H. "SMOG Grading — a new readability formula." *Journal of Reading* 12(8):639–646, 1969. https://ogg.osu.edu/media/documents/health_lit/WRRSMOG_Readability_Formula_G._Harry_McLaughlin__1969_.pdf
+20. Smith, E. A. & Senter, R. J. *Automated Readability Index.* AMRL-TR-66-22, Aerospace Medical Research Laboratories, 1967. https://apps.dtic.mil/sti/tr/pdf/AD0667273.pdf
+21. Coleman, M. & Liau, T. L. "A computer readability formula designed for machine scoring." *Journal of Applied Psychology* 60(2):283–284, 1975. https://psycnet.apa.org/doi/10.1037/h0076540
+22. Dale, E. & Chall, J. S. "A formula for predicting readability." *Educational Research Bulletin* 27:11–20, 37–54, 1948.
+23. Chall, J. S. & Dale, E. *Readability Revisited: The New Dale-Chall Readability Formula.* Brookline Books, 1995.
+24. Björnsson, C.-H. *Läsbarhet.* Stockholm: Liber, 1968.
+25. Anderson, J. "Lix and Rix: Variations on a Little-known Readability Index." *Journal of Reading* 26(6):490–496, 1983. https://www.jstor.org/stable/40031755
+26. Caylor, J. S., Sticht, T. G., Fox, L. C. & Ford, J. P. *Methodologies for Determining Reading Requirements of Military Occupational Specialties.* HumRRO Technical Report 73-5, 1973.
+27. Fry, E. "A readability formula that saves time." *Journal of Reading* 11(7):513–516, 575–578, 1968.
+28. Schriver, K. A. "Readability Formulas in the New Millennium: What's the Use?" *ACM SIGDOC*, 2000. https://www.karenschriverassociates.com/wp-content/uploads/2020/03/8-Schriver-Readability-formulas-whats-the-use.pdf
+29. Klare, G. R. "A Second Look at the Validity of Readability Formulas." *Journal of Reading Behavior*, 1976. https://www.ideals.illinois.edu/items/15551/bitstreams/54962/data.pdf
+30. Palmer, D. D. & Hearst, M. A. "Adaptive Multilingual Sentence Boundary Disambiguation." *Computational Linguistics* 23(2), 1997. https://people.ischool.berkeley.edu/~hearst/papers/cl-palmer.pdf
+31. Browne, C., Culligan, B. & Phillips, J. *The New General Service List.* 2013. http://www.newgeneralservicelist.com/
+
+### Lexical diversity and stylometry
+
+32. Ure, J. "Lexical Density and Register Differentiation." In *Applications of Linguistics*, Cambridge University Press, 1971.
+33. Halliday, M. A. K. *Spoken and Written Language.* Deakin University Press, 1985.
+34. McCarthy, P. M. *An Assessment of the Range and Usefulness of Lexical Diversity Measures and the Potential of the Measure of Textual, Lexical Diversity (MTLD).* PhD dissertation, University of Memphis, 2005.
+35. McCarthy, P. M. & Jarvis, S. "MTLD, vocd-D, and HD-D: A validation study of sophisticated approaches to lexical diversity assessment." *Behavior Research Methods* 42(2):381–392, 2010. https://pmc.ncbi.nlm.nih.gov/articles/PMC3813439/
+36. Yule, G. U. *The Statistical Study of Literary Vocabulary.* Cambridge University Press, 1944.
+37. Tanaka-Ishii, K. & Aihara, S. "Computational Constancy Measures of Texts — Yule's K and Rényi's Entropy." *Computational Linguistics* 41(3):481–502, 2015. https://direct.mit.edu/coli/article/41/3/481/1519/
+
+### Japanese readability formulas
+
+38. Tateisi, Y., Ono, Y. & Yamada, H. "A Computer Readability Formula of Japanese Texts for Machine Scoring." *COLING 1988* Vol. 2:649–654. https://aclanthology.org/C88-2135/
+39. Sato, S., Matsuyoshi, S. & Kondoh, Y. "Automatic Assessment of Japanese Text Readability Based on a Textbook Corpus." *LREC 2008.* https://www.cs.brandeis.edu/~marc/misc/proceedings/lrec-2008/pdf/165_paper.pdf
+40. Sato, S. et al. "Obi2: A System for Automatic Readability Assessment of Japanese Text." *LREC 2014.* http://www.lrec-conf.org/proceedings/lrec2014/pdf/633_Paper.pdf
+41. Shibasaki, H. & Hara, H. *Constructing a Readability Scale of Japanese Texts and Developing a Software.* KAKENHI-PROJECT-19300277, 2010. https://kaken.nii.ac.jp/en/grant/KAKENHI-PROJECT-19300277/
+42. Hasebe, Y. & Lee, J.-H. "Introducing a Readability Evaluation System for Japanese Language Education." *CASTEL/J 2015.* https://jreadability.net/file/hasebe-lee-2015-castelj.pdf
+43. Lee, J.-H. & Hasebe, Y. "Readability Measurement for Japanese Text Based on Levelled Corpora." University of Tsukuba, 2020. http://jhlee.sakura.ne.jp/papers/lee-et-al2016rb.pdf
+44. Mizuno, J. et al. "E-learning Japanese readability formula." *Journal of Natural Language Processing* 16(4), 2009. https://www.jstage.jst.go.jp/article/jnlp/16/4/16_4_4_3/_pdf
+
+### Japanese language resources
+
+45. NINJAL. *Balanced Corpus of Contemporary Written Japanese (BCCWJ) Frequency Lists.* https://clrd.ninjal.ac.jp/bccwj/en/freq-list.html
+46. W3C. *Requirements for Japanese Text Layout (JLREQ).* https://www.w3.org/TR/jlreq/?lang=en
+47. Japan Translation Federation. *JTF Japanese Style Guide 3.0.* 2019. https://www.jtf.jp/tips/styleguide — English translation https://www.jtf.jp/pdf/jtf_style_guide_e.pdf
+48. Microsoft. *Japanese Localization Style Guide.* http://ftp.ntu.edu.tw/pub/cpatch/g/glossary/microsoft_styleguide_jpn.pdf
+49. Ministry of Education of Japan. *Jōyō Kanji List.* 2010 revision (2,136 characters).
+50. Tatsumi, H. *J-LEX Japanese Difficulty Tagger.* https://www17408ui.sakura.ne.jp/tatsum/J-LEX/
+51. Premaratne, R. "Is the use of kanji increasing in the Japanese writing system?" *Electronic Journal of Contemporary Japanese Studies* 12(3), 2012. https://www.japanesestudies.org.uk/ejcjs/vol12/iss3/premaratne.html
+52. Allen, D. "A Procedure for Determining Japanese Loanword Status." *Vocabulary Learning and Instruction* 9(1), 2021. https://vli-journal.org/wp/wp-content/uploads/2021/08/VLI_9_1_5_allen.pdf
+
+### Prose-quality tooling and style guides
+
+53. Ford, J. et al. *vale — a syntax-aware linter for prose.* https://vale.sh/docs/topics/styles
+54. Ford, B. *write-good.* https://github.com/btford/write-good
+55. Amperser. *proselint.* https://github.com/amperser/proselint
+56. get-alex. *alex — catch insensitive, inconsiderate writing.* https://alexjs.com
+57. retext authors. *retext plugin registry.* https://github.com/retextjs/retext/blob/master/doc/plugins.md
+58. Hemingway Editor algorithm analysis. *Deconstructing the Hemingway App.* https://medium.com/free-code-camp/deconstructing-the-hemingway-app-8098e22d878d
+59. textlint-ja. *textlint-rule-preset-ja-technical-writing.* https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing
+60. Automattic. *harper — Rust grammar and prose checker.* https://github.com/Automattic/harper
+61. Williams, J. *Style: Toward Clarity and Grace.* University of Chicago Press, 1990.
+62. Pinker, S. *The Sense of Style: The Thinking Person's Guide to Writing in the 21st Century.* Viking, 2014.
+63. Hyland, K. *Metadiscourse: Exploring Interaction in Writing.* Continuum, 2005.
+
+### Rust ecosystem
+
+64. lindera authors. *Lindera morphological analyzer.* https://github.com/lindera/lindera
+65. daac-tools. *Vibrato tokenizer.* https://github.com/daac-tools/vibrato
+66. pemistahl. *Lingua language detector (Rust port).* https://github.com/pemistahl/lingua-rs
+67. Quickwit. *whichlang language detection library.* https://quickwit.io/blog/whichlang-language-detection-library
+68. unicode-rs. *unicode-segmentation (UAX #29).* https://github.com/unicode-rs/unicode-segmentation
+69. Unicode Consortium. *UAX #24 Unicode Script Property.* https://www.unicode.org/reports/tr24/
+70. Unicode Consortium. *UAX #29 Unicode Text Segmentation.* https://www.unicode.org/reports/tr29/
+71. CMU Pronouncing Dictionary. http://www.speech.cs.cmu.edu/cgi-bin/cmudict
+72. syllarust authors. *syllarust — CMU-backed syllable counter.* https://lib.rs/crates/syllarust
