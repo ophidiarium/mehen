@@ -4,9 +4,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::{
     is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
@@ -630,10 +631,57 @@ impl Abc for PowershellCode {
     }
 }
 
+impl Abc for CCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use C::*;
+
+        match node.kind_id().into() {
+            // A: assignments, compound assignments, `init_declarator` with
+            // initializer (`int x = 1`), and increment/decrement.
+            AssignmentExpression => {
+                stats.assignments += 1.;
+            }
+            InitDeclarator if node.is_child(EQ as u16) => {
+                stats.assignments += 1.;
+            }
+            UpdateExpression => {
+                stats.assignments += 1.;
+            }
+            // B: every function/method call.
+            CallExpression | CallExpression2 => {
+                stats.branches += 1.;
+            }
+            // C: structural conditionals, switch cases, comparison and
+            // short-circuit boolean operators. `else_clause` also contributes
+            // per Fitzpatrick's original ABC specification, matching how
+            // Python / TypeScript / Tsx treat `ElseClause` in this crate.
+            IfStatement
+            | ElseClause
+            | CaseStatement
+            | ForStatement
+            | WhileStatement
+            | DoStatement
+            | ConditionalExpression
+            | EQEQ
+            | BANGEQ
+            | LT
+            | LTEQ
+            | GT
+            | GTEQ
+            | AMPAMP
+            | PIPEPIPE
+            | BANG => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
@@ -1114,6 +1162,32 @@ mod tests {
                 assert_eq!(metric.abc.conditions_sum(), 4.0);
                 assert_eq!(metric.abc.branches_sum(), 1.0);
                 assert_eq!(metric.abc.assignments_sum(), 0.0);
+            },
+        );
+    }
+
+    #[test]
+    fn c_abc_counts_else_clause_in_conditions() {
+        // Per Fitzpatrick (1997), `else` is a branch-point that contributes
+        // to the `C` (Conditions) component. tree-sitter-c exposes it as a
+        // dedicated `else_clause` named node, so an `if (x > 0) {...} else
+        // {...}` should yield: +1 if + 1 `>` comparison + 1 else = 3
+        // conditions. Matches how Python / TypeScript / Tsx treat
+        // `ElseClause` in this file.
+        check_metrics::<CParser>(
+            "int f(int x) {
+                 if (x > 0) {
+                     return 1;
+                 } else {
+                     return 0;
+                 }
+             }",
+            "foo.c",
+            |metric| {
+                // A: 0 (no assignments). B: 0 (no calls). C: 3 (if + `>` + else).
+                assert_eq!(metric.abc.assignments_sum(), 0.0);
+                assert_eq!(metric.abc.branches_sum(), 0.0);
+                assert_eq!(metric.abc.conditions_sum(), 3.0);
             },
         );
     }

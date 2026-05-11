@@ -4,9 +4,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
@@ -297,6 +298,31 @@ impl Cyclomatic for PowershellCode {
             | PIPEPIPE
             | DASHand
             | DASHor => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Cyclomatic for CCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use C::*;
+
+        match node.kind_id().into() {
+            // Decision-point set aligned with Sonar's cyclomatic rule for C:
+            // `if`, every `case`, loops, ternary (`conditional_expression`),
+            // and each short-circuit boolean operator (`&&` / `||`).
+            // `switch` itself is not a decision (cases are); `default` is
+            // fallthrough.
+            IfStatement
+            | CaseStatement
+            | ForStatement
+            | WhileStatement
+            | DoStatement
+            | ConditionalExpression
+            | AMPAMP
+            | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
             _ => {}

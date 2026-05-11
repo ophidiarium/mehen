@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, LANG, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    CCode, GoCode, KotlinCode, LANG, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
     TypescriptCode,
 };
 use crate::metrics::cyclomatic;
@@ -139,7 +139,7 @@ impl Stats {
     /// Languages without class-like constructs opt out.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
-        !matches!(lang, LANG::Go)
+        !matches!(lang, LANG::Go | LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -196,6 +196,11 @@ impl_wmc!(
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
+    fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
+}
+
+// C has no class-like constructs; WMC is not applicable.
+impl Wmc for CCode {
     fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
 }
 

@@ -4,6 +4,8 @@ version = "0.0.1"
 authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
 
+[workspace]
+
 [dependencies]
 clap = { version = "^4.6", features = ["derive"] }
 askama = "^0.16"
@@ -16,6 +18,7 @@ tree-sitter-go = "=0.25.0"
 tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
+tree-sitter-c = "=0.24.2"
 
 [profile.release]
 strip = "debuginfo"

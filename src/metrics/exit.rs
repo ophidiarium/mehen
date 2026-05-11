@@ -4,9 +4,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -228,6 +229,17 @@ impl Exit for PowershellCode {
             lead,
             Some(Powershell::Return) | Some(Powershell::Throw) | Some(Powershell::Exit)
         ) {
+            stats.exit += 1;
+        }
+    }
+}
+
+impl Exit for CCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        // Only `return` exits a function. `break` / `continue` are loop
+        // flow, not function-exit — same convention used for Ruby / Kotlin.
+        // `goto` stays within the same function.
+        if matches!(node.kind_id().into(), C::ReturnStatement) {
             stats.exit += 1;
         }
     }

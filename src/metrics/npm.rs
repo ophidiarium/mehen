@@ -241,7 +241,7 @@ impl Stats {
     /// Languages without class-like constructs opt out.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
-        !matches!(lang, LANG::Go)
+        !matches!(lang, LANG::Go | LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -473,6 +473,11 @@ impl Npm for RubyCode {
 
 // Go has no class-like constructs; Npm is not applicable.
 impl Npm for GoCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+// C has no class-like constructs; Npm is not applicable.
+impl Npm for CCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
