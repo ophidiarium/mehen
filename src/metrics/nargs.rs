@@ -8,8 +8,8 @@ use crate::langs::{
     TypescriptCode,
 };
 #[cfg(test)]
-use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
-use crate::languages::{Go, Kotlin, Powershell};
+use crate::langs::{CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+use crate::languages::{C, Go, Kotlin, Powershell};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::traits::Search;
@@ -370,14 +370,65 @@ impl NArgs for PowershellCode {
     }
 }
 
+#[inline(always)]
+fn compute_c_args(node: &Node, nargs: &mut usize) {
+    // tree-sitter-c nests the parameter list under the innermost
+    // `function_declarator`: `function_definition > function_declarator >
+    // parameter_list`. Pointer (`int (*f)(...)`) and attributed declarators
+    // wrap the `function_declarator`, so walk inward via the `declarator`
+    // field until we find the `function_declarator` whose direct child is
+    // the `parameter_list`.
+    let mut cur = node.0.child_by_field_name("declarator");
+    while let Some(current) = cur {
+        if current.kind_id() == C::FunctionDeclarator {
+            let mut cursor = current.walk();
+            let Some(param_list) = current
+                .children(&mut cursor)
+                .find(|c| c.kind_id() == C::ParameterList)
+            else {
+                return;
+            };
+            let mut list_cursor = param_list.walk();
+            let params: Vec<_> = param_list
+                .children(&mut list_cursor)
+                .filter(|p| p.kind_id() == C::ParameterDeclaration)
+                .collect();
+            // `(void)` — a sole `parameter_declaration` whose only child is
+            // a `primitive_type` (no named declarator) — is C's spelling
+            // for "no parameters" and must not be counted. Function
+            // *definitions* require named parameters when any exist, so a
+            // nameless sole parameter is reliably `(void)` in practice.
+            // `variadic_parameter` (`...`) is already filtered above.
+            let is_void_only = params.len() == 1
+                && params[0].child_count() == 1
+                && params[0]
+                    .child(0)
+                    .is_some_and(|c| c.kind_id() == C::PrimitiveType);
+            if !is_void_only {
+                *nargs += params.len();
+            }
+            return;
+        }
+        cur = current.child_by_field_name("declarator");
+    }
+}
+
+impl NArgs for CCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if Self::is_func(node) {
+            compute_c_args(node, &mut stats.fn_nargs);
+        }
+        // C has no closures; `is_closure` is always false.
+    }
+}
+
 implement_metric_trait!(
     [NArgs],
     PythonCode,
     TypescriptCode,
     TsxCode,
     RustCode,
-    RubyCode,
-    CCode
+    RubyCode
 );
 
 #[cfg(test)]
@@ -996,6 +1047,91 @@ mod tests {
                       "functions_max": 1.0,
                       "closures_min": 0.0,
                       "closures_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn c_function_counts_parameters() {
+        // Regression: tree-sitter-c nests `parameter_list` under
+        // `function_declarator`, not directly under `function_definition`.
+        // The generic `compute_args` that looks for a `parameters` field on
+        // the function node would read zero for C functions; the C-specific
+        // counter must descend into the declarator. Definition here has two
+        // params (int a, int b), so aggregated nargs must reflect that.
+        check_metrics::<CParser>(
+            "int add(int a, int b) { return a + b; }",
+            "foo.c",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 2.0,
+                      "total_closures": 0.0,
+                      "average_functions": 2.0,
+                      "average_closures": 0.0,
+                      "total": 2.0,
+                      "average": 2.0,
+                      "functions_min": 0.0,
+                      "functions_max": 2.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn c_void_parameter_is_not_counted() {
+        // `int foo(void)` is the C spelling for "no parameters" and must
+        // count as zero arguments — not one.
+        check_metrics::<CParser>("int foo(void) { return 0; }", "foo.c", |metric| {
+            insta::assert_json_snapshot!(
+                metric.nargs,
+                @r###"
+                    {
+                      "total_functions": 0.0,
+                      "total_closures": 0.0,
+                      "average_functions": 0.0,
+                      "average_closures": 0.0,
+                      "total": 0.0,
+                      "average": 0.0,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn c_variadic_parameter_does_not_count() {
+        // `int vararg(int fmt, ...)` has one named argument; the `...`
+        // token is a `variadic_parameter`, not a `parameter_declaration`,
+        // and must not contribute to the count.
+        check_metrics::<CParser>(
+            "int vararg(int fmt, ...) { return fmt; }",
+            "foo.c",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 1.0,
+                      "total_closures": 0.0,
+                      "average_functions": 1.0,
+                      "average_closures": 0.0,
+                      "total": 1.0,
+                      "average": 1.0,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
                     }"###
                 );
             },
