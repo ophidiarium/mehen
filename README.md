@@ -30,6 +30,7 @@ Today `mehen` supports:
 - Ruby
 - Kotlin
 - PowerShell
+- C (`.c`, `.h`)
 
 Because TypeScript is a superset of JavaScript, `mehen` analyzes `.js`/`.mjs`/`.cjs`
 files through the TypeScript grammar and `.jsx` files through the TSX grammar.
