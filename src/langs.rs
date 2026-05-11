@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tree_sitter::Language;
 
-use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -99,6 +99,16 @@ mk_langs!(
         tree_sitter_pwsh,
         [ps1, psm1, psd1],
         ["powershell"]
+    ),
+    (
+        C,
+        "The `C` language",
+        "c",
+        CCode,
+        CParser,
+        tree_sitter_c,
+        [c, h],
+        ["c"]
     )
 );
 

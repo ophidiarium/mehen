@@ -1,8 +1,8 @@
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
     TypescriptCode, TypescriptParser,
 };
-use crate::languages::{Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 macro_rules! check_if_func {
@@ -564,6 +564,66 @@ impl Checker for PowershellCode {
         // PowerShell has a dedicated `elseif_clause` named node, so a nested
         // `if_statement` never appears as the body of another `if_statement`.
         // No flattening needed.
+        false
+    }
+}
+
+impl Checker for CCode {
+    fn is_comment(node: &Node) -> bool {
+        node.kind_id() == C::Comment
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            C::TranslationUnit | C::FunctionDefinition | C::FunctionDefinition2
+        )
+    }
+
+    fn is_func(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            C::FunctionDefinition | C::FunctionDefinition2
+        )
+    }
+
+    fn is_closure(_: &Node) -> bool {
+        // C has no closures.
+        false
+    }
+
+    fn is_call(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            C::CallExpression | C::CallExpression2
+        )
+    }
+
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            C::LPAREN | C::LPAREN2 | C::COMMA | C::RPAREN
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            C::StringLiteral | C::ConcatenatedString | C::CharLiteral
+        )
+    }
+
+    #[inline(always)]
+    fn is_else_if(node: &Node) -> bool {
+        // C's grammar exposes an explicit `else_clause` wrapper around the
+        // nested body. An `if_statement` whose parent is an `else_clause` is
+        // the `else if` form and should not increment nesting twice.
+        if node.kind_id() != C::IfStatement {
+            return false;
+        }
+        if let Some(parent) = node.parent() {
+            return parent.kind_id() == C::ElseClause;
+        }
         false
     }
 }

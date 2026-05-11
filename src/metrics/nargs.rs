@@ -4,11 +4,12 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 #[cfg(test)]
-use crate::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
-use crate::languages::{Go, Kotlin, Powershell};
+use crate::langs::{CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+use crate::languages::{C, Go, Kotlin, Powershell};
 use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::traits::Search;
@@ -250,7 +251,7 @@ pub(crate) trait NArgs
 where
     Self: Checker + Sized,
 {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_args::<Self>(node, &mut stats.fn_nargs);
             return;
@@ -263,7 +264,7 @@ where
 }
 
 impl NArgs for GoCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_go_args(node, &mut stats.fn_nargs);
             return;
@@ -276,7 +277,7 @@ impl NArgs for GoCode {
 }
 
 impl NArgs for KotlinCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_kotlin_args(node, &mut stats.fn_nargs);
             return;
@@ -357,7 +358,7 @@ fn compute_powershell_args(node: &Node, nargs: &mut usize) {
 }
 
 impl NArgs for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_powershell_args(node, &mut stats.fn_nargs);
             return;
@@ -366,6 +367,81 @@ impl NArgs for PowershellCode {
         if Self::is_closure(node) {
             compute_powershell_args(node, &mut stats.closure_nargs);
         }
+    }
+}
+
+#[inline(always)]
+fn is_c_function_declarator(kind: u16) -> bool {
+    // The tree-sitter-c grammar emits `function_declarator` under five
+    // distinct IDs (context-dependent alternates for nested / abstract /
+    // attributed declarators). All alias the same rule, so any of them
+    // can hold our `parameter_list`.
+    matches!(
+        C::from(kind),
+        C::FunctionDeclarator
+            | C::FunctionDeclarator2
+            | C::FunctionDeclarator3
+            | C::FunctionDeclarator4
+            | C::FunctionDeclarator5
+    )
+}
+
+#[inline(always)]
+fn is_c_parameter_list(kind: u16) -> bool {
+    matches!(C::from(kind), C::ParameterList | C::ParameterList2)
+}
+
+#[inline(always)]
+fn compute_c_args(node: &Node, code: &[u8], nargs: &mut usize) {
+    // tree-sitter-c nests the parameter list under the innermost
+    // `function_declarator`: `function_definition > function_declarator >
+    // parameter_list`. Pointer (`int (*f)(...)`) and attributed declarators
+    // wrap the `function_declarator`, so walk inward via the `declarator`
+    // field until we find the `function_declarator` whose direct child is
+    // the `parameter_list`. Both the declarator and parameter-list rules
+    // expose multiple positional IDs (231..=235 / 259) alongside the
+    // canonical 230 / 258; any of them is a valid match.
+    let mut cur = node.0.child_by_field_name("declarator");
+    while let Some(current) = cur {
+        if is_c_function_declarator(current.kind_id()) {
+            let mut cursor = current.walk();
+            let Some(param_list) = current
+                .children(&mut cursor)
+                .find(|c| is_c_parameter_list(c.kind_id()))
+            else {
+                return;
+            };
+            let mut list_cursor = param_list.walk();
+            let params: Vec<_> = param_list
+                .children(&mut list_cursor)
+                .filter(|p| p.kind_id() == C::ParameterDeclaration)
+                .collect();
+            // `(void)` is C's spelling for "no parameters" and must not be
+            // counted. Detect it precisely by checking that the sole
+            // parameter's text literally matches `void` — a nameless
+            // `parameter_declaration` alone isn't enough to disambiguate
+            // `(void)` from `(int)` (a bare type in an old-style
+            // prototype), which tree-sitter-c parses with the same shape.
+            // `variadic_parameter` (`...`) is already filtered out above.
+            let is_void_only = params.len() == 1
+                && code
+                    .get(params[0].start_byte()..params[0].end_byte())
+                    .is_some_and(|bytes| bytes == b"void");
+            if !is_void_only {
+                *nargs += params.len();
+            }
+            return;
+        }
+        cur = current.child_by_field_name("declarator");
+    }
+}
+
+impl NArgs for CCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if Self::is_func(node) {
+            compute_c_args(node, code, &mut stats.fn_nargs);
+        }
+        // C has no closures; `is_closure` is always false.
     }
 }
 
@@ -998,5 +1074,103 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn c_function_counts_parameters() {
+        // Regression: tree-sitter-c nests `parameter_list` under
+        // `function_declarator`, not directly under `function_definition`.
+        // The generic `compute_args` that looks for a `parameters` field on
+        // the function node would read zero for C functions; the C-specific
+        // counter must descend into the declarator. Definition here has two
+        // params (int a, int b), so aggregated nargs must reflect that.
+        check_metrics::<CParser>(
+            "int add(int a, int b) { return a + b; }",
+            "foo.c",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 2.0,
+                      "total_closures": 0.0,
+                      "average_functions": 2.0,
+                      "average_closures": 0.0,
+                      "total": 2.0,
+                      "average": 2.0,
+                      "functions_min": 0.0,
+                      "functions_max": 2.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn c_void_parameter_is_not_counted() {
+        // `int foo(void)` is the C spelling for "no parameters" and must
+        // count as zero arguments — not one.
+        check_metrics::<CParser>("int foo(void) { return 0; }", "foo.c", |metric| {
+            insta::assert_json_snapshot!(
+                metric.nargs,
+                @r###"
+                    {
+                      "total_functions": 0.0,
+                      "total_closures": 0.0,
+                      "average_functions": 0.0,
+                      "average_closures": 0.0,
+                      "total": 0.0,
+                      "average": 0.0,
+                      "functions_min": 0.0,
+                      "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn c_variadic_parameter_does_not_count() {
+        // `int vararg(int fmt, ...)` has one named argument; the `...`
+        // token is a `variadic_parameter`, not a `parameter_declaration`,
+        // and must not contribute to the count.
+        check_metrics::<CParser>(
+            "int vararg(int fmt, ...) { return fmt; }",
+            "foo.c",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.nargs,
+                    @r###"
+                    {
+                      "total_functions": 1.0,
+                      "total_closures": 0.0,
+                      "average_functions": 1.0,
+                      "average_closures": 0.0,
+                      "total": 1.0,
+                      "average": 1.0,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn c_bare_type_parameter_counts_as_one() {
+        // `int foo(int)` — a K&R / old-style prototype-esque definition
+        // with a bare type and no parameter name — has ONE parameter.
+        // tree-sitter-c parses it with the same AST shape as `int foo(void)`
+        // (sole `parameter_declaration` holding just a `primitive_type`),
+        // so the `(void)` detection must look at the literal text, not
+        // just the structural shape, to avoid undercounting this case.
+        check_metrics::<CParser>("int foo(int) { return 0; }", "foo.c", |metric| {
+            assert_eq!(metric.nargs.fn_args_sum(), 1.0);
+        });
     }
 }

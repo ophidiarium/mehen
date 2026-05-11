@@ -6,10 +6,10 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    GoCode, KotlinCode, PowershellCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, PythonParser, RubyCode, RustCode,
+    TsxCode, TypescriptCode,
 };
-use crate::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 use crate::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -770,10 +770,72 @@ impl Cognitive for PowershellCode {
     }
 }
 
+impl Cognitive for CCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use C::*;
+
+        let (mut nesting, mut depth, lambda) = get_nesting_from_map(node, nesting_map);
+
+        // Sonar cognitive scoring for C:
+        //   - Nesting-increasing: `if` (not else-if), loops, `switch`, and
+        //     the ternary `conditional_expression`.
+        //   - Non-nesting +1: `else` (covers else-if).
+        //   - Same-operator collapsing on `&&` / `||` sequences.
+        //   - `function_definition` resets structural nesting and bumps
+        //     function depth. C has no closures or lambdas.
+        match node.kind_id().into() {
+            IfStatement if !Self::is_else_if(node) => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            IfStatement => {
+                // `else if`: structural +1 is already paid by the outer
+                // `else_clause`, but the condition starts a new
+                // boolean-operator sequence. Defense-in-depth with the
+                // `ElseClause` reset: keeps the invariant local to each
+                // `if`, so a future visitor between `else_clause` and the
+                // inner `if`'s operators won't reintroduce cross-branch
+                // sequence bleed.
+                stats.boolean_seq.reset();
+            }
+            ForStatement | WhileStatement | DoStatement | SwitchStatement
+            | ConditionalExpression => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            ElseClause /* covers else-if */ => {
+                increment_by_one(stats);
+                // Mirror the ElseClause / ElseifClause resets in every
+                // other language's cognitive impl so chained conditions
+                // don't inherit state from the preceding branch.
+                stats.boolean_seq.reset();
+            }
+            ExpressionStatement | ExpressionStatement2 | ReturnStatement | Declaration => {
+                stats.boolean_seq.reset();
+            }
+            BinaryExpression | BinaryExpression2 => {
+                compute_booleans::<C>(node, stats, &AMPAMP, &PIPEPIPE);
+            }
+            FunctionDefinition | FunctionDefinition2 => {
+                nesting = 0;
+                increment_function_depth_any::<C>(
+                    &mut depth,
+                    node,
+                    &[FunctionDefinition, FunctionDefinition2],
+                );
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
@@ -2518,6 +2580,37 @@ mod tests {
                       "max": 3.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn c_boolean_sequence_does_not_leak_across_else_if() {
+        // Regression: tree-sitter-c parses `else if` as `else_clause { if_statement }`.
+        // The outer `if (a && b)`'s boolean-sequence tracker must not bleed
+        // into the inner `else if (c && d)` condition — otherwise the
+        // second `&&` would collapse with the first (same operator) and
+        // cognitive would be undercounted.
+        //
+        // Expected breakdown for `int f(int a, int b, int c, int d)`:
+        //   +1 outer `if`                 (nesting = 0 -> 1)
+        //   +1 outer `&&`                 (first op in sequence)
+        //   +1 `else` clause              (no nesting)
+        //   +0 inner `if` (else-if arm)   (structural cost paid by `else`)
+        //   +1 inner `&&`                 (fresh sequence — IF reset works)
+        // total = 4.
+        check_metrics::<CParser>(
+            "int f(int a, int b, int c, int d) {
+                 if (a && b) {
+                     return 1;
+                 } else if (c && d) {
+                     return 2;
+                 }
+                 return 0;
+             }",
+            "foo.c",
+            |metric| {
+                assert_eq!(metric.cognitive.cognitive_sum(), 4.0);
             },
         );
     }
