@@ -162,7 +162,7 @@ struct Cli {
     version: bool,
 
     /// Emit output as JSON (currently only supported with --version).
-    #[clap(long, global = true)]
+    #[clap(long, global = true, requires = "version")]
     json: bool,
 
     #[command(subcommand)]

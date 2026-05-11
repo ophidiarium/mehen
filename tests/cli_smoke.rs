@@ -1,6 +1,25 @@
 use std::process::Command;
 
 #[test]
+fn json_flag_requires_version() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .arg("--json")
+        .output()
+        .expect("failed to run mehen --json");
+
+    assert!(
+        !output.status.success(),
+        "--json without --version should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr was not UTF-8");
+    assert!(
+        stderr.contains("--version"),
+        "expected error to mention --version, got: {stderr}"
+    );
+}
+
+#[test]
 fn version_json_emits_structured_payload() {
     let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args(["--version", "--json"])
