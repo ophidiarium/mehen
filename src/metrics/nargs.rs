@@ -251,7 +251,7 @@ pub(crate) trait NArgs
 where
     Self: Checker + Sized,
 {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_args::<Self>(node, &mut stats.fn_nargs);
             return;
@@ -264,7 +264,7 @@ where
 }
 
 impl NArgs for GoCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_go_args(node, &mut stats.fn_nargs);
             return;
@@ -277,7 +277,7 @@ impl NArgs for GoCode {
 }
 
 impl NArgs for KotlinCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_kotlin_args(node, &mut stats.fn_nargs);
             return;
@@ -358,7 +358,7 @@ fn compute_powershell_args(node: &Node, nargs: &mut usize) {
 }
 
 impl NArgs for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
             compute_powershell_args(node, &mut stats.fn_nargs);
             return;
@@ -371,7 +371,7 @@ impl NArgs for PowershellCode {
 }
 
 #[inline(always)]
-fn compute_c_args(node: &Node, nargs: &mut usize) {
+fn compute_c_args(node: &Node, code: &[u8], nargs: &mut usize) {
     // tree-sitter-c nests the parameter list under the innermost
     // `function_declarator`: `function_definition > function_declarator >
     // parameter_list`. Pointer (`int (*f)(...)`) and attributed declarators
@@ -393,17 +393,17 @@ fn compute_c_args(node: &Node, nargs: &mut usize) {
                 .children(&mut list_cursor)
                 .filter(|p| p.kind_id() == C::ParameterDeclaration)
                 .collect();
-            // `(void)` — a sole `parameter_declaration` whose only child is
-            // a `primitive_type` (no named declarator) — is C's spelling
-            // for "no parameters" and must not be counted. Function
-            // *definitions* require named parameters when any exist, so a
-            // nameless sole parameter is reliably `(void)` in practice.
-            // `variadic_parameter` (`...`) is already filtered above.
+            // `(void)` is C's spelling for "no parameters" and must not be
+            // counted. Detect it precisely by checking that the sole
+            // parameter's text literally matches `void` — a nameless
+            // `parameter_declaration` alone isn't enough to disambiguate
+            // `(void)` from `(int)` (a bare type in an old-style
+            // prototype), which tree-sitter-c parses with the same shape.
+            // `variadic_parameter` (`...`) is already filtered out above.
             let is_void_only = params.len() == 1
-                && params[0].child_count() == 1
-                && params[0]
-                    .child(0)
-                    .is_some_and(|c| c.kind_id() == C::PrimitiveType);
+                && code
+                    .get(params[0].start_byte()..params[0].end_byte())
+                    .is_some_and(|bytes| bytes == b"void");
             if !is_void_only {
                 *nargs += params.len();
             }
@@ -414,9 +414,9 @@ fn compute_c_args(node: &Node, nargs: &mut usize) {
 }
 
 impl NArgs for CCode {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
         if Self::is_func(node) {
-            compute_c_args(node, &mut stats.fn_nargs);
+            compute_c_args(node, code, &mut stats.fn_nargs);
         }
         // C has no closures; `is_closure` is always false.
     }
@@ -1136,5 +1136,18 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn c_bare_type_parameter_counts_as_one() {
+        // `int foo(int)` — a K&R / old-style prototype-esque definition
+        // with a bare type and no parameter name — has ONE parameter.
+        // tree-sitter-c parses it with the same AST shape as `int foo(void)`
+        // (sole `parameter_declaration` holding just a `primitive_type`),
+        // so the `(void)` detection must look at the literal text, not
+        // just the structural shape, to avoid undercounting this case.
+        check_metrics::<CParser>("int foo(int) { return 0; }", "foo.c", |metric| {
+            assert_eq!(metric.nargs.fn_args_sum(), 1.0);
+        });
     }
 }

@@ -339,7 +339,7 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
             T::Halstead::compute(&node, code, &mut state.halstead_maps);
             T::Loc::compute(&node, &mut last.metrics.loc, func_space, unit);
             T::Nom::compute(&node, &mut last.metrics.nom);
-            T::NArgs::compute(&node, &mut last.metrics.nargs);
+            T::NArgs::compute(&node, code, &mut last.metrics.nargs);
             T::Exit::compute(&node, &mut last.metrics.nexits);
             T::Abc::compute(&node, &mut last.metrics.abc);
             T::Npm::compute(&node, code, &mut last.metrics.npm);
