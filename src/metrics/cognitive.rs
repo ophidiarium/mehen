@@ -791,13 +791,26 @@ impl Cognitive for CCode {
             IfStatement if !Self::is_else_if(node) => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
-            IfStatement => {}
+            IfStatement => {
+                // `else if`: structural +1 is already paid by the outer
+                // `else_clause`, but the condition starts a new
+                // boolean-operator sequence. Defense-in-depth with the
+                // `ElseClause` reset: keeps the invariant local to each
+                // `if`, so a future visitor between `else_clause` and the
+                // inner `if`'s operators won't reintroduce cross-branch
+                // sequence bleed.
+                stats.boolean_seq.reset();
+            }
             ForStatement | WhileStatement | DoStatement | SwitchStatement
             | ConditionalExpression => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
             ElseClause /* covers else-if */ => {
                 increment_by_one(stats);
+                // Mirror the ElseClause / ElseifClause resets in every
+                // other language's cognitive impl so chained conditions
+                // don't inherit state from the preceding branch.
+                stats.boolean_seq.reset();
             }
             ExpressionStatement | ExpressionStatement2 | ReturnStatement | Declaration => {
                 stats.boolean_seq.reset();
@@ -822,7 +835,7 @@ impl Cognitive for CCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
@@ -2567,6 +2580,37 @@ mod tests {
                       "max": 3.0
                     }"###
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn c_boolean_sequence_does_not_leak_across_else_if() {
+        // Regression: tree-sitter-c parses `else if` as `else_clause { if_statement }`.
+        // The outer `if (a && b)`'s boolean-sequence tracker must not bleed
+        // into the inner `else if (c && d)` condition — otherwise the
+        // second `&&` would collapse with the first (same operator) and
+        // cognitive would be undercounted.
+        //
+        // Expected breakdown for `int f(int a, int b, int c, int d)`:
+        //   +1 outer `if`                 (nesting = 0 -> 1)
+        //   +1 outer `&&`                 (first op in sequence)
+        //   +1 `else` clause              (no nesting)
+        //   +0 inner `if` (else-if arm)   (structural cost paid by `else`)
+        //   +1 inner `&&`                 (fresh sequence — IF reset works)
+        // total = 4.
+        check_metrics::<CParser>(
+            "int f(int a, int b, int c, int d) {
+                 if (a && b) {
+                     return 1;
+                 } else if (c && d) {
+                     return 2;
+                 }
+                 return 0;
+             }",
+            "foo.c",
+            |metric| {
+                assert_eq!(metric.cognitive.cognitive_sum(), 4.0);
             },
         );
     }
