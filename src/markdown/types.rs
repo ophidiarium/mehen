@@ -1,12 +1,14 @@
 //! Public-shaped metric types exported by the Markdown analyzer.
 //!
 //! The field layout mirrors §23 of
-//! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A populated LOC
-//! family, word count, section count, heading count, and ECU. Phase B adds
-//! `complexity` (MRPC, MCC, Halstead) and `maintainability.documentation_maintainability_index`
-//! (DMI core). Phase C adds `links`, `visuals`, `tables`,
-//! `maintainability.artifact_debt_score`, and a per-artifact detail list.
-//! Later phases append more fields; no field ever shrinks.
+//! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A produced the
+//! LOC family, word count, section count, heading count, and Effective
+//! Content Units. Phase B adds `complexity` (MRPC, MCC, Halstead) and
+//! `maintainability.documentation_maintainability_index` (DMI core). Phase C
+//! adds `links`, `visuals`, `tables`, `maintainability.artifact_debt_score`,
+//! and a per-artifact detail list. Phase E adds the language-aware prose
+//! metric surface (§§29–38) as a separate top-level `prose` key. Later phases
+//! append more fields; no field ever shrinks.
 
 use serde::Serialize;
 
@@ -309,7 +311,7 @@ pub(crate) struct ArtifactRecord {
     pub(crate) burden: f64,
 }
 
-/// Phase-A + Phase-B + Phase-C Markdown metric output.
+/// Phase-A + Phase-B + Phase-C + Phase-E Markdown metric output.
 ///
 /// Emitted per file on the JSON / YAML / TOML path and under the `markdown`
 /// key of the exported schema so later phases can add sibling keys like
@@ -329,4 +331,7 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) tables: Tables,
     pub(crate) maintainability: Maintainability,
     pub(crate) artifacts: Vec<ArtifactRecord>,
+    /// §§29–38 Prose metric layer. Always emitted; its presence does NOT
+    /// modify DMI / MCC / MRPC / FillerLazyRisk in later phases.
+    pub(crate) prose: crate::markdown::prose::ProseReport,
 }

@@ -1,0 +1,37 @@
+# Weasel words — vague intensifiers / quantifiers.
+# Source: write-good (https://github.com/btford/write-good/blob/master/lib/weasel.js) — MIT.
+# One lowercase entry per line.
+are a number
+clearly
+completely
+exceedingly
+excellent
+extremely
+fairly
+few
+huge
+interestingly
+largely
+many
+mostly
+obviously
+quite
+relatively
+remarkably
+several
+significantly
+substantially
+surprisingly
+tiny
+various
+vast
+very
+a number of
+lots of
+lots
+a lot of
+a bunch of
+sort of
+a bit
+a lot
+bunch
