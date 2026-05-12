@@ -33,7 +33,7 @@ pub(crate) fn collect_sections(root: &Node<'_>) -> Vec<Section> {
         heading_level: None,
         heading_text: None,
         start_line: (root.start_row() as u64) + 1,
-        end_line: (root.end_row() as u64) + 1,
+        end_line: section_end_line(root),
         parent_section_id: None,
         child_section_ids: Vec::new(),
         word_count: 0,
