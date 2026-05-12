@@ -286,14 +286,9 @@ fn metrics_succeeds_for_empty_markdown_file() {
     // Codex P1 regression guard: a zero-byte .md file must still produce
     // a valid Markdown metric record (dloc=0, sections=[]) instead of
     // silently emitting nothing.
-    use std::io::Write as _;
-
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("empty.md");
-    std::fs::File::create(&path)
-        .expect("create empty.md")
-        .write_all(b"")
-        .expect("write empty file");
+    std::fs::File::create(&path).expect("create empty.md");
 
     let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args(["--metrics", "-p", path.to_str().unwrap()])

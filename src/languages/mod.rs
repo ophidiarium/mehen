@@ -30,4 +30,4 @@ pub(crate) use language_c::*;
 #[cfg(feature = "markdown")]
 pub(crate) mod language_markdown;
 #[cfg(feature = "markdown")]
-pub(crate) use language_markdown::*;
+pub(crate) use language_markdown::Markdown;
