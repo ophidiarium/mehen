@@ -115,7 +115,7 @@ fn is_markdown_path(override_language: &Option<LANG>, path: &Path) -> bool {
         .map(|e| e.to_ascii_lowercase());
     matches!(
         ext.as_deref(),
-        Some("md" | "markdown" | "mdown" | "mkd" | "mkdn")
+        Some("md" | "markdown" | "mdown" | "mkd" | "mkdn" | "mdx")
     )
 }
 

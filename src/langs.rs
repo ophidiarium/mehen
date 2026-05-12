@@ -120,8 +120,8 @@ mk_langs!(
         MarkdownCode,
         MarkdownParser,
         tree_sitter_markdown_text,
-        [md, markdown, mdown, mkd, mkdn],
-        ["markdown", "gfm"]
+        [md, markdown, mdown, mkd, mkdn, mdx],
+        ["markdown", "gfm", "mdx"]
     )
 );
 
