@@ -27,6 +27,19 @@ use unicode_script::{Script, UnicodeScript};
 use crate::languages::Markdown;
 use crate::node::Node;
 
+/// Sentinel character inserted where an `InlineCode` span was stripped.
+///
+/// Downstream stages (sentence splitter, word tokenizer, wording metrics)
+/// see this as a single "object" placeholder. It survives sentence
+/// splitting (it isn't a sentence terminator) and gets filtered out of
+/// word tokenization (it isn't alphanumeric), so metric rates are
+/// unchanged — but a sentence that originally contained `` `foo` `` can
+/// still be detected as "had inline code" by checking for the sentinel.
+///
+/// U+FFFC OBJECT REPLACEMENT CHARACTER is the canonical Unicode marker
+/// for a removed inline object and will never appear in real prose.
+pub(crate) const INLINE_CODE_SENTINEL: char = '\u{FFFC}';
+
 /// Per-block language tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Language {
@@ -198,8 +211,15 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
 /// Strategy: take the block's full byte slice from the source, then excise
 /// every descendant sub-range that belongs to a skip class (inline code,
 /// URLs, HTML inline, MDX inline, math inline, autolinks, front-matter,
-/// pipe-table delimiters, heading markers). Excised ranges are replaced
-/// with a single space so adjacent tokens never fuse.
+/// pipe-table delimiters, heading markers).
+///
+/// Excised ranges are substituted with a single replacement character so
+/// adjacent tokens never fuse:
+///   - `InlineCode` spans leave behind [`INLINE_CODE_SENTINEL`] so
+///     downstream wording metrics can detect that a sentence originally
+///     carried an inline-code token (used to suppress weasel / hedge
+///     noise around backtick-wrapped identifiers — §37.5 item 3).
+///   - All other skip kinds collapse to a single space.
 ///
 /// This byte-slice approach preserves the original whitespace between
 /// tokens, which is critical for sentence- and word-segmentation.
@@ -210,26 +230,33 @@ pub(crate) fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
         return String::new();
     }
 
-    // Collect skip ranges relative to the source buffer.
-    let mut skip_ranges: Vec<(usize, usize)> = Vec::new();
+    // Collect skip ranges relative to the source buffer. Each entry
+    // carries whether the skip was an `InlineCode` (so we can emit a
+    // sentinel) or another skip kind (emit a space).
+    let mut skip_ranges: Vec<(usize, usize, SkipKind)> = Vec::new();
     collect_skip_ranges(node, &mut skip_ranges);
 
     // Sort + merge overlapping skip ranges so we can linearly excise them.
+    // When two overlapping ranges disagree on kind, `InlineCode` wins so
+    // the sentinel is still emitted.
     skip_ranges.sort_by_key(|r| r.0);
-    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(skip_ranges.len());
-    for (s, e) in skip_ranges {
+    let mut merged: Vec<(usize, usize, SkipKind)> = Vec::with_capacity(skip_ranges.len());
+    for (s, e, k) in skip_ranges {
         if let Some(last) = merged.last_mut()
             && s <= last.1
         {
             last.1 = last.1.max(e);
+            if k == SkipKind::InlineCode {
+                last.2 = SkipKind::InlineCode;
+            }
         } else {
-            merged.push((s, e));
+            merged.push((s, e, k));
         }
     }
 
     let mut out = String::new();
     let mut cursor = block_start;
-    for (s, e) in merged {
+    for (s, e, k) in merged {
         let s = s.max(block_start).min(block_end);
         let e = e.max(block_start).min(block_end);
         if cursor < s
@@ -237,7 +264,10 @@ pub(crate) fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
         {
             out.push_str(slice);
         }
-        out.push(' ');
+        match k {
+            SkipKind::InlineCode => out.push(INLINE_CODE_SENTINEL),
+            SkipKind::Other => out.push(' '),
+        }
         cursor = e.max(cursor);
     }
     if cursor < block_end
@@ -249,12 +279,30 @@ pub(crate) fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
     normalize_whitespace(&out)
 }
 
-/// Walks the subtree at `node` and appends (start_byte, end_byte) ranges for
-/// every descendant whose kind should be stripped from prose.
-fn collect_skip_ranges(node: &Node<'_>, out: &mut Vec<(usize, usize)>) {
+/// Internal tag on a skip range so the extractor knows whether to emit a
+/// sentinel or just a space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SkipKind {
+    /// `InlineCode` span — emit [`INLINE_CODE_SENTINEL`] so wording metrics
+    /// can still detect the original inline-code context.
+    InlineCode,
+    /// Every other skip kind (math, HTML, URLs, markers…) collapses to a
+    /// single space.
+    Other,
+}
+
+/// Walks the subtree at `node` and appends (start_byte, end_byte, kind)
+/// entries for every descendant whose kind should be stripped from prose.
+fn collect_skip_ranges(node: &Node<'_>, out: &mut Vec<(usize, usize, SkipKind)>) {
     let kind: Markdown = node.kind_id().into();
     if is_skip_kind(&kind) {
-        out.push((node.start_byte(), node.end_byte()));
+        let sk = match kind {
+            Markdown::InlineCode | Markdown::InlineCodeContent | Markdown::InlineCodeContent2 => {
+                SkipKind::InlineCode
+            }
+            _ => SkipKind::Other,
+        };
+        out.push((node.start_byte(), node.end_byte(), sk));
         return;
     }
     let mut cursor = node.cursor();
@@ -378,7 +426,9 @@ pub(crate) fn classify_text(text: &str) -> Language {
     let mut visible_chars = 0usize;
 
     for c in text.chars() {
-        if c.is_whitespace() {
+        if c.is_whitespace() || c == INLINE_CODE_SENTINEL {
+            // Skip inline-code sentinels so substituting `InlineCode`
+            // spans with U+FFFC doesn't skew the script ratios.
             continue;
         }
         visible_chars += 1;

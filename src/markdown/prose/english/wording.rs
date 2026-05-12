@@ -174,14 +174,25 @@ fn weasel_set() -> &'static HashSet<String> {
 }
 
 fn weasel_density(words: &[String], sents: &[String]) -> f64 {
-    // Quoted-literal blockquote suppression (§37.5 item 3): skip sentences
-    // that start with `>` (blockquote marker); our stripped text no longer
-    // carries the marker, but we also suppress lines that contain a
-    // backtick-wrapped identifier — those tend to be technical hedges.
+    // Quoted-literal suppression (§37.5 item 3): skip sentences that carry
+    // an inline-code token. Backticks are stripped upstream in
+    // `extract_prose_text`, but `InlineCode` spans leave behind
+    // `INLINE_CODE_SENTINEL` — the sentinel survives sentence splitting
+    // and is filtered out of word tokenization, so it costs nothing at
+    // the metric level while still flagging the original technical
+    // context. Sentences containing it typically describe a
+    // backtick-wrapped identifier and shouldn't contribute to weasel
+    // density.
     let suppressed: HashSet<usize> = sents
         .iter()
         .enumerate()
-        .filter_map(|(i, s)| if s.contains('`') { Some(i) } else { None })
+        .filter_map(|(i, s)| {
+            if s.contains(crate::markdown::prose::lang_detect::INLINE_CODE_SENTINEL) {
+                Some(i)
+            } else {
+                None
+            }
+        })
         .collect();
     let set = weasel_set();
     let mut matches = 0usize;
@@ -400,5 +411,44 @@ mod tests {
     fn expletive_detects_there_is() {
         let sents = vec!["There is no doubt.".to_string(), "The cat sat.".to_string()];
         assert_eq!(expletive_count(&sents), 1);
+    }
+
+    #[test]
+    fn weasel_density_suppresses_sentinel_sentences() {
+        // Codex P2 regression: a sentence like `` `foo` is very fast ``
+        // used to bypass backtick-suppression because `InlineCode` spans
+        // are stripped upstream of sentence splitting, leaving no
+        // backtick in the sentence for `weasel_density` to detect. The
+        // fix substitutes `InlineCode` spans with `INLINE_CODE_SENTINEL`
+        // (U+FFFC), which survives sentence splitting and word
+        // tokenization. `weasel_density` now suppresses any sentence that
+        // carries the sentinel.
+        //
+        // Construct the post-strip sentence directly so this test
+        // doesn't depend on the tree-sitter pipeline.
+        let sentinel = crate::markdown::prose::lang_detect::INLINE_CODE_SENTINEL.to_string();
+        // "very" is in the bundled weasel list — ensures the control
+        // case below actually fires.
+        let sent_sentinel = format!("{sentinel} is very fast");
+        let words_sentinel: Vec<String> = sent_sentinel
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+
+        let with_density = weasel_density(&words_sentinel, &[sent_sentinel]);
+        assert_eq!(
+            with_density, 0.0,
+            "sentinel-carrying sentence must not contribute to weasel density, got {with_density}"
+        );
+
+        // Control: same weasel word in a sentence without the sentinel
+        // still registers.
+        let plain = "this is very fast".to_string();
+        let words_plain: Vec<String> = plain.split_whitespace().map(|s| s.to_string()).collect();
+        let plain_density = weasel_density(&words_plain, &[plain]);
+        assert!(
+            plain_density > 0.0,
+            "sanity: weasel `very` must still register without sentinel, got {plain_density}"
+        );
     }
 }
