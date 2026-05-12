@@ -53,8 +53,42 @@ complexity:
     effort: 184.83170524615116
     embedded_volume: 0
     total_volume: 111.48579046593244
+links:
+  total: 0
+  internal: 0
+  relative: 0
+  external: 0
+  external_vendor: 0
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 0
+  footnote: 0
+  bare_url: 0
+  broken: 0
+  link_debt_score: 0
+  information_scent_score: 0
+  review_burden: 0
+visuals:
+  images: 0
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 0
+tables:
+  count: 0
+  max_cells: 0
+  table_burden_score: 0
+  table_scaffold_score: 0
+  hard_warnings: 0
 maintainability:
   documentation_maintainability_index: 100
+  section_balance_score: 0
+  good_scaffold_score: 0
+  artifact_debt_score: 0
+artifacts: []
 prose:
   language_detection:
     dominant_language: en

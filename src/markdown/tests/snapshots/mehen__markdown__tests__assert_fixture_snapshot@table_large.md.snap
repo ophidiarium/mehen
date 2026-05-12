@@ -3,26 +3,26 @@ source: src/markdown/tests/mod.rs
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 10
-  ploc: 3
+  dloc: 14
+  ploc: 4
   cloc: 0
-  tloc: 4
+  tloc: 8
   mloc: 0
-  bloc: 3
-  aloc: 4
+  bloc: 2
+  aloc: 8
 loc_ratios:
-  artifact_line_ratio: 0.4
+  artifact_line_ratio: 0.5714285714285714
   code_line_ratio: 0
-  table_line_ratio: 0.4
+  table_line_ratio: 0.5714285714285714
   math_line_ratio: 0
-  blank_line_ratio: 0.3
+  blank_line_ratio: 0.14285714285714285
 size:
-  words: 12
-  effective_content_units: 0.5900000000000001
+  words: 36
+  effective_content_units: 5.61
   sections: 1
   headings: 1
 ecu_inputs:
-  table_cells: 9
+  table_cells: 91
   diagram_nodes: 0
   diagram_edges: 0
   math_tokens: 0
@@ -32,27 +32,27 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 10
+    end_line: 14
     parent_section_id: ~
     child_section_ids: []
-    word_count: 12
-    block_count: 3
+    word_count: 36
+    block_count: 2
 complexity:
-  reading_path_complexity: 1
-  reading_path_complexity_raw: 1
-  cognitive_complexity: 0.7265624999999999
+  reading_path_complexity: 2
+  reading_path_complexity_raw: 2
+  cognitive_complexity: 1.3219413178184862
   halstead:
-    operators_distinct: 5
-    operators_total: 10
-    operands_distinct: 17
-    operands_total: 18
-    vocabulary: 22
-    length: 28
-    volume: 124.86408532184433
-    difficulty: 2.6470588235294117
-    effort: 330.5225787931173
+    operators_distinct: 6
+    operators_total: 27
+    operands_distinct: 46
+    operands_total: 52
+    vocabulary: 52
+    length: 79
+    volume: 450.33473773314626
+    difficulty: 3.391304347826087
+    effort: 1527.2221540515395
     embedded_volume: 0
-    total_volume: 124.86408532184433
+    total_volume: 450.33473773314626
 links:
   total: 0
   internal: 0
@@ -79,10 +79,10 @@ visuals:
   visual_net_effect: 0
 tables:
   count: 1
-  max_cells: 9
-  table_burden_score: 0.05
-  table_scaffold_score: 1
-  hard_warnings: 0
+  max_cells: 91
+  table_burden_score: 0.2861378205128205
+  table_scaffold_score: 0.7416666666666667
+  hard_warnings: 1
 maintainability:
   documentation_maintainability_index: 100
   section_balance_score: 0
@@ -91,14 +91,14 @@ maintainability:
 artifacts:
   - id: 0
     kind: table
-    start_line: 5
-    end_line: 8
+    start_line: 7
+    end_line: 14
     language_tag: ~
-    size: 9
+    size: 91
     has_explanation: true
     has_label: true
     oversized: false
-    burden: 0.05
+    burden: 0.2861378205128205
 prose:
   language_detection:
     dominant_language: en
@@ -107,10 +107,7 @@ prose:
         end_line: 1
         language: en
       - start_line: 3
-        end_line: 3
-        language: en
-      - start_line: 10
-        end_line: 10
+        end_line: 5
         language: en
   english:
     readability:
@@ -129,31 +126,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.8
-      hapax_ratio: 0.833
-      dis_ratio: 0.083
-      lexical_density: 0.733
-      avg_sentence_words: 5
-      p90_sentence_words: 7
-      max_sentence_words: 7
-      stddev_sentence_words: 1.633
-      avg_word_chars: 5.2
-      p90_word_chars: 8
+      mattr_50: 0.821
+      hapax_ratio: 0.844
+      dis_ratio: 0.094
+      lexical_density: 0.692
+      avg_sentence_words: 13
+      p90_sentence_words: 28
+      max_sentence_words: 28
+      stddev_sentence_words: 10.801
+      avg_word_chars: 4.282
+      p90_word_chars: 7
       sentence_count: 3
-      words_total: 15
+      words_total: 39
     wording:
       passive_ratio: 0
-      hedge_density: 0
+      hedge_density: 0.026
       weasel_density: 0
       wordy_density: 0
-      adverb_density: 0
+      adverb_density: 0.026
       nominalization_density: 0
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 1
+      wording_quality_score: 0.972
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -162,7 +159,7 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 15
+    words_counted: 39
     sentences_counted: 3
     blocks_stripped:
       - table

@@ -103,8 +103,62 @@ complexity:
     effort: 4524.540840985396
     embedded_volume: 0
     total_volume: 755.9992291266738
+links:
+  total: 6
+  internal: 0
+  relative: 0
+  external: 6
+  external_vendor: 0
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 0
+  footnote: 0
+  bare_url: 0
+  broken: 0
+  link_debt_score: 0.1
+  information_scent_score: 0.3
+  review_burden: 6
+visuals:
+  images: 0
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 0
+tables:
+  count: 0
+  max_cells: 0
+  table_burden_score: 0
+  table_scaffold_score: 0
+  hard_warnings: 0
 maintainability:
   documentation_maintainability_index: 98.57264615384615
+  section_balance_score: 0
+  good_scaffold_score: 0
+  artifact_debt_score: 0.35
+artifacts:
+  - id: 0
+    kind: code
+    start_line: 30
+    end_line: 32
+    language_tag: ~
+    size: 1
+    has_explanation: true
+    has_label: false
+    oversized: false
+    burden: 2.5
+  - id: 1
+    kind: code
+    start_line: 38
+    end_line: 40
+    language_tag: bash
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
 prose:
   language_detection:
     dominant_language: en
