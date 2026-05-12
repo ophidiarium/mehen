@@ -396,9 +396,12 @@ fn resolve_relative(base_dir: &Path, rel: &str) -> bool {
     if rel.is_empty() {
         return true;
     }
-    let rel = rel.trim_start_matches('/').trim_start_matches('.');
-    // Trim but keep the leading component meaningful. A link starting with
-    // `../` or `./` joins normally via Path.
+    // Strip a single leading `/` so absolute-style relatives resolve from
+    // the Markdown file's directory. Do NOT strip leading `.` — `./foo.md`
+    // and `../bar.md` are valid relative paths that Path::join handles
+    // natively. Previously trimming `.` turned them into `/foo.md` and
+    // reported valid sibling/parent links as broken (Codex P1).
+    let rel = rel.strip_prefix('/').unwrap_or(rel);
     let candidate = base_dir.join(rel);
     candidate.exists()
 }
@@ -459,7 +462,21 @@ fn collect_heading_slugs(node: &Node<'_>, source: &str, out: &mut HashSet<String
             | SetextHeading2
     );
     if is_heading && let Some(text) = heading_text(node, source) {
-        out.insert(slugify(&text));
+        // GitHub-style de-duplication: the first heading with a given slug
+        // keeps the bare slug; subsequent headings get `-1`, `-2`, etc.
+        // appended. Anchor links like `#intro-1` in a doc with two
+        // `## Intro` headings should resolve to the second one.
+        let base = slugify(&text);
+        if out.insert(base.clone()) {
+            // first occurrence
+        } else {
+            for n in 1.. {
+                let candidate = format!("{base}-{n}");
+                if out.insert(candidate) {
+                    break;
+                }
+            }
+        }
     }
     let mut cursor = node.cursor();
     if cursor.goto_first_child() {
@@ -764,5 +781,58 @@ mod tests {
     fn host_and_after_host_split_url() {
         assert_eq!(host_of("https://foo.bar/baz?x=1"), Some("foo.bar"));
         assert_eq!(after_host("https://foo.bar/baz?x=1"), Some("/baz?x=1"));
+    }
+
+    #[test]
+    fn resolve_relative_preserves_dot_prefixed_paths() {
+        // Codex P1 on PR #84: `./foo.md` and `../bar.md` must resolve
+        // against `base_dir`, not against the filesystem root. Previously
+        // `trim_start_matches('.')` turned them into absolute-style paths
+        // that reported valid sibling/parent links as broken.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let base_dir = tmp.path();
+        let sibling = base_dir.join("foo.md");
+        std::fs::write(&sibling, b"# Foo\n").expect("write sibling");
+        let parent = base_dir.parent().expect("parent dir exists");
+        // `./foo.md` should resolve inside base_dir.
+        assert!(
+            resolve_relative(base_dir, "./foo.md"),
+            "./foo.md must resolve against base_dir"
+        );
+        // `../<leaf>` with a non-existent target should NOT resolve…
+        assert!(
+            !resolve_relative(base_dir, "../definitely-not-a-real-file-xyz.md"),
+            "missing parent file must report unresolved"
+        );
+        // …but a real parent path does.
+        if let Some(parent_name) = base_dir.file_name().and_then(|s| s.to_str()) {
+            // Create a sibling of base_dir so `../<parent_name>/foo.md` exists.
+            let nested = parent.join(parent_name).join("foo.md");
+            assert!(nested.exists());
+            assert!(resolve_relative(
+                base_dir,
+                &format!("../{}/foo.md", parent_name)
+            ));
+        }
+    }
+
+    #[test]
+    fn collect_heading_slugs_dedups_with_github_numeric_suffix() {
+        // Codex P2 on PR #84: GitHub appends `-1`, `-2`, … to duplicate
+        // heading slugs. Anchor collection must match so `#intro-1` on
+        // a doc with two `## Intro` headings resolves cleanly.
+        let src = "## Intro\n\nfirst\n\n## Intro\n\nsecond\n\n## Intro\n\nthird\n";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let root = crate::node::Node(tree.root_node());
+        let slugs = collect_anchor_slugs(&root, src);
+        assert!(slugs.contains("intro"), "base slug present");
+        assert!(slugs.contains("intro-1"), "second occurrence gets -1");
+        assert!(slugs.contains("intro-2"), "third occurrence gets -2");
+        // `-3` should NOT be generated unless there's a fourth heading.
+        assert!(!slugs.contains("intro-3"));
     }
 }
