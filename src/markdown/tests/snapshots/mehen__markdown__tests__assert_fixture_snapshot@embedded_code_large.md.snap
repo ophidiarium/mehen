@@ -78,8 +78,8 @@ sections:
     word_count: 26
     block_count: 2
 complexity:
-  reading_path_complexity: 1
-  reading_path_complexity_raw: 4
+  reading_path_complexity: 1.2000000000000002
+  reading_path_complexity_raw: 7
   cognitive_complexity: 6.144
   halstead:
     operators_distinct: 10

@@ -62,6 +62,11 @@ enum EdgeKind {
     Footnote,
     Relative,
     External,
+    // TODO(Phase D): artifact-explanation edges fire when a section's
+    // adjacency table shows explanatory prose near an artifact. Held
+    // here so the edge-weight table stays intact once Phase D adds the
+    // nearby-prose walker.
+    #[allow(dead_code)]
     Artifact,
 }
 
@@ -194,6 +199,21 @@ impl GraphBuilder {
 
         match kind {
             Section | Section1 | Section2 | Section3 | Section4 | Section5 | Section6 => {
+                // §3.4 defines the derived section tree as "one section per
+                // heading". Tree-sitter emits headingless wrapper sections
+                // for pre-heading / blank content — those must not inflate
+                // the MRPC node set, otherwise a newline-only file reports
+                // non-zero `reading_path_complexity_raw` while
+                // `size.sections` correctly reports 0. Only create a
+                // Section graph node when an actual heading exists
+                // (Codex P2 on PR #83).
+                let Some(slug) = extract_heading_slug(node, source) else {
+                    // Headingless wrapper: recurse into children so their
+                    // artifacts/links reach the enclosing section, but do
+                    // not create a graph node.
+                    self.recurse_children(node, source);
+                    return;
+                };
                 let parent = self.section_stack.last().copied();
                 let id = self.sections.len() as u32;
                 self.sections.push(SectionInfo { _id: id, parent });
@@ -211,12 +231,7 @@ impl GraphBuilder {
                         kind: EdgeKind::Hierarchy,
                     });
                 }
-                // Record the section's heading slug so `#anchor` links
-                // can resolve to an existing section node instead of
-                // creating a synthetic LinkedDoc node per anchor.
-                if let Some(slug) = extract_heading_slug(node, source) {
-                    self.section_slugs.entry(slug).or_insert(id);
-                }
+                self.section_slugs.entry(slug).or_insert(id);
                 self.section_stack.push(id);
                 self.recurse_children(node, source);
                 self.section_stack.pop();
@@ -290,6 +305,11 @@ impl GraphBuilder {
                         kind: EdgeKind::Hierarchy,
                     });
                 }
+                // Recurse into children so any Link/Image nodes inside the
+                // footnote body still emit relative/external/internal edges
+                // — long-form docs often store references inside footnotes
+                // (Codex P2 on PR #83).
+                self.recurse_children(node, source);
                 return;
             }
             LinkReferenceDefinition => {
@@ -358,20 +378,20 @@ impl GraphBuilder {
     }
 
     fn add_artifact_node(&mut self, node: GraphNodeId) {
+        // The artifact-explanation edge fires only when explanatory prose
+        // lives adjacent to the artifact — §7.1 describes it that way, and
+        // unconditionally adding the edge for every artifact inflates MRPC
+        // for artifact-heavy docs and erases the explained/unexplained
+        // distinction (Codex P2 on PR #83). The adjacency check itself is
+        // Phase D (via the section-level paragraph walker); until then,
+        // the artifact node is created (contributing to |N|) without an
+        // edge. Phase D will insert the edge when the nearby-prose table
+        // is populated.
         if let Some(section_id) = self.section_stack.last().copied() {
             let idx = section_id as usize;
             if idx < self.section_artifacts.len() {
                 self.section_artifacts[idx].push(node);
             }
-            // Artifact explanation edge: from section to artifact.
-            self.edges.push(Edge {
-                from: GraphNodeId {
-                    kind: NodeKind::Section,
-                    index: section_id,
-                },
-                to: node,
-                kind: EdgeKind::Artifact,
-            });
         }
     }
 

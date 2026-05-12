@@ -29,8 +29,8 @@ ecu_inputs:
   raw_html_or_mdx_lines: 0
 sections: []
 complexity:
-  reading_path_complexity: 1
-  reading_path_complexity_raw: 1
+  reading_path_complexity: 0
+  reading_path_complexity_raw: 0
   cognitive_complexity: 0
   halstead:
     operators_distinct: 0
