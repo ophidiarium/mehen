@@ -170,9 +170,9 @@ prose:
           count: 2
         - rule: rule-5-trailing-chouonpu
           severity: warn
-          count: 2
-      total_violations: 4
-      violation_density_per_1000: 6.838
+          count: 3
+      total_violations: 5
+      violation_density_per_1000: 8.547
     short_doc_warning: false
   meta:
     short_doc_warning: false

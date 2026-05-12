@@ -132,9 +132,12 @@ prose:
       long_sentence_count: 0
       wording_quality_score: 0.66
     style_conformance:
-      violations: []
-      total_violations: 0
-      violation_density_per_1000: 0
+      violations:
+        - rule: rule-5-trailing-chouonpu
+          severity: warn
+          count: 1
+      total_violations: 1
+      violation_density_per_1000: 3.65
     short_doc_warning: true
   meta:
     short_doc_warning: true

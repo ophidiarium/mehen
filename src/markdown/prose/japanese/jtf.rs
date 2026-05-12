@@ -163,8 +163,7 @@ fn keitai_jotai_mix_count(sents: &[String]) -> u64 {
 
 /// Counts katakana compounds ending on specific characters where JTF
 /// rule 5 prefers a trailing `ー`. Heuristic: a katakana run of length
-/// ≥ 3 ending in one of `[ラ・リ・ル・レ・ロ・ア・イ・ウ・エ・オ・ヤ・ユ・ヨ・ター]`
-/// without a trailing `ー` (excluding the already-terminated case).
+/// ≥ 3 ending in one of the stem-ending vowels without a trailing `ー`.
 ///
 /// This is intentionally conservative — false positives are preferred to
 /// false negatives because the output is advisory.
@@ -184,25 +183,18 @@ fn count_missing_chouonpu(text: &str) -> u64 {
             }
             let len = end - i;
             if len >= 3 {
-                // Check if run ends in certain chars without `ー`.
+                // JTF rule 5: the run's final character must be one of the
+                // stem-ending vowels AND must not already be a `ー`. We do
+                // NOT skip runs that contain an internal `ー` — e.g.
+                // `コンピュータ` (internal `ー`, missing trailing `ー`) is
+                // still a rule-5 violation. The only exception is when the
+                // final character is itself `ー`, which means the chōonpu
+                // is already present.
                 let last = chars[end - 1];
-                // `ター`, `バー`, etc. already end with `ー`; no violation.
                 if last != 'ー' {
-                    // Only flag when the last char is a common stem-ending
-                    // vowel. This matches the コンピュータ → コンピューター
-                    // rule without over-flagging genuine short names.
-                    //
-                    // To prevent double-counting with very short loanwords
-                    // (2 chars) we already filtered len >= 3 above.
-                    //
-                    // Skip words that already have a ー earlier in the run
-                    // (indicates intentional short form).
-                    let has_internal = chars[i..end].contains(&'ー');
-                    if !has_internal {
-                        let ends = ['タ', 'ラ', 'リ', 'ル', 'レ', 'ロ', 'サ', 'ザ', 'ダ', 'バ'];
-                        if ends.contains(&last) {
-                            count += 1;
-                        }
+                    let ends = ['タ', 'ラ', 'リ', 'ル', 'レ', 'ロ', 'サ', 'ザ', 'ダ', 'バ'];
+                    if ends.contains(&last) {
+                        count += 1;
                     }
                 }
             }
@@ -212,4 +204,39 @@ fn count_missing_chouonpu(text: &str) -> u64 {
         }
     }
     count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rule5_flags_internal_chouonpu_missing_trailing() {
+        // Codex P2 regression: `コンピュータ` contains an internal `ー` but
+        // is missing the trailing `ー` (JTF rule 5 prefers `コンピューター`).
+        // The previous `has_internal` gate skipped runs that contained any
+        // `ー`, so this canonical violation was never counted. After the fix
+        // the rule only looks at the final character — present `ー` ⇒ OK,
+        // missing trailing stem-vowel ⇒ violation.
+        assert_eq!(
+            count_missing_chouonpu("コンピュータ"),
+            1,
+            "コンピュータ has trailing タ without closing ー: must be a rule-5 violation"
+        );
+
+        // Negative control: `コンピューター` already has the trailing `ー`,
+        // so it must NOT be flagged.
+        assert_eq!(
+            count_missing_chouonpu("コンピューター"),
+            0,
+            "コンピューター already ends in ー: must not fire"
+        );
+    }
+
+    #[test]
+    fn rule5_ignores_runs_shorter_than_three() {
+        // Short runs (< 3 katakana chars) are outside the heuristic band —
+        // they're too ambiguous to flag safely.
+        assert_eq!(count_missing_chouonpu("タラ"), 0);
+    }
 }
