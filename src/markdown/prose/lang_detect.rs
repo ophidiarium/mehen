@@ -572,6 +572,27 @@ pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<D
         }
     }
 
+    // Pass 3: re-apply short-block inheritance now that pass 2 resolved
+    // kanji-only headings like `## 目的`. Without this pass, short body
+    // blocks right after such a heading stayed `Other` because pass 1 had
+    // no `last_heading_lang` yet (Codex P2 on PR #85).
+    let mut last_heading_lang: Option<Language> = None;
+    for b in out.iter_mut() {
+        if is_heading_kind(&b.kind) {
+            if !matches!(b.language, Language::None | Language::Other) {
+                last_heading_lang = Some(b.language);
+            }
+            continue;
+        }
+        let visible_len = b.text.chars().filter(|c| !c.is_whitespace()).count();
+        if visible_len < 15
+            && matches!(b.language, Language::Other)
+            && let Some(inh) = last_heading_lang
+        {
+            b.language = inh;
+        }
+    }
+
     out
 }
 
