@@ -113,5 +113,69 @@ complexity:
     effort: 3184.696824990331
     embedded_volume: 1.2392304845413264
     total_volume: 577.5177035780297
+links:
+  total: 2
+  internal: 0
+  relative: 1
+  external: 1
+  external_vendor: 1
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 1
+  footnote: 0
+  bare_url: 0
+  broken: 1
+  link_debt_score: 0.45
+  information_scent_score: 0.3
+  review_burden: 4.3
+visuals:
+  images: 1
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 1
+tables:
+  count: 1
+  max_cells: 6
+  table_burden_score: 0.025
+  table_scaffold_score: 1
+  hard_warnings: 0
 maintainability:
   documentation_maintainability_index: 100
+  section_balance_score: 0
+  good_scaffold_score: 0
+  artifact_debt_score: 0.04666666666666666
+artifacts:
+  - id: 0
+    kind: image
+    start_line: 18
+    end_line: 18
+    language_tag: ~
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 1
+    kind: table
+    start_line: 24
+    end_line: 27
+    language_tag: ~
+    size: 6
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 0.025
+  - id: 2
+    kind: code
+    start_line: 35
+    end_line: 38
+    language_tag: python
+    size: 2
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1

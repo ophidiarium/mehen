@@ -1,13 +1,15 @@
-//! Snapshot tests for the Phase-A + Phase-B Markdown pipeline.
+//! Snapshot tests for the Markdown pipeline (Phase A + Phase B + Phase C).
 //!
 //! Each fixture under `fixtures/` exercises a distinct aspect of the
 //! analyzer so regressions in any single dimension (LOC bucket, word count,
 //! section tree, ECU, MRPC graph weight, MCC penalty, Halstead class
-//! coverage, DMI normalization) surface as an isolated snapshot diff.
+//! coverage, DMI normalization, link class, table burden, diagram
+//! complexity, artifact debt) surface as an isolated snapshot diff.
 
 use std::path::PathBuf;
 
 use crate::markdown::analyze_markdown;
+use crate::markdown::diagrams;
 
 fn load_fixture(name: &str) -> (String, PathBuf) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -104,6 +106,55 @@ fn embedded_code_large_fixture() {
     // Exercises §9.4 embedded-volume dispatch across Rust / Python / TS;
     // unsupported fences (sql) must not contribute.
     assert_fixture_snapshot("embedded_code_large.md");
+}
+
+#[test]
+fn links_mixed_fixture() {
+    // Exercises every §11.1 link class: internal anchor (resolving + not),
+    // relative file (resolving + not), external (and bare URL), IssuePR,
+    // Scholarly, ExternalVendor, reference-definition, shortcut reference,
+    // and footnote. The aggregate link_debt / scent / review_burden pin
+    // the §11.2–§11.4 formulas.
+    assert_fixture_snapshot("links_mixed.md");
+}
+
+#[test]
+fn broken_links_fixture() {
+    // High broken-rate case: drives link_debt_score past the 0.10 sat
+    // threshold.
+    assert_fixture_snapshot("broken_links.md");
+}
+
+#[test]
+fn table_large_fixture() {
+    // Hard-warning table per §13: cols > 12 so the burden score dominates
+    // the aggregate.
+    assert_fixture_snapshot("table_large.md");
+}
+
+#[test]
+fn diagram_mermaid_fixture() {
+    // Codifies the §12.2 two-node cycle invariant.
+    assert_fixture_snapshot("diagram_mermaid.md");
+}
+
+#[test]
+fn diagram_parse_error_fixture() {
+    // Unknown language ("tikz") flips parse_error, adding the +2.0 term.
+    assert_fixture_snapshot("diagram_parse_error.md");
+}
+
+#[test]
+fn images_no_alt_fixture() {
+    // One image without alt-text + missing target vs. one with alt and a
+    // resolving target — pins the V_scaffold asymmetry.
+    assert_fixture_snapshot("images_no_alt.md");
+}
+
+#[test]
+fn artifact_debt_high_fixture() {
+    // Several unlabelled fences, a parse-error diagram, and raw HTML.
+    assert_fixture_snapshot("artifact_debt_high.md");
 }
 
 #[test]
@@ -275,4 +326,17 @@ fn unlabelled_code_fence_penalty_shows_up() {
         b.complexity.cognitive_complexity,
         a.complexity.cognitive_complexity
     );
+}
+
+/// Spec-pinned sanity check for the §12.2 cycle formula. Independent of the
+/// Markdown analyzer so regressions in the diagram parser surface before
+/// the insta snapshots start drifting.
+#[test]
+fn mermaid_two_node_cycle_matches_spec() {
+    let sig = diagrams::mermaid::parse("graph TD\n  A --> B\n  B --> A\n");
+    assert_eq!(sig.nodes, 2);
+    assert_eq!(sig.edges, 2);
+    assert_eq!(sig.components, 1);
+    assert_eq!(sig.cycles, 1);
+    assert!(!sig.parse_error);
 }
