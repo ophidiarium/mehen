@@ -279,7 +279,10 @@ impl<'a> Walker<'a> {
 
         // Code fences.
         if matches!(kind, FencedCodeBlock | IndentedCodeBlock) {
-            let loc = node_line_span(node);
+            // LOC counts fence content only — fence markers would inflate
+            // the size-based weighting by ~2 lines near the §8.1 `<=12`
+            // cutoff (Codex P2).
+            let loc = fence_content_line_count(node);
             let info = fence_info(node, self.source);
             let is_diagram = matches!(
                 info.as_deref(),
@@ -725,6 +728,29 @@ fn node_line_span(node: &Node<'_>) -> usize {
         end -= 1;
     }
     end.saturating_sub(start) + 1
+}
+
+/// Content-only line count inside a fenced code block. Indented code blocks
+/// have no delimiters so their content equals their span.
+fn fence_content_line_count(node: &Node<'_>) -> usize {
+    let kind: Markdown = node.kind_id().into();
+    if matches!(kind, Markdown::IndentedCodeBlock) {
+        return node_line_span(node);
+    }
+    let mut cursor = node.cursor();
+    if !cursor.goto_first_child() {
+        return 0;
+    }
+    loop {
+        let child = cursor.node();
+        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
+            return node_line_span(&child);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    0
 }
 
 fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {

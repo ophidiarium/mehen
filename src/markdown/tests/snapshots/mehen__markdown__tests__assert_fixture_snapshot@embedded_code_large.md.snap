@@ -80,7 +80,7 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 4
-  cognitive_complexity: 6.63
+  cognitive_complexity: 6.144
   halstead:
     operators_distinct: 10
     operators_total: 22

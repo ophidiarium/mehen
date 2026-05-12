@@ -21,7 +21,6 @@ use crate::languages::Markdown;
 use crate::node::Node;
 
 /// Per-edge weights from §7.3.
-#[allow(dead_code)]
 mod weights {
     pub(super) const HIERARCHY: f64 = 0.15;
     pub(super) const SEQUENTIAL: f64 = 0.20;
@@ -31,6 +30,7 @@ mod weights {
     pub(super) const EXTERNAL: f64 = 1.00;
     // TODO(Phase C): link validator bumps broken links from EXTERNAL (1.00) /
     // INTERNAL (0.50) to BROKEN (1.20).
+    #[allow(dead_code)]
     pub(super) const _BROKEN: f64 = 1.20;
     pub(super) const ARTIFACT: f64 = 0.40;
 }
@@ -133,6 +133,10 @@ struct GraphBuilder {
     /// Current section stack by level (index = depth - 1). The top of the
     /// stack is the current enclosing section for artifacts and links.
     section_stack: Vec<u32>,
+    /// Slug (GFM style) → section id, built as sections are opened so
+    /// internal anchors can resolve to an existing section node instead
+    /// of fabricating one per unique anchor (Codex P1 on PR #83).
+    section_slugs: BTreeMap<String, u32>,
 }
 
 struct SectionInfo {
@@ -172,13 +176,22 @@ impl GraphBuilder {
                         kind: EdgeKind::Hierarchy,
                     });
                 }
+                // Record the section's heading slug so `#anchor` links
+                // can resolve to an existing section node instead of
+                // creating a synthetic LinkedDoc node per anchor.
+                if let Some(slug) = extract_heading_slug(node, source) {
+                    self.section_slugs.entry(slug).or_insert(id);
+                }
                 self.section_stack.push(id);
                 self.recurse_children(node, source);
                 self.section_stack.pop();
                 return;
             }
             FencedCodeBlock | IndentedCodeBlock => {
-                let loc = node_line_span(node);
+                // LOC counts content only, never the fence markers —
+                // otherwise a 10-line fence reads as 12 LOC and the
+                // threshold tips prematurely (Codex P2).
+                let loc = fence_content_line_count(node);
                 let info = fence_info(node, source);
                 let is_diagram = matches!(
                     info.as_deref(),
@@ -346,25 +359,31 @@ impl GraphBuilder {
         let class = classify_link(dest);
         match class {
             LinkClass::InternalAnchor => {
-                // Internal anchors target another section in the same
-                // document. Phase C will resolve the anchor to a concrete
-                // section; for now model it as an edge to the current
-                // section (self-loop) or the document root (section 0 if
-                // any). We prefer a distinct dedicated sink so it still
-                // contributes to the edge budget without fabricating a
-                // target.
-                // Use a per-anchor synthetic "linked-doc" node keyed on the
-                // anchor text. This keeps the graph deterministic.
-                let next = self.linked_docs.len() as u32;
-                let id = *self.linked_docs.entry(dest.to_string()).or_insert(next);
-                self.edges.push(Edge {
-                    from,
-                    to: GraphNodeId {
-                        kind: NodeKind::LinkedDoc,
-                        index: id,
-                    },
-                    kind: EdgeKind::InternalAnchor,
-                });
+                // Internal anchors target another section of the *same*
+                // document. §7.1 nodes already include every section, so
+                // anchor resolution should land on one of those — not
+                // fabricate a new node. Phase C will build the authoritative
+                // heading-slug → section map; until then, match on GFM slug
+                // built from the source text of each known heading.
+                //
+                // If the anchor fails to match any heading, route the edge
+                // to section 0 (the enclosing document) so it still
+                // contributes to the edge budget and the graph's connected
+                // component count stays stable. Fabricating a per-anchor
+                // `LinkedDoc` node would inflate |N| and depress MRPC on
+                // TOC-heavy documents (Codex P1).
+                let target_section = resolve_anchor_to_section(dest, &self.section_slugs)
+                    .or_else(|| (!self.sections.is_empty()).then_some(0usize));
+                if let Some(sid) = target_section {
+                    self.edges.push(Edge {
+                        from,
+                        to: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: sid as u32,
+                        },
+                        kind: EdgeKind::InternalAnchor,
+                    });
+                }
             }
             LinkClass::Relative => {
                 let key = normalize_relative_path(dest);
@@ -635,6 +654,120 @@ fn node_line_span(node: &Node<'_>) -> usize {
     end.saturating_sub(start) + 1
 }
 
+/// Line count of just the content inside a `fenced_code_block` — excludes
+/// the opening/closing fence markers. For `indented_code_block` the whole
+/// node IS content, so we fall back to `node_line_span`.
+fn fence_content_line_count(node: &Node<'_>) -> usize {
+    let kind: Markdown = node.kind_id().into();
+    if matches!(kind, Markdown::IndentedCodeBlock) {
+        return node_line_span(node);
+    }
+    let mut cursor = node.cursor();
+    if !cursor.goto_first_child() {
+        return 0;
+    }
+    loop {
+        let child = cursor.node();
+        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
+            return node_line_span(&child);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    0
+}
+
+/// GFM slug builder: lowercases the source text of a heading, strips
+/// punctuation except `-` and whitespace, collapses whitespace runs to `-`.
+/// Returns `None` when the section has no heading (shouldn't happen in
+/// well-formed grammars but we guard anyway).
+fn extract_heading_slug(section: &Node<'_>, source: &str) -> Option<String> {
+    let heading_node = find_heading_text_node(section)?;
+    let start = heading_node.start_byte();
+    let end = heading_node.end_byte();
+    let text = source.get(start..end)?.trim();
+    Some(gfm_slug(text))
+}
+
+fn find_heading_text_node<'a>(section: &Node<'a>) -> Option<Node<'a>> {
+    use Markdown::*;
+    let mut cursor = section.cursor();
+    if !cursor.goto_first_child() {
+        return None;
+    }
+    loop {
+        let child = cursor.node();
+        let kind: Markdown = child.kind_id().into();
+        if matches!(
+            kind,
+            AtxHeading
+                | AtxHeading2
+                | AtxHeading3
+                | AtxHeading4
+                | AtxHeading5
+                | AtxHeading6
+                | SetextHeading
+                | SetextHeading2
+        ) {
+            // The visible text lives in the `Inline` child; fall back to
+            // the heading node itself if the grammar surface changes.
+            let mut inner = child.cursor();
+            if inner.goto_first_child() {
+                loop {
+                    let n = inner.node();
+                    if matches!(n.kind_id().into(), Markdown::Inline) {
+                        return Some(n);
+                    }
+                    if !inner.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+            return Some(child);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    None
+}
+
+/// Compute a GFM-style anchor slug. This intentionally mirrors GitHub's
+/// anchor generation: lowercase, drop punctuation (except `-`/`_`),
+/// collapse whitespace to `-`, strip leading/trailing dashes.
+fn gfm_slug(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last_dash = false;
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if (ch.is_whitespace() || ch == '-' || ch == '_') && !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
+        }
+        // drop everything else
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
+}
+
+/// Resolve `#anchor` to an existing section id. Leading `#` is stripped,
+/// and the remainder is slugified the same way section headings were,
+/// so the two forms compare equal even with upper-case or punctuated
+/// source text.
+fn resolve_anchor_to_section(dest: &str, section_slugs: &BTreeMap<String, u32>) -> Option<usize> {
+    let stripped = dest.strip_prefix('#')?;
+    let slug = gfm_slug(stripped);
+    if slug.is_empty() {
+        return None;
+    }
+    section_slugs.get(&slug).copied().map(|x| x as usize)
+}
+
 fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
     let mut cursor = node.cursor();
     if !cursor.goto_first_child() {
@@ -821,6 +954,73 @@ mod tests {
         let r = compute_mrpc(&root, src);
         // One section, no edges → weighted = max(1, 0 - 1 + 2*1) = 1.0.
         assert_eq!(r.weighted, 1.0);
+    }
+
+    #[test]
+    fn internal_anchor_resolves_to_existing_section() {
+        // Codex P1 on PR #83: `#anchor` links must resolve to an existing
+        // section node rather than fabricate a new LinkedDoc node per
+        // unique anchor. TOC-heavy documents used to bleed MRPC because
+        // every anchor added one node and one edge.
+        let src = "# Intro\n\n- [Install](#install)\n- [Usage](#usage)\n\n\
+                   # Install\n\nInstall prose.\n\n# Usage\n\nUsage prose.\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let r = compute_mrpc(&root, src);
+        // 3 sections, 2 sequential edges (Intro→Install, Install→Usage),
+        // 2 internal-anchor edges (Intro→Install, Intro→Usage). No extra
+        // LinkedDoc nodes → node count stays at 3.
+        // Weighted: 2*0.20 (sequential) + 2*0.50 (internal) = 1.40.
+        // MRPC = max(1, 1.40 - 3 + 2*1) = max(1, 0.40) = 1.0.
+        assert_eq!(r.weighted, 1.0);
+        // Raw: 4 edges - 3 nodes + 2*1 = 3.
+        assert_eq!(r.raw, 3.0);
+    }
+
+    #[test]
+    fn fence_content_line_count_excludes_delimiters() {
+        // Codex P2 on PR #83: LOC for a fenced code block must count
+        // content only. A fence with exactly 10 content lines used to
+        // report 12 LOC (opening + closing + 10) and trip the ≥12 LARGE
+        // threshold.
+        let src = "# Demo\n\n```text\n\
+                   a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n\
+                   ```\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        // Find the fenced_code_block and assert its content line count.
+        fn find<'a>(n: &crate::node::Node<'a>) -> Option<crate::node::Node<'a>> {
+            use Markdown::*;
+            let kind: Markdown = n.kind_id().into();
+            if matches!(kind, FencedCodeBlock) {
+                return Some(*n);
+            }
+            let mut cursor = n.cursor();
+            if !cursor.goto_first_child() {
+                return None;
+            }
+            loop {
+                let child = cursor.node();
+                if let Some(found) = find(&child) {
+                    return Some(found);
+                }
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+            None
+        }
+        let fence = find(&crate::node::Node(tree.root_node())).expect("fenced block");
+        assert_eq!(fence_content_line_count(&fence), 10);
+    }
+
+    #[test]
+    fn gfm_slug_matches_github_style() {
+        assert_eq!(gfm_slug("Hello World!"), "hello-world");
+        assert_eq!(gfm_slug("Install & Use"), "install-use");
+        assert_eq!(gfm_slug("§3.4 Section"), "34-section");
+        assert_eq!(gfm_slug("   "), "");
+        assert_eq!(gfm_slug("__underscore__"), "underscore");
     }
 
     #[test]

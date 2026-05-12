@@ -83,7 +83,7 @@ fn ln_1p(x: f64) -> f64 {
     if x <= 0.0 {
         return 0.0;
     }
-    (1.0 + x).ln()
+    x.ln_1p()
 }
 
 #[cfg(test)]

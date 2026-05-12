@@ -69,7 +69,7 @@ sections:
     block_count: 2
 complexity:
   reading_path_complexity: 1
-  reading_path_complexity_raw: 3
+  reading_path_complexity_raw: 5
   cognitive_complexity: 8.799999999999999
   halstead:
     operators_distinct: 8

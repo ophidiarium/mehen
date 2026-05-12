@@ -168,7 +168,7 @@ fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {
             let bytes = source.as_bytes();
             let start = child.start_byte();
             let end = child.end_byte();
-            if end <= bytes.len() && start <= end {
+            if end <= bytes.len() && start < end {
                 return std::str::from_utf8(&bytes[start..end])
                     .ok()
                     .map(str::to_string);

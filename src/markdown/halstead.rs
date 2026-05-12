@@ -96,8 +96,6 @@ pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
     let volume = length as f64 * vocab_f.log2();
     let difficulty = if n2 > 0 {
         (n1 as f64 / 2.0) * (big_n2 as f64 / n2 as f64)
-    } else if big_n2 > 0 {
-        (n1 as f64 / 2.0) * (big_n2 as f64 / 1.0)
     } else {
         0.0
     };
