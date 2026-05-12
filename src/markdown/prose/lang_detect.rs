@@ -143,23 +143,16 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
         if end_col == 0 && end_line > start_line {
             end_line -= 1;
         }
-        let text = extract_prose_text(node, source);
-        if !text.trim().is_empty() {
-            blocks.push(ProseBlock {
-                kind: kind.clone(),
-                start_line,
-                end_line,
-                text,
-                _raw: source,
-            });
-        }
-        // Recurse only into containers (blockquote, callout) — paragraphs /
-        // headings never nest further prose blocks. For blockquote / callout,
-        // nested paragraphs still get their own entry.
-        if matches!(
+        let is_container = matches!(
             kind,
             Markdown::BlockQuote | Markdown::PlainBlockQuote | Markdown::Callout
-        ) {
+        );
+
+        if is_container {
+            // Containers (blockquote / callout) don't emit their own slice:
+            // recurse into children so nested paragraphs are counted exactly
+            // once. Emitting both the container text AND descending into
+            // children would double-count every word / sentence inside.
             let mut cursor = node.cursor();
             if cursor.goto_first_child() {
                 loop {
@@ -169,6 +162,21 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
                     }
                 }
             }
+            return;
+        }
+
+        // Leaf prose block (paragraph / heading): emit its own slice and
+        // don't recurse further — paragraphs / headings never nest more
+        // prose blocks.
+        let text = extract_prose_text(node, source);
+        if !text.trim().is_empty() {
+            blocks.push(ProseBlock {
+                kind: kind.clone(),
+                start_line,
+                end_line,
+                text,
+                _raw: source,
+            });
         }
         return;
     }
@@ -624,5 +632,71 @@ mod tests {
         // Mixed, but kana ≥ 15 % → ja.
         let t = "設定 config file を open して編集します";
         assert_eq!(classify_text(t), Language::Ja);
+    }
+
+    fn parse_blocks(src: &str) -> Vec<ProseBlock<'static>> {
+        use tree_sitter::Parser as TsParser;
+        // Leak the buffer so we can return borrowed `ProseBlock` values with
+        // a 'static lifetime for this test-only helper.
+        let bytes: &'static [u8] = Box::leak(src.as_bytes().to_vec().into_boxed_slice());
+        let mut parser = TsParser::new();
+        parser
+            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(bytes, None).unwrap();
+        let root = crate::node::Node(tree.root_node());
+        // SAFETY: the source buffer `bytes` outlives the returned Vec; tree
+        // goes out of scope at function end but the collected blocks own
+        // their extracted text and only borrow `_raw` which points at the
+        // leaked buffer.
+        let blocks: Vec<ProseBlock<'static>> =
+            collect_prose_blocks(&root, bytes).into_iter().collect();
+        std::mem::forget(tree);
+        blocks
+    }
+
+    #[test]
+    fn blockquote_with_paragraph_emits_one_block() {
+        // Codex P1 regression: a blockquote containing a single paragraph
+        // used to emit TWO prose blocks — once for the container's full
+        // slice and again for the nested paragraph — which caused every
+        // word and sentence inside quoted material to be counted twice.
+        //
+        // Fix: containers (blockquote / callout) recurse into children and
+        // do NOT emit their own slice. Only the nested paragraph surfaces
+        // as a prose block.
+        let src = "> A quoted paragraph with exactly nine common English words.\n";
+        let blocks = parse_blocks(src);
+        let paragraph_blocks: Vec<_> = blocks
+            .iter()
+            .filter(|b| matches!(b.kind, Markdown::Paragraph))
+            .collect();
+        let container_blocks: Vec<_> = blocks
+            .iter()
+            .filter(|b| {
+                matches!(
+                    b.kind,
+                    Markdown::BlockQuote | Markdown::PlainBlockQuote | Markdown::Callout
+                )
+            })
+            .collect();
+        assert_eq!(
+            paragraph_blocks.len(),
+            1,
+            "expected exactly one paragraph block inside the blockquote, got {}: {:?}",
+            paragraph_blocks.len(),
+            blocks
+                .iter()
+                .map(|b| (b.kind.clone(), b.text.clone()))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            container_blocks.is_empty(),
+            "container blocks (blockquote/callout) must not emit their own slice, got: {:?}",
+            container_blocks
+                .iter()
+                .map(|b| (b.kind.clone(), b.text.clone()))
+                .collect::<Vec<_>>()
+        );
     }
 }
