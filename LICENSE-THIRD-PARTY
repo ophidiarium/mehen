@@ -1,0 +1,139 @@
+# Third-Party Data and License Notices
+
+Mehen bundles several small data files derived from third-party sources.
+This file documents the origin, license, and attribution for each. The
+mehen Rust crate itself is released under MPL-2.0 (see `LICENSE`); the
+bundled data lives under `src/markdown/data/` and follows the licenses
+below.
+
+## NGSL 1.2 (New General Service List)
+
+- File: `src/markdown/data/ngsl_1_2.txt`
+- Origin: Browne, C., Culligan, B., & Phillips, J. (2013). The New
+  General Service List. http://www.newgeneralservicelist.com/
+- License: Creative Commons Attribution-ShareAlike 4.0 International
+  (CC BY-SA 4.0). https://creativecommons.org/licenses/by-sa/4.0/
+- Attribution: "The New General Service List by Charles Browne, Brent
+  Culligan, and Joseph Phillips is licensed under CC BY-SA 4.0."
+- Use: Powers the Dale-Chall-style "familiar word" lookup for §31.7.
+  Mehen does NOT bundle the Dale-Chall 3000-word list because that list
+  is copyrighted (Chall and Dale heirs).
+
+## NLTK English Stopword List
+
+- File: `src/markdown/data/nltk_stopwords_en.txt`
+- Origin: Natural Language Toolkit corpus package, `stopwords.english`.
+  https://github.com/nltk/nltk_data
+- License: The NLTK code is Apache 2.0; individual corpora distributed
+  with NLTK have varying licenses. The English stopword list
+  (nltk_data/corpora/stopwords/english) is a public-domain list of 175
+  common English function words.
+- Use: Backs the `lexical_density ≈ 1 − stopwords/tokens` estimator
+  (§32.1).
+
+## write-good passive-voice irregular past participles
+
+- File: `src/markdown/data/passive_irregulars.txt`
+- Origin: write-good 1.0.8 — `lib/passive.js`.
+  https://github.com/btford/write-good
+- License: MIT — Copyright (c) 2014 Brett Foster.
+- Use: Disambiguates passive-voice matches in §33.1. Combined with the
+  UAX #29 tokenizer this is the core passive-voice detector.
+
+## words/hedges hedge-word list
+
+- File: `src/markdown/data/hedges.txt`
+- Origin: https://github.com/words/hedges
+- License: MIT — Copyright (c) Titus Wormer.
+- Use: §33.2 hedge-density computation.
+
+## write-good weasel-word list
+
+- File: `src/markdown/data/weasels.txt`
+- Origin: write-good `lib/weasel.js` — same source as above.
+- License: MIT — Copyright (c) 2014 Brett Foster.
+- Use: §33.3 weasel-density computation.
+
+## retext-simplify wordy-phrase list
+
+- File: `src/markdown/data/wordy_phrases.txt`
+- Origin: https://github.com/retextjs/retext-simplify
+- License: MIT — Copyright (c) Titus Wormer.
+- Use: §33.4 wordy-density computation. Only the phrase list is bundled;
+  the suggested replacements are not currently exposed in the output.
+
+## words/no-cliches cliché list (subset)
+
+- File: `src/markdown/data/cliches.txt`
+- Origin: https://github.com/words/no-cliches
+- License: MIT — Copyright (c) Titus Wormer.
+- Use: §33.9 cliche-density computation. The bundled file is a
+  representative subset of the upstream ~700-entry list; the exact
+  subset is documented in the file's header comment.
+
+## proselint nonword list (subset)
+
+- File: `src/markdown/data/nonwords.txt`
+- Origin: proselint (https://github.com/amperser/proselint) —
+  checks/misc/illogic.
+- License: BSD 3-Clause — Copyright (c) 2015-2023 Amperser Labs.
+- Use: §33.9 `nonword_count` flag.
+
+## alex / retext-equality inclusive-language flags
+
+- File: `src/markdown/data/inclusive_flags.txt`
+- Origin: Derived from alex / retext-equality
+  (https://github.com/retextjs/retext-equality) and the Inclusive Naming
+  Initiative mappings (https://inclusivenaming.org/).
+- License: MIT — Copyright (c) Titus Wormer (for retext-equality); the
+  Inclusive Naming Initiative publishes its mappings under Apache-2.0.
+- Use: §33.12 Inclusive-language scoring.
+
+## Jōyō kanji list
+
+- File: `src/markdown/data/jouyou_kanji.txt`
+- Origin: Japanese Ministry of Education (文部科学省) "Jōyō Kanji
+  Table" (2010 revision). Published at
+  https://www.mext.go.jp/a_menu/shotou/new-cs/youryou/syo/kokugo/001.htm
+- License: Public domain (Japanese government policy document,
+  distributed under Japan's government-works rule).
+- Use: §35.2 Jōyō grade proxy and §36.5 JTF rule 3 (hyōgai detection).
+  The bundled file assigns grades 1–6 (Kyōiku grades) and grade 7
+  (secondary Jōyō) to individual kanji.
+
+## textlint-rule-preset-ja-technical-writing — weak-phrase and
+   redundant-expression lists
+
+- Files: `src/markdown/data/ja_weak_phrases.txt`,
+  `src/markdown/data/ja_redundant.txt`
+- Origin: https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing
+- License: MIT — Copyright (c) textlint-ja contributors.
+- Use: §36.6 `ja-no-weak-phrase` and `ja-no-redundant-expression` rules.
+
+## English abbreviation list
+
+- File: `src/markdown/data/abbreviations_en.txt`
+- Origin: Synthesized from write-good (MIT), proselint (BSD-3-Clause),
+  retext-smartypants (MIT), and standard journalism style guides.
+- License: Each source permits redistribution under MIT or BSD-3-Clause;
+  the synthesized list is released under MIT here for consistency.
+- Use: §31.12 abbreviation-aware sentence segmentation.
+
+---
+
+## Tier 1/2 (feature-gated) dictionaries — NOT bundled in this phase
+
+The following resources are **not** bundled in the Tier-0 default build
+but may be enabled via Cargo features in future phases. The list is kept
+here for advance license planning.
+
+- CMU Pronouncing Dictionary (Tier 1a, `syllables-cmu`). Public domain.
+- JLPT N5–N1 word and kanji lists (Tier 1c, `japanese-jlpt`). No official
+  release from JEES/JF; community-maintained lists under various
+  licenses. Mehen would bundle J-LEX-derived lists with attribution.
+- IPADIC via Lindera (Tier 2a, `japanese-morph`). IPA/IPAdic license;
+  Lindera's NOTICE file propagation is required.
+- UniDic via Vibrato (Tier 2b, `japanese-unidic`). BSD-like with NINJAL
+  credit; external dictionary, not bundled in-binary.
+- Lingua language-detection models (Tier 1d, `lingua`). Apache-2.0. Full
+  model multi-megabyte.

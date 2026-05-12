@@ -28,3 +28,14 @@ ecu_inputs:
   math_tokens: 0
   raw_html_or_mdx_lines: 0
 sections: []
+prose:
+  language_detection:
+    dominant_language: other
+    blocks: []
+  english: ~
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 0
+    sentences_counted: 0
+    blocks_stripped: []

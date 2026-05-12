@@ -57,3 +57,78 @@ sections:
     child_section_ids: []
     word_count: 8
     block_count: 1
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 3
+        language: en
+      - start_line: 5
+        end_line: 5
+        language: en
+      - start_line: 7
+        end_line: 7
+        language: en
+      - start_line: 9
+        end_line: 9
+        language: en
+      - start_line: 11
+        end_line: 11
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.71
+      hapax_ratio: 0.727
+      dis_ratio: 0.182
+      lexical_density: 0.677
+      avg_sentence_words: 5.167
+      p90_sentence_words: 11
+      max_sentence_words: 11
+      stddev_sentence_words: 3.337
+      avg_word_chars: 4.806
+      p90_word_chars: 9
+      sentence_count: 6
+      words_total: 31
+    wording:
+      passive_ratio: 0
+      hedge_density: 0
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0.032
+      nominalization_density: 0
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 0.969
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 31
+    sentences_counted: 6
+    blocks_stripped: []

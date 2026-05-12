@@ -1,0 +1,628 @@
+//! Block-level language detection (§30).
+//!
+//! Tier 0 uses a zero-dependency Unicode-script block-ratio heuristic:
+//!
+//! ```text
+//! kana = hiragana + katakana
+//! cjk  = kana + han
+//! latin = ascii_letter + fullwidth_latin_letter
+//! total = non_whitespace_non_punct
+//!
+//! if kana / total >= 0.15                          -> ja
+//! elif cjk / total >= 0.40 and kana == 0           -> other (Chinese)
+//! elif latin / total >= 0.80                       -> en
+//! else                                             -> other
+//! ```
+//!
+//! Short blocks (< 15 visible chars) that classify as `Other` inherit the
+//! enclosing heading's language — a stable deterministic fallback that keeps
+//! short list items from fragmenting a document's classification.
+//!
+//! Code fences, link destinations, front-matter, HTML, MDX, math and tables
+//! are tagged [`Language::None`] and excluded from prose analysis entirely.
+
+use serde::Serialize;
+use unicode_script::{Script, UnicodeScript};
+
+use crate::languages::Markdown;
+use crate::node::Node;
+
+/// Per-block language tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Language {
+    /// English (or other Latin-script prose).
+    En,
+    /// Japanese (any hiragana/katakana presence above threshold).
+    Ja,
+    /// Non-EN, non-JA — e.g. Chinese, Korean, Thai, Arabic, etc.
+    Other,
+    /// Mixed — aggregated at document level when both en and ja appear.
+    Mixed,
+    /// Not prose: code, front-matter, HTML, table, math, image target.
+    None,
+}
+
+impl Language {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Language::En => "en",
+            Language::Ja => "ja",
+            Language::Other => "other",
+            Language::Mixed => "mixed",
+            Language::None => "none",
+        }
+    }
+}
+
+/// One prose-eligible block extracted from the tree.
+#[derive(Debug, Clone)]
+pub(crate) struct ProseBlock<'a> {
+    pub(crate) kind: Markdown,
+    pub(crate) start_line: u64,
+    pub(crate) end_line: u64,
+    /// Stripped prose text: inline code / URLs / alt-text destination already
+    /// removed so script ratios aren't polluted by literal tokens.
+    pub(crate) text: String,
+    pub(crate) _raw: &'a [u8],
+}
+
+/// Like [`ProseBlock`] but carries a resolved language tag for downstream
+/// metric dispatch.
+#[derive(Debug, Clone)]
+pub(crate) struct DetectedBlock {
+    pub(crate) kind: Markdown,
+    pub(crate) start_line: u64,
+    pub(crate) end_line: u64,
+    pub(crate) text: String,
+    pub(crate) language: Language,
+}
+
+/// Walks the parse tree and collects every prose-eligible block in document
+/// order.
+pub(crate) fn collect_prose_blocks<'a>(root: &Node<'_>, source: &'a [u8]) -> Vec<ProseBlock<'a>> {
+    let mut blocks = Vec::new();
+    walk(root, source, &mut blocks);
+    blocks
+}
+
+fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>) {
+    let kind: Markdown = node.kind_id().into();
+
+    // Prose-carrying blocks we record. For list items we recurse so that
+    // nested paragraphs / blockquotes / callouts are recorded individually
+    // — matching §30.3's per-block tagging requirement.
+    let is_prose_block = matches!(
+        kind,
+        Markdown::Paragraph
+            | Markdown::AtxHeading
+            | Markdown::AtxHeading2
+            | Markdown::AtxHeading3
+            | Markdown::AtxHeading4
+            | Markdown::AtxHeading5
+            | Markdown::AtxHeading6
+            | Markdown::SetextHeading
+            | Markdown::SetextHeading2
+            | Markdown::BlockQuote
+            | Markdown::PlainBlockQuote
+            | Markdown::Callout
+    );
+
+    // Stop containers: never descend, never emit.
+    let is_stop = matches!(
+        kind,
+        Markdown::FencedCodeBlock
+            | Markdown::IndentedCodeBlock
+            | Markdown::HtmlBlock
+            | Markdown::HtmlBlock1
+            | Markdown::HtmlBlock3
+            | Markdown::HtmlBlock4
+            | Markdown::HtmlBlock5
+            | Markdown::HtmlBlock6
+            | Markdown::HtmlBlock7
+            | Markdown::HtmlCommentBlock
+            | Markdown::MdxJsxBlock
+            | Markdown::MinusMetadata
+            | Markdown::PlusMetadata
+            | Markdown::MathBlock
+            | Markdown::PipeTable
+            | Markdown::LinkReferenceDefinition
+            | Markdown::ThematicBreak
+            | Markdown::ThematicBreak2
+            | Markdown::DirectiveBlock
+            | Markdown::ImageBlock
+    );
+
+    if is_stop {
+        return;
+    }
+
+    if is_prose_block {
+        let start_line = (node.start_row() as u64) + 1;
+        let (end_row, end_col) = node.end_position();
+        let mut end_line = (end_row as u64) + 1;
+        if end_col == 0 && end_line > start_line {
+            end_line -= 1;
+        }
+        let text = extract_prose_text(node, source);
+        if !text.trim().is_empty() {
+            blocks.push(ProseBlock {
+                kind: kind.clone(),
+                start_line,
+                end_line,
+                text,
+                _raw: source,
+            });
+        }
+        // Recurse only into containers (blockquote, callout) — paragraphs /
+        // headings never nest further prose blocks. For blockquote / callout,
+        // nested paragraphs still get their own entry.
+        if matches!(
+            kind,
+            Markdown::BlockQuote | Markdown::PlainBlockQuote | Markdown::Callout
+        ) {
+            let mut cursor = node.cursor();
+            if cursor.goto_first_child() {
+                loop {
+                    walk(&cursor.node(), source, blocks);
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // Recurse into everything else (sections, lists, list items, documents).
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            walk(&cursor.node(), source, blocks);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+}
+
+/// Produces the clean prose text for a prose-block node.
+///
+/// Strategy: take the block's full byte slice from the source, then excise
+/// every descendant sub-range that belongs to a skip class (inline code,
+/// URLs, HTML inline, MDX inline, math inline, autolinks, front-matter,
+/// pipe-table delimiters, heading markers). Excised ranges are replaced
+/// with a single space so adjacent tokens never fuse.
+///
+/// This byte-slice approach preserves the original whitespace between
+/// tokens, which is critical for sentence- and word-segmentation.
+pub(crate) fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
+    let block_start = node.start_byte();
+    let block_end = node.end_byte();
+    if block_end <= block_start || block_end > source.len() {
+        return String::new();
+    }
+
+    // Collect skip ranges relative to the source buffer.
+    let mut skip_ranges: Vec<(usize, usize)> = Vec::new();
+    collect_skip_ranges(node, &mut skip_ranges);
+
+    // Sort + merge overlapping skip ranges so we can linearly excise them.
+    skip_ranges.sort_by_key(|r| r.0);
+    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(skip_ranges.len());
+    for (s, e) in skip_ranges {
+        if let Some(last) = merged.last_mut()
+            && s <= last.1
+        {
+            last.1 = last.1.max(e);
+        } else {
+            merged.push((s, e));
+        }
+    }
+
+    let mut out = String::new();
+    let mut cursor = block_start;
+    for (s, e) in merged {
+        let s = s.max(block_start).min(block_end);
+        let e = e.max(block_start).min(block_end);
+        if cursor < s
+            && let Ok(slice) = std::str::from_utf8(&source[cursor..s])
+        {
+            out.push_str(slice);
+        }
+        out.push(' ');
+        cursor = e.max(cursor);
+    }
+    if cursor < block_end
+        && let Ok(slice) = std::str::from_utf8(&source[cursor..block_end])
+    {
+        out.push_str(slice);
+    }
+
+    normalize_whitespace(&out)
+}
+
+/// Walks the subtree at `node` and appends (start_byte, end_byte) ranges for
+/// every descendant whose kind should be stripped from prose.
+fn collect_skip_ranges(node: &Node<'_>, out: &mut Vec<(usize, usize)>) {
+    let kind: Markdown = node.kind_id().into();
+    if is_skip_kind(&kind) {
+        out.push((node.start_byte(), node.end_byte()));
+        return;
+    }
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            collect_skip_ranges(&cursor.node(), out);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+}
+
+fn is_skip_kind(kind: &Markdown) -> bool {
+    matches!(
+        kind,
+        Markdown::InlineCode
+            | Markdown::CodeFenceContent
+            | Markdown::InlineCodeContent
+            | Markdown::InlineCodeContent2
+            | Markdown::MathInline
+            | Markdown::MathInlineContent
+            | Markdown::MathBlock
+            | Markdown::MathBlockContent
+            | Markdown::HtmlInline
+            | Markdown::HtmlBlock
+            | Markdown::HtmlBlock1
+            | Markdown::HtmlBlock3
+            | Markdown::HtmlBlock4
+            | Markdown::HtmlBlock5
+            | Markdown::HtmlBlock6
+            | Markdown::HtmlBlock7
+            | Markdown::HtmlCommentBlock
+            | Markdown::HtmlOpenTag
+            | Markdown::HtmlCloseTag
+            | Markdown::HtmlComment
+            | Markdown::HtmlCdata
+            | Markdown::HtmlDeclaration
+            | Markdown::HtmlProcessingInstruction
+            | Markdown::MdxJsxBlock
+            | Markdown::MdxJsxInline
+            | Markdown::MdxJsxOpenTag
+            | Markdown::MdxJsxOpenTag2
+            | Markdown::MdxJsxCloseTag
+            | Markdown::MdxJsxCloseTag2
+            | Markdown::MdxJsxExpression
+            | Markdown::Autolink
+            | Markdown::Uri
+            | Markdown::Email
+            | Markdown::LinkDestination
+            | Markdown::LinkDestinationParenthesis
+            | Markdown::LinkTitle
+            | Markdown::MinusMetadata
+            | Markdown::PlusMetadata
+            | Markdown::PipeTableDelimiterRow
+            | Markdown::PipeTableDelimiterCell
+            | Markdown::AtxH1Marker
+            | Markdown::AtxH2Marker
+            | Markdown::AtxH3Marker
+            | Markdown::AtxH4Marker
+            | Markdown::AtxH5Marker
+            | Markdown::AtxH6Marker
+            | Markdown::SetextH1Underline
+            | Markdown::SetextH2Underline
+            | Markdown::BlockQuoteMarker
+            | Markdown::CalloutMarkerOpen
+            | Markdown::CalloutMarkerClose
+            | Markdown::CalloutType
+            | Markdown::ListMarkerMinus
+            | Markdown::ListMarkerPlus
+            | Markdown::ListMarkerStar
+            | Markdown::ListMarkerDot
+            | Markdown::ListMarkerParenthesis
+            | Markdown::ListMarkerMinus2
+            | Markdown::ListMarkerPlus2
+            | Markdown::ListMarkerStar2
+            | Markdown::ListMarkerParenthesis2
+            | Markdown::ListMarkerDot2
+            | Markdown::TaskListMarkerChecked
+            | Markdown::TaskListMarkerUnchecked
+    )
+}
+
+/// Collapses runs of whitespace and line breaks to a single space.
+fn normalize_whitespace(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut prev_ws = false;
+    for c in s.chars() {
+        if c.is_whitespace() {
+            if !prev_ws {
+                out.push(' ');
+            }
+            prev_ws = true;
+        } else {
+            out.push(c);
+            prev_ws = false;
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Applies the Unicode-script block-ratio heuristic to one prose block.
+pub(crate) fn classify_block(block: &ProseBlock<'_>) -> DetectedBlock {
+    let language = classify_text(&block.text);
+    DetectedBlock {
+        kind: block.kind.clone(),
+        start_line: block.start_line,
+        end_line: block.end_line,
+        text: block.text.clone(),
+        language,
+    }
+}
+
+/// Classifies a text span using the Tier-0 rule from §30.1.
+pub(crate) fn classify_text(text: &str) -> Language {
+    let mut kana = 0usize;
+    let mut han = 0usize;
+    let mut ascii_letter = 0usize;
+    let mut fullwidth_letter = 0usize;
+    let mut total = 0usize;
+    let mut visible_chars = 0usize;
+
+    for c in text.chars() {
+        if c.is_whitespace() {
+            continue;
+        }
+        visible_chars += 1;
+        // Filter out punctuation and digits from the denominator. Digits are
+        // technical tokens that don't signal language; punctuation is shared.
+        if c.is_ascii_punctuation() || is_cjk_punctuation(c) || c.is_ascii_digit() {
+            continue;
+        }
+        total += 1;
+
+        // Classify.
+        if is_hiragana(c) || is_katakana(c) {
+            kana += 1;
+        } else if is_han(c) {
+            han += 1;
+        } else if c.is_ascii_alphabetic() {
+            ascii_letter += 1;
+        } else if is_fullwidth_latin(c) {
+            fullwidth_letter += 1;
+        }
+    }
+
+    if total == 0 {
+        // Block contained only punctuation / digits / whitespace. Very short.
+        if visible_chars == 0 {
+            return Language::None;
+        }
+        return Language::Other;
+    }
+
+    let cjk = kana + han;
+    let latin = ascii_letter + fullwidth_letter;
+    let t = total as f64;
+
+    let kana_ratio = kana as f64 / t;
+    let cjk_ratio = cjk as f64 / t;
+    let latin_ratio = latin as f64 / t;
+
+    if kana_ratio >= 0.15 {
+        Language::Ja
+    } else if cjk_ratio >= 0.40 && kana == 0 {
+        // Likely Chinese (no kana); treat as Other for our metric pipelines.
+        Language::Other
+    } else if latin_ratio >= 0.80 {
+        Language::En
+    } else {
+        Language::Other
+    }
+}
+
+fn is_hiragana(c: char) -> bool {
+    let u = c as u32;
+    (0x3040..=0x309F).contains(&u) || (0x1B130..=0x1B16F).contains(&u)
+}
+
+fn is_katakana(c: char) -> bool {
+    let u = c as u32;
+    (0x30A0..=0x30FF).contains(&u)
+        || (0x31F0..=0x31FF).contains(&u)
+        || (0xFF65..=0xFF9F).contains(&u)
+}
+
+fn is_han(c: char) -> bool {
+    // Use unicode-script for Han detection: covers CJK Unified, Ext A-G,
+    // and compatibility blocks. Cheaper than enumerating explicitly.
+    matches!(c.script(), Script::Han)
+}
+
+fn is_fullwidth_latin(c: char) -> bool {
+    let u = c as u32;
+    (0xFF21..=0xFF3A).contains(&u) || (0xFF41..=0xFF5A).contains(&u)
+}
+
+fn is_cjk_punctuation(c: char) -> bool {
+    let u = c as u32;
+    (0x3000..=0x303F).contains(&u)
+        || (0xFF00..=0xFF0F).contains(&u)
+        || (0xFF1A..=0xFF20).contains(&u)
+        || (0xFF3B..=0xFF40).contains(&u)
+        || (0xFF5B..=0xFF65).contains(&u)
+}
+
+/// Second pass: short blocks that came back `Other` inherit from the
+/// surrounding context. Deterministic because the block list is in document
+/// order.
+///
+/// Rules:
+/// 1. Non-heading short blocks (< 15 visible chars) that classified as Other
+///    inherit the preceding heading's language.
+/// 2. Headings that classified as Other inherit the nearest non-`Other`
+///    neighboring block's language (earlier preferred; else later).
+pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<DetectedBlock> {
+    let mut out = blocks;
+
+    // Pass 1: non-heading short blocks inherit from preceding heading.
+    let mut last_heading_lang: Option<Language> = None;
+    for b in out.iter_mut() {
+        if is_heading_kind(&b.kind) {
+            if !matches!(b.language, Language::None | Language::Other) {
+                last_heading_lang = Some(b.language);
+            }
+            continue;
+        }
+        let visible_len = b.text.chars().filter(|c| !c.is_whitespace()).count();
+        if visible_len < 15
+            && matches!(b.language, Language::Other)
+            && let Some(inh) = last_heading_lang
+        {
+            b.language = inh;
+        }
+    }
+
+    // Pass 2: headings that came back `Other` inherit from nearest neighbor.
+    // Kanji-only headings ("## 目的") are a common trigger.
+    let langs: Vec<Language> = out.iter().map(|b| b.language).collect();
+    for (i, block) in out.iter_mut().enumerate() {
+        if !is_heading_kind(&block.kind) {
+            continue;
+        }
+        if !matches!(block.language, Language::Other) {
+            continue;
+        }
+        // Search forward and backward for the nearest non-Other, non-None
+        // language. Prefer the next-neighboring paragraph because it
+        // represents the section's body.
+        let mut inh: Option<Language> = langs
+            .iter()
+            .skip(i + 1)
+            .copied()
+            .find(|l| matches!(l, Language::En | Language::Ja));
+        if inh.is_none() {
+            inh = langs
+                .iter()
+                .take(i)
+                .rev()
+                .copied()
+                .find(|l| matches!(l, Language::En | Language::Ja));
+        }
+        if let Some(l) = inh {
+            block.language = l;
+        }
+    }
+
+    out
+}
+
+fn is_heading_kind(kind: &Markdown) -> bool {
+    matches!(
+        kind,
+        Markdown::AtxHeading
+            | Markdown::AtxHeading2
+            | Markdown::AtxHeading3
+            | Markdown::AtxHeading4
+            | Markdown::AtxHeading5
+            | Markdown::AtxHeading6
+            | Markdown::SetextHeading
+            | Markdown::SetextHeading2
+    )
+}
+
+/// Picks the document-level dominant language by simple majority over
+/// detected blocks. Ties and mixed-bilingual documents return `Mixed`.
+pub(crate) fn dominant_language(blocks: &[DetectedBlock]) -> Language {
+    let mut en_blocks = 0usize;
+    let mut ja_blocks = 0usize;
+    let mut other_blocks = 0usize;
+
+    for b in blocks {
+        match b.language {
+            Language::En => en_blocks += 1,
+            Language::Ja => ja_blocks += 1,
+            Language::Other => other_blocks += 1,
+            _ => {}
+        }
+    }
+
+    if en_blocks == 0 && ja_blocks == 0 {
+        if other_blocks == 0 {
+            // No prose at all.
+            return Language::Other;
+        }
+        return Language::Other;
+    }
+    if en_blocks > 0 && ja_blocks > 0 {
+        return Language::Mixed;
+    }
+    if en_blocks > 0 {
+        Language::En
+    } else {
+        Language::Ja
+    }
+}
+
+/// Concatenates the text of all blocks tagged with `language` into a single
+/// string separated by `\n\n` so downstream sentence segmentation treats
+/// block boundaries as hard terminators (§31.12).
+pub(crate) fn concat_lang_text(blocks: &[DetectedBlock], language: Language) -> String {
+    let mut out = String::new();
+    for b in blocks {
+        if b.language == language {
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&b.text);
+        }
+    }
+    out
+}
+
+// `Serialize` for Language is only used in BlockLangReport indirectly
+// via `as_str()`. Declared here for completeness if the enum ever grows.
+impl Serialize for Language {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_en() {
+        let t = "This paragraph contains ten words of ordinary English prose.";
+        assert_eq!(classify_text(t), Language::En);
+    }
+
+    #[test]
+    fn classify_ja() {
+        let t = "これは日本語のテキストです。読みやすい文章を書きましょう。";
+        assert_eq!(classify_text(t), Language::Ja);
+    }
+
+    #[test]
+    fn classify_chinese_as_other() {
+        // No hiragana/katakana, all Han: treated as Other.
+        let t = "这是一段中文文本没有任何假名字符存在";
+        assert_eq!(classify_text(t), Language::Other);
+    }
+
+    #[test]
+    fn classify_empty() {
+        assert_eq!(classify_text(""), Language::None);
+    }
+
+    #[test]
+    fn classify_bilingual_picks_ja_when_kana_present() {
+        // Mixed, but kana ≥ 15 % → ja.
+        let t = "設定 config file を open して編集します";
+        assert_eq!(classify_text(t), Language::Ja);
+    }
+}

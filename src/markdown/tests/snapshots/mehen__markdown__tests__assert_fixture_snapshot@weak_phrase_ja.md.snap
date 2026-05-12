@@ -1,0 +1,143 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 15
+  ploc: 8
+  cloc: 0
+  tloc: 0
+  mloc: 0
+  bloc: 7
+  aloc: 0
+loc_ratios:
+  artifact_line_ratio: 0
+  code_line_ratio: 0
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.4666666666666667
+size:
+  words: 13
+  effective_content_units: 0.05416666666666667
+  sections: 4
+  headings: 4
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 15
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+    word_count: 4
+    block_count: 1
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 5
+    end_line: 8
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 3
+    block_count: 1
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 9
+    end_line: 12
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 3
+    block_count: 1
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 13
+    end_line: 15
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 3
+    block_count: 1
+prose:
+  language_detection:
+    dominant_language: ja
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: ja
+      - start_line: 3
+        end_line: 3
+        language: ja
+      - start_line: 5
+        end_line: 5
+        language: ja
+      - start_line: 7
+        end_line: 7
+        language: ja
+      - start_line: 9
+        end_line: 9
+        language: ja
+      - start_line: 11
+        end_line: 11
+        language: ja
+      - start_line: 13
+        end_line: 13
+        language: ja
+      - start_line: 15
+        end_line: 15
+        language: ja
+  english: ~
+  japanese:
+    script_composition:
+      kanji_ratio: 0.288
+      hiragana_ratio: 0.639
+      katakana_ratio: 0.073
+      latin_ratio: 0
+      digit_ratio: 0
+      script_entropy: 1.206
+      visible_chars: 274
+    readability:
+      tateishi_rs: ~
+      jouyou_grade_mean: 3.152
+      hyougai_ratio: 0
+    lexical:
+      avg_sentence_chars: 19.786
+      p90_sentence_chars: 36
+      max_sentence_chars: 40
+      comma_period_ratio: 0.3
+      jukugo_density: 0.643
+      sentence_count: 14
+      char_count: 277
+    wording:
+      politeness_dominant: keitai
+      keitai_count: 10
+      jotai_count: 0
+      honorific_count: 0
+      keitai_jotai_mix_count: 0
+      weak_phrase_count: 10
+      redundant_expression_count: 5
+      doubled_joshi_count: 9
+      long_kanji_run_count: 0
+      max_comma_violation_count: 0
+      max_ten_violation_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 0.66
+    style_conformance:
+      violations: []
+      total_violations: 0
+      violation_density_per_1000: 0
+    short_doc_warning: true
+  meta:
+    short_doc_warning: true
+    words_counted: 277
+    sentences_counted: 14
+    blocks_stripped: []

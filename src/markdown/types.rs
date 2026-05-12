@@ -1,10 +1,11 @@
 //! Public-shaped metric types exported by the Markdown analyzer.
 //!
 //! The field layout mirrors §23 of
-//! `docs/mehen_markdown_metrics_research_foundation.md` but includes only the
-//! keys produced by Phase A (LOC family, word count, section count, heading
-//! count, and Effective Content Units). Later phases append more fields; no
-//! field ever shrinks.
+//! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A produced the
+//! LOC family, word count, section count, heading count, and Effective
+//! Content Units; Phase E adds the language-aware prose metric surface
+//! (§§29–38) as a separate top-level key. Later phases append more fields;
+//! no field ever shrinks.
 
 use serde::Serialize;
 
@@ -79,7 +80,7 @@ pub(crate) struct EcuInputs {
     pub(crate) raw_html_or_mdx_lines: u64,
 }
 
-/// Phase-A Markdown metric output.
+/// Phase-A + Phase-E Markdown metric output.
 ///
 /// Emitted per file on the JSON / YAML / TOML path and under the `markdown`
 /// key of the exported schema so later phases can add sibling keys like
@@ -93,4 +94,7 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) size: Size,
     pub(crate) ecu_inputs: EcuInputs,
     pub(crate) sections: Vec<Section>,
+    /// §§29–38 Prose metric layer. Always emitted; its presence does NOT
+    /// modify DMI / MCC / MRPC / FillerLazyRisk in later phases.
+    pub(crate) prose: crate::markdown::prose::ProseReport,
 }

@@ -3,22 +3,22 @@ source: src/markdown/tests/mod.rs
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 7
-  ploc: 4
+  dloc: 4
+  ploc: 3
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 3
+  bloc: 1
   aloc: 0
 loc_ratios:
   artifact_line_ratio: 0
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.42857142857142855
+  blank_line_ratio: 0.25
 size:
-  words: 27
-  effective_content_units: 0.1125
+  words: 20
+  effective_content_units: 0.08333333333333333
   sections: 1
   headings: 1
 ecu_inputs:
@@ -32,11 +32,11 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 7
+    end_line: 4
     parent_section_id: ~
     child_section_ids: []
-    word_count: 27
-    block_count: 3
+    word_count: 20
+    block_count: 1
 prose:
   language_detection:
     dominant_language: en
@@ -45,13 +45,7 @@ prose:
         end_line: 1
         language: en
       - start_line: 3
-        end_line: 3
-        language: en
-      - start_line: 5
-        end_line: 5
-        language: en
-      - start_line: 7
-        end_line: 7
+        end_line: 4
         language: en
   english:
     readability:
@@ -70,31 +64,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.733
-      hapax_ratio: 0.773
-      dis_ratio: 0.091
-      lexical_density: 0.8
-      avg_sentence_words: 7.5
-      p90_sentence_words: 10
-      max_sentence_words: 10
-      stddev_sentence_words: 2.693
-      avg_word_chars: 5.633
-      p90_word_chars: 9
-      sentence_count: 4
-      words_total: 30
+      mattr_50: 0.909
+      hapax_ratio: 0.9
+      dis_ratio: 0.1
+      lexical_density: 0.545
+      avg_sentence_words: 4.4
+      p90_sentence_words: 6
+      max_sentence_words: 6
+      stddev_sentence_words: 1.96
+      avg_word_chars: 4.136
+      p90_word_chars: 7
+      sentence_count: 5
+      words_total: 22
     wording:
       passive_ratio: 0
-      hedge_density: 0
-      weasel_density: 0
-      wordy_density: 0
+      hedge_density: 0.091
+      weasel_density: 0.091
+      wordy_density: 0.045
       adverb_density: 0
-      nominalization_density: 0
+      nominalization_density: 0.045
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 1
+      wording_quality_score: 0.624
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -103,6 +97,6 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 30
-    sentences_counted: 4
+    words_counted: 22
+    sentences_counted: 5
     blocks_stripped: []

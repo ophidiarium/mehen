@@ -2,20 +2,23 @@
 //!
 //! Parses a Markdown source buffer with the tree-sitter-markdown-text grammar
 //! and produces a [`MarkdownMetrics`] record covering the §5 LOC family, §4
-//! word count, §3.4 section tree, and §6 Effective Content Units. Later
-//! phases extend this module (links, tables, visuals, MRPC, MCC, DMI, prose
-//! layer) but must not rewrite Phase-A fields.
+//! word count, §3.4 section tree, §6 Effective Content Units, and the
+//! §§29–38 language-aware prose layer. Later phases extend this module
+//! (links, tables, visuals, MRPC, MCC, DMI) but must not rewrite Phase-A or
+//! Phase-E fields.
 
 use std::path::Path;
 
 use crate::markdown::ecu::{compute_ecu_inputs, effective_content_units};
 use crate::markdown::loc::{LineClasses, derive_ratios, physical_line_count};
+use crate::markdown::prose::analyze_prose;
 use crate::markdown::sections::collect_sections;
 use crate::markdown::types::{MarkdownMetrics, Size};
 use crate::markdown::words::count_words;
 use tree_sitter::Parser as TsParser;
 
-/// Parses `source` as Markdown and returns the Phase-A metric record.
+/// Parses `source` as Markdown and returns the Phase-A + Phase-E metric
+/// record.
 ///
 /// `path` is recorded verbatim into the output's `path` field; the caller
 /// controls whether it is absolute or relative.
@@ -46,6 +49,10 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let ecu_inputs = compute_ecu_inputs(&root, &classes);
     let ecu = effective_content_units(&loc, words, &ecu_inputs);
 
+    // §§29–38 Prose layer. Kept strictly separate per §29.1 — it never
+    // modifies any structural score.
+    let prose = analyze_prose(&root, source.as_bytes());
+
     MarkdownMetrics {
         path: path.to_string_lossy().to_string(),
         loc,
@@ -58,5 +65,6 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
         },
         ecu_inputs,
         sections,
+        prose,
     }
 }
