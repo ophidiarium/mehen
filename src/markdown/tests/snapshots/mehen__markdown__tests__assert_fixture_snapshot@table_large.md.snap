@@ -4,26 +4,26 @@ assertion_line: 29
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 20
+  dloc: 14
   ploc: 4
-  cloc: 11
-  tloc: 0
+  cloc: 0
+  tloc: 8
   mloc: 0
-  bloc: 5
-  aloc: 11
+  bloc: 2
+  aloc: 8
 loc_ratios:
-  artifact_line_ratio: 0.55
-  code_line_ratio: 0.55
-  table_line_ratio: 0
+  artifact_line_ratio: 0.5714285714285714
+  code_line_ratio: 0
+  table_line_ratio: 0.5714285714285714
   math_line_ratio: 0
-  blank_line_ratio: 0.25
+  blank_line_ratio: 0.14285714285714285
 size:
-  words: 15
-  effective_content_units: 3.9124999999999996
+  words: 36
+  effective_content_units: 5.61
   sections: 1
   headings: 1
 ecu_inputs:
-  table_cells: 0
+  table_cells: 91
   diagram_nodes: 0
   diagram_edges: 0
   math_tokens: 0
@@ -33,11 +33,11 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 20
+    end_line: 14
     parent_section_id: ~
     child_section_ids: []
-    word_count: 15
-    block_count: 5
+    word_count: 36
+    block_count: 2
 links:
   total: 0
   internal: 0
@@ -63,33 +63,23 @@ visuals:
   visual_scaffold_score: 0
   visual_net_effect: 0
 tables:
-  count: 0
-  max_cells: 0
-  table_burden_score: 0
-  table_scaffold_score: 0
-  hard_warnings: 0
+  count: 1
+  max_cells: 91
+  table_burden_score: 0.2861378205128205
+  table_scaffold_score: 0.7416666666666667
+  hard_warnings: 1
 maintainability:
   documentation_maintainability_index: 0
   section_balance_score: 0
   artifact_debt_score: 0
 artifacts:
   - id: 0
-    kind: code
-    start_line: 5
-    end_line: 9
-    language_tag: rust
-    size: 3
+    kind: table
+    start_line: 7
+    end_line: 14
+    language_tag: ~
+    size: 91
     has_explanation: true
     has_label: true
     oversized: false
-    burden: 1
-  - id: 1
-    kind: code
-    start_line: 13
-    end_line: 18
-    language_tag: json
-    size: 4
-    has_explanation: true
-    has_label: true
-    oversized: false
-    burden: 1
+    burden: 0.2861378205128205

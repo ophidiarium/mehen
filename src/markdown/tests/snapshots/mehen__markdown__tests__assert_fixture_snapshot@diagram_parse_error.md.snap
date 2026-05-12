@@ -4,28 +4,28 @@ assertion_line: 29
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 20
+  dloc: 19
   ploc: 4
-  cloc: 11
+  cloc: 12
   tloc: 0
   mloc: 0
-  bloc: 5
-  aloc: 11
+  bloc: 3
+  aloc: 12
 loc_ratios:
-  artifact_line_ratio: 0.55
-  code_line_ratio: 0.55
+  artifact_line_ratio: 0.631578947368421
+  code_line_ratio: 0.631578947368421
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.25
+  blank_line_ratio: 0.15789473684210525
 size:
-  words: 15
-  effective_content_units: 3.9124999999999996
+  words: 25
+  effective_content_units: 5.854166666666666
   sections: 1
   headings: 1
 ecu_inputs:
   table_cells: 0
-  diagram_nodes: 0
-  diagram_edges: 0
+  diagram_nodes: 2
+  diagram_edges: 3
   math_tokens: 0
   raw_html_or_mdx_lines: 0
 sections:
@@ -33,11 +33,11 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 20
+    end_line: 19
     parent_section_id: ~
     child_section_ids: []
-    word_count: 15
-    block_count: 5
+    word_count: 25
+    block_count: 3
 links:
   total: 0
   internal: 0
@@ -56,12 +56,12 @@ links:
   review_burden: 0
 visuals:
   images: 0
-  diagrams: 0
-  diagram_nodes_total: 0
-  diagram_edges_total: 0
+  diagrams: 1
+  diagram_nodes_total: 2
+  diagram_edges_total: 3
   diagram_cycles_total: 0
-  visual_scaffold_score: 0
-  visual_net_effect: 0
+  visual_scaffold_score: 0.9759000729485331
+  visual_net_effect: 0.4500000000000002
 tables:
   count: 0
   max_cells: 0
@@ -74,21 +74,21 @@ maintainability:
   artifact_debt_score: 0
 artifacts:
   - id: 0
-    kind: code
-    start_line: 5
-    end_line: 9
-    language_tag: rust
-    size: 3
+    kind: diagram
+    start_line: 7
+    end_line: 13
+    language_tag: plantuml
+    size: 2
     has_explanation: true
     has_label: true
     oversized: false
-    burden: 1
+    burden: 2.45
   - id: 1
     kind: code
-    start_line: 13
-    end_line: 18
-    language_tag: json
-    size: 4
+    start_line: 15
+    end_line: 19
+    language_tag: tikz
+    size: 3
     has_explanation: true
     has_label: true
     oversized: false

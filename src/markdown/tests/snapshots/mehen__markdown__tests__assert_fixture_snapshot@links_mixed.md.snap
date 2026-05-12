@@ -4,22 +4,22 @@ assertion_line: 29
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 11
-  ploc: 6
+  dloc: 29
+  ploc: 14
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 5
-  aloc: 0
+  bloc: 13
+  aloc: 2
 loc_ratios:
-  artifact_line_ratio: 0
+  artifact_line_ratio: 0.06896551724137931
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.45454545454545453
+  blank_line_ratio: 0.4482758620689655
 size:
-  words: 24
-  effective_content_units: 0.1
+  words: 29
+  effective_content_units: 0.12083333333333333
   sections: 3
   headings: 3
 ecu_inputs:
@@ -33,47 +33,47 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 11
+    end_line: 29
     parent_section_id: ~
     child_section_ids:
       - 1
       - 2
-    word_count: 5
-    block_count: 1
+    word_count: 26
+    block_count: 7
   - section_id: 1
-    heading_level: 3
+    heading_level: 2
     heading_text: ~
-    start_line: 5
-    end_line: 8
+    start_line: 19
+    end_line: 26
     parent_section_id: 0
     child_section_ids: []
-    word_count: 11
-    block_count: 1
+    word_count: 3
+    block_count: 3
   - section_id: 2
     heading_level: 2
     heading_text: ~
-    start_line: 9
-    end_line: 11
+    start_line: 27
+    end_line: 29
     parent_section_id: 0
     child_section_ids: []
-    word_count: 8
-    block_count: 1
+    word_count: 0
+    block_count: 2
 links:
-  total: 0
-  internal: 0
-  relative: 0
-  external: 0
-  external_vendor: 0
-  scholarly: 0
-  issue_pr: 0
+  total: 15
+  internal: 2
+  relative: 7
+  external: 5
+  external_vendor: 1
+  scholarly: 1
+  issue_pr: 1
   absolute_same_repo: 0
   image: 0
-  footnote: 0
-  bare_url: 0
-  broken: 0
-  link_debt_score: 0
-  information_scent_score: 0
-  review_burden: 0
+  footnote: 1
+  bare_url: 1
+  broken: 2
+  link_debt_score: 0.76
+  information_scent_score: 0.3857142857142857
+  review_burden: 16.7
 visuals:
   images: 0
   diagrams: 0
@@ -91,5 +91,5 @@ tables:
 maintainability:
   documentation_maintainability_index: 0
   section_balance_score: 0
-  artifact_debt_score: 0
+  artifact_debt_score: 0.1
 artifacts: []

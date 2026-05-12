@@ -1,12 +1,14 @@
-//! Snapshot tests for the Phase-A Markdown pipeline.
+//! Snapshot tests for the Markdown pipeline (Phase A + Phase C).
 //!
 //! Each fixture under `fixtures/` exercises a distinct aspect of the
 //! analyzer so regressions in any single dimension (LOC bucket, word count,
-//! section tree, ECU coefficient) surface as an isolated snapshot diff.
+//! section tree, ECU, link class, table burden, diagram complexity, artifact
+//! debt) surface as an isolated snapshot diff.
 
 use std::path::PathBuf;
 
 use crate::markdown::analyze_markdown;
+use crate::markdown::diagrams;
 
 fn load_fixture(name: &str) -> (String, PathBuf) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -20,7 +22,6 @@ fn load_fixture(name: &str) -> (String, PathBuf) {
 fn assert_fixture_snapshot(name: &str) {
     let (source, path) = load_fixture(name);
     let metrics = analyze_markdown(&source, &path);
-    // Redact the absolute path so snapshots are portable across workspaces.
     insta::with_settings!({
         snapshot_suffix => name,
         omit_expression => true,
@@ -71,18 +72,59 @@ fn tight_list_fixture() {
 }
 
 #[test]
+fn links_mixed_fixture() {
+    // Exercises every §11.1 link class: internal anchor (resolving + not),
+    // relative file (resolving + not), external (and bare URL), IssuePR,
+    // Scholarly, ExternalVendor, reference-definition, shortcut reference,
+    // and footnote. The aggregate link_debt / scent / review_burden pin
+    // the §11.2–§11.4 formulas.
+    assert_fixture_snapshot("links_mixed.md");
+}
+
+#[test]
+fn broken_links_fixture() {
+    // High broken-rate case: drives link_debt_score past the 0.10 sat
+    // threshold.
+    assert_fixture_snapshot("broken_links.md");
+}
+
+#[test]
+fn table_large_fixture() {
+    // Hard-warning table per §13: cols > 12 so the burden score dominates
+    // the aggregate.
+    assert_fixture_snapshot("table_large.md");
+}
+
+#[test]
+fn diagram_mermaid_fixture() {
+    // Codifies the §12.2 two-node cycle invariant.
+    assert_fixture_snapshot("diagram_mermaid.md");
+}
+
+#[test]
+fn diagram_parse_error_fixture() {
+    // Unknown language ("tikz") flips parse_error, adding the +2.0 term.
+    assert_fixture_snapshot("diagram_parse_error.md");
+}
+
+#[test]
+fn images_no_alt_fixture() {
+    // One image without alt-text + missing target vs. one with alt and a
+    // resolving target — pins the V_scaffold asymmetry.
+    assert_fixture_snapshot("images_no_alt.md");
+}
+
+#[test]
+fn artifact_debt_high_fixture() {
+    // Several unlabelled fences, a parse-error diagram, and raw HTML.
+    assert_fixture_snapshot("artifact_debt_high.md");
+}
+
+#[test]
 fn tiny_file_produces_metrics() {
-    // Codex P1: tiny Markdown files (1-3 bytes) used to be swallowed by
-    // `read_file_inner`'s `file_size <= 3` early return. The analyzer
-    // itself must still produce metrics — `read_file_raw` handles the
-    // file-size heuristic on the CLI side, but the analyzer is the last
-    // line of defense and must not assume a minimum input length.
     for src in ["", "a", "#", "#\n", "a\n"] {
         let path = PathBuf::from("tiny.md");
         let metrics = analyze_markdown(src, &path);
-        // The only invariant we care about here: no panic, and metric
-        // fields are populated (even with zero values) so JSON emission
-        // never produces malformed output.
         assert!(
             metrics.loc.dloc <= 2,
             "dloc {}: input {src:?}",
@@ -93,19 +135,7 @@ fn tiny_file_produces_metrics() {
 
 #[test]
 fn trailing_newlines_preserved_in_dloc() {
-    // `read_file_raw` feeds `analyze_markdown` the file-on-disk bytes, so
-    // trailing blank lines survive and count toward DLOC/BLOC. Guards
-    // against the Codex P1 regression: if a future change routes Markdown
-    // through `remove_blank_lines` again, the trailing blanks collapse and
-    // this assertion breaks.
-    //
-    // Input: "Alpha.\n\nBeta.\n\n\n"
-    //   line 1: Alpha.   (prose)
-    //   line 2: blank
-    //   line 3: Beta.    (prose)
-    //   line 4: blank
-    //   line 5: blank
-    //   (the final \n is the line-5 terminator, not a new line)
+    // See Phase-A comment: trailing blanks must survive in DLOC/BLOC.
     let src = "Alpha.\n\nBeta.\n\n\n";
     let path = PathBuf::from("trailing_newlines.md");
     let metrics = analyze_markdown(src, &path);
@@ -117,9 +147,6 @@ fn trailing_newlines_preserved_in_dloc() {
         metrics.loc.bloc >= 3,
         "three blank lines (one between, two trailing) must land in BLOC"
     );
-
-    // Cross-check: stripping all trailing newlines (the `remove_blank_lines`
-    // regression path) would drop DLOC to 3.
     let normalized = "Alpha.\n\nBeta.\n";
     let normalized_metrics = analyze_markdown(normalized, &path);
     assert_eq!(
@@ -127,4 +154,17 @@ fn trailing_newlines_preserved_in_dloc() {
         "sanity check: the normalized form undercounts lines — that is why \
          Markdown must receive raw bytes"
     );
+}
+
+/// Spec-pinned sanity check for the §12.2 cycle formula. Independent of the
+/// Markdown analyzer so regressions in the diagram parser surface before
+/// the insta snapshots start drifting.
+#[test]
+fn mermaid_two_node_cycle_matches_spec() {
+    let sig = diagrams::mermaid::parse("graph TD\n  A --> B\n  B --> A\n");
+    assert_eq!(sig.nodes, 2);
+    assert_eq!(sig.edges, 2);
+    assert_eq!(sig.components, 1);
+    assert_eq!(sig.cycles, 1);
+    assert!(!sig.parse_error);
 }
