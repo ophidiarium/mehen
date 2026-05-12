@@ -3,24 +3,24 @@ source: src/markdown/tests/mod.rs
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 11
-  ploc: 6
+  dloc: 29
+  ploc: 16
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 5
+  bloc: 13
   aloc: 0
 loc_ratios:
   artifact_line_ratio: 0
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.45454545454545453
+  blank_line_ratio: 0.4482758620689655
 size:
-  words: 24
-  effective_content_units: 0.1
-  sections: 3
-  headings: 3
+  words: 51
+  effective_content_units: 0.2125
+  sections: 4
+  headings: 4
 ecu_inputs:
   table_cells: 0
   diagram_nodes: 0
@@ -32,46 +32,56 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 11
+    end_line: 25
     parent_section_id: ~
     child_section_ids:
       - 1
       - 2
-    word_count: 5
+      - 3
+    word_count: 21
     block_count: 1
   - section_id: 1
-    heading_level: 3
+    heading_level: 2
     heading_text: ~
-    start_line: 5
-    end_line: 8
+    start_line: 7
+    end_line: 11
     parent_section_id: 0
     child_section_ids: []
-    word_count: 11
+    word_count: 10
     block_count: 1
   - section_id: 2
     heading_level: 2
     heading_text: ~
-    start_line: 9
-    end_line: 11
+    start_line: 12
+    end_line: 17
     parent_section_id: 0
     child_section_ids: []
-    word_count: 8
+    word_count: 9
     block_count: 1
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 18
+    end_line: 25
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 11
+    block_count: 2
 complexity:
   reading_path_complexity: 1
-  reading_path_complexity_raw: 2
-  cognitive_complexity: 1
+  reading_path_complexity_raw: 3
+  cognitive_complexity: 8.799999999999999
   halstead:
-    operators_distinct: 4
-    operators_total: 6
-    operands_distinct: 24
-    operands_total: 31
-    vocabulary: 28
-    length: 37
-    volume: 177.87213211613133
-    difficulty: 2.5833333333333335
-    effort: 459.5030079666726
+    operators_distinct: 8
+    operators_total: 52
+    operands_distinct: 64
+    operands_total: 78
+    vocabulary: 72
+    length: 130
+    volume: 802.0902501875006
+    difficulty: 4.875
+    effort: 3910.1899696640653
     embedded_volume: 0
-    total_volume: 177.87213211613133
+    total_volume: 802.0902501875006
 maintainability:
   documentation_maintainability_index: 100

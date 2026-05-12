@@ -1,0 +1,868 @@
+//! Markdown Reading Path Complexity (MRPC) per §7.
+//!
+//! Builds a navigation graph `G_doc = (N, E)`:
+//!
+//! - Nodes: sections, large code blocks (≥ 12 LOC), tables with ≥ 12 cells,
+//!   diagrams, footnotes/reference definitions, linked documents, and
+//!   external domains (one node per domain).
+//! - Edges: sequential section, parent-child heading, internal link (to
+//!   same-doc anchor or other section), relative repo link, external link,
+//!   artifact explanation, footnote/reference.
+//!
+//! §7.2: `mrpc_raw = |E| - |N| + 2P`.
+//! §7.3: `mrpc = max(1, sum(edge_weight) - |N| + 2P)`.
+//!
+//! Phase B treats external links as valid (weight 1.00). Phase C will add the
+//! link validator and bump broken links to 1.20.
+
+use std::collections::BTreeMap;
+
+use crate::languages::Markdown;
+use crate::node::Node;
+
+/// Per-edge weights from §7.3.
+#[allow(dead_code)]
+mod weights {
+    pub(super) const HIERARCHY: f64 = 0.15;
+    pub(super) const SEQUENTIAL: f64 = 0.20;
+    pub(super) const INTERNAL: f64 = 0.50;
+    pub(super) const FOOTNOTE: f64 = 0.65;
+    pub(super) const RELATIVE: f64 = 0.80;
+    pub(super) const EXTERNAL: f64 = 1.00;
+    // TODO(Phase C): link validator bumps broken links from EXTERNAL (1.00) /
+    // INTERNAL (0.50) to BROKEN (1.20).
+    pub(super) const _BROKEN: f64 = 1.20;
+    pub(super) const ARTIFACT: f64 = 0.40;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum NodeKind {
+    Section,
+    LargeCode,
+    LargeTable,
+    Diagram,
+    Footnote,
+    LinkedDoc,
+    ExternalDomain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct GraphNodeId {
+    kind: NodeKind,
+    /// Stable deterministic index within its kind (e.g. 0-based section id
+    /// in document order or alphabetical domain index).
+    index: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum EdgeKind {
+    Hierarchy,
+    Sequential,
+    InternalAnchor,
+    Footnote,
+    Relative,
+    External,
+    Artifact,
+}
+
+impl EdgeKind {
+    fn weight(self) -> f64 {
+        match self {
+            EdgeKind::Hierarchy => weights::HIERARCHY,
+            EdgeKind::Sequential => weights::SEQUENTIAL,
+            EdgeKind::InternalAnchor => weights::INTERNAL,
+            EdgeKind::Footnote => weights::FOOTNOTE,
+            EdgeKind::Relative => weights::RELATIVE,
+            EdgeKind::External => weights::EXTERNAL,
+            EdgeKind::Artifact => weights::ARTIFACT,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Edge {
+    from: GraphNodeId,
+    to: GraphNodeId,
+    kind: EdgeKind,
+}
+
+/// Minimum rows/cells/LOC thresholds from §7.1.
+const LARGE_CODE_LOC: usize = 12;
+const LARGE_TABLE_CELLS: usize = 12;
+
+/// Classification of a link's destination URL for MRPC edge typing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinkClass {
+    /// Starts with `#` — same-document anchor.
+    InternalAnchor,
+    /// Relative path like `foo.md`, `../src/lib.rs` or `docs/api#auth`.
+    Relative,
+    /// Absolute URL with a scheme (http / https / mailto / etc.).
+    External,
+}
+
+/// MRPC output bundle.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct MrpcResult {
+    pub(crate) weighted: f64,
+    pub(crate) raw: f64,
+}
+
+/// Public entry point: walks the parsed AST to build `G_doc` and compute
+/// both the §7.2 raw form and the §7.3 weighted form.
+pub(crate) fn compute_mrpc(root: &Node<'_>, source: &str) -> MrpcResult {
+    let mut graph = GraphBuilder::default();
+    graph.walk(root, source);
+    graph.emit()
+}
+
+#[derive(Default)]
+struct GraphBuilder {
+    sections: Vec<SectionInfo>,
+    large_codes: u32,
+    large_tables: u32,
+    diagrams: u32,
+    footnotes: BTreeMap<String, u32>,
+    linked_docs: BTreeMap<String, u32>,
+    external_domains: BTreeMap<String, u32>,
+    /// Sequential order in which block-level nodes occurred within each
+    /// section — the artifact-explanation edge fires when an artifact
+    /// (large code / table / diagram) is adjacent to a paragraph.
+    section_artifacts: Vec<Vec<GraphNodeId>>,
+    edges: Vec<Edge>,
+    /// Current section stack by level (index = depth - 1). The top of the
+    /// stack is the current enclosing section for artifacts and links.
+    section_stack: Vec<u32>,
+}
+
+struct SectionInfo {
+    _id: u32,
+    parent: Option<u32>,
+}
+
+impl GraphBuilder {
+    fn walk(&mut self, root: &Node<'_>, source: &str) {
+        self.walk_recurse(root, source);
+        // Sequential section edges (document order, only within the same
+        // parent).
+        self.add_sequential_edges();
+    }
+
+    fn walk_recurse(&mut self, node: &Node<'_>, source: &str) {
+        use Markdown::*;
+
+        let kind: Markdown = node.kind_id().into();
+
+        match kind {
+            Section | Section1 | Section2 | Section3 | Section4 | Section5 | Section6 => {
+                let parent = self.section_stack.last().copied();
+                let id = self.sections.len() as u32;
+                self.sections.push(SectionInfo { _id: id, parent });
+                self.section_artifacts.push(Vec::new());
+                if let Some(p) = parent {
+                    self.edges.push(Edge {
+                        from: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: p,
+                        },
+                        to: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: id,
+                        },
+                        kind: EdgeKind::Hierarchy,
+                    });
+                }
+                self.section_stack.push(id);
+                self.recurse_children(node, source);
+                self.section_stack.pop();
+                return;
+            }
+            FencedCodeBlock | IndentedCodeBlock => {
+                let loc = node_line_span(node);
+                let info = fence_info(node, source);
+                let is_diagram = matches!(
+                    info.as_deref(),
+                    Some("mermaid")
+                        | Some("plantuml")
+                        | Some("dot")
+                        | Some("graphviz")
+                        | Some("d2")
+                );
+                if is_diagram {
+                    let id = self.diagrams;
+                    self.diagrams += 1;
+                    self.add_artifact_node(GraphNodeId {
+                        kind: NodeKind::Diagram,
+                        index: id,
+                    });
+                } else if loc >= LARGE_CODE_LOC {
+                    let id = self.large_codes;
+                    self.large_codes += 1;
+                    self.add_artifact_node(GraphNodeId {
+                        kind: NodeKind::LargeCode,
+                        index: id,
+                    });
+                }
+                return;
+            }
+            PipeTable => {
+                let cells = count_table_cells(node);
+                if cells >= LARGE_TABLE_CELLS {
+                    let id = self.large_tables;
+                    self.large_tables += 1;
+                    self.add_artifact_node(GraphNodeId {
+                        kind: NodeKind::LargeTable,
+                        index: id,
+                    });
+                }
+                return;
+            }
+            FootnoteDefinition => {
+                let label = footnote_def_label(node, source).unwrap_or_default();
+                let next = self.footnotes.len() as u32;
+                let id = *self.footnotes.entry(label).or_insert(next);
+                // Create an artifact-style node for the footnote so it
+                // contributes to N even without any reference edge.
+                let gid = GraphNodeId {
+                    kind: NodeKind::Footnote,
+                    index: id,
+                };
+                // Link from the enclosing section (if any) to the footnote —
+                // definitions are traversed alongside their referencing
+                // section, so model that as a hierarchy edge so it counts as
+                // part of N but does not inflate weighted MRPC above the
+                // footnote reference's own weight.
+                if let Some(section_id) = self.section_stack.last().copied() {
+                    self.edges.push(Edge {
+                        from: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: section_id,
+                        },
+                        to: gid,
+                        kind: EdgeKind::Hierarchy,
+                    });
+                }
+                return;
+            }
+            LinkReferenceDefinition => {
+                // §7.1: "footnotes/reference definitions" are a single class
+                // of nodes. Treat a reference definition the same way.
+                let label = link_ref_label(node, source).unwrap_or_default();
+                let next = self.footnotes.len() as u32;
+                let id = *self.footnotes.entry(label).or_insert(next);
+                let gid = GraphNodeId {
+                    kind: NodeKind::Footnote,
+                    index: id,
+                };
+                if let Some(section_id) = self.section_stack.last().copied() {
+                    self.edges.push(Edge {
+                        from: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: section_id,
+                        },
+                        to: gid,
+                        kind: EdgeKind::Hierarchy,
+                    });
+                }
+                return;
+            }
+            FootnoteReference => {
+                // Edge from enclosing section to the footnote node.
+                let label = footnote_ref_label(node, source).unwrap_or_default();
+                let next = self.footnotes.len() as u32;
+                let id = *self.footnotes.entry(label).or_insert(next);
+                if let Some(section_id) = self.section_stack.last().copied() {
+                    self.edges.push(Edge {
+                        from: GraphNodeId {
+                            kind: NodeKind::Section,
+                            index: section_id,
+                        },
+                        to: GraphNodeId {
+                            kind: NodeKind::Footnote,
+                            index: id,
+                        },
+                        kind: EdgeKind::Footnote,
+                    });
+                }
+                // Fall through in case nested content matters — but a
+                // footnote reference has no relevant children.
+                return;
+            }
+            Link | Image => {
+                if let Some(dest) = link_destination(node, source) {
+                    self.handle_link(&dest);
+                }
+                return;
+            }
+            _ => {}
+        }
+
+        self.recurse_children(node, source);
+    }
+
+    fn recurse_children(&mut self, node: &Node<'_>, source: &str) {
+        let mut cursor = node.cursor();
+        if cursor.goto_first_child() {
+            loop {
+                let child = cursor.node();
+                self.walk_recurse(&child, source);
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+    }
+
+    fn add_artifact_node(&mut self, node: GraphNodeId) {
+        if let Some(section_id) = self.section_stack.last().copied() {
+            let idx = section_id as usize;
+            if idx < self.section_artifacts.len() {
+                self.section_artifacts[idx].push(node);
+            }
+            // Artifact explanation edge: from section to artifact.
+            self.edges.push(Edge {
+                from: GraphNodeId {
+                    kind: NodeKind::Section,
+                    index: section_id,
+                },
+                to: node,
+                kind: EdgeKind::Artifact,
+            });
+        }
+    }
+
+    fn handle_link(&mut self, dest: &str) {
+        let Some(section_id) = self.section_stack.last().copied() else {
+            // Pre-heading links: no MRPC section to anchor on, so they do not
+            // contribute an edge. This matches the research-doc philosophy
+            // that MRPC measures navigation between sections of a structured
+            // document.
+            return;
+        };
+        let from = GraphNodeId {
+            kind: NodeKind::Section,
+            index: section_id,
+        };
+        let class = classify_link(dest);
+        match class {
+            LinkClass::InternalAnchor => {
+                // Internal anchors target another section in the same
+                // document. Phase C will resolve the anchor to a concrete
+                // section; for now model it as an edge to the current
+                // section (self-loop) or the document root (section 0 if
+                // any). We prefer a distinct dedicated sink so it still
+                // contributes to the edge budget without fabricating a
+                // target.
+                // Use a per-anchor synthetic "linked-doc" node keyed on the
+                // anchor text. This keeps the graph deterministic.
+                let next = self.linked_docs.len() as u32;
+                let id = *self.linked_docs.entry(dest.to_string()).or_insert(next);
+                self.edges.push(Edge {
+                    from,
+                    to: GraphNodeId {
+                        kind: NodeKind::LinkedDoc,
+                        index: id,
+                    },
+                    kind: EdgeKind::InternalAnchor,
+                });
+            }
+            LinkClass::Relative => {
+                let key = normalize_relative_path(dest);
+                let next = self.linked_docs.len() as u32;
+                let id = *self.linked_docs.entry(key).or_insert(next);
+                self.edges.push(Edge {
+                    from,
+                    to: GraphNodeId {
+                        kind: NodeKind::LinkedDoc,
+                        index: id,
+                    },
+                    kind: EdgeKind::Relative,
+                });
+            }
+            LinkClass::External => {
+                let domain = extract_domain(dest).unwrap_or_else(|| "unknown".to_string());
+                let next = self.external_domains.len() as u32;
+                let id = *self.external_domains.entry(domain).or_insert(next);
+                self.edges.push(Edge {
+                    from,
+                    to: GraphNodeId {
+                        kind: NodeKind::ExternalDomain,
+                        index: id,
+                    },
+                    // TODO(Phase C): link validator promotes `External` to
+                    // `Broken` (weight 1.20) when the target is unreachable.
+                    kind: EdgeKind::External,
+                });
+            }
+        }
+    }
+
+    fn add_sequential_edges(&mut self) {
+        // Group sections by parent, then connect siblings in document order.
+        let mut siblings: BTreeMap<Option<u32>, Vec<u32>> = BTreeMap::new();
+        for (i, s) in self.sections.iter().enumerate() {
+            siblings.entry(s.parent).or_default().push(i as u32);
+        }
+        for (_parent, ids) in siblings {
+            for pair in ids.windows(2) {
+                self.edges.push(Edge {
+                    from: GraphNodeId {
+                        kind: NodeKind::Section,
+                        index: pair[0],
+                    },
+                    to: GraphNodeId {
+                        kind: NodeKind::Section,
+                        index: pair[1],
+                    },
+                    kind: EdgeKind::Sequential,
+                });
+            }
+        }
+    }
+
+    fn emit(self) -> MrpcResult {
+        let n_sections = self.sections.len() as u32;
+        let n_large_code = self.large_codes;
+        let n_large_table = self.large_tables;
+        let n_diagram = self.diagrams;
+        let n_footnote = self.footnotes.len() as u32;
+        let n_linked_doc = self.linked_docs.len() as u32;
+        let n_external = self.external_domains.len() as u32;
+
+        let total_nodes = n_sections
+            + n_large_code
+            + n_large_table
+            + n_diagram
+            + n_footnote
+            + n_linked_doc
+            + n_external;
+
+        if total_nodes == 0 {
+            return MrpcResult::default();
+        }
+
+        // Connected components via union-find. We only care about components
+        // among reachable nodes in the edge list; isolated artifact nodes
+        // that were created but never referenced are rare (§7.1 says edges
+        // make the node exist), but we count every declared node to stay
+        // faithful to `|N|`.
+        let p = connected_components(&self, total_nodes);
+        let n = total_nodes as f64;
+
+        let sum_w: f64 = self.edges.iter().map(|e| e.kind.weight()).sum();
+        let raw_edges = self.edges.len() as f64;
+
+        let weighted = (sum_w - n + 2.0 * p).max(1.0);
+        let raw = raw_edges - n + 2.0 * p;
+
+        MrpcResult { weighted, raw }
+    }
+}
+
+fn connected_components(g: &GraphBuilder, total_nodes: u32) -> f64 {
+    use std::collections::HashMap;
+
+    // Assign a compact integer id to every declared node so union-find is
+    // dense.
+    let mut ids: HashMap<GraphNodeId, usize> = HashMap::new();
+    for i in 0..g.sections.len() {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::Section,
+                index: i as u32,
+            },
+            ids.len(),
+        );
+    }
+    for i in 0..g.large_codes {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::LargeCode,
+                index: i,
+            },
+            ids.len(),
+        );
+    }
+    for i in 0..g.large_tables {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::LargeTable,
+                index: i,
+            },
+            ids.len(),
+        );
+    }
+    for i in 0..g.diagrams {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::Diagram,
+                index: i,
+            },
+            ids.len(),
+        );
+    }
+    for idx in g.footnotes.values() {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::Footnote,
+                index: *idx,
+            },
+            ids.len(),
+        );
+    }
+    for idx in g.linked_docs.values() {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::LinkedDoc,
+                index: *idx,
+            },
+            ids.len(),
+        );
+    }
+    for idx in g.external_domains.values() {
+        ids.insert(
+            GraphNodeId {
+                kind: NodeKind::ExternalDomain,
+                index: *idx,
+            },
+            ids.len(),
+        );
+    }
+
+    let mut parent: Vec<usize> = (0..(total_nodes as usize)).collect();
+
+    fn find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    fn union(parent: &mut [usize], a: usize, b: usize) {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent[ra] = rb;
+        }
+    }
+
+    for e in &g.edges {
+        let (Some(&a), Some(&b)) = (ids.get(&e.from), ids.get(&e.to)) else {
+            continue;
+        };
+        union(&mut parent, a, b);
+    }
+
+    let mut roots = std::collections::HashSet::new();
+    for i in 0..(total_nodes as usize) {
+        roots.insert(find(&mut parent, i));
+    }
+    roots.len() as f64
+}
+
+fn classify_link(dest: &str) -> LinkClass {
+    if dest.starts_with('#') {
+        LinkClass::InternalAnchor
+    } else if has_scheme(dest) {
+        LinkClass::External
+    } else {
+        LinkClass::Relative
+    }
+}
+
+fn has_scheme(dest: &str) -> bool {
+    if let Some(colon) = dest.find(':') {
+        let scheme = &dest[..colon];
+        // RFC 3986 scheme: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+        let chars: Vec<char> = scheme.chars().collect();
+        if chars.is_empty() {
+            return false;
+        }
+        if !chars[0].is_ascii_alphabetic() {
+            return false;
+        }
+        for c in &chars[1..] {
+            if !(c.is_ascii_alphanumeric() || *c == '+' || *c == '-' || *c == '.') {
+                return false;
+            }
+        }
+        return true;
+    }
+    false
+}
+
+fn extract_domain(dest: &str) -> Option<String> {
+    let rest = match dest.find("://") {
+        Some(pos) => &dest[pos + 3..],
+        None => return None,
+    };
+    let host_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let host = &rest[..host_end];
+    if host.is_empty() {
+        return None;
+    }
+    // Strip userinfo ("user:pass@host").
+    let host = match host.rfind('@') {
+        Some(at) => &host[at + 1..],
+        None => host,
+    };
+    // Strip port.
+    let host = match host.rfind(':') {
+        Some(p) => &host[..p],
+        None => host,
+    };
+    Some(host.to_ascii_lowercase())
+}
+
+fn normalize_relative_path(dest: &str) -> String {
+    // Drop any fragment so `foo.md#section` and `foo.md` collapse to one
+    // linked-doc node. Keep query components — they usually point at
+    // different targets.
+    if let Some(pos) = dest.find('#') {
+        dest[..pos].to_string()
+    } else {
+        dest.to_string()
+    }
+}
+
+fn node_line_span(node: &Node<'_>) -> usize {
+    let start = node.start_row();
+    let (end_row, end_col) = node.end_position();
+    let mut end = end_row;
+    if end > start && end_col == 0 {
+        end -= 1;
+    }
+    end.saturating_sub(start) + 1
+}
+
+fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
+    let mut cursor = node.cursor();
+    if !cursor.goto_first_child() {
+        return None;
+    }
+    loop {
+        let child = cursor.node();
+        if matches!(
+            child.kind_id().into(),
+            Markdown::InfoString | Markdown::Language
+        ) {
+            // `Language` is a child of `InfoString`; either works.
+            let inner = find_language_inside(&child).unwrap_or(child);
+            let bytes = source.as_bytes();
+            let start = inner.start_byte();
+            let end = inner.end_byte();
+            if start <= bytes.len() && end <= bytes.len() && start < end {
+                let info = std::str::from_utf8(&bytes[start..end])
+                    .ok()?
+                    .trim()
+                    .to_ascii_lowercase();
+                if !info.is_empty() {
+                    return Some(info);
+                }
+            }
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    None
+}
+
+fn find_language_inside<'a>(node: &Node<'a>) -> Option<Node<'a>> {
+    if matches!(node.kind_id().into(), Markdown::Language) {
+        return Some(*node);
+    }
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            let child = cursor.node();
+            if matches!(child.kind_id().into(), Markdown::Language) {
+                return Some(child);
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    None
+}
+
+fn count_table_cells(node: &Node<'_>) -> usize {
+    let mut total = 0usize;
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            let child = cursor.node();
+            if matches!(
+                child.kind_id().into(),
+                Markdown::PipeTableHeader | Markdown::PipeTableRow
+            ) {
+                let mut c2 = child.cursor();
+                if c2.goto_first_child() {
+                    loop {
+                        if matches!(c2.node().kind_id().into(), Markdown::PipeTableCell) {
+                            total += 1;
+                        }
+                        if !c2.goto_next_sibling() {
+                            break;
+                        }
+                    }
+                }
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    total
+}
+
+fn link_destination(node: &Node<'_>, source: &str) -> Option<String> {
+    // Find a `link_destination` or `link_destination_parenthesis` descendant.
+    let mut stack = vec![*node];
+    while let Some(n) = stack.pop() {
+        let kind: Markdown = n.kind_id().into();
+        if matches!(
+            kind,
+            Markdown::LinkDestination | Markdown::LinkDestinationParenthesis | Markdown::Uri
+        ) {
+            let bytes = source.as_bytes();
+            let start = n.start_byte();
+            let end = n.end_byte();
+            if end <= bytes.len() && start < end {
+                let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
+                if !text.is_empty() {
+                    // The grammar can wrap the URL in angle brackets; strip them.
+                    let clean = text.trim_start_matches('<').trim_end_matches('>');
+                    return Some(clean.to_string());
+                }
+            }
+            return None;
+        }
+        let mut cursor = n.cursor();
+        if cursor.goto_first_child() {
+            loop {
+                stack.push(cursor.node());
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+    }
+    None
+}
+
+fn footnote_def_label(node: &Node<'_>, source: &str) -> Option<String> {
+    label_text(node, source, Markdown::FootnoteLabel)
+}
+
+fn footnote_ref_label(node: &Node<'_>, source: &str) -> Option<String> {
+    label_text(node, source, Markdown::FootnoteReferenceLabel)
+        .or_else(|| label_text(node, source, Markdown::FootnoteLabel))
+}
+
+fn link_ref_label(node: &Node<'_>, source: &str) -> Option<String> {
+    label_text(node, source, Markdown::LinkLabel)
+}
+
+fn label_text(node: &Node<'_>, source: &str, target: Markdown) -> Option<String> {
+    let target_id = target as u16;
+    let mut stack = vec![*node];
+    while let Some(n) = stack.pop() {
+        if n.kind_id() == target_id {
+            let bytes = source.as_bytes();
+            let start = n.start_byte();
+            let end = n.end_byte();
+            if end <= bytes.len() {
+                return std::str::from_utf8(&bytes[start..end])
+                    .ok()
+                    .map(|s| s.trim().to_string());
+            }
+        }
+        let mut cursor = n.cursor();
+        if cursor.goto_first_child() {
+            loop {
+                stack.push(cursor.node());
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(src: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
+            .unwrap();
+        parser.parse(src, None).unwrap()
+    }
+
+    #[test]
+    fn empty_document_has_zero_mrpc() {
+        let tree = parse("");
+        let root = crate::node::Node(tree.root_node());
+        let r = compute_mrpc(&root, "");
+        assert_eq!(r.weighted, 0.0);
+        assert_eq!(r.raw, 0.0);
+    }
+
+    #[test]
+    fn pure_prose_has_minimal_mrpc() {
+        let src = "# Title\n\nSome prose with no links or artifacts.\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let r = compute_mrpc(&root, src);
+        // One section, no edges → weighted = max(1, 0 - 1 + 2*1) = 1.0.
+        assert_eq!(r.weighted, 1.0);
+    }
+
+    #[test]
+    fn external_link_gets_external_weight() {
+        let src = "# Title\n\nSee [rust-lang](https://www.rust-lang.org) for more.\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let r = compute_mrpc(&root, src);
+        // N = 2 (section + external domain); E = 1 with weight 1.0.
+        // Weighted MRPC = max(1, 1.0 - 2 + 2*1) = 1.0.
+        assert_eq!(r.weighted, 1.0);
+    }
+
+    #[test]
+    fn multi_section_mrpc_grows() {
+        let src = "# A\n\ntext\n\n## B\n\ntext\n\n## C\n\n[x](https://example.com)\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let r = compute_mrpc(&root, src);
+        // 3 sections + 1 external domain = 4 nodes.
+        // Edges: 2 hierarchy (A→B, A→C), 1 sequential (B→C), 1 external.
+        // Sum weights = 0.15 + 0.15 + 0.20 + 1.00 = 1.50
+        // |N| = 4, P = 1 → weighted = 1.50 - 4 + 2 = -0.50 → max(1, …) = 1.0
+        assert_eq!(r.weighted, 1.0);
+    }
+
+    #[test]
+    fn classify_link_behaves() {
+        assert_eq!(classify_link("#intro"), LinkClass::InternalAnchor);
+        assert_eq!(classify_link("./foo.md"), LinkClass::Relative);
+        assert_eq!(classify_link("foo.md#x"), LinkClass::Relative);
+        assert_eq!(classify_link("https://example.com/"), LinkClass::External);
+        assert_eq!(classify_link("mailto:x@y.z"), LinkClass::External);
+    }
+
+    #[test]
+    fn extract_domain_handles_userinfo_and_port() {
+        assert_eq!(
+            extract_domain("https://user:pw@Example.COM:8443/x?y=1"),
+            Some("example.com".to_string())
+        );
+        assert_eq!(extract_domain("http://a.b/"), Some("a.b".to_string()));
+        assert_eq!(extract_domain("mailto:x@y.z"), None);
+    }
+}

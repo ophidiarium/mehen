@@ -1,0 +1,117 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 38
+  ploc: 16
+  cloc: 4
+  tloc: 4
+  mloc: 0
+  bloc: 13
+  aloc: 9
+loc_ratios:
+  artifact_line_ratio: 0.23684210526315788
+  code_line_ratio: 0.10526315789473684
+  table_line_ratio: 0.10526315789473684
+  math_line_ratio: 0
+  blank_line_ratio: 0.34210526315789475
+size:
+  words: 41
+  effective_content_units: 1.9308333333333332
+  sections: 7
+  headings: 7
+ecu_inputs:
+  table_cells: 6
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 38
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+    word_count: 26
+    block_count: 1
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 7
+    end_line: 10
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 7
+    block_count: 1
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 11
+    end_line: 15
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 2
+    block_count: 3
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 16
+    end_line: 21
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 1
+    block_count: 2
+  - section_id: 4
+    heading_level: 2
+    heading_text: ~
+    start_line: 22
+    end_line: 28
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 5
+    heading_level: 2
+    heading_text: ~
+    start_line: 29
+    end_line: 32
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 5
+    block_count: 1
+  - section_id: 6
+    heading_level: 2
+    heading_text: ~
+    start_line: 33
+    end_line: 38
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 6
+  cognitive_complexity: 3.763125
+  halstead:
+    operators_distinct: 10
+    operators_total: 32
+    operands_distinct: 57
+    operands_total: 63
+    vocabulary: 67
+    length: 95
+    volume: 576.2784730934884
+    difficulty: 5.526315789473685
+    effort: 3184.696824990331
+    embedded_volume: 1.2392304845413264
+    total_volume: 577.5177035780297
+maintainability:
+  documentation_maintainability_index: 100
