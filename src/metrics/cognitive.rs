@@ -832,6 +832,18 @@ impl Cognitive for CCode {
     }
 }
 
+// Markdown is a documentation language; Cognitive is a code metric. The
+// dedicated Markdown pipeline computes its own MCC analogue (Phase B).
+#[cfg(feature = "markdown")]
+impl Cognitive for crate::langs::MarkdownCode {
+    fn compute(
+        _node: &Node,
+        _stats: &mut Stats,
+        _nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{

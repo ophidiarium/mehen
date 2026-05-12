@@ -11,5 +11,6 @@ mk_langs!(
     (Ruby, tree_sitter_ruby),
     (Kotlin, tree_sitter_kotlin),
     (Powershell, tree_sitter_pwsh),
-    (C, tree_sitter_c)
+    (C, tree_sitter_c),
+    (Markdown, tree_sitter_markdown_text)
 );

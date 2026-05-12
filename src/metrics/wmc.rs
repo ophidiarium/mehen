@@ -136,9 +136,15 @@ impl Stats {
     }
 
     /// Returns whether the `Wmc` metric is meaningful for the given language.
-    /// Languages without class-like constructs opt out.
+    /// Languages without class-like constructs opt out. Markdown is a
+    /// documentation language with no classes or methods and likewise opts
+    /// out of `Wmc`.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
+        #[cfg(feature = "markdown")]
+        if matches!(lang, LANG::Markdown) {
+            return false;
+        }
         !matches!(lang, LANG::Go | LANG::C)
     }
 
@@ -201,6 +207,13 @@ impl Wmc for GoCode {
 
 // C has no class-like constructs; WMC is not applicable.
 impl Wmc for CCode {
+    fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
+}
+
+// Markdown is a documentation language; WMC is a code-metric and does not
+// apply. The metric is also disabled for the language via `applies_to`.
+#[cfg(feature = "markdown")]
+impl Wmc for crate::langs::MarkdownCode {
     fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
 }
 

@@ -238,9 +238,14 @@ impl Stats {
     }
 
     /// Returns whether the `Npm` metric is meaningful for the given language.
-    /// Languages without class-like constructs opt out.
+    /// Languages without class-like constructs opt out. Markdown has no
+    /// classes or methods and likewise opts out.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
+        #[cfg(feature = "markdown")]
+        if matches!(lang, LANG::Markdown) {
+            return false;
+        }
         !matches!(lang, LANG::Go | LANG::C)
     }
 
@@ -628,6 +633,12 @@ impl Npm for PowershellCode {
         let public = powershell_member_is_public(node, code);
         record_method(stats, SpaceKind::Class, public);
     }
+}
+
+// Markdown has no methods; NPM opts out via `applies_to(LANG::Markdown)`.
+#[cfg(feature = "markdown")]
+impl Npm for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
 #[cfg(test)]

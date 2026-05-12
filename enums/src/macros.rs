@@ -28,6 +28,7 @@ macro_rules! mk_get_language {
                 Lang::Kotlin => tree_sitter_kotlin::LANGUAGE.into(),
                 Lang::Powershell => tree_sitter_pwsh::LANGUAGE.into(),
                 Lang::C => tree_sitter_c::LANGUAGE.into(),
+                Lang::Markdown => tree_sitter_markdown_text::LANGUAGE.into(),
             }
         }
     };

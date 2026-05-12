@@ -1,3 +1,5 @@
+#[cfg(feature = "markdown")]
+use crate::langs::MarkdownCode;
 use crate::langs::{
     CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
     TypescriptCode,
@@ -655,6 +657,13 @@ impl Getter for CCode {
             _ => HalsteadType::Unknown,
         }
     }
+}
+
+#[cfg(feature = "markdown")]
+impl Getter for MarkdownCode {
+    // Markdown uses the dedicated pipeline in `src/markdown/`; here we rely on
+    // the trait's default `Getter` impls so the parser still builds a single
+    // top-level unit space with no functions or classes.
 }
 
 #[cfg(test)]

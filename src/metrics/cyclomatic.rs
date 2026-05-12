@@ -330,6 +330,13 @@ impl Cyclomatic for CCode {
     }
 }
 
+// Markdown is a documentation language; cyclomatic is a code metric. The
+// dedicated Markdown pipeline computes its own MRPC analogue (Phase B).
+#[cfg(feature = "markdown")]
+impl Cyclomatic for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _stats: &mut Stats) {}
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{

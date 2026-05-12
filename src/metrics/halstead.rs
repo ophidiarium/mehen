@@ -339,8 +339,13 @@ impl Halstead for CCode {
     }
 }
 
-// No languages require empty Halstead implementations
-// implement_metric_trait!(Halstead);
+// Markdown is a documentation language; classical Halstead is a code metric
+// and does not apply. A Markdown-specific Halstead analogue will land in
+// Phase B via the dedicated pipeline.
+#[cfg(feature = "markdown")]
+impl Halstead for crate::langs::MarkdownCode {
+    fn compute<'a>(_node: &Node<'a>, _code: &'a [u8], _halstead_maps: &mut HalsteadMaps<'a>) {}
+}
 
 #[cfg(test)]
 mod tests {

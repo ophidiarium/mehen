@@ -678,6 +678,13 @@ impl Abc for CCode {
     }
 }
 
+// Markdown is a documentation language; ABC is a code metric and has no
+// meaning on prose. The dedicated Markdown pipeline handles document metrics.
+#[cfg(feature = "markdown")]
+impl Abc for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _stats: &mut Stats) {}
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{

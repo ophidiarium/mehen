@@ -39,9 +39,15 @@ tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
 tree-sitter-c = "=0.24.2"
+# TODO: switch to crates.io version once tree-sitter-markdown-text 0.1.0 is published.
+tree-sitter-markdown-text = { git = "https://github.com/ophidiarium/tree-sitter-markdown-text", tag = "v0.1.0", optional = true }
+
+[features]
+default = ["markdown"]
+markdown = ["dep:tree-sitter-markdown-text"]
 
 [package.metadata.cargo-machete]
-ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby", "tree-sitter-kotlin", "tree-sitter-pwsh", "tree-sitter-c"]
+ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby", "tree-sitter-kotlin", "tree-sitter-pwsh", "tree-sitter-c", "tree-sitter-markdown-text"]
 
 [dev-dependencies]
 insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }

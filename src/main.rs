@@ -40,6 +40,8 @@ mod formats;
 mod ci;
 mod diff;
 mod git;
+#[cfg(feature = "markdown")]
+mod markdown;
 mod metric_selector;
 mod rust_metric_helpers;
 mod top_offenders;
@@ -117,6 +119,30 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
         };
         action::<Dump>(&language, source, &path, None, cfg)
     } else if cfg.metrics {
+        // Markdown metrics run through a dedicated documentation pipeline,
+        // not the source-code `FuncSpace` path. Intercept here so the output
+        // schema stays shaped per §23 instead of masquerading as code spaces.
+        #[cfg(feature = "markdown")]
+        if matches!(language, LANG::Markdown) {
+            let source_str = String::from_utf8_lossy(&source).into_owned();
+            let metrics = markdown::analyze_markdown(&source_str, &path);
+            if let Some(output_format) = &cfg.output_format {
+                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
+            } else {
+                // Default stdout rendering is a pretty-printed JSON blob —
+                // the same as the rest of the metrics pipeline's dev path.
+                match serde_json::to_string_pretty(&metrics) {
+                    Ok(rendered) => {
+                        writeln!(io::stdout().lock(), "{rendered}")
+                            .expect("failed to write markdown metrics");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize markdown metrics: {e}");
+                    }
+                }
+            }
+            return Ok(());
+        }
         if let Some(output_format) = &cfg.output_format {
             if let Some(space) = get_function_spaces(&language, source, &path, None) {
                 output_format.dump_formats(space, path, cfg.output.as_ref(), cfg.pretty);
