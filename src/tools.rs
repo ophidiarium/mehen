@@ -49,8 +49,16 @@ fn read_file_inner(
         return Ok(None);
     }
     if file_size == 0 {
-        // Completely empty files produce no metrics either way.
-        return Ok(None);
+        // Zero-byte files: the source-code pipeline has nothing to do, but
+        // the Markdown pipeline still wants a record so `--metrics` emits
+        // `dloc=0` / `sections: []` for the file. Return an empty buffer
+        // only when the caller opted out of `skip_tiny` (Markdown path);
+        // source-code callers continue to short-circuit.
+        return if skip_tiny {
+            Ok(None)
+        } else {
+            Ok(Some(Vec::new()))
+        };
     }
 
     let mut file = File::open(path)?;

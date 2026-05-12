@@ -279,3 +279,44 @@ fn top_offenders_rejects_unknown_language_type() {
         "unexpected stderr: {stderr}"
     );
 }
+
+#[cfg(feature = "markdown")]
+#[test]
+fn metrics_succeeds_for_empty_markdown_file() {
+    // Codex P1 regression guard: a zero-byte .md file must still produce
+    // a valid Markdown metric record (dloc=0, sections=[]) instead of
+    // silently emitting nothing.
+    use std::io::Write as _;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("empty.md");
+    std::fs::File::create(&path)
+        .expect("create empty.md")
+        .write_all(b"")
+        .expect("write empty file");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
+        .args(["--metrics", "-p", path.to_str().unwrap()])
+        .output()
+        .expect("failed to run mehen --metrics on empty .md");
+
+    assert!(
+        output.status.success(),
+        "mehen --metrics on an empty .md file must succeed: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout was not UTF-8");
+    assert!(
+        !stdout.trim().is_empty(),
+        "mehen --metrics on an empty .md file must produce output"
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON from empty-md run: {e}\n---\n{stdout}"));
+    assert_eq!(parsed["loc"]["dloc"].as_u64(), Some(0));
+    assert_eq!(
+        parsed["sections"].as_array().map(|s| s.len()),
+        Some(0),
+        "empty .md must produce sections: []"
+    );
+}
