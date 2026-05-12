@@ -169,6 +169,31 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
         };
         action::<Dump>(&language, source, &path, None, cfg)
     } else if cfg.metrics {
+        // Secondary Markdown route: the extension-based fast path above
+        // catches `.md`-like files before the source-code loader can drop
+        // them, but a file identified as Markdown via emacs/vim mode
+        // (e.g. `-*- mode: markdown -*-`) falls through to here. Still
+        // send it to the documentation pipeline.
+        #[cfg(feature = "markdown")]
+        if matches!(language, LANG::Markdown) {
+            let raw = read_file_raw(&path)?.unwrap_or_else(|| source.clone());
+            let source_str = String::from_utf8_lossy(&raw).into_owned();
+            let metrics = markdown::analyze_markdown(&source_str, &path);
+            if let Some(output_format) = &cfg.output_format {
+                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
+            } else {
+                match serde_json::to_string_pretty(&metrics) {
+                    Ok(rendered) => {
+                        writeln!(io::stdout().lock(), "{rendered}")
+                            .expect("failed to write markdown metrics");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize markdown metrics: {e}");
+                    }
+                }
+            }
+            return Ok(());
+        }
         if let Some(output_format) = &cfg.output_format {
             if let Some(space) = get_function_spaces(&language, source, &path, None) {
                 output_format.dump_formats(space, path, cfg.output.as_ref(), cfg.pretty);
