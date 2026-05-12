@@ -358,6 +358,15 @@ impl GraphBuilder {
                 }
                 return;
             }
+            Autolink => {
+                // Autolinks (`<https://example.com>`) are semantically
+                // equivalent to inline external links — they should emit
+                // the same navigation edge (Codex P2 on PR #83).
+                if let Some(dest) = autolink_destination(node, source) {
+                    self.handle_link(&dest);
+                }
+                return;
+            }
             _ => {}
         }
 
@@ -914,6 +923,46 @@ fn count_table_cells(node: &Node<'_>) -> usize {
         }
     }
     total
+}
+
+/// Extract the URL from an `autolink` node. Autolinks wrap the URL in
+/// `<>` and emit a `Uri` child; the text between the angle brackets is
+/// the destination.
+fn autolink_destination(node: &Node<'_>, source: &str) -> Option<String> {
+    // Look for the `Uri` (or fallback to the whole node text) and strip
+    // the surrounding angle brackets.
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            let child = cursor.node();
+            if matches!(child.kind_id().into(), Markdown::Uri) {
+                let bytes = source.as_bytes();
+                let start = child.start_byte();
+                let end = child.end_byte();
+                if end <= bytes.len() && start < end {
+                    let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
+                    if !text.is_empty() {
+                        return Some(text.to_string());
+                    }
+                }
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    // Fallback: strip `<>` from the raw node text.
+    let bytes = source.as_bytes();
+    let start = node.start_byte();
+    let end = node.end_byte();
+    if end <= bytes.len() && start < end {
+        let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
+        let clean = text.trim_start_matches('<').trim_end_matches('>');
+        if !clean.is_empty() {
+            return Some(clean.to_string());
+        }
+    }
+    None
 }
 
 fn link_destination(node: &Node<'_>, source: &str) -> Option<String> {
