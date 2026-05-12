@@ -1,0 +1,50 @@
+---
+source: src/markdown/tests/mod.rs
+assertion_line: 28
+---
+path: "<fixture_path>"
+loc:
+  dloc: 8
+  ploc: 7
+  cloc: 0
+  tloc: 0
+  mloc: 0
+  bloc: 1
+  aloc: 0
+loc_ratios:
+  artifact_line_ratio: 0
+  code_line_ratio: 0
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.125
+size:
+  words: 9
+  effective_content_units: 0.0375
+  sections: 1
+  headings: 1
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: ~
+    heading_text: ~
+    start_line: 1
+    end_line: 8
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+    word_count: 0
+    block_count: 0
+  - section_id: 1
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 8
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 9
+    block_count: 6

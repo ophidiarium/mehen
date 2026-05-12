@@ -62,6 +62,15 @@ fn heading_skip_fixture() {
 }
 
 #[test]
+fn tight_list_fixture() {
+    // Tight bullet lists land in the `list_item` container without a
+    // paragraph child. LOC classification must count them as PLOC; if a
+    // future regression drops ListItem from the prose arm they fall
+    // through to Blank and land in BLOC instead.
+    assert_fixture_snapshot("tight_list.md");
+}
+
+#[test]
 fn trailing_newlines_preserved_in_dloc() {
     // `read_file_raw` feeds `analyze_markdown` the file-on-disk bytes, so
     // trailing blank lines survive and count toward DLOC/BLOC. Guards

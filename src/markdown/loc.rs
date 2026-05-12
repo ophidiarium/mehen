@@ -150,7 +150,9 @@ fn classify_node(node: &Node<'_>, classes: &mut [LineClass]) {
 
         // Prose-shaped blocks. Children like inline code / math inline do
         // not relabel their line — they appear inside a paragraph whose
-        // line bucket is prose, consistent with §5.
+        // line bucket is prose, consistent with §5. List items are prose
+        // too: tight lists omit paragraph wrappers, so without this the
+        // list lines would fall through to Blank and inflate BLOC.
         Markdown::Paragraph
         | Markdown::AtxHeading
         | Markdown::AtxHeading2
@@ -163,7 +165,17 @@ fn classify_node(node: &Node<'_>, classes: &mut [LineClass]) {
         | Markdown::BlockQuote
         | Markdown::PlainBlockQuote
         | Markdown::Callout
-        | Markdown::CalloutHeaderParagraph => LineClass::Prose,
+        | Markdown::CalloutHeaderParagraph
+        | Markdown::ListItem
+        | Markdown::ListItem2
+        | Markdown::ListItem3
+        | Markdown::ListItem4
+        | Markdown::ListItem5
+        | Markdown::TaskListItem
+        | Markdown::TaskListItem2
+        | Markdown::TaskListItem3
+        | Markdown::TaskListItem4
+        | Markdown::TaskListItem5 => LineClass::Prose,
 
         _ => return,
     };
