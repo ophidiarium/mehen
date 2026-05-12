@@ -134,6 +134,20 @@ implement_metric_trait!(
     CCode
 );
 
+// Markdown is a documentation language; Maintainability Index depends on
+// source-code LOC / cyclomatic / Halstead counts which are not applicable.
+// A dedicated DMI analogue lands in Phase B.
+#[cfg(feature = "markdown")]
+impl Mi for crate::langs::MarkdownCode {
+    fn compute(
+        _loc: &loc::Stats,
+        _cyclomatic: &cyclomatic::Stats,
+        _halstead: &halstead::Stats,
+        _stats: &mut Stats,
+    ) {
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::PythonParser;

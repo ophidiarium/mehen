@@ -11,6 +11,9 @@ macro_rules! get_language {
     (tree_sitter_pwsh) => {
         tree_sitter_pwsh::LANGUAGE.into()
     };
+    (tree_sitter_markdown_text) => {
+        tree_sitter_markdown_text::LANGUAGE.into()
+    };
     ($name:ident) => {
         $name::LANGUAGE.into()
     };

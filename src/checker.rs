@@ -1,3 +1,5 @@
+#[cfg(feature = "markdown")]
+use crate::langs::MarkdownCode;
 use crate::langs::{
     CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
     TypescriptCode, TypescriptParser,
@@ -624,6 +626,45 @@ impl Checker for CCode {
         if let Some(parent) = node.parent() {
             return parent.kind_id() == C::ElseClause;
         }
+        false
+    }
+}
+
+#[cfg(feature = "markdown")]
+impl Checker for MarkdownCode {
+    // Markdown is a documentation language; its AST has no code-shaped nodes,
+    // so the source-code `Checker` predicates all return `false`. The dedicated
+    // Markdown analyzer (see `src/markdown/`) bypasses this trait entirely.
+    fn is_comment(_: &Node) -> bool {
+        false
+    }
+
+    fn is_func_space(_: &Node) -> bool {
+        false
+    }
+
+    fn is_func(_: &Node) -> bool {
+        false
+    }
+
+    fn is_closure(_: &Node) -> bool {
+        false
+    }
+
+    fn is_call(_: &Node) -> bool {
+        false
+    }
+
+    fn is_non_arg(_: &Node) -> bool {
+        false
+    }
+
+    fn is_string(_: &Node) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn is_else_if(_: &Node) -> bool {
         false
     }
 }

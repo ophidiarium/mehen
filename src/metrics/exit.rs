@@ -245,6 +245,12 @@ impl Exit for CCode {
     }
 }
 
+// Markdown documents have no return statements.
+#[cfg(feature = "markdown")]
+impl Exit for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _stats: &mut Stats) {}
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{

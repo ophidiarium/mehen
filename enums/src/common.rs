@@ -23,6 +23,16 @@ pub fn sanitize_identifier(name: &str) -> String {
     if name == "Self" {
         return "SELF".to_string();
     }
+    // A token composed solely of underscores (e.g. `__` emphasis delimiter in
+    // Markdown grammars) survives the loop below as `__`, which then collapses
+    // to an empty identifier in `camel_case`. Map such names to a run of
+    // `UNDERSCORE` tokens joined with `_` so each contributes a word boundary
+    // and the generated enum variant compiles.
+    if !name.is_empty() && name.chars().all(|c| c == '_') {
+        return std::iter::repeat_n("UNDERSCORE", name.len())
+            .collect::<Vec<_>>()
+            .join("_");
+    }
 
     let mut result = String::with_capacity(name.len());
     for c in name.chars() {
@@ -170,7 +180,16 @@ pub fn get_token_names(language: &Language, escape: bool) -> Vec<(String, bool, 
         }
     }
     let mut names: Vec<_> = names.values().cloned().collect();
-    names.push(("Error".to_string(), false, "ERROR".to_string()));
+    // The tree-sitter ERROR sentinel is always appended. A small number of
+    // grammars (e.g. tree-sitter-markdown-text) also declare an anonymous
+    // `_error` external token whose sanitized identifier collides with `Error`;
+    // suffix the explicit sentinel in that case so both variants compile.
+    let sentinel_name = if names.iter().any(|(n, _, _)| n == "Error") {
+        "ErrorSentinel".to_string()
+    } else {
+        "Error".to_string()
+    };
+    names.push((sentinel_name, false, "ERROR".to_string()));
 
     names
 }

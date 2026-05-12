@@ -217,9 +217,14 @@ impl Stats {
     }
 
     /// Returns whether the `Npa` metric is meaningful for the given language.
-    /// Languages without class-like constructs opt out.
+    /// Languages without class-like constructs opt out. Markdown has no
+    /// classes and likewise opts out.
     #[inline(always)]
     pub(crate) fn applies_to(lang: LANG) -> bool {
+        #[cfg(feature = "markdown")]
+        if matches!(lang, LANG::Markdown) {
+            return false;
+        }
         !matches!(lang, LANG::Go | LANG::C)
     }
 
@@ -546,6 +551,12 @@ impl Npa for PowershellCode {
         let public = crate::metrics::npm::powershell_member_is_public(node, code);
         stats.record_attribute(SpaceKind::Class, public);
     }
+}
+
+// Markdown has no classes; NPA opts out via `applies_to(LANG::Markdown)`.
+#[cfg(feature = "markdown")]
+impl Npa for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
 #[cfg(test)]

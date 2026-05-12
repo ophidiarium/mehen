@@ -26,3 +26,16 @@ Ccomment = "Ccomment"
 "Hge" = "Hge"
 "ccontains" = "ccontains"
 "Seh" = "Seh"
+# Readability formula by Caylor, Sticht, Fox & Ford (1973) — proper noun
+"FORCAST" = "FORCAST"
+"forcast" = "forcast"
+# Proper noun: Jean Ure (lexical density, 1971)
+"Ure" = "Ure"
+# Proper noun: Yukio Ono (Japanese readability, Tateishi/Ono/Yamada 1988)
+"Ono" = "Ono"
+# Acronym for Wording Quality Score (§33.11, §36.7)
+"WQS" = "WQS"
+# Proper noun: Automattic (harper Rust grammar checker vendor)
+"Automattic" = "Automattic"
+# Suffix-pattern fragment cited in §33.6 nominalizations (-ment)
+"ment" = "ment"

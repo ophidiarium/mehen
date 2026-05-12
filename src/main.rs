@@ -40,11 +40,15 @@ mod formats;
 mod ci;
 mod diff;
 mod git;
+#[cfg(feature = "markdown")]
+mod markdown;
 mod metric_selector;
 mod rust_metric_helpers;
 mod top_offenders;
 
 use std::io::{self, Write};
+#[cfg(feature = "markdown")]
+use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use std::sync::{Arc, Mutex};
@@ -62,6 +66,8 @@ use crate::function::{Function, FunctionCfg};
 use crate::langs::{LANG, action, get_from_ext, get_function_spaces};
 use crate::output::{Dump, DumpCfg};
 use crate::spaces::{Metrics, MetricsCfg};
+#[cfg(feature = "markdown")]
+use crate::tools::read_file_raw;
 use crate::tools::{guess_language, read_file_with_eol};
 use crate::top_offenders::TopOffendersOpts;
 
@@ -95,7 +101,57 @@ pub(crate) fn mk_globset(elems: Vec<String>) -> GlobSet {
     globset.build().map_or(GlobSet::empty(), |globset| globset)
 }
 
+/// Returns true when the file at `path` should be treated as Markdown for
+/// the metrics pipeline. Extension-based check so tiny files (empty, 1-2
+/// bytes) that never reach `read_file_with_eol` still get routed here.
+#[cfg(feature = "markdown")]
+fn is_markdown_path(override_language: &Option<LANG>, path: &Path) -> bool {
+    if let Some(lang) = override_language {
+        return matches!(lang, LANG::Markdown);
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    matches!(
+        ext.as_deref(),
+        Some("md" | "markdown" | "mdown" | "mkd" | "mkdn" | "mdx")
+    )
+}
+
 fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
+    // Fast path for Markdown metrics: peek at the extension (no file read)
+    // so tiny docs (empty file, `#\n`, …) still produce metrics. The
+    // source-code loader's `<= 3 byte` heuristic would otherwise skip them.
+    //
+    // `--dump` must still take precedence so `mehen --dump -p foo.md`
+    // returns an AST tree like every other language; only route straight
+    // to the metrics pipeline when dump isn't requested.
+    #[cfg(feature = "markdown")]
+    if cfg.metrics && !cfg.dump && is_markdown_path(&cfg.language, &path) {
+        if let Some(raw) = read_file_raw(&path)? {
+            let source_str = String::from_utf8_lossy(&raw).into_owned();
+            let metrics = markdown::analyze_markdown(&source_str, &path);
+            if let Some(output_format) = &cfg.output_format {
+                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
+            } else {
+                // Default stdout rendering is a pretty-printed JSON blob —
+                // the same as the rest of the metrics pipeline's dev path.
+                match serde_json::to_string_pretty(&metrics) {
+                    Ok(rendered) => {
+                        writeln!(io::stdout().lock(), "{rendered}")
+                            .expect("failed to write markdown metrics");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize markdown metrics: {e}");
+                    }
+                }
+            }
+            return Ok(());
+        }
+        return Ok(());
+    }
+
     let source = if let Some(source) = read_file_with_eol(&path)? {
         source
     } else {
@@ -117,6 +173,31 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
         };
         action::<Dump>(&language, source, &path, None, cfg)
     } else if cfg.metrics {
+        // Secondary Markdown route: the extension-based fast path above
+        // catches `.md`-like files before the source-code loader can drop
+        // them, but a file identified as Markdown via emacs/vim mode
+        // (e.g. `-*- mode: markdown -*-`) falls through to here. Still
+        // send it to the documentation pipeline.
+        #[cfg(feature = "markdown")]
+        if matches!(language, LANG::Markdown) {
+            let raw = read_file_raw(&path)?.unwrap_or_else(|| source.clone());
+            let source_str = String::from_utf8_lossy(&raw).into_owned();
+            let metrics = markdown::analyze_markdown(&source_str, &path);
+            if let Some(output_format) = &cfg.output_format {
+                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
+            } else {
+                match serde_json::to_string_pretty(&metrics) {
+                    Ok(rendered) => {
+                        writeln!(io::stdout().lock(), "{rendered}")
+                            .expect("failed to write markdown metrics");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize markdown metrics: {e}");
+                    }
+                }
+            }
+            return Ok(());
+        }
         if let Some(output_format) = &cfg.output_format {
             if let Some(space) = get_function_spaces(&language, source, &path, None) {
                 output_format.dump_formats(space, path, cfg.output.as_ref(), cfg.pretty);
