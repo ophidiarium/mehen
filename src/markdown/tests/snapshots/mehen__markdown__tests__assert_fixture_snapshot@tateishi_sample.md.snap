@@ -162,7 +162,7 @@ prose:
       max_comma_violation_count: 0
       max_ten_violation_count: 1
       long_sentence_count: 0
-      wording_quality_score: 0.9
+      wording_quality_score: 0.83
     style_conformance:
       violations:
         - rule: rule-3-jouyou-only

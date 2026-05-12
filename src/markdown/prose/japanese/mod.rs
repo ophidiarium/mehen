@@ -76,11 +76,22 @@ pub(crate) fn analyze(text: &str) -> JapaneseReport {
     // 5. Lexical (comma/period ratio, avg sent chars, p90, jukugo).
     let lexical = wording::lexical(&sents, &script_composition, &runs);
 
-    // 6. Wording / politeness / weak phrases / JTF rule outputs.
-    let wording = wording::wording(text, &sents, &script_composition, &runs, &lexical);
-
-    // 7. JTF mechanical rules.
+    // 6. JTF mechanical rules — computed first so wording's WQS can consume
+    //    the resulting violation density per §36.7.
     let style_conformance = jtf::analyze(text, &sents, &script_composition, &jouyou);
+
+    // 7. Wording / politeness / weak phrases. Threads hyougai_ratio and
+    //    the JTF violation density through so the composite Wording
+    //    Quality Score (§36.7) covers those axes directly.
+    let wording = wording::wording(
+        text,
+        &sents,
+        &script_composition,
+        &runs,
+        &lexical,
+        jouyou.hyougai_ratio,
+        style_conformance.violation_density_per_1000,
+    );
 
     JapaneseReport {
         script_composition,

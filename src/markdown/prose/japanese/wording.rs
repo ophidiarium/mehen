@@ -117,6 +117,8 @@ pub(crate) fn wording(
     _composition: &ScriptComposition,
     runs: &[Run],
     lexical: &JapaneseLexical,
+    hyougai_ratio: f64,
+    jtf_violation_density_per_1000: f64,
 ) -> JapaneseWording {
     // Politeness classification.
     let (keitai, jotai, honorific) = classify_politeness(sents);
@@ -194,21 +196,27 @@ pub(crate) fn wording(
     };
 
     // Japanese Wording Quality Score §36.7.
+    //
+    // The §36.7 formula has explicit `hyougai_ratio` and
+    // `jtf_violation_density` terms; earlier revisions reused
+    // `long_kanji_rate` as a placeholder for both, which let hyōgai-heavy
+    // or JTF-violating documents keep a clean WQS. The jouyou + JTF signals
+    // are now threaded in directly so the score responds to those axes.
     let wqs = clamp01(
         1.0 - 0.15 * sat(long_rate, 0.05, 0.30)
             - 0.12 * sat(weak_rate, 0.01, 0.05)
             - 0.12 * sat(redundant_rate, 0.01, 0.05)
             - 0.10 * sat(doubled_joshi_count as f64 / sent_n, 0.02, 0.10)
             - 0.10 * sat(long_kanji_rate, 0.05, 0.25)
-            - 0.10 * if keitai_jotai_mix_count > 0 {
-                sat(mix_ratio, 0.02, 0.20)
-            } else {
-                0.0
-            }
+            - 0.10
+                * if keitai_jotai_mix_count > 0 {
+                    sat(mix_ratio, 0.02, 0.20)
+                } else {
+                    0.0
+                }
             - 0.08 * sat(max_comma_rate, 0.02, 0.15)
-            // hyougai_ratio term pulled in by jouyou module externally; keep
-            // weight here zero to avoid double-counting.
-            - 0.07 * sat(long_kanji_rate, 0.5, 5.0),
+            - 0.08 * sat(hyougai_ratio, 0.05, 0.25)
+            - 0.07 * sat(jtf_violation_density_per_1000, 0.5, 5.0),
     );
 
     JapaneseWording {
@@ -408,5 +416,39 @@ mod tests {
     fn weak_phrase_detected() {
         let text = "このバージョンは動くかもしれない。";
         assert!(count_phrase_occurrences(text, weak_phrases()) > 0);
+    }
+
+    #[test]
+    fn wqs_responds_to_hyougai_and_jtf_signals() {
+        // Codex P1 regression: §36.7 has explicit hyougai_ratio and
+        // jtf_violation_density terms. Earlier revisions reused
+        // long_kanji_rate as a stand-in, which left the composite WQS
+        // blind to both axes. After the fix, the same document scored
+        // with clean jouyou/JTF signals must score HIGHER than one with
+        // hyougai_ratio=0.30 and jtf_violation_density=3.0.
+        use super::super::scripts::ScriptComposition;
+        let text = "これはテストです。動作します。";
+        let sents = vec!["これはテストです。".to_string(), "動作します。".to_string()];
+        let composition = ScriptComposition::default();
+        let runs: Vec<Run> = Vec::new();
+        let lexical = JapaneseLexical {
+            avg_sentence_chars: 10.0,
+            p90_sentence_chars: 10,
+            max_sentence_chars: 10,
+            comma_period_ratio: 0.0,
+            jukugo_density: 0.0,
+            sentence_count: 2,
+            char_count: 20,
+        };
+
+        let clean = wording(text, &sents, &composition, &runs, &lexical, 0.0, 0.0);
+        let dirty = wording(text, &sents, &composition, &runs, &lexical, 0.30, 3.0);
+
+        assert!(
+            dirty.wording_quality_score < clean.wording_quality_score,
+            "WQS must drop when hyougai/JTF signals are present: clean={}, dirty={}",
+            clean.wording_quality_score,
+            dirty.wording_quality_score
+        );
     }
 }
