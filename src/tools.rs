@@ -24,20 +24,54 @@ use regex::bytes::Regex;
 /// read_file_with_eol(&path).unwrap();
 /// ```
 pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    read_file_inner(path, true, true)
+}
+
+/// Reads a file without the trailing-blank-line normalization used for
+/// source-code analysis. Markdown LOC metrics (DLOC/BLOC etc.) depend on
+/// the raw line layout and must see the real trailing `\n`s. Also bypasses
+/// the `file_size <= 3` early-return used for source code, since a 1-byte
+/// Markdown file (`"#"`) is a legitimate heading and must still produce
+/// metrics.
+#[cfg(feature = "markdown")]
+pub(crate) fn read_file_raw(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    read_file_inner(path, false, false)
+}
+
+fn read_file_inner(
+    path: &Path,
+    normalize_trailing: bool,
+    skip_tiny: bool,
+) -> std::io::Result<Option<Vec<u8>>> {
     let file_size = fs::metadata(path).map_or(1024 * 1024, |m| m.len() as usize);
-    if file_size <= 3 {
+    if skip_tiny && file_size <= 3 {
         // this file is very likely almost empty... so nothing to do on it
         return Ok(None);
+    }
+    if file_size == 0 {
+        // Zero-byte files: the source-code pipeline has nothing to do, but
+        // the Markdown pipeline still wants a record so `--metrics` emits
+        // `dloc=0` / `sections: []` for the file. Return an empty buffer
+        // only when the caller opted out of `skip_tiny` (Markdown path);
+        // source-code callers continue to short-circuit.
+        return if skip_tiny {
+            Ok(None)
+        } else {
+            Ok(Some(Vec::new()))
+        };
     }
 
     let mut file = File::open(path)?;
 
-    let mut start = vec![0; 64.min(file_size)];
+    let probe_len = 64.min(file_size);
+    let mut start = vec![0; probe_len];
     let start = if file.read_exact(&mut start).is_ok() {
-        // Skip the bom if one
-        if start[..2] == [b'\xFE', b'\xFF'] || start[..2] == [b'\xFF', b'\xFE'] {
+        // Skip the bom if one — guard each prefix check against buffer
+        // length so 1-2 byte files do not panic on the slice.
+        if probe_len >= 2 && (start[..2] == [b'\xFE', b'\xFF'] || start[..2] == [b'\xFF', b'\xFE'])
+        {
             &start[2..]
-        } else if start[..3] == [b'\xEF', b'\xBB', b'\xBF'] {
+        } else if probe_len >= 3 && start[..3] == [b'\xEF', b'\xBB', b'\xBF'] {
             &start[3..]
         } else {
             &start
@@ -48,8 +82,12 @@ pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>
 
     // so start contains more or less 64 chars
     let mut head = String::from_utf8_lossy(start).into_owned();
-    // The last char could be wrong because we were in the middle of an utf-8 sequence
-    head.pop();
+    // The last char could be wrong because we were in the middle of an utf-8
+    // sequence. Only trim the suspect tail when we actually probed the full
+    // 64-byte window — a short file's bytes are complete.
+    if probe_len == 64 {
+        head.pop();
+    }
     // now check if there is an invalid char
     if head.contains('\u{FFFD}') {
         return Ok(None);
@@ -60,7 +98,9 @@ pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>
 
     file.read_to_end(&mut data)?;
 
-    remove_blank_lines(&mut data);
+    if normalize_trailing {
+        remove_blank_lines(&mut data);
+    }
 
     Ok(Some(data))
 }

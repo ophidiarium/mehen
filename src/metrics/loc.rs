@@ -961,6 +961,15 @@ impl Loc for PowershellCode {
     }
 }
 
+// Markdown uses the dedicated `src/markdown/loc.rs` LOC-family pipeline.
+// The source-code `Loc` trait is intentionally a no-op here so the generic
+// `metrics()` walker produces an empty LOC struct rather than misleading
+// prose-as-code counts.
+#[cfg(feature = "markdown")]
+impl Loc for crate::langs::MarkdownCode {
+    fn compute(_node: &Node, _stats: &mut Stats, _is_func_space: bool, _is_unit: bool) {}
+}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{

@@ -217,6 +217,10 @@ implement_metric_trait!(
     CCode
 );
 
+// Markdown documents have no functions or closures.
+#[cfg(feature = "markdown")]
+impl Nom for crate::langs::MarkdownCode {}
+
 #[cfg(test)]
 mod tests {
     use crate::langs::{KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser};

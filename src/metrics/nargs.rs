@@ -454,6 +454,10 @@ implement_metric_trait!(
     RubyCode
 );
 
+// Markdown documents have no function parameters.
+#[cfg(feature = "markdown")]
+impl NArgs for crate::langs::MarkdownCode {}
+
 #[cfg(test)]
 mod tests {
     use crate::tools::check_metrics;

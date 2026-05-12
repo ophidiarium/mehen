@@ -189,6 +189,7 @@ dependencies = [
  "tree-sitter-c",
  "tree-sitter-go",
  "tree-sitter-kotlin-sg",
+ "tree-sitter-markdown-text",
  "tree-sitter-pwsh",
  "tree-sitter-python",
  "tree-sitter-ruby",
@@ -440,6 +441,16 @@ name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
+
+[[package]]
+name = "tree-sitter-markdown-text"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413578708f2c79ad35202f3720e92e3ce6f4e1994c5df9c9044e59d6057bf137"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
 
 [[package]]
 name = "tree-sitter-pwsh"
