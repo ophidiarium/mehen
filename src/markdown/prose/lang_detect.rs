@@ -434,7 +434,15 @@ pub(crate) fn classify_text(text: &str) -> Language {
         visible_chars += 1;
         // Filter out punctuation and digits from the denominator. Digits are
         // technical tokens that don't signal language; punctuation is shared.
-        if c.is_ascii_punctuation() || is_cjk_punctuation(c) || c.is_ascii_digit() {
+        // Fullwidth digits (`０`–`９`, U+FF10–U+FF19) must also be excluded
+        // or they stay in `total` but never count as kana/han/latin, pushing
+        // the ratios down and misclassifying Japanese headings with
+        // fullwidth numerals as `other` (Codex P2 on PR #85).
+        if c.is_ascii_punctuation()
+            || is_cjk_punctuation(c)
+            || c.is_ascii_digit()
+            || ('\u{FF10}'..='\u{FF19}').contains(&c)
+        {
             continue;
         }
         total += 1;
