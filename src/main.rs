@@ -123,8 +123,12 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
     // Fast path for Markdown metrics: peek at the extension (no file read)
     // so tiny docs (empty file, `#\n`, …) still produce metrics. The
     // source-code loader's `<= 3 byte` heuristic would otherwise skip them.
+    //
+    // `--dump` must still take precedence so `mehen --dump -p foo.md`
+    // returns an AST tree like every other language; only route straight
+    // to the metrics pipeline when dump isn't requested.
     #[cfg(feature = "markdown")]
-    if cfg.metrics && is_markdown_path(&cfg.language, &path) {
+    if cfg.metrics && !cfg.dump && is_markdown_path(&cfg.language, &path) {
         if let Some(raw) = read_file_raw(&path)? {
             let source_str = String::from_utf8_lossy(&raw).into_owned();
             let metrics = markdown::analyze_markdown(&source_str, &path);
