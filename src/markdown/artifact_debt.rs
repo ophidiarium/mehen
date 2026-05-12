@@ -25,7 +25,21 @@ pub(crate) struct DebtInputs<'a> {
 
 pub(crate) fn artifact_debt_score(inputs: &DebtInputs<'_>) -> f64 {
     let artifacts = inputs.artifacts;
-    let total_artifacts = artifacts.len().max(1) as f64;
+    // §19 is a per-artifact metric. A prose-only document with no
+    // artifacts has zero artifact debt by definition — counting stray
+    // prose external links as "artifact debt" creates false positives
+    // on snippet-free markdown (Codex P1 on PR #84). The only §19
+    // component that is not strictly artifact-bound is
+    // `raw_html_or_mdx_lines / DLOC`; we keep that contribution so
+    // raw-HTML-heavy prose still produces debt, but every per-artifact
+    // ratio resolves to 0 when `artifacts.is_empty()`.
+    if artifacts.is_empty() {
+        let raw_html_lines = inputs.raw_html_or_mdx_lines as f64;
+        let dloc = inputs.loc.dloc.max(1) as f64;
+        return clamp01(0.15 * sat(raw_html_lines / dloc, 0.05, 0.25));
+    }
+
+    let total_artifacts = artifacts.len() as f64;
 
     let code_fences = artifacts
         .iter()

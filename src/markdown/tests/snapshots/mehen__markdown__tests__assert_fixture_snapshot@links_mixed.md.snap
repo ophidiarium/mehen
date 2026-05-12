@@ -1,6 +1,5 @@
 ---
 source: src/markdown/tests/mod.rs
-assertion_line: 29
 ---
 path: "<fixture_path>"
 loc:
@@ -91,5 +90,5 @@ tables:
 maintainability:
   documentation_maintainability_index: 0
   section_balance_score: 0
-  artifact_debt_score: 0.1
+  artifact_debt_score: 0
 artifacts: []
