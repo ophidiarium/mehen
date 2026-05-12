@@ -1,0 +1,313 @@
+# Wordy phrases — verbose constructions with simpler alternatives.
+# Source: retext-simplify (https://github.com/retextjs/retext-simplify) MIT,
+# condensed to the phrase list; simpler alternative in comment (not used at runtime).
+# Format: one lowercase phrase per line.
+a number of
+a small number of
+a variety of
+absolutely essential
+absolutely necessary
+accounted for by the fact that
+accordingly
+actual fact
+adjacent to
+advance planning
+all of
+all of a sudden
+along the lines of
+an appreciable amount of
+an appreciable number of
+an example of this is the fact that
+an order of magnitude
+any and all
+are in agreement
+are of the same opinion
+as a consequence of
+as a matter of fact
+as a means of
+as is the case
+as of this date
+as per
+as regards
+as the case may be
+as to
+as yet
+ascertain
+at a later date
+at all times
+at an earlier date
+at first glance
+at present
+at the conclusion of
+at the present time
+at this moment in time
+at this point in time
+at this time
+attach together
+authored
+based on the fact that
+based on the premise that
+because of the fact that
+be an indication of
+be benefited by
+be cognizant of
+be responsible for
+be that as it may
+beg to differ
+being as
+both of them
+boyfriend
+bring to a conclusion
+buy up
+by a factor of two
+by means of
+by the same token
+by virtue of
+by virtue of the fact that
+by way of
+called attention to the fact that
+cease and desist
+close proximity
+commence
+communicate
+completely opposite
+concerning the matter of
+conduct an investigation
+considered to be
+consists of
+continue on
+costs the sum of
+could possibly
+currently
+definitely decided
+demonstrate
+despite the fact that
+did not succeed
+due to the fact that
+during the course of
+during the time that
+each and every one
+each individual
+effected
+end result
+endeavor
+enter into a dialogue
+equally as
+established the fact that
+estimated at about
+eventuate
+exhibit a tendency to
+facilitate
+factor
+fatally killed
+few in number
+final outcome
+finalize
+first and foremost
+first of all
+for a short space of time
+for the purpose of
+for the reason that
+from the point of view of
+give rise to
+given the fact that
+have the ability to
+has a requirement for
+he is a man who
+honest truth
+if and when
+if conditions are such that
+impact
+important essentials
+in a hasty manner
+in a position to
+in a timely manner
+in advance of
+in an uncertain manner
+in attendance
+in close proximity
+in conjunction with
+in connection with
+in excess of
+in lieu of
+in light of the fact that
+in many cases
+in my opinion
+in order to
+in regard to
+in relation to
+in respect to
+in spite of the fact that
+in terms of
+in the absence of
+in the amount of
+in the course of
+in the end
+in the event that
+in the final analysis
+in the immediate vicinity of
+in the majority of cases
+in the nature of
+in the near future
+in the neighborhood of
+in the process of
+in the vicinity of
+in view of
+in view of the fact that
+inasmuch as
+inquire
+is able to
+is applicable to
+is aware of the fact that
+is in the process of
+is of the opinion that
+is required to
+is undertaking to
+it is
+it is believed that
+it is clear that
+it is essential that
+it is evident that
+it is highly recommended
+it is imperative that
+it is incumbent upon
+it is interesting that
+it is necessary that
+it is obvious that
+it is often the case that
+it is possible
+it is possible that
+it is recommended that
+it is vital that
+it is worth mentioning
+last but not least
+later on
+like for example
+liquidate
+majority of
+make adjustments to
+make an application to
+make inquiries about
+many of the
+may have been
+modify
+most likely
+moreover
+needless to say
+not merely
+notwithstanding the fact that
+of an indefinite nature
+of the opinion that
+offer a suggestion
+on a daily basis
+on account of
+on behalf of
+on numerous occasions
+on the basis of
+on the grounds that
+on the occasion of
+on the part of
+once in a great while
+one of the
+one of the reasons
+outside of
+owing to the fact that
+owing to the fact
+partake
+past history
+past memories
+perhaps a few
+personally i believe
+pertaining to
+plan ahead
+plan in advance
+plethora
+point in time
+possibility exists
+pre-planned
+pre-heat
+presently
+previous to
+prior to
+provide a response to
+provided that
+put the emphasis on
+quite a few
+quite unique
+reach a conclusion
+refer back
+relating to
+relative to
+remuneration
+render inoperative
+residence
+respecting
+resultant effect
+return back
+said
+serious crisis
+serves the function of being
+shall
+should you wish
+similar to
+since there is no other
+small in size
+so as to
+so consequently
+still persists
+strike action
+subsequent to
+sufficient number of
+take into consideration
+take action
+take under consideration
+terminate
+that being said
+the fact of the matter is
+the fact that
+the majority of
+the reason being
+the reason for
+the reason is because
+the reason that
+the vast majority of
+there are
+there is
+thereafter
+therefore
+this is
+this point in time
+through the use of
+thus
+to be perfectly honest
+to my mind
+to speak
+together with
+tomorrow
+totality of
+true facts
+ultimately
+under the provisions of
+utilize
+utilization
+various different
+very unique
+vis-à-vis
+vis-a-vis
+want for
+was a person who
+was able to
+was in the process of
+we are of the opinion that
+whether or not
+while
+whilst
+with reference to
+with regard to
+with respect to
+with the exception of
+with the possible exception of
+with the purpose of
+with the result that
+within the realm of possibility
+yet to come

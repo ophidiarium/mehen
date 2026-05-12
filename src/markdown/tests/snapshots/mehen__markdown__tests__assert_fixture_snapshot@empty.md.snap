@@ -80,3 +80,14 @@ maintainability:
   good_scaffold_score: 0
   artifact_debt_score: 0
 artifacts: []
+prose:
+  language_detection:
+    dominant_language: other
+    blocks: []
+  english: ~
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 0
+    sentences_counted: 0
+    blocks_stripped: []

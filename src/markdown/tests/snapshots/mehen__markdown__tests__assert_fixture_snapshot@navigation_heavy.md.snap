@@ -119,3 +119,87 @@ maintainability:
   good_scaffold_score: 0
   artifact_debt_score: 0
 artifacts: []
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 5
+        language: en
+      - start_line: 7
+        end_line: 7
+        language: en
+      - start_line: 9
+        end_line: 10
+        language: en
+      - start_line: 12
+        end_line: 12
+        language: en
+      - start_line: 14
+        end_line: 16
+        language: en
+      - start_line: 18
+        end_line: 18
+        language: en
+      - start_line: 20
+        end_line: 22
+        language: en
+      - start_line: 24
+        end_line: 24
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.781
+      hapax_ratio: 0.763
+      dis_ratio: 0.186
+      lexical_density: 0.747
+      avg_sentence_words: 7.9
+      p90_sentence_words: 14
+      max_sentence_words: 21
+      stddev_sentence_words: 6.488
+      avg_word_chars: 5.418
+      p90_word_chars: 9
+      sentence_count: 10
+      words_total: 79
+    wording:
+      passive_ratio: 0
+      hedge_density: 0
+      weasel_density: 0.013
+      wordy_density: 0
+      adverb_density: 0
+      nominalization_density: 0.051
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 0.992
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 79
+    sentences_counted: 10
+    blocks_stripped: []

@@ -6,7 +6,8 @@
 //! source buffer and path; its output is a serializable
 //! [`types::MarkdownMetrics`] record matching §23's exported schema
 //! (Phase-A LOC/size + Phase-B complexity / maintainability core + Phase-C
-//! links / visuals / tables / artifact debt).
+//! links / visuals / tables / artifact debt + Phase-E language-aware prose
+//! metrics).
 //!
 //! The high-level entry point is [`analyzer::analyze_markdown`]. It is
 //! invoked from `main.rs` when the detected language is `LANG::Markdown`;
@@ -29,6 +30,7 @@ pub(crate) mod mathops;
 pub(crate) mod mcc;
 pub(crate) mod mrpc;
 pub(crate) mod nearby;
+pub(crate) mod prose;
 pub(crate) mod sections;
 pub(crate) mod tables;
 pub(crate) mod types;

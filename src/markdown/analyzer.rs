@@ -16,15 +16,17 @@
 //! - §13 tables,
 //! - §14.1 per-code-fence burden (stored in `artifacts`),
 //! - §14.3 per-math-block burden (stored in `artifacts`),
-//! - §19 artifact debt score.
+//! - §19 artifact debt score,
+//! - §§29–38 language-aware prose layer.
 //!
 //! Phase D (grounding, filler, RCI) appends more fields; no field ever
-//! shrinks.
+//! shrinks. The prose layer is kept strictly separate per §29.1 — it never
+//! modifies any structural score.
 //!
 //! Pipeline order: Phase A (LOC, sections, words, ECU) → Phase B (MRPC,
 //! MCC, Halstead, DMI) → Phase C (links, visuals, tables, artifacts,
-//! artifact debt). Phase C feeds real diagram node/edge counts back into
-//! ECU so §6 does not stay at zero.
+//! artifact debt) → Phase E (prose). Phase C feeds real diagram node/edge
+//! counts back into ECU so §6 does not stay at zero.
 
 use std::path::Path;
 
@@ -40,6 +42,7 @@ use crate::markdown::math_burden::{MathBlock, analyze_math_blocks};
 use crate::markdown::mcc::compute_mcc;
 use crate::markdown::mrpc::compute_mrpc;
 use crate::markdown::nearby::{BlockSpan, collect_blocks, has_prose_within};
+use crate::markdown::prose::analyze_prose;
 use crate::markdown::sections::collect_sections;
 use crate::markdown::tables::{aggregate_tables, analyze_tables};
 use crate::markdown::types::{
@@ -52,8 +55,9 @@ use crate::node::Node;
 use tree_sitter::Parser as TsParser;
 
 /// Parses `source` as Markdown and returns a metric record covering Phase A,
-/// Phase B, and Phase C. `path` is recorded verbatim into the output's
-/// `path` field; the caller controls whether it is absolute or relative.
+/// Phase B, Phase C, and Phase E. `path` is recorded verbatim into the
+/// output's `path` field; the caller controls whether it is absolute or
+/// relative.
 pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let mut parser = TsParser::new();
     parser
@@ -166,6 +170,10 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     };
     let artifact_debt = artifact_debt_score(&debt_inputs);
 
+    // §§29–38 Prose layer. Kept strictly separate per §29.1 — it never
+    // modifies any structural score.
+    let prose = analyze_prose(&root, source.as_bytes());
+
     MarkdownMetrics {
         path: path.to_string_lossy().to_string(),
         loc,
@@ -194,6 +202,7 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
             artifact_debt_score: artifact_debt,
         },
         artifacts,
+        prose,
     }
 }
 

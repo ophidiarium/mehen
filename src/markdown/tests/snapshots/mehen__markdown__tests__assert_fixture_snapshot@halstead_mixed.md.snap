@@ -179,3 +179,102 @@ artifacts:
     has_label: true
     oversized: false
     burden: 1
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 5
+        language: en
+      - start_line: 7
+        end_line: 7
+        language: en
+      - start_line: 9
+        end_line: 9
+        language: en
+      - start_line: 11
+        end_line: 11
+        language: en
+      - start_line: 13
+        end_line: 13
+        language: en
+      - start_line: 14
+        end_line: 14
+        language: en
+      - start_line: 16
+        end_line: 16
+        language: en
+      - start_line: 20
+        end_line: 20
+        language: en
+      - start_line: 22
+        end_line: 22
+        language: en
+      - start_line: 29
+        end_line: 29
+        language: en
+      - start_line: 31
+        end_line: 31
+        language: en
+      - start_line: 33
+        end_line: 33
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.72
+      hapax_ratio: 0.69
+      dis_ratio: 0.238
+      lexical_density: 0.78
+      avg_sentence_words: 3.933
+      p90_sentence_words: 5
+      max_sentence_words: 26
+      stddev_sentence_words: 6.016
+      avg_word_chars: 5
+      p90_word_chars: 8
+      sentence_count: 15
+      words_total: 59
+    wording:
+      passive_ratio: 0
+      hedge_density: 0
+      weasel_density: 0.017
+      wordy_density: 0
+      adverb_density: 0
+      nominalization_density: 0.017
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 0.979
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 59
+    sentences_counted: 15
+    blocks_stripped:
+      - code
+      - math
+      - table

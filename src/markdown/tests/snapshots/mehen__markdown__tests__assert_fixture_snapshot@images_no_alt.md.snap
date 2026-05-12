@@ -109,3 +109,70 @@ artifacts:
     has_label: true
     oversized: false
     burden: 1
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 5
+        language: en
+      - start_line: 9
+        end_line: 9
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.778
+      hapax_ratio: 0.786
+      dis_ratio: 0.179
+      lexical_density: 0.583
+      avg_sentence_words: 7.2
+      p90_sentence_words: 17
+      max_sentence_words: 17
+      stddev_sentence_words: 5.636
+      avg_word_chars: 4.25
+      p90_word_chars: 7
+      sentence_count: 5
+      words_total: 36
+    wording:
+      passive_ratio: 0
+      hedge_density: 0
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0
+      nominalization_density: 0
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 1
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 36
+    sentences_counted: 5
+    blocks_stripped:
+      - code
