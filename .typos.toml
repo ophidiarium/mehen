@@ -8,6 +8,17 @@ extend-exclude = [
     "tree-sitter-*/examples/",
     "**/CHANGELOG.md",
     "**/snapshots/**/*",
+    # Prose-metric dictionaries intentionally contain non-words, cliches,
+    # hedges, and weasel phrases for the analyzer to flag. Excluding them
+    # from typo checking keeps the analyzer lists authoritative.
+    "src/markdown/data/nonwords.txt",
+    "src/markdown/data/cliches.txt",
+    "src/markdown/data/hedges.txt",
+    "src/markdown/data/weasels.txt",
+    "src/markdown/data/wordy_phrases.txt",
+    "src/markdown/data/inclusive_flags.txt",
+    "src/markdown/data/ja_weak_phrases.txt",
+    "src/markdown/data/ja_redundant.txt",
 ]
 
 [default.extend-identifiers]
@@ -16,6 +27,8 @@ typ = "typ"
 typs = "typs"
 typs1 = "typs1"
 typs2 = "typs2"
+# Short for "inherited" in lang_detect.rs block-language inheritance logic.
+inh = "inh"
 
 [default.extend-words]
 # Intentional name of a removed language parser
