@@ -2,42 +2,57 @@
 //!
 //! Parses a Markdown source buffer with the tree-sitter-markdown-text grammar
 //! and produces a [`MarkdownMetrics`] record covering:
-//! - §5 LOC family
-//! - §4 word count
-//! - §3.4 section tree
-//! - §6 Effective Content Units
-//! - §11 link classification + debt + scent + review burden
-//! - §12 visuals (images + diagrams)
-//! - §13 tables
-//! - §14.1 per-code-fence burden (stored in `artifacts`)
-//! - §14.3 per-math-block burden (stored in `artifacts`)
-//! - §19 artifact debt score
 //!
-//! Phase B (MRPC, MCC, Halstead, DMI) and Phase D (grounding, filler, RCI)
-//! append more fields; no field ever shrinks.
+//! - §5 LOC family,
+//! - §4 word count `W`,
+//! - §3.4 section tree,
+//! - §6 Effective Content Units,
+//! - §7 Markdown Reading Path Complexity (weighted + raw),
+//! - §8 Markdown Cognitive Complexity,
+//! - §9 Markdown Halstead + §9.4 embedded-code adjustment,
+//! - §10 Documentation Maintainability Index core (V/M/R terms),
+//! - §11 link classification + debt + scent + review burden,
+//! - §12 visuals (images + diagrams),
+//! - §13 tables,
+//! - §14.1 per-code-fence burden (stored in `artifacts`),
+//! - §14.3 per-math-block burden (stored in `artifacts`),
+//! - §19 artifact debt score.
+//!
+//! Phase D (grounding, filler, RCI) appends more fields; no field ever
+//! shrinks.
+//!
+//! Pipeline order: Phase A (LOC, sections, words, ECU) → Phase B (MRPC,
+//! MCC, Halstead, DMI) → Phase C (links, visuals, tables, artifacts,
+//! artifact debt). Phase C feeds real diagram node/edge counts back into
+//! ECU so §6 does not stay at zero.
 
 use std::path::Path;
 
 use crate::markdown::artifact_debt::{DebtInputs, artifact_debt_score};
 use crate::markdown::code_burden::{CodeFence, analyze_code_fences};
+use crate::markdown::dmi::{DmiInputs, compute_dmi};
 use crate::markdown::ecu::{compute_ecu_inputs, effective_content_units};
+use crate::markdown::embedded_code::embedded_volume;
+use crate::markdown::halstead::compute_halstead;
 use crate::markdown::links::analyze_links;
 use crate::markdown::loc::{LineClasses, derive_ratios, physical_line_count};
 use crate::markdown::math_burden::{MathBlock, analyze_math_blocks};
+use crate::markdown::mcc::compute_mcc;
+use crate::markdown::mrpc::compute_mrpc;
 use crate::markdown::nearby::{BlockSpan, collect_blocks, has_prose_within};
 use crate::markdown::sections::collect_sections;
 use crate::markdown::tables::{aggregate_tables, analyze_tables};
 use crate::markdown::types::{
-    ArtifactKind, ArtifactRecord, DiagramRecord, ImageRecord, Maintainability, MarkdownMetrics,
-    Size, TableRecord,
+    ArtifactKind, ArtifactRecord, Complexity, DiagramRecord, ImageRecord, Maintainability,
+    MarkdownMetrics, Size, TableRecord,
 };
 use crate::markdown::visuals::analyze_visuals;
 use crate::markdown::words::count_words;
 use crate::node::Node;
 use tree_sitter::Parser as TsParser;
 
-/// Parses `source` as Markdown and returns a metric record covering all of
-/// Phase A and Phase C. `path` is recorded verbatim into the output's
+/// Parses `source` as Markdown and returns a metric record covering Phase A,
+/// Phase B, and Phase C. `path` is recorded verbatim into the output's
 /// `path` field; the caller controls whether it is absolute or relative.
 pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let mut parser = TsParser::new();
@@ -50,6 +65,7 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let ts_root = tree.root_node();
     let root = crate::node::Node(ts_root);
 
+    // Phase A: LOC family, ratios, size, sections, ECU inputs.
     let total_lines = physical_line_count(source);
     let classes = LineClasses::build(&root, total_lines);
     let loc = classes.loc_family();
@@ -57,11 +73,27 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
 
     let words = count_words(&root);
     let sections = collect_sections(&root);
+    // §3.4: the derived section tree has one section per heading. No
+    // synthetic root is exported, so `sections.len()` is the heading count.
     let heading_sections = sections.len() as u64;
     let headings = heading_sections;
 
     let ecu_inputs = compute_ecu_inputs(&root, &classes);
     let ecu = effective_content_units(&loc, words, &ecu_inputs);
+
+    // Phase B: complexity surface (MRPC, MCC, Halstead) and DMI core.
+    let mrpc = compute_mrpc(&root, source);
+    let mcc = compute_mcc(&root, source);
+    let mut halstead = compute_halstead(&root, source);
+    let emb = embedded_volume(&root, source);
+    halstead.embedded_volume = emb;
+    halstead.total_volume = halstead.volume + emb;
+
+    let dmi = compute_dmi(DmiInputs {
+        mrpc: mrpc.weighted,
+        mcc: mcc.mcc,
+        total_volume: halstead.total_volume,
+    });
 
     // Phase C: block index for nearby-prose queries.
     let blocks: Vec<BlockSpan> = collect_blocks(&root);
@@ -146,12 +178,19 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
         },
         ecu_inputs: ecu_inputs_final,
         sections,
+        complexity: Complexity {
+            reading_path_complexity: mrpc.weighted,
+            reading_path_complexity_raw: mrpc.raw,
+            cognitive_complexity: mcc.mcc,
+            halstead,
+        },
         links: link_agg,
         visuals: visual_analysis.aggregate,
         tables: tables_agg,
         maintainability: Maintainability {
-            documentation_maintainability_index: 0.0,
+            documentation_maintainability_index: dmi,
             section_balance_score: 0.0,
+            good_scaffold_score: 0.0,
             artifact_debt_score: artifact_debt,
         },
         artifacts,

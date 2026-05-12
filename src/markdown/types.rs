@@ -1,9 +1,10 @@
 //! Public-shaped metric types exported by the Markdown analyzer.
 //!
 //! The field layout mirrors §23 of
-//! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A (LOC family,
-//! word count, section count, heading count, Effective Content Units) is
-//! stable; Phase C (this module) adds `links`, `visuals`, `tables`,
+//! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A populated LOC
+//! family, word count, section count, heading count, and ECU. Phase B adds
+//! `complexity` (MRPC, MCC, Halstead) and `maintainability.documentation_maintainability_index`
+//! (DMI core). Phase C adds `links`, `visuals`, `tables`,
 //! `maintainability.artifact_debt_score`, and a per-artifact detail list.
 //! Later phases append more fields; no field ever shrinks.
 
@@ -78,6 +79,41 @@ pub(crate) struct EcuInputs {
     pub(crate) diagram_edges: u64,
     pub(crate) math_tokens: u64,
     pub(crate) raw_html_or_mdx_lines: u64,
+}
+
+/// Markdown Halstead sub-metrics per §9.
+///
+/// `operators_*` / `operands_*` match the text's `n1`, `N1`, `n2`, `N2`.
+/// `vocabulary` = n1 + n2, `length` = N1 + N2. `volume`, `difficulty`, and
+/// `effort` are derived per §9.3. `embedded_volume` is the §9.4 sum over
+/// supported code fences; `total_volume` = `volume + embedded_volume`.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Halstead {
+    pub(crate) operators_distinct: u64,
+    pub(crate) operators_total: u64,
+    pub(crate) operands_distinct: u64,
+    pub(crate) operands_total: u64,
+    pub(crate) vocabulary: u64,
+    pub(crate) length: u64,
+    pub(crate) volume: f64,
+    pub(crate) difficulty: f64,
+    pub(crate) effort: f64,
+    pub(crate) embedded_volume: f64,
+    pub(crate) total_volume: f64,
+}
+
+/// Complexity aggregate exported under the §23 `complexity` key.
+///
+/// `reading_path_complexity` is the §7.3 weighted MRPC (with weights from the
+/// edge-type table); `reading_path_complexity_raw` is the §7.2 unweighted
+/// graph form `|E| - |N| + 2P`, surfaced for auditability.
+/// `cognitive_complexity` is §8's final MCC after scaffold credit is applied.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Complexity {
+    pub(crate) reading_path_complexity: f64,
+    pub(crate) reading_path_complexity_raw: f64,
+    pub(crate) cognitive_complexity: f64,
+    pub(crate) halstead: Halstead,
 }
 
 /// §11.1 link classifications. Each link is assigned exactly one primary
@@ -222,14 +258,19 @@ pub(crate) struct Visuals {
 
 /// Maintainability aggregate per §23.
 ///
-/// Phase A / Phase C only fills `artifact_debt_score` (§19). The other two
-/// fields are reserved for forward compatibility with Phase B's DMI wiring
-/// and Phase E's section balance score so the on-disk YAML / JSON shape
-/// never needs to rename keys.
+/// - `documentation_maintainability_index` is the §10.2 DMI on `[0, 100]`
+///   scale. Phase B wires the V / M / R components; L / T / A / S / F / G
+///   terms stay at zero until later phases land — see the TODO comments in
+///   `dmi.rs`.
+/// - `artifact_debt_score` is the §19 per-artifact debt aggregate (Phase C).
+/// - `section_balance_score` / `good_scaffold_score` are reserved stubs for
+///   Phase D/E; they stay at 0.0 so the on-disk YAML / JSON shape never
+///   needs to rename keys.
 #[derive(Debug, Default, Clone, Serialize)]
 pub(crate) struct Maintainability {
     pub(crate) documentation_maintainability_index: f64,
     pub(crate) section_balance_score: f64,
+    pub(crate) good_scaffold_score: f64,
     pub(crate) artifact_debt_score: f64,
 }
 
@@ -268,11 +309,11 @@ pub(crate) struct ArtifactRecord {
     pub(crate) burden: f64,
 }
 
-/// Phase-A + Phase-C Markdown metric output.
+/// Phase-A + Phase-B + Phase-C Markdown metric output.
 ///
 /// Emitted per file on the JSON / YAML / TOML path and under the `markdown`
 /// key of the exported schema so later phases can add sibling keys like
-/// `complexity`, `grounding`, etc., without renames.
+/// `grounding`, `evidence`, etc., without renames.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct MarkdownMetrics {
     /// The analyzed file's relative or absolute path, as seen by the CLI.
@@ -282,6 +323,7 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) size: Size,
     pub(crate) ecu_inputs: EcuInputs,
     pub(crate) sections: Vec<Section>,
+    pub(crate) complexity: Complexity,
     pub(crate) links: Links,
     pub(crate) visuals: Visuals,
     pub(crate) tables: Tables,

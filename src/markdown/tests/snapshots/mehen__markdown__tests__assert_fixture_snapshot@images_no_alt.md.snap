@@ -37,6 +37,22 @@ sections:
     child_section_ids: []
     word_count: 30
     block_count: 3
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 1
+  cognitive_complexity: 0.75
+  halstead:
+    operators_distinct: 5
+    operators_total: 8
+    operands_distinct: 32
+    operands_total: 37
+    vocabulary: 37
+    length: 45
+    volume: 234.42540145330275
+    difficulty: 2.890625
+    effort: 677.6359260759533
+    embedded_volume: 0
+    total_volume: 234.42540145330275
 links:
   total: 2
   internal: 0
@@ -68,8 +84,9 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 0
+  documentation_maintainability_index: 100
   section_balance_score: 0
+  good_scaffold_score: 0
   artifact_debt_score: 0
 artifacts:
   - id: 0

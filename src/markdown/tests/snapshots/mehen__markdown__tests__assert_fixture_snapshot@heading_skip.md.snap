@@ -1,6 +1,5 @@
 ---
 source: src/markdown/tests/mod.rs
-assertion_line: 29
 ---
 path: "<fixture_path>"
 loc:
@@ -58,6 +57,22 @@ sections:
     child_section_ids: []
     word_count: 8
     block_count: 1
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 2
+  cognitive_complexity: 1
+  halstead:
+    operators_distinct: 4
+    operators_total: 6
+    operands_distinct: 24
+    operands_total: 31
+    vocabulary: 28
+    length: 37
+    volume: 177.87213211613133
+    difficulty: 2.5833333333333335
+    effort: 459.5030079666726
+    embedded_volume: 0
+    total_volume: 177.87213211613133
 links:
   total: 0
   internal: 0
@@ -89,7 +104,8 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 0
+  documentation_maintainability_index: 100
   section_balance_score: 0
+  good_scaffold_score: 0
   artifact_debt_score: 0
 artifacts: []
