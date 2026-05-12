@@ -28,3 +28,21 @@ ecu_inputs:
   math_tokens: 0
   raw_html_or_mdx_lines: 0
 sections: []
+complexity:
+  reading_path_complexity: 0
+  reading_path_complexity_raw: 0
+  cognitive_complexity: 0
+  halstead:
+    operators_distinct: 0
+    operators_total: 0
+    operands_distinct: 0
+    operands_total: 0
+    vocabulary: 0
+    length: 0
+    volume: 0
+    difficulty: 0
+    effort: 0
+    embedded_volume: 0
+    total_volume: 0
+maintainability:
+  documentation_maintainability_index: 100

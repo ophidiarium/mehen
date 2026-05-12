@@ -1,0 +1,67 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 26
+  ploc: 21
+  cloc: 0
+  tloc: 0
+  mloc: 0
+  bloc: 5
+  aloc: 0
+loc_ratios:
+  artifact_line_ratio: 0
+  code_line_ratio: 0
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.19230769230769232
+size:
+  words: 46
+  effective_content_units: 0.19166666666666668
+  sections: 2
+  headings: 2
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 26
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+    word_count: 34
+    block_count: 15
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 17
+    end_line: 26
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 12
+    block_count: 9
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 1
+  cognitive_complexity: 17.177
+  halstead:
+    operators_distinct: 8
+    operators_total: 24
+    operands_distinct: 37
+    operands_total: 51
+    vocabulary: 45
+    length: 75
+    volume: 411.8889822247256
+    difficulty: 5.513513513513513
+    effort: 2270.955469563352
+    embedded_volume: 0
+    total_volume: 411.8889822247256
+maintainability:
+  documentation_maintainability_index: 99.39713846153846

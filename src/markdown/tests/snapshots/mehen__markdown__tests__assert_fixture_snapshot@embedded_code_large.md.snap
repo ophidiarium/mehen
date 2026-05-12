@@ -1,0 +1,97 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 89
+  ploc: 10
+  cloc: 69
+  tloc: 0
+  mloc: 0
+  bloc: 10
+  aloc: 69
+loc_ratios:
+  artifact_line_ratio: 0.7752808988764045
+  code_line_ratio: 0.7752808988764045
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.11235955056179775
+size:
+  words: 46
+  effective_content_units: 24.341666666666665
+  sections: 5
+  headings: 5
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 89
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+    word_count: 20
+    block_count: 1
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 6
+    end_line: 32
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 33
+    end_line: 54
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 55
+    end_line: 80
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 4
+    heading_level: 2
+    heading_text: ~
+    start_line: 81
+    end_line: 89
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 26
+    block_count: 2
+complexity:
+  reading_path_complexity: 1.2000000000000002
+  reading_path_complexity_raw: 7
+  cognitive_complexity: 6.144
+  halstead:
+    operators_distinct: 10
+    operators_total: 22
+    operands_distinct: 53
+    operands_total: 62
+    vocabulary: 63
+    length: 84
+    volume: 502.091513573993
+    difficulty: 5.849056603773585
+    effort: 2936.7616831686382
+    embedded_volume: 25.954304845355438
+    total_volume: 528.0458184193484
+maintainability:
+  documentation_maintainability_index: 100
