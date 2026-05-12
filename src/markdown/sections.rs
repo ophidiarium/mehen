@@ -19,15 +19,18 @@ use crate::node::Node;
 
 /// Collects sections (one per heading) in document order.
 ///
-/// A synthetic "file" section is emitted when the document starts with
-/// content before the first heading — otherwise content before any heading
-/// would have no place to live. That pre-heading content belongs to a
-/// root section whose `heading_level` is `None`.
+/// §3.4 defines the derived section tree as *one section per heading*. A
+/// document with no headings returns an empty list. Pre-heading content
+/// is accounted for in `size.words` but has no section of its own.
+///
+/// Internally we keep a synthetic "file" placeholder so the tree walk can
+/// attribute pre-heading content and preserve parent/child ids during
+/// construction; that placeholder is dropped and the remaining sections
+/// are renumbered before returning to the caller.
 pub(crate) fn collect_sections(root: &Node<'_>) -> Vec<Section> {
     let mut sections: Vec<Section> = Vec::new();
 
-    // Always emit a root "document" section so pre-heading prose has a home
-    // and the top-level `sections` field is non-empty for non-empty files.
+    // Synthetic root used only during walk. Dropped before return.
     sections.push(Section {
         section_id: 0,
         heading_level: None,
@@ -42,12 +45,43 @@ pub(crate) fn collect_sections(root: &Node<'_>) -> Vec<Section> {
 
     walk(root, 0, &mut sections);
 
-    // `collect_sections` is called after `count_words` elsewhere, but the
-    // per-section word count is computed here so each section's slice is
-    // scoped to its own subtree.
     populate_word_and_block_counts(root, &mut sections);
 
+    // Strip the synthetic root and renumber remaining sections so the
+    // exported `sections` array reflects only heading-rooted sections with
+    // contiguous ids starting at 0.
+    sections.remove(0);
+    renumber_sections(&mut sections);
+
     sections
+}
+
+/// Renumbers `sections` so `section_id` is the array index and every
+/// `parent_section_id` / `child_section_ids` entry refers to the renumbered
+/// ids. Sections whose parent was the dropped synthetic root become
+/// top-level (`parent_section_id = None`).
+fn renumber_sections(sections: &mut [Section]) {
+    // Map old section_id -> new index. Since the synthetic root lived at
+    // id 0, every remaining section's old id is >= 1. The new order is
+    // the current vector order.
+    let old_to_new: std::collections::HashMap<usize, usize> = sections
+        .iter()
+        .enumerate()
+        .map(|(new_idx, s)| (s.section_id, new_idx))
+        .collect();
+
+    for (new_idx, section) in sections.iter_mut().enumerate() {
+        section.section_id = new_idx;
+        section.parent_section_id = match section.parent_section_id {
+            Some(0) | None => None,
+            Some(old_parent) => old_to_new.get(&old_parent).copied(),
+        };
+        section.child_section_ids = section
+            .child_section_ids
+            .iter()
+            .filter_map(|old_id| old_to_new.get(old_id).copied())
+            .collect();
+    }
 }
 
 fn walk(node: &Node<'_>, parent_id: usize, sections: &mut Vec<Section>) {

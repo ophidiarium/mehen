@@ -29,41 +29,31 @@ ecu_inputs:
   raw_html_or_mdx_lines: 0
 sections:
   - section_id: 0
-    heading_level: ~
+    heading_level: 1
     heading_text: ~
     start_line: 1
     end_line: 11
     parent_section_id: ~
     child_section_ids:
       - 1
-    word_count: 0
-    block_count: 0
-  - section_id: 1
-    heading_level: 1
-    heading_text: ~
-    start_line: 1
-    end_line: 11
-    parent_section_id: 0
-    child_section_ids:
       - 2
-      - 3
     word_count: 5
     block_count: 1
-  - section_id: 2
+  - section_id: 1
     heading_level: 3
     heading_text: ~
     start_line: 5
     end_line: 8
-    parent_section_id: 1
+    parent_section_id: 0
     child_section_ids: []
     word_count: 11
     block_count: 1
-  - section_id: 3
+  - section_id: 2
     heading_level: 2
     heading_text: ~
     start_line: 9
     end_line: 11
-    parent_section_id: 1
+    parent_section_id: 0
     child_section_ids: []
     word_count: 8
     block_count: 1

@@ -1,6 +1,5 @@
 ---
 source: src/markdown/tests/mod.rs
-assertion_line: 28
 ---
 path: "<fixture_path>"
 loc:
@@ -30,21 +29,11 @@ ecu_inputs:
   raw_html_or_mdx_lines: 0
 sections:
   - section_id: 0
-    heading_level: ~
-    heading_text: ~
-    start_line: 1
-    end_line: 8
-    parent_section_id: ~
-    child_section_ids:
-      - 1
-    word_count: 0
-    block_count: 0
-  - section_id: 1
     heading_level: 1
     heading_text: ~
     start_line: 1
     end_line: 8
-    parent_section_id: 0
+    parent_section_id: ~
     child_section_ids: []
     word_count: 9
     block_count: 6

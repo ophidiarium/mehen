@@ -38,14 +38,10 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let words = count_words(&root);
     let sections = collect_sections(&root);
 
-    // `sections[0]` is the synthetic root; subtract it from the counted
-    // sections so the `sections` total reflects *heading-rooted* sections
-    // only (§3.4 uses "derived section tree" to mean heading sections).
-    let heading_sections = sections
-        .iter()
-        .filter(|s| s.heading_level.is_some())
-        .count() as u64;
-    let headings = heading_sections; // one heading per section in this grammar.
+    // §3.4: the derived section tree has one section per heading. No
+    // synthetic root is exported, so `sections.len()` is the heading count.
+    let heading_sections = sections.len() as u64;
+    let headings = heading_sections;
 
     let ecu_inputs = compute_ecu_inputs(&root, &classes);
     let ecu = effective_content_units(&loc, words, &ecu_inputs);

@@ -71,6 +71,27 @@ fn tight_list_fixture() {
 }
 
 #[test]
+fn tiny_file_produces_metrics() {
+    // Codex P1: tiny Markdown files (1-3 bytes) used to be swallowed by
+    // `read_file_inner`'s `file_size <= 3` early return. The analyzer
+    // itself must still produce metrics — `read_file_raw` handles the
+    // file-size heuristic on the CLI side, but the analyzer is the last
+    // line of defense and must not assume a minimum input length.
+    for src in ["", "a", "#", "#\n", "a\n"] {
+        let path = PathBuf::from("tiny.md");
+        let metrics = analyze_markdown(src, &path);
+        // The only invariant we care about here: no panic, and metric
+        // fields are populated (even with zero values) so JSON emission
+        // never produces malformed output.
+        assert!(
+            metrics.loc.dloc <= 2,
+            "dloc {}: input {src:?}",
+            metrics.loc.dloc
+        );
+    }
+}
+
+#[test]
 fn trailing_newlines_preserved_in_dloc() {
     // `read_file_raw` feeds `analyze_markdown` the file-on-disk bytes, so
     // trailing blank lines survive and count toward DLOC/BLOC. Guards

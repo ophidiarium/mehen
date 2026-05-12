@@ -47,6 +47,8 @@ mod rust_metric_helpers;
 mod top_offenders;
 
 use std::io::{self, Write};
+#[cfg(feature = "markdown")]
+use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 use std::sync::{Arc, Mutex};
@@ -99,7 +101,53 @@ pub(crate) fn mk_globset(elems: Vec<String>) -> GlobSet {
     globset.build().map_or(GlobSet::empty(), |globset| globset)
 }
 
+/// Returns true when the file at `path` should be treated as Markdown for
+/// the metrics pipeline. Extension-based check so tiny files (empty, 1-2
+/// bytes) that never reach `read_file_with_eol` still get routed here.
+#[cfg(feature = "markdown")]
+fn is_markdown_path(override_language: &Option<LANG>, path: &Path) -> bool {
+    if let Some(lang) = override_language {
+        return matches!(lang, LANG::Markdown);
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    matches!(
+        ext.as_deref(),
+        Some("md" | "markdown" | "mdown" | "mkd" | "mkdn")
+    )
+}
+
 fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
+    // Fast path for Markdown metrics: peek at the extension (no file read)
+    // so tiny docs (empty file, `#\n`, …) still produce metrics. The
+    // source-code loader's `<= 3 byte` heuristic would otherwise skip them.
+    #[cfg(feature = "markdown")]
+    if cfg.metrics && is_markdown_path(&cfg.language, &path) {
+        if let Some(raw) = read_file_raw(&path)? {
+            let source_str = String::from_utf8_lossy(&raw).into_owned();
+            let metrics = markdown::analyze_markdown(&source_str, &path);
+            if let Some(output_format) = &cfg.output_format {
+                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
+            } else {
+                // Default stdout rendering is a pretty-printed JSON blob —
+                // the same as the rest of the metrics pipeline's dev path.
+                match serde_json::to_string_pretty(&metrics) {
+                    Ok(rendered) => {
+                        writeln!(io::stdout().lock(), "{rendered}")
+                            .expect("failed to write markdown metrics");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize markdown metrics: {e}");
+                    }
+                }
+            }
+            return Ok(());
+        }
+        return Ok(());
+    }
+
     let source = if let Some(source) = read_file_with_eol(&path)? {
         source
     } else {
@@ -121,37 +169,6 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
         };
         action::<Dump>(&language, source, &path, None, cfg)
     } else if cfg.metrics {
-        // Markdown metrics run through a dedicated documentation pipeline,
-        // not the source-code `FuncSpace` path. Intercept here so the output
-        // schema stays shaped per §23 instead of masquerading as code spaces.
-        #[cfg(feature = "markdown")]
-        if matches!(language, LANG::Markdown) {
-            // LOC-family metrics depend on the raw byte layout. Re-read the
-            // file without `remove_blank_lines` so DLOC/BLOC/section.end_line
-            // reflect the file on disk, not the source-code normalization.
-            let raw = match read_file_raw(&path)? {
-                Some(bytes) => bytes,
-                None => source.clone(),
-            };
-            let source_str = String::from_utf8_lossy(&raw).into_owned();
-            let metrics = markdown::analyze_markdown(&source_str, &path);
-            if let Some(output_format) = &cfg.output_format {
-                output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
-            } else {
-                // Default stdout rendering is a pretty-printed JSON blob —
-                // the same as the rest of the metrics pipeline's dev path.
-                match serde_json::to_string_pretty(&metrics) {
-                    Ok(rendered) => {
-                        writeln!(io::stdout().lock(), "{rendered}")
-                            .expect("failed to write markdown metrics");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to serialize markdown metrics: {e}");
-                    }
-                }
-            }
-            return Ok(());
-        }
         if let Some(output_format) = &cfg.output_format {
             if let Some(space) = get_function_spaces(&language, source, &path, None) {
                 output_format.dump_formats(space, path, cfg.output.as_ref(), cfg.pretty);
