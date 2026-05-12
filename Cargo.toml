@@ -39,8 +39,7 @@ tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
 tree-sitter-c = "=0.24.2"
-# TODO: switch to crates.io version once tree-sitter-markdown-text 0.1.0 is published.
-tree-sitter-markdown-text = { git = "https://github.com/ophidiarium/tree-sitter-markdown-text", tag = "v0.1.0", optional = true }
+tree-sitter-markdown-text = { version = "=0.1.0", optional = true }
 
 [features]
 default = ["markdown"]
