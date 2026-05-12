@@ -114,8 +114,14 @@ pub(crate) fn analyze_prose(root: &Node<'_>, source: &[u8]) -> ProseReport {
         (None, None) => (0, 0),
     };
 
+    // Either language crossing the short-doc threshold propagates up to the
+    // document-level warning. This matters for bilingual docs where the
+    // English half can be very short (e.g. a README with a long Japanese
+    // body and a tiny English summary): we must not hide the warning just
+    // because the dominant language has enough prose.
     let short_doc_warning = match (english.as_ref(), japanese.as_ref()) {
-        (Some(en), _) => en.short_doc_warning,
+        (Some(en), Some(ja)) => en.short_doc_warning || ja.short_doc_warning,
+        (Some(en), None) => en.short_doc_warning,
         (None, Some(ja)) => ja.short_doc_warning,
         (None, None) => true,
     };
@@ -245,4 +251,86 @@ fn blocks_stripped_kinds(root: &Node<'_>) -> Vec<String> {
         out.push("table".to_string());
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser as TsParser;
+
+    fn analyze_src(src: &str) -> ProseReport {
+        let mut parser = TsParser::new();
+        parser
+            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
+            .expect("set_language");
+        let tree = parser.parse(src.as_bytes(), None).expect("parse");
+        let root = crate::node::Node(tree.root_node());
+        analyze_prose(&root, src.as_bytes())
+    }
+
+    #[test]
+    fn bilingual_short_english_triggers_warning() {
+        // Codex P2 regression: when both English and Japanese prose are
+        // present, `meta.short_doc_warning` was taken from the English branch
+        // only. If English was long enough but Japanese was short (or vice
+        // versa), the warning never propagated. The fix is a logical OR so
+        // EITHER language hitting the short-doc threshold surfaces the flag.
+        //
+        // Fixture: ~3 English words (way below 100 / 5 sentences) + a long
+        // Japanese body far beyond the 300-char / 5-sentence threshold.
+        let src = "\
+# Bilingual short-English doc
+
+Hi there.
+
+## 本文
+
+\
+これは日本語の長い本文です。最初の段落では、言語検出と短文警告の挙動を確認します。\
+検出器はひらがなとカタカナの比率に基づいてブロック単位で言語を判定し、それぞれの言語に対して別々のパイプラインを実行します。\
+短文警告はそれぞれの言語パイプラインが独立に判断するため、片方が短ければ文書全体で警告を出すべきです。
+
+続く段落では、文書全体の評価について述べます。\
+英語側の段落が短くても、日本語側に十分な量のテキストがあれば、メトリックは日本語に対して計算されます。\
+ただし、短文警告は英語側の判断も反映しなければなりません。なぜなら、バイリンガル文書で片方の言語が不足している場合、\
+読者はその情報を必要とするからです。従来のコードでは英語側の判断だけを採用していたため、日本語だけが短いケースでは警告が出ませんでした。
+
+最後の段落として、修正後の挙動をまとめます。今後はどちらかの言語パイプラインが短文判定を返した時点で、\
+文書全体の短文警告を真にします。この変更によって、バイリンガル文書の信頼性が向上し、\
+片方の言語だけが不足しているケースを見逃すことがなくなります。テストはこの挙動を保証します。
+";
+        let report = analyze_src(src);
+
+        // Sanity: both pipelines fired.
+        assert!(
+            report.english.is_some(),
+            "expected English pipeline to fire, got {:?}",
+            report.english
+        );
+        assert!(
+            report.japanese.is_some(),
+            "expected Japanese pipeline to fire, got {:?}",
+            report.japanese
+        );
+
+        // English must have flagged short; Japanese must NOT have flagged.
+        let en = report.english.as_ref().unwrap();
+        let ja = report.japanese.as_ref().unwrap();
+        assert!(
+            en.short_doc_warning,
+            "sanity: English half is short; en.short_doc_warning must be true"
+        );
+        assert!(
+            !ja.short_doc_warning,
+            "sanity: Japanese half is long; ja.short_doc_warning must be false, got {}",
+            ja.short_doc_warning
+        );
+
+        // Regression: top-level meta must carry the English short flag
+        // through even when Japanese is not short.
+        assert!(
+            report.meta.short_doc_warning,
+            "bilingual doc with short English half must set meta.short_doc_warning=true"
+        );
+    }
 }
