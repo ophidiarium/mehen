@@ -34,7 +34,11 @@ fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
         let info = fence_info_tag(node, source);
         let lang = info.as_deref().and_then(map_fence_to_lang);
         if let (Some(lang), Some(body)) = (lang, fenced_code_content(node, source)) {
-            *total += analyze_fence(lang, &body);
+            // Hand `body` off by value — `analyze_fence` feeds the
+            // bytes straight into `get_function_spaces` via
+            // `into_bytes`, so no intermediate `to_vec()` clone is
+            // needed (Gemini medium on PR #83).
+            *total += analyze_fence(lang, body);
         }
         // Do not descend — we've handled the fence.
         return;
@@ -50,8 +54,8 @@ fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
     }
 }
 
-fn analyze_fence(lang: LANG, body: &str) -> f64 {
-    let bytes = body.as_bytes().to_vec();
+fn analyze_fence(lang: LANG, body: String) -> f64 {
+    let bytes = body.into_bytes();
     let path: std::path::PathBuf = synthetic_path(lang);
     // `get_function_spaces` is `pub(crate)` and returns an aggregated
     // `FuncSpace` with `metrics.halstead`, `.cognitive`, `.loc` filled in.
