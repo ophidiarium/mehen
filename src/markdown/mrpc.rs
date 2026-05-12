@@ -656,10 +656,25 @@ fn extract_domain(dest: &str) -> Option<String> {
         Some(at) => &host[at + 1..],
         None => host,
     };
-    // Strip port.
-    let host = match host.rfind(':') {
-        Some(p) => &host[..p],
-        None => host,
+    // Strip port. Bracketed IPv6 literals need special handling — a naive
+    // `rfind(':')` would split the address (`https://[2001:db8::1]/` →
+    // `[2001:db8:`) because the host itself contains colons. Per RFC 3986
+    // the bracketed host is `[ … ]` and any port follows the closing `]`.
+    let host = if host.starts_with('[') {
+        match host.find(']') {
+            // `[ipv6]` or `[ipv6]:port` — keep everything up to and
+            // including the closing `]`; anything after (including an
+            // optional `:port`) is discarded.
+            Some(close) => &host[..=close],
+            // Malformed host (no closing `]`) — fall back to the whole
+            // slice rather than produce something worse.
+            None => host,
+        }
+    } else {
+        match host.rfind(':') {
+            Some(p) => &host[..p],
+            None => host,
+        }
     };
     Some(host.to_ascii_lowercase())
 }
@@ -1126,6 +1141,35 @@ mod tests {
         );
         assert_eq!(extract_domain("http://a.b/"), Some("a.b".to_string()));
         assert_eq!(extract_domain("mailto:x@y.z"), None);
+    }
+
+    #[test]
+    fn extract_domain_handles_bracketed_ipv6() {
+        // Codex P2 + Gemini medium on PR #83: bracketed IPv6 hosts with or
+        // without a port must not collapse onto a prefix-of-address key.
+        // Previously `rfind(':')` struck inside the literal and returned
+        // `[2001:db8:`, merging distinct endpoints into one external-domain
+        // node.
+        assert_eq!(
+            extract_domain("https://[2001:db8::1]/"),
+            Some("[2001:db8::1]".to_string())
+        );
+        assert_eq!(
+            extract_domain("https://[::1]:8080/path"),
+            Some("[::1]".to_string())
+        );
+        assert_eq!(extract_domain("https://[::1]/"), Some("[::1]".to_string()));
+        // Upper-case hex digits inside the literal lowercase as a unit;
+        // brackets are kept intact.
+        assert_eq!(
+            extract_domain("https://[FE80::1]:443/"),
+            Some("[fe80::1]".to_string())
+        );
+        // Non-bracketed hosts with port continue to work.
+        assert_eq!(
+            extract_domain("https://example.com:443/"),
+            Some("example.com".to_string())
+        );
     }
 
     #[test]
