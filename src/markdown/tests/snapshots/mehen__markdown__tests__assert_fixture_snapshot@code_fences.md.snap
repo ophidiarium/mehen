@@ -37,6 +37,24 @@ sections:
     child_section_ids: []
     word_count: 15
     block_count: 5
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 1
+  cognitive_complexity: 2.0250000000000004
+  halstead:
+    operators_distinct: 4
+    operators_total: 6
+    operands_distinct: 18
+    operands_total: 20
+    vocabulary: 22
+    length: 26
+    volume: 115.94522208456974
+    difficulty: 2.2222222222222223
+    effort: 257.65604907682166
+    embedded_volume: 1.3392304845413265
+    total_volume: 117.28445256911107
+maintainability:
+  documentation_maintainability_index: 100
 prose:
   language_detection:
     dominant_language: en

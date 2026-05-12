@@ -1,0 +1,176 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 89
+  ploc: 10
+  cloc: 69
+  tloc: 0
+  mloc: 0
+  bloc: 10
+  aloc: 69
+loc_ratios:
+  artifact_line_ratio: 0.7752808988764045
+  code_line_ratio: 0.7752808988764045
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.11235955056179775
+size:
+  words: 46
+  effective_content_units: 24.341666666666665
+  sections: 5
+  headings: 5
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 89
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+    word_count: 20
+    block_count: 1
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 6
+    end_line: 32
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 33
+    end_line: 54
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 55
+    end_line: 80
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+  - section_id: 4
+    heading_level: 2
+    heading_text: ~
+    start_line: 81
+    end_line: 89
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 26
+    block_count: 2
+complexity:
+  reading_path_complexity: 1.2000000000000002
+  reading_path_complexity_raw: 7
+  cognitive_complexity: 6.144
+  halstead:
+    operators_distinct: 10
+    operators_total: 22
+    operands_distinct: 53
+    operands_total: 62
+    vocabulary: 63
+    length: 84
+    volume: 502.091513573993
+    difficulty: 5.849056603773585
+    effort: 2936.7616831686382
+    embedded_volume: 25.954304845355438
+    total_volume: 528.0458184193484
+maintainability:
+  documentation_maintainability_index: 100
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 4
+        language: en
+      - start_line: 6
+        end_line: 6
+        language: en
+      - start_line: 33
+        end_line: 33
+        language: en
+      - start_line: 55
+        end_line: 55
+        language: en
+      - start_line: 81
+        end_line: 81
+        language: en
+      - start_line: 83
+        end_line: 85
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.832
+      hapax_ratio: 0.814
+      dis_ratio: 0.116
+      lexical_density: 0.667
+      avg_sentence_words: 6.75
+      p90_sentence_words: 25
+      max_sentence_words: 25
+      stddev_sentence_words: 7.838
+      avg_word_chars: 5.537
+      p90_word_chars: 10
+      sentence_count: 8
+      words_total: 54
+    wording:
+      passive_ratio: 0.125
+      hedge_density: 0
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0.019
+      nominalization_density: 0.037
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 1
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 54
+    sentences_counted: 8
+    blocks_stripped:
+      - code

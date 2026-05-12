@@ -3,9 +3,10 @@
 //! The field layout mirrors §23 of
 //! `docs/mehen_markdown_metrics_research_foundation.md`. Phase A produced the
 //! LOC family, word count, section count, heading count, and Effective
-//! Content Units; Phase E adds the language-aware prose metric surface
-//! (§§29–38) as a separate top-level key. Later phases append more fields;
-//! no field ever shrinks.
+//! Content Units. Phase B adds `complexity` (MRPC, MCC, Halstead) and
+//! `maintainability` (DMI core). Phase E adds the language-aware prose metric
+//! surface (§§29–38) as a separate top-level `prose` key. Later phases append
+//! more fields; no field ever shrinks.
 
 use serde::Serialize;
 
@@ -80,11 +81,57 @@ pub(crate) struct EcuInputs {
     pub(crate) raw_html_or_mdx_lines: u64,
 }
 
-/// Phase-A + Phase-E Markdown metric output.
+/// Markdown Halstead sub-metrics per §9.
+///
+/// `operators_*` / `operands_*` match the text's `n1`, `N1`, `n2`, `N2`.
+/// `vocabulary` = n1 + n2, `length` = N1 + N2. `volume`, `difficulty`, and
+/// `effort` are derived per §9.3. `embedded_volume` is the §9.4 sum over
+/// supported code fences; `total_volume` = `volume + embedded_volume`.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Halstead {
+    pub(crate) operators_distinct: u64,
+    pub(crate) operators_total: u64,
+    pub(crate) operands_distinct: u64,
+    pub(crate) operands_total: u64,
+    pub(crate) vocabulary: u64,
+    pub(crate) length: u64,
+    pub(crate) volume: f64,
+    pub(crate) difficulty: f64,
+    pub(crate) effort: f64,
+    pub(crate) embedded_volume: f64,
+    pub(crate) total_volume: f64,
+}
+
+/// Complexity aggregate exported under the §23 `complexity` key.
+///
+/// `reading_path_complexity` is the §7.3 weighted MRPC (with weights from the
+/// edge-type table); `reading_path_complexity_raw` is the §7.2 unweighted
+/// graph form `|E| - |N| + 2P`, surfaced for auditability.
+/// `cognitive_complexity` is §8's final MCC after scaffold credit is applied.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Complexity {
+    pub(crate) reading_path_complexity: f64,
+    pub(crate) reading_path_complexity_raw: f64,
+    pub(crate) cognitive_complexity: f64,
+    pub(crate) halstead: Halstead,
+}
+
+/// Maintainability aggregate per §23.
+///
+/// `documentation_maintainability_index` is the §10.2 DMI on `[0, 100]`
+/// scale. Phase B wires the V / M / R components; L / T / A / S / F / G
+/// terms stay at zero until Phases C and D land — see the TODO comments in
+/// `dmi.rs`.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Maintainability {
+    pub(crate) documentation_maintainability_index: f64,
+}
+
+/// Phase-A + Phase-B + Phase-E Markdown metric output.
 ///
 /// Emitted per file on the JSON / YAML / TOML path and under the `markdown`
 /// key of the exported schema so later phases can add sibling keys like
-/// `complexity`, `links`, `grounding`, etc., without renames.
+/// `links`, `grounding`, etc., without renames.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct MarkdownMetrics {
     /// The analyzed file's relative or absolute path, as seen by the CLI.
@@ -94,6 +141,8 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) size: Size,
     pub(crate) ecu_inputs: EcuInputs,
     pub(crate) sections: Vec<Section>,
+    pub(crate) complexity: Complexity,
+    pub(crate) maintainability: Maintainability,
     /// §§29–38 Prose metric layer. Always emitted; its presence does NOT
     /// modify DMI / MCC / MRPC / FillerLazyRisk in later phases.
     pub(crate) prose: crate::markdown::prose::ProseReport,
