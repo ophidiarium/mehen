@@ -60,3 +60,41 @@ fn frontmatter_fixture() {
 fn heading_skip_fixture() {
     assert_fixture_snapshot("heading_skip.md");
 }
+
+#[test]
+fn trailing_newlines_preserved_in_dloc() {
+    // `read_file_raw` feeds `analyze_markdown` the file-on-disk bytes, so
+    // trailing blank lines survive and count toward DLOC/BLOC. Guards
+    // against the Codex P1 regression: if a future change routes Markdown
+    // through `remove_blank_lines` again, the trailing blanks collapse and
+    // this assertion breaks.
+    //
+    // Input: "Alpha.\n\nBeta.\n\n\n"
+    //   line 1: Alpha.   (prose)
+    //   line 2: blank
+    //   line 3: Beta.    (prose)
+    //   line 4: blank
+    //   line 5: blank
+    //   (the final \n is the line-5 terminator, not a new line)
+    let src = "Alpha.\n\nBeta.\n\n\n";
+    let path = PathBuf::from("trailing_newlines.md");
+    let metrics = analyze_markdown(src, &path);
+    assert_eq!(
+        metrics.loc.dloc, 5,
+        "dloc must count every physical line including trailing blanks"
+    );
+    assert!(
+        metrics.loc.bloc >= 3,
+        "three blank lines (one between, two trailing) must land in BLOC"
+    );
+
+    // Cross-check: stripping all trailing newlines (the `remove_blank_lines`
+    // regression path) would drop DLOC to 3.
+    let normalized = "Alpha.\n\nBeta.\n";
+    let normalized_metrics = analyze_markdown(normalized, &path);
+    assert_eq!(
+        normalized_metrics.loc.dloc, 3,
+        "sanity check: the normalized form undercounts lines — that is why \
+         Markdown must receive raw bytes"
+    );
+}

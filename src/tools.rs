@@ -24,6 +24,18 @@ use regex::bytes::Regex;
 /// read_file_with_eol(&path).unwrap();
 /// ```
 pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    read_file_inner(path, true)
+}
+
+/// Reads a file without the trailing-blank-line normalization used for
+/// source-code analysis. Markdown LOC metrics (DLOC/BLOC etc.) depend on
+/// the raw line layout and must see the real trailing `\n`s.
+#[cfg(feature = "markdown")]
+pub(crate) fn read_file_raw(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    read_file_inner(path, false)
+}
+
+fn read_file_inner(path: &Path, normalize_trailing: bool) -> std::io::Result<Option<Vec<u8>>> {
     let file_size = fs::metadata(path).map_or(1024 * 1024, |m| m.len() as usize);
     if file_size <= 3 {
         // this file is very likely almost empty... so nothing to do on it
@@ -60,7 +72,9 @@ pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>
 
     file.read_to_end(&mut data)?;
 
-    remove_blank_lines(&mut data);
+    if normalize_trailing {
+        remove_blank_lines(&mut data);
+    }
 
     Ok(Some(data))
 }

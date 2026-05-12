@@ -64,6 +64,8 @@ use crate::function::{Function, FunctionCfg};
 use crate::langs::{LANG, action, get_from_ext, get_function_spaces};
 use crate::output::{Dump, DumpCfg};
 use crate::spaces::{Metrics, MetricsCfg};
+#[cfg(feature = "markdown")]
+use crate::tools::read_file_raw;
 use crate::tools::{guess_language, read_file_with_eol};
 use crate::top_offenders::TopOffendersOpts;
 
@@ -124,7 +126,14 @@ fn act_on_file(path: PathBuf, cfg: &Config) -> std::io::Result<()> {
         // schema stays shaped per §23 instead of masquerading as code spaces.
         #[cfg(feature = "markdown")]
         if matches!(language, LANG::Markdown) {
-            let source_str = String::from_utf8_lossy(&source).into_owned();
+            // LOC-family metrics depend on the raw byte layout. Re-read the
+            // file without `remove_blank_lines` so DLOC/BLOC/section.end_line
+            // reflect the file on disk, not the source-code normalization.
+            let raw = match read_file_raw(&path)? {
+                Some(bytes) => bytes,
+                None => source.clone(),
+            };
+            let source_str = String::from_utf8_lossy(&raw).into_owned();
             let metrics = markdown::analyze_markdown(&source_str, &path);
             if let Some(output_format) = &cfg.output_format {
                 output_format.dump_formats(metrics, path, cfg.output.as_ref(), cfg.pretty);
