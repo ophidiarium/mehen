@@ -137,6 +137,12 @@ struct GraphBuilder {
     /// internal anchors can resolve to an existing section node instead
     /// of fabricating one per unique anchor (Codex P1 on PR #83).
     section_slugs: BTreeMap<String, u32>,
+    /// Normalized reference label → destination URL collected from every
+    /// `LinkReferenceDefinition` in the document. Reference-style links
+    /// (`[text][id]` or shortcut `[id]`) resolve their destination through
+    /// this map so they produce the same edge as their inline equivalent
+    /// (`[text](url)`). See Codex P1 on PR #83.
+    link_refs: BTreeMap<String, String>,
 }
 
 struct SectionInfo {
@@ -146,10 +152,39 @@ struct SectionInfo {
 
 impl GraphBuilder {
     fn walk(&mut self, root: &Node<'_>, source: &str) {
+        // Pass 0: collect every `LinkReferenceDefinition` so reference-style
+        // links (`[text][id]`, `[id][]`, and shortcut `[id]`) can resolve
+        // their destination through the same `classify_link` pipeline used
+        // for inline links. Without this pre-pass reference-style links
+        // never emit the correct edge type because their URL lives in a
+        // sibling definition node (Codex P1 on PR #83).
+        self.collect_link_refs(root, source);
         self.walk_recurse(root, source);
         // Sequential section edges (document order, only within the same
         // parent).
         self.add_sequential_edges();
+    }
+
+    fn collect_link_refs(&mut self, node: &Node<'_>, source: &str) {
+        use Markdown::*;
+        let kind: Markdown = node.kind_id().into();
+        if matches!(kind, LinkReferenceDefinition)
+            && let Some(label) = link_ref_label(node, source)
+            && let Some(dest) = link_destination(node, source)
+        {
+            self.link_refs
+                .entry(normalize_ref_label(&label))
+                .or_insert(dest);
+        }
+        let mut cursor = node.cursor();
+        if cursor.goto_first_child() {
+            loop {
+                self.collect_link_refs(&cursor.node(), source);
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
     }
 
     fn walk_recurse(&mut self, node: &Node<'_>, source: &str) {
@@ -258,25 +293,13 @@ impl GraphBuilder {
                 return;
             }
             LinkReferenceDefinition => {
-                // §7.1: "footnotes/reference definitions" are a single class
-                // of nodes. Treat a reference definition the same way.
-                let label = link_ref_label(node, source).unwrap_or_default();
-                let next = self.footnotes.len() as u32;
-                let id = *self.footnotes.entry(label).or_insert(next);
-                let gid = GraphNodeId {
-                    kind: NodeKind::Footnote,
-                    index: id,
-                };
-                if let Some(section_id) = self.section_stack.last().copied() {
-                    self.edges.push(Edge {
-                        from: GraphNodeId {
-                            kind: NodeKind::Section,
-                            index: section_id,
-                        },
-                        to: gid,
-                        kind: EdgeKind::Hierarchy,
-                    });
-                }
+                // Reference definitions never contribute a graph node of
+                // their own — their destination is surfaced through the
+                // `Link | Image` branch via `link_refs`. Otherwise a
+                // reference-style link `[text][id]` + `[id]: …` would
+                // produce a different MRPC than the equivalent inline
+                // `[text](…)` even though the navigation cost is identical
+                // (Codex P1 on PR #83).
                 return;
             }
             FootnoteReference => {
@@ -302,7 +325,15 @@ impl GraphBuilder {
                 return;
             }
             Link | Image => {
+                // Inline `[text](url)` / `![alt](url)` — destination is a
+                // descendant. Reference-style `[text][id]` / `[id][]` /
+                // shortcut `[id]` — destination lives in the matching
+                // `LinkReferenceDefinition` collected during the pre-pass.
                 if let Some(dest) = link_destination(node, source) {
+                    self.handle_link(&dest);
+                } else if let Some(label) = link_ref_label(node, source)
+                    && let Some(dest) = self.link_refs.get(&normalize_ref_label(&label)).cloned()
+                {
                     self.handle_link(&dest);
                 }
                 return;
@@ -898,6 +929,38 @@ fn link_ref_label(node: &Node<'_>, source: &str) -> Option<String> {
     label_text(node, source, Markdown::LinkLabel)
 }
 
+/// Normalize a reference-link label per the CommonMark / GFM rules:
+/// strip the surrounding `[…]`, trim, fold internal whitespace runs to a
+/// single space, and lowercase (ASCII only is sufficient for our test
+/// coverage — GFM additionally applies Unicode case-folding but nothing
+/// in the metric math depends on that).
+fn normalize_ref_label(label: &str) -> String {
+    let mut inner = label.trim();
+    if let Some(stripped) = inner.strip_prefix('[') {
+        inner = stripped;
+    }
+    if let Some(stripped) = inner.strip_suffix(']') {
+        inner = stripped;
+    }
+    let mut out = String::with_capacity(inner.len());
+    let mut last_ws = false;
+    for ch in inner.chars() {
+        if ch.is_whitespace() {
+            if !last_ws && !out.is_empty() {
+                out.push(' ');
+                last_ws = true;
+            }
+        } else {
+            out.push(ch.to_ascii_lowercase());
+            last_ws = false;
+        }
+    }
+    if out.ends_with(' ') {
+        out.pop();
+    }
+    out
+}
+
 fn label_text(node: &Node<'_>, source: &str, target: Markdown) -> Option<String> {
     let target_id = target as u16;
     let mut stack = vec![*node];
@@ -1063,5 +1126,41 @@ mod tests {
         );
         assert_eq!(extract_domain("http://a.b/"), Some("a.b".to_string()));
         assert_eq!(extract_domain("mailto:x@y.z"), None);
+    }
+
+    #[test]
+    fn reference_style_link_mrpc_matches_inline() {
+        // Codex P1 on PR #83: reference-style links must produce the same
+        // MRPC as their inline counterpart. Both links point at
+        // `../api.md` so the graph has 1 section + 1 linked_doc and the
+        // weighted form collapses to max(1, 0.80 - 2 + 2) = 1.0.
+        let inline = "# Title\n\nSee [docs](../api.md) for details.\n";
+        let reference = "# Title\n\nSee [docs][api-docs] for details.\n\n[api-docs]: ../api.md\n";
+        let a = compute_mrpc(&crate::node::Node(parse(inline).root_node()), inline);
+        let b = compute_mrpc(&crate::node::Node(parse(reference).root_node()), reference);
+        assert_eq!(
+            a.weighted, b.weighted,
+            "inline vs reference-style weighted mismatch: {:?} vs {:?}",
+            a, b
+        );
+        assert_eq!(
+            a.raw, b.raw,
+            "inline vs reference-style raw mismatch: {:?} vs {:?}",
+            a, b
+        );
+    }
+
+    #[test]
+    fn normalize_ref_label_is_case_and_whitespace_insensitive() {
+        // GFM normalizes label by trimming, folding whitespace runs, and
+        // lowercasing — ensure our reference lookup does the same.
+        assert_eq!(
+            normalize_ref_label("[api-docs]"),
+            normalize_ref_label("  API-DOCS  ")
+        );
+        assert_eq!(
+            normalize_ref_label("Foo Bar"),
+            normalize_ref_label("foo  bar")
+        );
     }
 }
