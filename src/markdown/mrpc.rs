@@ -987,7 +987,6 @@ mod tests {
                    a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n\
                    ```\n";
         let tree = parse(src);
-        let root = crate::node::Node(tree.root_node());
         // Find the fenced_code_block and assert its content line count.
         fn find<'a>(n: &crate::node::Node<'a>) -> Option<crate::node::Node<'a>> {
             use Markdown::*;
