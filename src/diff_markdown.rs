@@ -622,7 +622,16 @@ fn build_readability_cell(file: &DocDiffFile, dominant: Language) -> Cell {
         _ => CellKind::OneDecimal,
     };
     let mut cell = Cell::build(head_val.unwrap_or(0.0), base_val.unwrap_or(0.0), kind, file);
-    if head_val.is_none() || head_short {
+    // For a *deleted* file the head side is None by construction. Falling
+    // back to the ShortDoc footnote would hide the baseline readability
+    // that the doc used to report. Instead, let the Deleted render path
+    // preserve the baseline value with the regression indicator (e.g.
+    // `0 (was: 12.7) 🔴`) so reviewers still see what was lost.
+    if file.is_deleted {
+        if base_val.is_none() {
+            cell.footnote = Some(Footnote::ShortDoc);
+        }
+    } else if head_val.is_none() || head_short {
         cell.footnote = Some(Footnote::ShortDoc);
     }
     let _ = base_short;
@@ -2691,6 +2700,59 @@ mod tests {
             !out[0].rendered.contains("`./guide.md` (L10)"),
             "L10 was already broken in base; must not be re-reported",
         );
+    }
+
+    #[test]
+    fn readability_cell_preserves_base_value_on_deletion() {
+        // When a .md is deleted the head side is None; the previous
+        // behavior forced the ShortDoc footnote (`— ²`) so reviewers lost
+        // the baseline FKGL. Now we drop the ShortDoc override when base
+        // has a value, letting the standard deletion path show `0.0 (was:
+        // X.Y) 🔴`.
+        let mut base = empty_metrics("docs/a.md");
+        let mut en = crate::markdown::prose::english::EnglishReport::default();
+        en.readability.flesch_kincaid_grade = Some(12.7);
+        en.short_doc_warning = false;
+        base.prose.english = Some(en);
+        base.prose.language_detection.dominant_language = "en".to_string();
+
+        let file = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: None,
+            base: Some(base),
+            is_new: false,
+            is_deleted: true,
+        };
+
+        let cell = build_readability_cell(&file, Language::En);
+        assert!(
+            cell.footnote.is_none(),
+            "deletion with base readability must not force ShortDoc footnote",
+        );
+        let rendered = cell.render("main");
+        assert!(
+            rendered.contains("12.7"),
+            "baseline value must appear in render, got: {rendered}",
+        );
+        assert!(
+            rendered.contains("was:"),
+            "deletion marker must be present, got: {rendered}",
+        );
+    }
+
+    #[test]
+    fn readability_cell_short_doc_when_base_also_missing() {
+        // Sanity check: if *both* sides are missing readability data we
+        // still show the ShortDoc footnote — there is nothing to surface.
+        let file = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: None,
+            base: Some(empty_metrics("docs/a.md")),
+            is_new: false,
+            is_deleted: true,
+        };
+        let cell = build_readability_cell(&file, Language::En);
+        assert!(matches!(cell.footnote, Some(Footnote::ShortDoc)));
     }
 
     #[test]
