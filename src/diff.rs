@@ -2,8 +2,14 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use crate::ci;
+#[cfg(feature = "markdown")]
+use crate::diff_markdown::{DocDiffFile, DocRenderCtx, render_doc_section};
 use crate::git::{self, ChangeStatus, GitError};
+#[cfg(feature = "markdown")]
+use crate::langs::LANG;
 use crate::langs::{get_from_ext, get_function_spaces};
+#[cfg(feature = "markdown")]
+use crate::markdown;
 use crate::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
 use crate::mk_globset;
 
@@ -96,6 +102,54 @@ pub(crate) struct DiffOpts {
         default_missing_value = "true"
     )]
     ignore_generated: bool,
+    /// Exit non-zero when the named thresholds are crossed
+    /// (comma-separated: `dmi-drop`, `new-broken-link`, `filler-high`, `all`).
+    #[clap(
+        long,
+        value_delimiter = ',',
+        value_parser = parse_fail_on_flag,
+    )]
+    fail_on: Vec<FailOn>,
+}
+
+/// Identifies one of the documented doc-metric CI gates. Any other value is
+/// rejected by clap at parse time rather than being silently ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum FailOn {
+    DmiDrop,
+    NewBrokenLink,
+    FillerHigh,
+    All,
+}
+
+impl FailOn {
+    #[cfg(feature = "markdown")]
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::DmiDrop => "dmi-drop",
+            Self::NewBrokenLink => "new-broken-link",
+            Self::FillerHigh => "filler-high",
+            Self::All => "all",
+        }
+    }
+}
+
+/// Custom clap value parser so misspelled flags (e.g. `new-borken-link`)
+/// produce an `InvalidValue` error at CLI-parse time instead of being
+/// silently dropped downstream.
+fn parse_fail_on_flag(raw: &str) -> Result<FailOn, clap::Error> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "dmi-drop" => Ok(FailOn::DmiDrop),
+        "new-broken-link" => Ok(FailOn::NewBrokenLink),
+        "filler-high" => Ok(FailOn::FillerHigh),
+        "all" => Ok(FailOn::All),
+        other => Err(clap::Error::raw(
+            clap::error::ErrorKind::InvalidValue,
+            format!(
+                "unknown --fail-on value `{other}`; expected one of: dmi-drop, new-broken-link, filler-high, all\n"
+            ),
+        )),
+    }
 }
 
 // ── Orchestration ──────────────────────────────────────────────────────
@@ -128,6 +182,8 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
         .transpose()?;
 
     let mut filtered = Vec::new();
+    #[cfg(feature = "markdown")]
+    let mut markdown_files: Vec<git::ChangedFile> = Vec::new();
     for cf in changed {
         let p = &cf.path;
         if !path_is_selected(p, &paths)
@@ -143,11 +199,17 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        if p.extension()
+        let ext_lang = p
+            .extension()
             .and_then(|e| e.to_str())
-            .and_then(get_from_ext)
-            .is_none()
-        {
+            .and_then(get_from_ext);
+        if ext_lang.is_none() {
+            continue;
+        }
+
+        #[cfg(feature = "markdown")]
+        if matches!(ext_lang, Some(LANG::Markdown)) {
+            markdown_files.push(cf.clone());
             continue;
         }
 
@@ -232,14 +294,218 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     // 6. Sort
     diffs.sort_by_key(|a| a.sort_key());
 
+    // Markdown doc section — parallel pipeline for `.md`-like files.
+    #[cfg(feature = "markdown")]
+    let doc_files: Vec<DocDiffFile> = {
+        let mut out: Vec<DocDiffFile> = Vec::new();
+        for cf in &markdown_files {
+            let is_deleted = cf.status == ChangeStatus::Deleted;
+            let is_candidate_new = cf.status == ChangeStatus::Added;
+            let base_metrics = if is_candidate_new {
+                None
+            } else {
+                match git::read_blob(&repo, &from_ref, &cf.path) {
+                    Ok(Some(bytes)) => Some(markdown::analyze_markdown(
+                        &String::from_utf8_lossy(&bytes),
+                        &cf.path,
+                    )),
+                    Ok(None) => None,
+                    Err(e) => {
+                        log::warn!("Skipping baseline for {}: {e}", cf.path.display());
+                        None
+                    }
+                }
+            };
+            let head_metrics = if is_deleted {
+                None
+            } else {
+                match git::read_blob(&repo, &to_ref, &cf.path) {
+                    Ok(Some(bytes)) => Some(markdown::analyze_markdown(
+                        &String::from_utf8_lossy(&bytes),
+                        &cf.path,
+                    )),
+                    Ok(None) => None,
+                    Err(e) => {
+                        log::warn!("Skipping current for {}: {e}", cf.path.display());
+                        None
+                    }
+                }
+            };
+            let is_new = is_candidate_new && base_metrics.is_none();
+            out.push(DocDiffFile {
+                path: cf.path.clone(),
+                head: head_metrics,
+                base: base_metrics,
+                is_new,
+                is_deleted,
+            });
+        }
+        out
+    };
+
     // 7. Output
     let format = opts.output_format.unwrap_or(DiffFormat::Markdown);
     match format {
-        DiffFormat::Markdown => print_markdown(&diffs, &selectors, &from_label, &from_ref, &to_ref),
-        DiffFormat::Json => print_json(&diffs),
+        DiffFormat::Markdown => {
+            print_markdown(&diffs, &selectors, &from_label, &from_ref, &to_ref);
+            #[cfg(feature = "markdown")]
+            if !doc_files.is_empty() {
+                let mut ctx = DocRenderCtx::new(&from_label);
+                let repo_url = ci_ctx
+                    .as_ref()
+                    .and_then(|c| c.repository.as_ref())
+                    .map(|r| format!("https://github.com/{r}"));
+                ctx.repo_url = repo_url.as_deref();
+                ctx.head_sha = Some(&to_ref);
+                if let Some(doc_md) = render_doc_section(&doc_files, &ctx) {
+                    let mut stdout = std::io::stdout().lock();
+                    writeln!(stdout).ok();
+                    write!(stdout, "{doc_md}").ok();
+                }
+            }
+        }
+        DiffFormat::Json => {
+            #[cfg(feature = "markdown")]
+            let doc_ref: Option<&[DocDiffFile]> = if doc_files.is_empty() {
+                None
+            } else {
+                Some(&doc_files)
+            };
+            #[cfg(not(feature = "markdown"))]
+            let doc_ref: Option<&[()]> = None;
+            if let Err(e) = print_json(&diffs, doc_ref) {
+                // Surface the error loudly — exit code 2 mirrors the
+                // --fail-on gate and is distinct from the generic exit 1
+                // that covers setup/IO errors in run_diff_inner.
+                log::error!("diff: failed to emit JSON output: {e}");
+                std::process::exit(2);
+            }
+        }
+    }
+
+    // --fail-on check.
+    #[cfg(feature = "markdown")]
+    {
+        let failures = evaluate_fail_on(&opts.fail_on, &doc_files);
+        if !failures.is_empty() {
+            log::error!("--fail-on threshold crossed: {}", failures.join(", "));
+            std::process::exit(2);
+        }
+    }
+    #[cfg(not(feature = "markdown"))]
+    {
+        if !opts.fail_on.is_empty() {
+            log::warn!(
+                "--fail-on was set but the `markdown` feature is disabled; no doc-metric thresholds are evaluated"
+            );
+        }
     }
 
     Ok(())
+}
+
+#[cfg(feature = "markdown")]
+fn doc_json_payload(files: &[DocDiffFile]) -> Vec<serde_json::Value> {
+    files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "path": f.path.to_string_lossy(),
+                "is_new": f.is_new,
+                "is_deleted": f.is_deleted,
+                "base": f.base,
+                "head": f.head,
+            })
+        })
+        .collect()
+}
+
+#[cfg(feature = "markdown")]
+fn evaluate_fail_on(flags: &[FailOn], docs: &[DocDiffFile]) -> Vec<String> {
+    let mut enabled: std::collections::BTreeSet<FailOn> = std::collections::BTreeSet::new();
+    for f in flags {
+        match f {
+            FailOn::All => {
+                enabled.insert(FailOn::DmiDrop);
+                enabled.insert(FailOn::NewBrokenLink);
+                enabled.insert(FailOn::FillerHigh);
+            }
+            other => {
+                enabled.insert(*other);
+            }
+        }
+    }
+    if enabled.is_empty() {
+        return Vec::new();
+    }
+    // If the caller asked to gate on doc metrics but no markdown files are
+    // in the diff, log a warning so users notice the flag silently matched
+    // nothing. The gate itself still returns success (no docs → no metric
+    // breach possible) so existing CI doesn't break.
+    if docs.iter().all(|f| f.head.is_none()) {
+        let flags: Vec<&str> = enabled.iter().copied().map(FailOn::as_str).collect();
+        log::warn!(
+            "--fail-on {flags:?} has no Markdown files in the diff; no doc-metric thresholds were evaluated"
+        );
+    }
+    let mut failures: Vec<String> = Vec::new();
+    for f in docs {
+        let Some(head) = &f.head else { continue };
+        let base = f.base.as_ref();
+        if enabled.contains(&FailOn::DmiDrop)
+            && let Some(b) = base
+        {
+            let hd = head.maintainability.documentation_maintainability_index;
+            let bd = b.maintainability.documentation_maintainability_index;
+            if bd - hd >= 3.0 {
+                failures.push(format!("dmi-drop:{}", f.path.display()));
+            }
+        }
+        if enabled.contains(&FailOn::NewBrokenLink) {
+            // Identity-based diff keyed on (class, destination) — line
+            // numbers MAY change without a new broken link (e.g. a doc
+            // prepends content, shifting every link down one line). The CI
+            // gate fires only when a key appears more often in head than in
+            // base. Line numbers still flow through to the callout layer for
+            // the PR comment; they just don't drive the fail-on decision.
+            // See §39.4.
+            let mut head_counts: std::collections::BTreeMap<
+                (crate::markdown::types::LinkClass, &str),
+                usize,
+            > = std::collections::BTreeMap::new();
+            for l in &head.link_records {
+                if matches!(l.resolved, Some(false)) {
+                    *head_counts
+                        .entry((l.class, l.destination.as_str()))
+                        .or_insert(0) += 1;
+                }
+            }
+            let mut base_counts: std::collections::BTreeMap<
+                (crate::markdown::types::LinkClass, &str),
+                usize,
+            > = std::collections::BTreeMap::new();
+            if let Some(b) = base {
+                for l in &b.link_records {
+                    if matches!(l.resolved, Some(false)) {
+                        *base_counts
+                            .entry((l.class, l.destination.as_str()))
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+            let has_new_broken = head_counts.iter().any(|(key, head_n)| {
+                let base_n = base_counts.get(key).copied().unwrap_or(0);
+                *head_n > base_n
+            });
+            if has_new_broken {
+                failures.push(format!("new-broken-link:{}", f.path.display()));
+            }
+        }
+        if enabled.contains(&FailOn::FillerHigh) && head.ai_era.filler_lazy_structure_risk >= 0.60 {
+            failures.push(format!("filler-high:{}", f.path.display()));
+        }
+    }
+    failures
 }
 
 // ── Generated-file filtering ───────────────────────────────────────────
@@ -381,6 +647,8 @@ fn print_markdown(
 ) {
     let mut out = String::new();
 
+    // Source-code anchor (§39.1: sibling of the docs anchor).
+    out.push_str("<!-- mehen-metrics -->\n");
     out.push_str(&format!(
         "## [Mehen](https://github.com/ophidiarium/mehen) Summary (`{from}`..`{to}`)\n\n"
     ));
@@ -473,9 +741,37 @@ fn format_f64(v: f64) -> String {
 
 // ── JSON output ────────────────────────────────────────────────────────
 
-fn print_json(diffs: &[FileDiff]) {
-    let json = serde_json::to_string_pretty(diffs).unwrap();
-    writeln!(std::io::stdout().lock(), "{json}").unwrap();
+/// Emit a single JSON document with a `source_code` key and an optional
+/// `markdown` key. Downstream consumers (`jq`, `serde_json`) see one top-level
+/// object, not two concatenated arrays.
+///
+/// Serialization errors bubble up as `Err` so `run_diff_inner` exits
+/// non-zero instead of silently writing an empty `""` to stdout.
+#[cfg(feature = "markdown")]
+fn print_json(
+    diffs: &[FileDiff],
+    docs: Option<&[DocDiffFile]>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("source_code".to_string(), serde_json::to_value(diffs)?);
+    if let Some(docs) = docs {
+        payload.insert(
+            "markdown".to_string(),
+            serde_json::Value::Array(doc_json_payload(docs)),
+        );
+    }
+    let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
+    writeln!(std::io::stdout().lock(), "{json}")?;
+    Ok(())
+}
+
+#[cfg(not(feature = "markdown"))]
+fn print_json(diffs: &[FileDiff], _docs: Option<&[()]>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("source_code".to_string(), serde_json::to_value(diffs)?);
+    let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
+    writeln!(std::io::stdout().lock(), "{json}")?;
+    Ok(())
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -694,6 +990,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "abc");
@@ -712,6 +1009,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "main");
@@ -739,6 +1037,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "origin/develop");
@@ -766,6 +1065,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "HEAD~1");
@@ -837,5 +1137,243 @@ src/value.txt linguist-generated=true
                 .unwrap()
         );
         assert!(filter.is_generated(Path::new("src/value.txt")).unwrap());
+    }
+
+    // ── `--fail-on new-broken-link` gating tests ───────────────────────
+    //
+    // Ensure the CI gate keys on `(class, destination)` identity — a link
+    // that merely shifts to a different line number MUST NOT trip the gate,
+    // but a duplicate broken destination MUST.
+
+    #[cfg(feature = "markdown")]
+    fn broken_link_for_fail_on(
+        line: u64,
+        class: crate::markdown::types::LinkClass,
+        destination: &str,
+    ) -> crate::markdown::types::LinkRecord {
+        crate::markdown::types::LinkRecord {
+            line,
+            class,
+            destination: destination.to_string(),
+            text: String::new(),
+            is_image: false,
+            is_bare_url: false,
+            resolved: Some(false),
+        }
+    }
+
+    #[cfg(feature = "markdown")]
+    fn minimal_md_metrics(path: &str) -> crate::markdown::types::MarkdownMetrics {
+        crate::markdown::types::MarkdownMetrics {
+            path: path.to_string(),
+            loc: Default::default(),
+            loc_ratios: Default::default(),
+            size: Default::default(),
+            ecu_inputs: Default::default(),
+            sections: vec![],
+            complexity: Default::default(),
+            links: Default::default(),
+            link_records: vec![],
+            visuals: Default::default(),
+            tables: Default::default(),
+            maintainability: Default::default(),
+            grounding: Default::default(),
+            ai_era: Default::default(),
+            review: Default::default(),
+            artifacts: vec![],
+            prose: Default::default(),
+        }
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_ignores_line_only_shift() {
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![broken_link_for_fail_on(
+            42,
+            crate::markdown::types::LinkClass::Relative,
+            "./guide.md",
+        )];
+        let mut base = minimal_md_metrics("docs/a.md");
+        base.link_records = vec![broken_link_for_fail_on(
+            10,
+            crate::markdown::types::LinkClass::Relative,
+            "./guide.md",
+        )];
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec![FailOn::NewBrokenLink];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert!(
+            failures.is_empty(),
+            "line-only shift must not trip new-broken-link; got: {failures:?}",
+        );
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_trips_on_new_occurrence() {
+        // Head has 2 broken refs to the same destination; base has 1. The
+        // second occurrence is net-new so the gate must fire.
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![
+            broken_link_for_fail_on(10, crate::markdown::types::LinkClass::Relative, "./g.md"),
+            broken_link_for_fail_on(20, crate::markdown::types::LinkClass::Relative, "./g.md"),
+        ];
+        let mut base = minimal_md_metrics("docs/a.md");
+        base.link_records = vec![broken_link_for_fail_on(
+            10,
+            crate::markdown::types::LinkClass::Relative,
+            "./g.md",
+        )];
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec![FailOn::NewBrokenLink];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].starts_with("new-broken-link:"));
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_trips_on_brand_new_destination() {
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![broken_link_for_fail_on(
+            5,
+            crate::markdown::types::LinkClass::Relative,
+            "./added.md",
+        )];
+        let base = minimal_md_metrics("docs/a.md");
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec![FailOn::NewBrokenLink];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert_eq!(failures.len(), 1);
+    }
+
+    // ── print_json error-propagation ────────────────────────────────────
+
+    #[test]
+    fn print_json_happy_path_is_ok() {
+        let diffs: Vec<FileDiff> = vec![FileDiff {
+            path: PathBuf::from("a.rs"),
+            metrics: vec![],
+            is_new: false,
+            is_deleted: false,
+        }];
+        #[cfg(feature = "markdown")]
+        let res = print_json(&diffs, None);
+        #[cfg(not(feature = "markdown"))]
+        let res = print_json(&diffs, None);
+        assert!(res.is_ok(), "valid input must serialize cleanly");
+    }
+
+    #[test]
+    fn print_json_returns_result_type() {
+        // §39 regression guard: print_json must return `Result<_, _>` so
+        // callers can exit non-zero on serialization failure. Before, the
+        // emitter used `unwrap_or_default` and silently wrote an empty
+        // JSON document to stdout when serde_json failed.
+        //
+        // We can only exercise the happy path deterministically here —
+        // serde_json's non-finite-float policy varies by version — but a
+        // type-level assertion that the function signature returns
+        // `Result` is enough to lock in the fix: the caller at the
+        // DiffFormat::Json branch uses `if let Err(e) = print_json(..)`
+        // so any future regression to an infallible signature would
+        // break compilation.
+        let diffs: Vec<FileDiff> = vec![];
+        #[cfg(feature = "markdown")]
+        let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
+        #[cfg(not(feature = "markdown"))]
+        let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
+        assert!(res.is_ok());
+    }
+
+    // ── `--fail-on` CLI-parse validation ────────────────────────────────
+
+    #[test]
+    fn fail_on_parser_accepts_every_documented_value() {
+        let cli = TestDiffCli::try_parse_from([
+            "mehen",
+            "--fail-on",
+            "dmi-drop,new-broken-link,filler-high,all",
+        ])
+        .expect("every documented value must parse");
+        assert_eq!(
+            cli.opts.fail_on,
+            vec![
+                FailOn::DmiDrop,
+                FailOn::NewBrokenLink,
+                FailOn::FillerHigh,
+                FailOn::All,
+            ]
+        );
+    }
+
+    #[test]
+    fn fail_on_parser_trims_and_lowercases() {
+        let cli = TestDiffCli::try_parse_from(["mehen", "--fail-on", "  Dmi-Drop , ALL "])
+            .expect("case and whitespace must be normalized");
+        assert_eq!(cli.opts.fail_on, vec![FailOn::DmiDrop, FailOn::All]);
+    }
+
+    #[test]
+    fn fail_on_parser_rejects_unknown_value() {
+        // Regression: before, typos like `new-borken-link` were silently
+        // dropped into an empty filter set. Now clap must error at parse
+        // time so the mistake is loud.
+        let err = TestDiffCli::try_parse_from(["mehen", "--fail-on", "new-borken-link"])
+            .expect_err("unknown value must be rejected");
+        // Clap wraps custom value-parser errors under ValueValidation; the
+        // raw ErrorKind::InvalidValue we produce survives either way. Accept
+        // both so the test is robust across clap internals.
+        assert!(
+            matches!(
+                err.kind(),
+                clap::error::ErrorKind::InvalidValue | clap::error::ErrorKind::ValueValidation,
+            ),
+            "expected InvalidValue or ValueValidation, got: {:?}",
+            err.kind(),
+        );
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("new-borken-link"),
+            "error must mention the offending value, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn fail_on_parser_rejects_partial_match_in_list() {
+        // Mix of a valid and a misspelled flag must still fail the whole
+        // parse so no value is silently dropped.
+        let err = TestDiffCli::try_parse_from(["mehen", "--fail-on", "dmi-drop,filler-hihg"])
+            .expect_err("list with an invalid entry must be rejected");
+        assert!(matches!(
+            err.kind(),
+            clap::error::ErrorKind::InvalidValue | clap::error::ErrorKind::ValueValidation,
+        ));
+        assert!(err.to_string().contains("filler-hihg"));
     }
 }

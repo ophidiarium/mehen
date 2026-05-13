@@ -229,6 +229,7 @@ fn aggregate_visuals(images: &[ImageRecord], diagrams: &[DiagramRecord], words: 
         diagram_nodes_total: diagrams.iter().map(|d| d.nodes).sum(),
         diagram_edges_total: diagrams.iter().map(|d| d.edges).sum(),
         diagram_cycles_total: diagrams.iter().map(|d| d.cycles).sum(),
+        diagram_parse_error_count: diagrams.iter().filter(|d| d.parse_error).count() as u64,
         ..Visuals::default()
     };
 

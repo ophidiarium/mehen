@@ -69,6 +69,21 @@ links:
   link_debt_score: 0.45
   information_scent_score: 0.44999999999999996
   review_burden: 4.1
+link_records:
+  - line: 7
+    class: relative
+    destination: "./missing-image.png"
+    text: broken
+    is_image: true
+    is_bare_url: false
+    resolved: false
+  - line: 9
+    class: relative
+    destination: code_fences.md
+    text: alt here
+    is_image: true
+    is_bare_url: false
+    resolved: true
 visuals:
   images: 2
   diagrams: 0

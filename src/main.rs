@@ -39,6 +39,8 @@ mod formats;
 
 mod ci;
 mod diff;
+#[cfg(feature = "markdown")]
+mod diff_markdown;
 mod git;
 #[cfg(feature = "markdown")]
 mod markdown;

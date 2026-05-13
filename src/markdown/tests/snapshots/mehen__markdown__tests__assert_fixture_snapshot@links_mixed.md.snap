@@ -89,6 +89,119 @@ links:
   link_debt_score: 0.76
   information_scent_score: 0.3857142857142857
   review_burden: 16.7
+link_records:
+  - line: 3
+    class: internal
+    destination: "#details"
+    text: Details
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 3
+    class: internal
+    destination: "#missing"
+    text: Broken anchor
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 5
+    class: relative
+    destination: links_mixed.md
+    text: this file
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 6
+    class: relative
+    destination: code_fences.md
+    text: sibling
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 6
+    class: relative
+    destination: nowhere.md
+    text: dead
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 8
+    class: external
+    destination: "https://example.com"
+    text: example
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 9
+    class: external
+    destination: "https://www.mozilla.org"
+    text: "https://www.mozilla.org"
+    is_image: false
+    is_bare_url: true
+    resolved: ~
+  - line: 11
+    class: issue_pr
+    destination: "https://github.com/foo/bar/issues/42"
+    text: Ticket 42
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 13
+    class: scholarly
+    destination: "https://doi.org/10.1/abc"
+    text: DOI
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 15
+    class: reference_definition
+    destination: ""
+    text: abc
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 15
+    class: reference_definition
+    destination: ""
+    text: abc-ref
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 15
+    class: reference_definition
+    destination: ""
+    text: missing
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 15
+    class: reference_definition
+    destination: ""
+    text: nope
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 17
+    class: footnote
+    destination: "1"
+    text: "[^1]"
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 23
+    class: reference_definition
+    destination: "https://example.org"
+    text: abc-ref
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 29
+    class: external_vendor
+    destination: "https://developer.mozilla.org/en-US/"
+    text: MDN
+    is_image: false
+    is_bare_url: false
+    resolved: ~
 visuals:
   images: 0
   diagrams: 0

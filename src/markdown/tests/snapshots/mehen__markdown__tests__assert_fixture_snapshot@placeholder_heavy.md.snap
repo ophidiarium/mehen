@@ -149,6 +149,56 @@ links:
   link_debt_score: 0.45
   information_scent_score: 0.2571428571428571
   review_burden: 20.6
+link_records:
+  - line: 15
+    class: relative
+    destination: TBD
+    text: the CI dashboard
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 16
+    class: relative
+    destination: FIXME
+    text: rollback flow
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 16
+    class: relative
+    destination: TODO
+    text: incident response
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 37
+    class: relative
+    destination: TBD
+    text: historical rollback notes
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 37
+    class: relative
+    destination: TODO
+    text: postmortems
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 57
+    class: relative
+    destination: TBD
+    text: placeholder entry
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 58
+    class: reference_definition
+    destination: ""
+    text: another placeholder
+    is_image: false
+    is_bare_url: false
+    resolved: true
 visuals:
   images: 0
   diagrams: 0
