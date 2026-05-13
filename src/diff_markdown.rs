@@ -1120,34 +1120,71 @@ fn emit_new_link_defects(
     base: Option<&MarkdownMetrics>,
     out: &mut Vec<Callout>,
 ) {
-    let base_set: std::collections::BTreeSet<(LinkClass, String)> = base
-        .map(|b| {
-            b.link_records
-                .iter()
-                .filter(|l| matches!(l.resolved, Some(false)))
-                .map(|l| (l.class, l.destination.clone()))
-                .collect()
-        })
-        .unwrap_or_default();
+    // §39.4 regression: count broken-link *occurrences* per (class, destination)
+    // key. If base has 1 broken `./guide.md` and head has 2, the second new
+    // occurrence must be reported. A set-diff drops the duplicate; we keep a
+    // multiset count-per-key map on each side so `new_broken = max(0, head -
+    // base)` per key can be summed into the emitted list.
+    let mut base_counts: std::collections::BTreeMap<(LinkClass, String), usize> =
+        std::collections::BTreeMap::new();
+    if let Some(b) = base {
+        for l in &b.link_records {
+            if !matches!(l.resolved, Some(false)) {
+                continue;
+            }
+            *base_counts
+                .entry((l.class, l.destination.clone()))
+                .or_insert(0) += 1;
+        }
+    }
 
-    let mut relative: Vec<(u64, String)> = Vec::new();
-    let mut anchor: Vec<(u64, String)> = Vec::new();
-    let mut external: Vec<(u64, String)> = Vec::new();
+    // Group head's broken-link occurrences by (class, destination) so we can
+    // subtract the base multiset one-for-one and keep the remaining new
+    // occurrences. Each occurrence keeps its own line for the callout list.
+    let mut head_groups: std::collections::BTreeMap<(LinkClass, String), Vec<u64>> =
+        std::collections::BTreeMap::new();
     for l in &head.link_records {
         if !matches!(l.resolved, Some(false)) {
             continue;
         }
-        if base_set.contains(&(l.class, l.destination.clone())) {
-            continue;
-        }
-        match l.class {
-            LinkClass::Relative => relative.push((l.line, l.destination.clone())),
-            LinkClass::Internal => anchor.push((l.line, l.destination.clone())),
+        head_groups
+            .entry((l.class, l.destination.clone()))
+            .or_default()
+            .push(l.line);
+    }
+
+    let mut relative: Vec<(u64, String)> = Vec::new();
+    let mut anchor: Vec<(u64, String)> = Vec::new();
+    let mut external: Vec<(u64, String)> = Vec::new();
+    for ((class, destination), mut lines) in head_groups {
+        lines.sort();
+        let drop = base_counts
+            .get(&(class, destination.clone()))
+            .copied()
+            .unwrap_or(0);
+        // Drop the first `drop` occurrences as already-broken in base; any
+        // remaining occurrences are net-new broken references for head.
+        let new_occurrences = lines.into_iter().skip(drop);
+        match class {
+            LinkClass::Relative => {
+                for line in new_occurrences {
+                    relative.push((line, destination.clone()));
+                }
+            }
+            LinkClass::Internal => {
+                for line in new_occurrences {
+                    anchor.push((line, destination.clone()));
+                }
+            }
             LinkClass::External
             | LinkClass::ExternalVendor
             | LinkClass::Scholarly
             | LinkClass::IssuePr
-            | LinkClass::AbsoluteSameRepo => external.push((l.line, l.destination.clone())),
+            | LinkClass::AbsoluteSameRepo => {
+                for line in new_occurrences {
+                    external.push((line, destination.clone()));
+                }
+            }
             _ => {}
         }
     }
@@ -2594,5 +2631,84 @@ mod tests {
         assert_eq!(format_int_thousands(0), "0");
         assert_eq!(format_int_thousands(999), "999");
         assert_eq!(format_int_thousands(1000), "1,000");
+    }
+
+    fn broken_link(
+        line: u64,
+        class: LinkClass,
+        destination: &str,
+    ) -> crate::markdown::types::LinkRecord {
+        crate::markdown::types::LinkRecord {
+            line,
+            class,
+            destination: destination.to_string(),
+            text: String::new(),
+            is_image: false,
+            is_bare_url: false,
+            resolved: Some(false),
+        }
+    }
+
+    fn doc_row_for(path: &str) -> DocRow {
+        let ctx = DocRenderCtx::new("main");
+        let file = DocDiffFile {
+            path: PathBuf::from(path),
+            head: Some(empty_metrics(path)),
+            base: Some(empty_metrics(path)),
+            is_new: false,
+            is_deleted: false,
+        };
+        DocRow::build(&file, &ctx)
+    }
+
+    #[test]
+    fn new_link_defects_count_duplicates_by_occurrence() {
+        // §39.4 regression: base has 1 broken `./guide.md`, head has 2. The
+        // second new occurrence must be reported even though `(class, dest)`
+        // already existed in base.
+        let mut head = empty_metrics("docs/a.md");
+        head.link_records = vec![
+            broken_link(10, LinkClass::Relative, "./guide.md"),
+            broken_link(20, LinkClass::Relative, "./guide.md"),
+        ];
+        let mut base = empty_metrics("docs/a.md");
+        base.link_records = vec![broken_link(10, LinkClass::Relative, "./guide.md")];
+
+        let row = doc_row_for("docs/a.md");
+        let mut out: Vec<Callout> = Vec::new();
+        emit_new_link_defects(&row, &head, Some(&base), &mut out);
+
+        assert_eq!(out.len(), 1, "exactly one callout for the relative class");
+        assert_eq!(out[0].rule_id, "broken_relative_link_added");
+        assert_eq!(out[0].magnitude, 1.0);
+        // The surviving occurrence takes the highest unmatched line.
+        assert!(
+            out[0].rendered.contains("`./guide.md` (L20)"),
+            "expected L20 occurrence in callout, got: {}",
+            out[0].rendered
+        );
+        assert!(
+            !out[0].rendered.contains("`./guide.md` (L10)"),
+            "L10 was already broken in base; must not be re-reported",
+        );
+    }
+
+    #[test]
+    fn new_link_defects_dedup_when_same_count() {
+        // When base and head contain the same number of broken occurrences
+        // for a (class, destination) key, nothing new is emitted.
+        let mut head = empty_metrics("docs/a.md");
+        head.link_records = vec![broken_link(30, LinkClass::Relative, "./guide.md")];
+        let mut base = empty_metrics("docs/a.md");
+        base.link_records = vec![broken_link(10, LinkClass::Relative, "./guide.md")];
+
+        let row = doc_row_for("docs/a.md");
+        let mut out: Vec<Callout> = Vec::new();
+        emit_new_link_defects(&row, &head, Some(&base), &mut out);
+
+        assert!(
+            out.is_empty(),
+            "equal occurrence count per key → no new-broken-link callout",
+        );
     }
 }
