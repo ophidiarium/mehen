@@ -123,7 +123,7 @@ pub(crate) struct Complexity {
 /// aggregate breakdown in `links.*` does not double-count.
 ///
 /// Serialized as snake_case to align with the §23 schema.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum LinkClass {
     /// `#anchor` into the current document.
@@ -350,6 +350,12 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) sections: Vec<Section>,
     pub(crate) complexity: Complexity,
     pub(crate) links: Links,
+    /// Per-link detail rows (§11.1). Phase F's `mehen diff` consumes these to
+    /// detect newly added broken relative/anchor/external links per §39.4.
+    /// Kept as an additive field so existing JSON consumers see an extra
+    /// array; serializers never emit it when empty to keep snapshots stable.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub(crate) link_records: Vec<LinkRecord>,
     pub(crate) visuals: Visuals,
     pub(crate) tables: Tables,
     pub(crate) maintainability: Maintainability,
