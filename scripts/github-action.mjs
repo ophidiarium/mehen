@@ -284,10 +284,19 @@ function runCommand(command, args, options = {}) {
 function parseDiffJson(stdout) {
   try {
     const parsed = JSON.parse(stdout);
-    if (!Array.isArray(parsed)) {
-      throw new Error("mehen diff JSON output was not an array");
+    // Phase F (§39) introduced the `{ source_code: [...], markdown?: ... }`
+    // shape so a single `mehen diff --output-format json` run can carry
+    // both sections. Accept either the new object form or the legacy
+    // top-level array for backward compatibility with older mehen CLIs.
+    if (Array.isArray(parsed)) {
+      return parsed;
     }
-    return parsed;
+    if (parsed && Array.isArray(parsed.source_code)) {
+      return parsed.source_code;
+    }
+    throw new Error(
+      "mehen diff JSON output was not an array or {source_code: [...]} object",
+    );
   } catch (error) {
     throw new Error(
       `Failed to parse mehen diff JSON: ${error.message}\n${stdout}`,
