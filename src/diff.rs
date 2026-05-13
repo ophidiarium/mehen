@@ -2,8 +2,14 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use crate::ci;
+#[cfg(feature = "markdown")]
+use crate::diff_markdown::{DocDiffFile, DocRenderCtx, render_doc_section};
 use crate::git::{self, ChangeStatus, GitError};
+#[cfg(feature = "markdown")]
+use crate::langs::LANG;
 use crate::langs::{get_from_ext, get_function_spaces};
+#[cfg(feature = "markdown")]
+use crate::markdown;
 use crate::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
 use crate::mk_globset;
 
@@ -96,6 +102,10 @@ pub(crate) struct DiffOpts {
         default_missing_value = "true"
     )]
     ignore_generated: bool,
+    /// Exit non-zero when the named thresholds are crossed
+    /// (comma-separated: `dmi-drop`, `new-broken-link`, `filler-high`, `all`).
+    #[clap(long, value_delimiter = ',')]
+    fail_on: Vec<String>,
 }
 
 // ── Orchestration ──────────────────────────────────────────────────────
@@ -128,6 +138,8 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
         .transpose()?;
 
     let mut filtered = Vec::new();
+    #[cfg(feature = "markdown")]
+    let mut markdown_files: Vec<git::ChangedFile> = Vec::new();
     for cf in changed {
         let p = &cf.path;
         if !path_is_selected(p, &paths)
@@ -143,11 +155,17 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        if p.extension()
+        let ext_lang = p
+            .extension()
             .and_then(|e| e.to_str())
-            .and_then(get_from_ext)
-            .is_none()
-        {
+            .and_then(get_from_ext);
+        if ext_lang.is_none() {
+            continue;
+        }
+
+        #[cfg(feature = "markdown")]
+        if matches!(ext_lang, Some(LANG::Markdown)) {
+            markdown_files.push(cf.clone());
             continue;
         }
 
@@ -232,14 +250,177 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     // 6. Sort
     diffs.sort_by_key(|a| a.sort_key());
 
+    // Markdown doc section — parallel pipeline for `.md`-like files.
+    #[cfg(feature = "markdown")]
+    let doc_files: Vec<DocDiffFile> = {
+        let mut out: Vec<DocDiffFile> = Vec::new();
+        for cf in &markdown_files {
+            let is_deleted = cf.status == ChangeStatus::Deleted;
+            let is_candidate_new = cf.status == ChangeStatus::Added;
+            let base_metrics = if is_candidate_new {
+                None
+            } else {
+                match git::read_blob(&repo, &from_ref, &cf.path) {
+                    Ok(Some(bytes)) => Some(markdown::analyze_markdown(
+                        &String::from_utf8_lossy(&bytes),
+                        &cf.path,
+                    )),
+                    Ok(None) => None,
+                    Err(e) => {
+                        log::warn!("Skipping baseline for {}: {e}", cf.path.display());
+                        None
+                    }
+                }
+            };
+            let head_metrics = if is_deleted {
+                None
+            } else {
+                match git::read_blob(&repo, &to_ref, &cf.path) {
+                    Ok(Some(bytes)) => Some(markdown::analyze_markdown(
+                        &String::from_utf8_lossy(&bytes),
+                        &cf.path,
+                    )),
+                    Ok(None) => None,
+                    Err(e) => {
+                        log::warn!("Skipping current for {}: {e}", cf.path.display());
+                        None
+                    }
+                }
+            };
+            let is_new = is_candidate_new && base_metrics.is_none();
+            out.push(DocDiffFile {
+                path: cf.path.clone(),
+                head: head_metrics,
+                base: base_metrics,
+                is_new,
+                is_deleted,
+            });
+        }
+        out
+    };
+
     // 7. Output
     let format = opts.output_format.unwrap_or(DiffFormat::Markdown);
     match format {
-        DiffFormat::Markdown => print_markdown(&diffs, &selectors, &from_label, &from_ref, &to_ref),
-        DiffFormat::Json => print_json(&diffs),
+        DiffFormat::Markdown => {
+            print_markdown(&diffs, &selectors, &from_label, &from_ref, &to_ref);
+            #[cfg(feature = "markdown")]
+            if !doc_files.is_empty() {
+                let mut ctx = DocRenderCtx::new(&from_label);
+                let repo_url = ci_ctx
+                    .as_ref()
+                    .and_then(|c| c.repository.as_ref())
+                    .map(|r| format!("https://github.com/{r}"));
+                ctx.repo_url = repo_url.as_deref();
+                ctx.head_sha = Some(&to_ref);
+                if let Some(doc_md) = render_doc_section(&doc_files, &ctx) {
+                    let mut stdout = std::io::stdout().lock();
+                    writeln!(stdout).ok();
+                    write!(stdout, "{doc_md}").ok();
+                }
+            }
+        }
+        DiffFormat::Json => {
+            print_json(&diffs);
+            #[cfg(feature = "markdown")]
+            if !doc_files.is_empty() {
+                print_doc_json(&doc_files);
+            }
+        }
+    }
+
+    // --fail-on check.
+    #[cfg(feature = "markdown")]
+    {
+        let failures = evaluate_fail_on(&opts.fail_on, &doc_files);
+        if !failures.is_empty() {
+            log::error!("--fail-on threshold crossed: {}", failures.join(", "));
+            std::process::exit(2);
+        }
+    }
+    #[cfg(not(feature = "markdown"))]
+    {
+        let _ = &opts.fail_on;
     }
 
     Ok(())
+}
+
+#[cfg(feature = "markdown")]
+fn print_doc_json(files: &[DocDiffFile]) {
+    // Serialize the doc diff as a sidecar JSON array. Each entry carries
+    // path, is_new, is_deleted, and the full MarkdownMetrics for base/head.
+    let payload: Vec<serde_json::Value> = files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "path": f.path.to_string_lossy(),
+                "is_new": f.is_new,
+                "is_deleted": f.is_deleted,
+                "base": f.base,
+                "head": f.head,
+            })
+        })
+        .collect();
+    let json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "[]".to_string());
+    writeln!(std::io::stdout().lock(), "{json}").ok();
+}
+
+#[cfg(feature = "markdown")]
+fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
+    let mut enabled = std::collections::BTreeSet::new();
+    for f in flags {
+        let trimmed = f.trim().to_ascii_lowercase();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed == "all" {
+            enabled.insert("dmi-drop".to_string());
+            enabled.insert("new-broken-link".to_string());
+            enabled.insert("filler-high".to_string());
+        } else {
+            enabled.insert(trimmed);
+        }
+    }
+    if enabled.is_empty() {
+        return Vec::new();
+    }
+    let mut failures: Vec<String> = Vec::new();
+    for f in docs {
+        let Some(head) = &f.head else { continue };
+        let base = f.base.as_ref();
+        if enabled.contains("dmi-drop")
+            && let Some(b) = base
+        {
+            let hd = head.maintainability.documentation_maintainability_index;
+            let bd = b.maintainability.documentation_maintainability_index;
+            if bd - hd >= 3.0 {
+                failures.push(format!("dmi-drop:{}", f.path.display()));
+            }
+        }
+        if enabled.contains("new-broken-link") {
+            let head_broken = head
+                .link_records
+                .iter()
+                .filter(|l| matches!(l.resolved, Some(false)))
+                .count();
+            let base_broken = base
+                .map(|b| {
+                    b.link_records
+                        .iter()
+                        .filter(|l| matches!(l.resolved, Some(false)))
+                        .count()
+                })
+                .unwrap_or(0);
+            if head_broken > base_broken {
+                failures.push(format!("new-broken-link:{}", f.path.display()));
+            }
+        }
+        if enabled.contains("filler-high") && head.ai_era.filler_lazy_structure_risk >= 0.60 {
+            failures.push(format!("filler-high:{}", f.path.display()));
+        }
+    }
+    failures
 }
 
 // ── Generated-file filtering ───────────────────────────────────────────
@@ -381,6 +562,8 @@ fn print_markdown(
 ) {
     let mut out = String::new();
 
+    // Source-code anchor (§39.1: sibling of the docs anchor).
+    out.push_str("<!-- mehen-metrics -->\n");
     out.push_str(&format!(
         "## [Mehen](https://github.com/ophidiarium/mehen) Summary (`{from}`..`{to}`)\n\n"
     ));
@@ -694,6 +877,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "abc");
@@ -712,6 +896,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &None);
         assert_eq!(from, "main");
@@ -739,6 +924,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "origin/develop");
@@ -766,6 +952,7 @@ mod tests {
             output_format: None,
             show_unchanged: false,
             ignore_generated: true,
+            fail_on: vec![],
         };
         let (from, to) = resolve_refs(&opts, &Some(ctx));
         assert_eq!(from, "HEAD~1");
