@@ -1308,14 +1308,18 @@ fn emit_new_lexical_illusions(
         .map(|en| en.wording.lexical_illusions)
         .unwrap_or(0);
     if head_n > base_n {
-        let word = String::from("see drill-down");
+        // §39.5.2 allows the {L:N…} line-number list to be omitted when
+        // per-occurrence surface/line data isn't propagated; we report the
+        // aggregate delta only. TODO(phase-next): thread per-occurrence
+        // surfaces + lines from `WordingReport` into the callout.
+        let delta = head_n - base_n;
         out.push(callout(
             1,
-            (head_n - base_n) as f64,
+            delta as f64,
             "lexical_illusion_added",
             &row.path,
             0,
-            tmpl_lexical_illusion_added(&row.display_path, &word, 0),
+            tmpl_lexical_illusion_added(&row.display_path, delta),
         ));
     }
 }
@@ -1337,15 +1341,17 @@ fn emit_new_nonwords(
         .map(|en| en.wording.nonword_count)
         .unwrap_or(0);
     if head_n > base_n {
-        let word = String::from("see drill-down");
-        let replacement = String::from("see drill-down");
+        // Per-occurrence surface + line numbers aren't threaded into the
+        // diff emitter yet; report the aggregate delta only, consistent with
+        // §39.5.2's allowance for omitted {L:N…} lists.
+        let delta = head_n - base_n;
         out.push(callout(
             1,
-            (head_n - base_n) as f64,
+            delta as f64,
             "nonword_added",
             &row.path,
             0,
-            tmpl_nonword_added(&row.display_path, &word, 0, &replacement),
+            tmpl_nonword_added(&row.display_path, delta),
         ));
     }
 }
@@ -1813,14 +1819,17 @@ fn emit_doubled_joshi(
     if head_n <= base_n {
         return;
     }
-    let particle = String::from("see drill-down");
+    // Per-particle surface + line numbers aren't threaded through yet.
+    // Report the aggregate count only. TODO(phase-next): propagate particle
+    // surfaces from the Japanese wording analyzer.
+    let delta = head_n - base_n;
     out.push(callout(
         3,
-        (head_n - base_n) as f64,
+        delta as f64,
         "doubled_joshi_added",
         &row.path,
         0,
-        tmpl_doubled_joshi_added(&row.display_path, &particle, 0),
+        tmpl_doubled_joshi_added(&row.display_path, delta),
     ));
 }
 
@@ -1843,14 +1852,17 @@ fn emit_kanji_run(
     if head_n <= base_n {
         return;
     }
-    let run = String::from("see drill-down");
+    // Per-run length + surface aren't threaded through yet. Report aggregate
+    // count only. TODO(phase-next): propagate run length + surface from the
+    // Japanese kanji-run analyzer.
+    let delta = head_n - base_n;
     out.push(callout(
         3,
-        (head_n - base_n) as f64,
+        delta as f64,
         "kanji_run_too_long_added",
         &row.path,
         0,
-        tmpl_kanji_run_too_long_added(&row.display_path, 0, 0, &run, 0),
+        tmpl_kanji_run_too_long_added(&row.display_path, delta),
     ));
 }
 
@@ -2075,12 +2087,16 @@ fn tmpl_inclusive_language_flag_added(file: &str, n: u64, list: &str) -> String 
     format!("\u{1F534} **{file}** \u{2014} {n} inclusive-language flag(s) added: {list}")
 }
 
-fn tmpl_nonword_added(file: &str, word: &str, line: u64, replacement: &str) -> String {
-    format!("\u{1F534} **{file}** \u{2014} non-word `{word}` at L{line} (suggest: `{replacement}`)")
+fn tmpl_nonword_added(file: &str, n: u64) -> String {
+    // §39.5.2 catalog: per-occurrence word/line slots are optional; omit when
+    // aggregate-only data is available.
+    format!("\u{1F534} **{file}** \u{2014} {n} non-word occurrence(s) added (see drill-down)")
 }
 
-fn tmpl_lexical_illusion_added(file: &str, word: &str, line: u64) -> String {
-    format!("\u{1F534} **{file}** \u{2014} doubled word `{word}` at L{line}")
+fn tmpl_lexical_illusion_added(file: &str, n: u64) -> String {
+    // §39.5.2 catalog: per-occurrence word/line slots are optional; omit when
+    // aggregate-only data is available.
+    format!("\u{1F534} **{file}** \u{2014} {n} doubled-word occurrence(s) added (see drill-down)")
 }
 
 fn tmpl_filler_risk_high(
@@ -2220,14 +2236,18 @@ fn tmpl_table_burden_hard(file: &str, line: u64, cells: u64) -> String {
     )
 }
 
-fn tmpl_doubled_joshi_added(file: &str, particle: &str, line: u64) -> String {
-    format!("\u{1F534} **{file}** \u{2014} repeated particle `{particle}` at L{line}")
+fn tmpl_doubled_joshi_added(file: &str, n: u64) -> String {
+    // §39.5.2 catalog: per-particle surface/line slots are optional; omit
+    // when aggregate-only data is available.
+    format!(
+        "\u{1F534} **{file}** \u{2014} {n} repeated-particle occurrence(s) added (see drill-down)"
+    )
 }
 
-fn tmpl_kanji_run_too_long_added(file: &str, n: u64, max: u64, run: &str, line: u64) -> String {
-    format!(
-        "\u{1F534} **{file}** \u{2014} kanji run of {n} chars exceeds limit {max}: `{run}` at L{line}"
-    )
+fn tmpl_kanji_run_too_long_added(file: &str, n: u64) -> String {
+    // §39.5.2 catalog: per-run length/surface/line slots are optional; omit
+    // when aggregate-only data is available.
+    format!("\u{1F534} **{file}** \u{2014} {n} long-kanji-run occurrence(s) added (see drill-down)")
 }
 
 fn tmpl_code_fence_unlabeled_added(file: &str, line: u64) -> String {
