@@ -321,11 +321,15 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         DiffFormat::Json => {
-            print_json(&diffs);
             #[cfg(feature = "markdown")]
-            if !doc_files.is_empty() {
-                print_doc_json(&doc_files);
-            }
+            let doc_ref: Option<&[DocDiffFile]> = if doc_files.is_empty() {
+                None
+            } else {
+                Some(&doc_files)
+            };
+            #[cfg(not(feature = "markdown"))]
+            let doc_ref: Option<&[()]> = None;
+            print_json(&diffs, doc_ref);
         }
     }
 
@@ -347,10 +351,8 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(feature = "markdown")]
-fn print_doc_json(files: &[DocDiffFile]) {
-    // Serialize the doc diff as a sidecar JSON array. Each entry carries
-    // path, is_new, is_deleted, and the full MarkdownMetrics for base/head.
-    let payload: Vec<serde_json::Value> = files
+fn doc_json_payload(files: &[DocDiffFile]) -> Vec<serde_json::Value> {
+    files
         .iter()
         .map(|f| {
             serde_json::json!({
@@ -361,9 +363,7 @@ fn print_doc_json(files: &[DocDiffFile]) {
                 "head": f.head,
             })
         })
-        .collect();
-    let json = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "[]".to_string());
-    writeln!(std::io::stdout().lock(), "{json}").ok();
+        .collect()
 }
 
 #[cfg(feature = "markdown")]
@@ -656,8 +656,36 @@ fn format_f64(v: f64) -> String {
 
 // ── JSON output ────────────────────────────────────────────────────────
 
-fn print_json(diffs: &[FileDiff]) {
-    let json = serde_json::to_string_pretty(diffs).unwrap();
+/// Emit a single JSON document with a `source_code` key and an optional
+/// `markdown` key. Downstream consumers (`jq`, `serde_json`) see one top-level
+/// object, not two concatenated arrays.
+#[cfg(feature = "markdown")]
+fn print_json(diffs: &[FileDiff], docs: Option<&[DocDiffFile]>) {
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "source_code".to_string(),
+        serde_json::to_value(diffs).unwrap_or(serde_json::Value::Null),
+    );
+    if let Some(docs) = docs {
+        payload.insert(
+            "markdown".to_string(),
+            serde_json::Value::Array(doc_json_payload(docs)),
+        );
+    }
+    let json =
+        serde_json::to_string_pretty(&serde_json::Value::Object(payload)).unwrap_or_default();
+    writeln!(std::io::stdout().lock(), "{json}").unwrap();
+}
+
+#[cfg(not(feature = "markdown"))]
+fn print_json(diffs: &[FileDiff], _docs: Option<&[()]>) {
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "source_code".to_string(),
+        serde_json::to_value(diffs).unwrap_or(serde_json::Value::Null),
+    );
+    let json =
+        serde_json::to_string_pretty(&serde_json::Value::Object(payload)).unwrap_or_default();
     writeln!(std::io::stdout().lock(), "{json}").unwrap();
 }
 
