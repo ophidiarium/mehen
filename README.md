@@ -163,15 +163,19 @@ only supported languages in changed files under those roots:
 Thresholds are optional. When configured, the action fails if an adverse
 per-file metric delta exceeds the configured limit.
 
-When a PR touches one or more Markdown files, `mehen diff` also emits a
-Documentation Metrics section inside the same sticky comment, anchored by
-`<!-- mehen-docs -->`. It reports DMI, word count, FKGL / Tateishi RS,
-link debt, and filler risk per file, plus a template-driven callout list
-for objective defects (broken links, new inclusive-language flags, long
-sentences, heading skips, unlabelled code fences, etc.). The full
-specification — anchor rules, cell format, callout template catalog,
-`--fail-on` gating — is in
-[`commands/pr-comment.md`](mehen-book/src/commands/pr-comment.md).
+When enabled and a PR touches one or more Markdown files, `mehen diff`
+will also emit a Documentation Metrics section inside the same sticky
+comment, anchored by `<!-- mehen-docs -->`. Once fully wired, it will
+report DMI, word count, FKGL / Tateishi RS, link debt, and filler risk
+per file, plus a template-driven callout list for objective defects
+(broken links, new inclusive-language flags, long sentences, heading
+skips, unlabelled code fences, etc.). The full specification — anchor
+rules, cell format, callout template catalog, planned `--fail-on`
+gating — is in
+[`commands/pr-comment.md`](mehen-book/src/commands/pr-comment.md). Until
+the Markdown renderer emits the anchor and the callout catalog is
+wired end-to-end, the GitHub Action only publishes the source-code
+metrics section.
 
 ## Reporting and Integrations
 
