@@ -313,7 +313,23 @@ function fetchMarkdownDocsSection(cli, baseArgs) {
     );
     return null;
   }
-  const body = mdResult.stdout || "";
+  return extractMarkdownDocsSection(mdResult?.stdout ?? "");
+}
+
+/**
+ * Pure extractor for the `<!-- mehen-docs -->` section so it can be
+ * unit-tested without spawning the CLI. Treats any of the following as
+ * "no docs section" (returns null):
+ *   - input is null, undefined, or whitespace-only,
+ *   - the anchor is absent,
+ *   - the slice starting at the anchor contains nothing beyond the
+ *     anchor itself (e.g. truncated/partial CLI output).
+ */
+function extractMarkdownDocsSection(stdout) {
+  const body = typeof stdout === "string" ? stdout : "";
+  if (!body.trim()) {
+    return null;
+  }
   const anchor = "<!-- mehen-docs -->";
   const start = body.indexOf(anchor);
   if (start < 0) {
@@ -322,7 +338,14 @@ function fetchMarkdownDocsSection(cli, baseArgs) {
   // Anchor through end-of-output is the docs section — §39.1 places
   // the anchor at the start of the section and the CLI never emits
   // anything after it.
-  return body.slice(start).trim();
+  const section = body.slice(start).trim();
+  // An anchor-only output (no headline/table/callouts after it) is
+  // effectively empty — treat as missing rather than publishing a bare
+  // comment marker into the sticky PR comment.
+  if (section === anchor) {
+    return null;
+  }
+  return section;
 }
 
 function parseDiffJson(stdout) {
@@ -723,6 +746,7 @@ export {
   DEFAULT_TEST_EXCLUDES,
   alignFileMetrics,
   collectThresholdViolations,
+  extractMarkdownDocsSection,
   formatMetricCell,
   inferPolarity,
   isNotApplicable,

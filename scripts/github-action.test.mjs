@@ -5,6 +5,7 @@ import {
   DEFAULT_TEST_EXCLUDES,
   alignFileMetrics,
   collectThresholdViolations,
+  extractMarkdownDocsSection,
   formatMetricCell,
   inferPolarity,
   isNotApplicable,
@@ -172,6 +173,60 @@ test("renderFooter omits version suffix when missing", () => {
   assert.ok(footer.includes("mehen"));
   assert.ok(!footer.includes(" v "));
   assert.ok(!/v\d/.test(footer));
+});
+
+test("extractMarkdownDocsSection returns null for empty or whitespace-only input", () => {
+  assert.equal(extractMarkdownDocsSection(""), null);
+  assert.equal(extractMarkdownDocsSection("   \n\t  "), null);
+  assert.equal(extractMarkdownDocsSection(null), null);
+  assert.equal(extractMarkdownDocsSection(undefined), null);
+});
+
+test("extractMarkdownDocsSection returns null when the anchor is missing", () => {
+  const stdout = [
+    "## [Mehen] Summary",
+    "",
+    "| File | Cyclomatic |",
+    "|---|---:|",
+    "| src/main.rs | 3 (main: 2) 🔴 |",
+  ].join("\n");
+  assert.equal(extractMarkdownDocsSection(stdout), null);
+});
+
+test("extractMarkdownDocsSection returns null when the anchor is present but the section is empty", () => {
+  assert.equal(extractMarkdownDocsSection("<!-- mehen-docs -->"), null);
+  assert.equal(extractMarkdownDocsSection("prelude\n<!-- mehen-docs -->\n\n  "), null);
+});
+
+test("extractMarkdownDocsSection slices from the anchor to end-of-output and trims", () => {
+  const section = [
+    "<!-- mehen-docs -->",
+    "## Documentation Metrics (this PR vs `main`)",
+    "",
+    "| File | DMI |",
+    "|---|---:|",
+    "| README.md | 74 (main: 71) 🟢 |",
+  ].join("\n");
+  const stdout = `## [Mehen] Summary\n\n| File |\n|---|\n\n${section}\n\n`;
+  const extracted = extractMarkdownDocsSection(stdout);
+  assert.equal(extracted, section);
+});
+
+test("extractMarkdownDocsSection preserves later anchors as literal text", () => {
+  // Defensive: if the CLI ever emits the anchor twice (e.g. inside a
+  // fenced example), indexOf finds the first one and we keep everything
+  // after it — the second anchor stays embedded rather than re-splitting.
+  const stdout = [
+    "<!-- mehen-docs -->",
+    "## Documentation Metrics",
+    "",
+    "```markdown",
+    "<!-- mehen-docs -->",
+    "```",
+  ].join("\n");
+  const extracted = extractMarkdownDocsSection(stdout);
+  assert.ok(extracted?.startsWith("<!-- mehen-docs -->"));
+  assert.ok(extracted.includes("```markdown"));
 });
 
 test("collectThresholdViolations skips non-applicable metrics", () => {
