@@ -79,7 +79,17 @@ async function main() {
   const diffs = parseDiffJson(diff.stdout);
   const context = readGithubContext();
   const violations = collectThresholdViolations(diffs, thresholds);
-  const markdown = renderMarkdown(diffs, context, thresholds, violations, version);
+  let markdown = renderMarkdown(diffs, context, thresholds, violations, version);
+
+  // Phase F (§39): `mehen diff --output-format markdown` emits a
+  // `<!-- mehen-docs -->` block whenever a changed Markdown file is in
+  // scope. Run a second invocation, extract just that block, and append
+  // it under the source-code section so one sticky comment carries both.
+  const docsSection = fetchMarkdownDocsSection(cli, diffArgs);
+  if (docsSection) {
+    markdown = `${markdown.trimEnd()}\n\n${docsSection}\n`;
+  }
+
   const reportMarkdown = path.join(reportsDir, `mehen-report-${Date.now()}.md`);
   fs.writeFileSync(reportMarkdown, markdown, "utf8");
 
@@ -279,6 +289,63 @@ function runCommand(command, args, options = {}) {
     );
   }
   return result;
+}
+
+/**
+ * Re-run `mehen diff --output-format markdown` with the same scope as
+ * the JSON run, then carve out the `<!-- mehen-docs -->` section per
+ * §39.1. Returns null when the section is absent (no Markdown files in
+ * scope) or when the CLI fails — callers treat null as "just publish
+ * the source-code section".
+ */
+function fetchMarkdownDocsSection(cli, baseArgs) {
+  const mdArgs = [...baseArgs];
+  const fmtIdx = mdArgs.indexOf("--output-format");
+  if (fmtIdx >= 0) {
+    mdArgs[fmtIdx + 1] = "markdown";
+  }
+  let mdResult;
+  try {
+    mdResult = runMehen(cli, mdArgs);
+  } catch (error) {
+    console.warn(
+      `mehen diff --output-format markdown failed (docs section will be omitted): ${error.message}`,
+    );
+    return null;
+  }
+  return extractMarkdownDocsSection(mdResult?.stdout ?? "");
+}
+
+/**
+ * Pure extractor for the `<!-- mehen-docs -->` section so it can be
+ * unit-tested without spawning the CLI. Treats any of the following as
+ * "no docs section" (returns null):
+ *   - input is null, undefined, or whitespace-only,
+ *   - the anchor is absent,
+ *   - the slice starting at the anchor contains nothing beyond the
+ *     anchor itself (e.g. truncated/partial CLI output).
+ */
+function extractMarkdownDocsSection(stdout) {
+  const body = typeof stdout === "string" ? stdout : "";
+  if (!body.trim()) {
+    return null;
+  }
+  const anchor = "<!-- mehen-docs -->";
+  const start = body.indexOf(anchor);
+  if (start < 0) {
+    return null;
+  }
+  // Anchor through end-of-output is the docs section — §39.1 places
+  // the anchor at the start of the section and the CLI never emits
+  // anything after it.
+  const section = body.slice(start).trim();
+  // An anchor-only output (no headline/table/callouts after it) is
+  // effectively empty — treat as missing rather than publishing a bare
+  // comment marker into the sticky PR comment.
+  if (section === anchor) {
+    return null;
+  }
+  return section;
 }
 
 function parseDiffJson(stdout) {
@@ -688,6 +755,7 @@ export {
   DEFAULT_TEST_EXCLUDES,
   alignFileMetrics,
   collectThresholdViolations,
+  extractMarkdownDocsSection,
   formatMetricCell,
   inferPolarity,
   isNotApplicable,

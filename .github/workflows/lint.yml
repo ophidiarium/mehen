@@ -6,6 +6,14 @@ on:
     types: [ opened, synchronize, reopened ]
     paths:
       - "**/*.rs"
+      # Markdown files feed the Phase-F `<!-- mehen-docs -->` section
+      # so the self-check publishes documentation metrics on doc-only PRs.
+      - "**/*.md"
+      - "**/*.markdown"
+      - "**/*.mdown"
+      - "**/*.mkd"
+      - "**/*.mkdn"
+      - "**/*.mdx"
       - ".github/workflows/lint.yml"
       - "action.yml"
       - Cargo.lock
@@ -66,4 +74,18 @@ jobs:
         uses: ./
         with:
           install-method: cargo
-          paths: src
+          # `src` carries the Rust source; `docs`, `mehen-book/src`, and the
+          # top-level Markdown files feed the Phase-F `<!-- mehen-docs -->`
+          # documentation-metrics section. Any path that matches one of
+          # mehen's registered Markdown extensions (md/markdown/mdown/
+          # mkd/mkdn/mdx) is routed through the documentation pipeline.
+          # Keep this list in sync with every root Markdown file in the
+          # repo so doc-only PRs do not silently skip the self-check.
+          paths: |
+            src
+            docs
+            mehen-book/src
+            README.md
+            AGENTS.md
+            CLAUDE.md
+            CHANGELOG.md

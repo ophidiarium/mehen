@@ -1,6 +1,36 @@
 # Supported Metrics
 
-**mehen** implements a series of metrics:
+**mehen** implements two metric families: source-code metrics for the
+supported programming languages, and documentation metrics for Markdown
+files. Both families can be mixed in a single run.
+
+## Markdown (documentation) metrics
+
+Markdown files get a dedicated metric suite that treats code fences,
+diagrams, tables, links, math, and images as first-class constructs
+instead of stripping them before counting words. The suite is split
+across three pages:
+
+- [Markdown Metrics](./metrics/markdown.md) — structural, language-opaque
+  layer: LOC family, section tree, MRPC (Markdown Reading Path
+  Complexity), MCC (Markdown Cognitive Complexity), Markdown Halstead,
+  DMI (Documentation Maintainability Index), Link Debt, Table
+  Burden/Scaffold, Visual Scaffold/Net Effect, Artifact Debt, Repository
+  Grounding, Evidence Coverage, Filler / Lazy Structure Risk, Review
+  Criticality Index, Section Balance, and Good Scaffold.
+- [Markdown Prose Metrics](./metrics/markdown-prose.md) — language-aware
+  layer: per-block language detection, English readability ensemble
+  (Flesch, Flesch-Kincaid, Fog, SMOG, ARI, Coleman-Liau, Dale-Chall,
+  FORCAST, LIX/RIX), lexical diversity (MATTR, hapax, density), wording
+  quality (passive, hedges, weasels, wordy, adverbs, nominalizations,
+  expletives, illusions, cliches, nonwords), inclusive-language flags,
+  Japanese script composition, Tateishi simplified readability,
+  Jōyō-grade proxy, JTF rule conformance, and a textlint-ja subset.
+- [`mehen diff` PR comment](./commands/pr-comment.md) — the design
+  spec for the sticky GitHub comment surface that reports Markdown
+  metric deltas on pull requests.
+
+## Source-code metrics
 
 - **ABC**: it measures the size of a source code by counting the number of
 Assignments (`A`), Branches (`B`) and Conditions (`C`).
