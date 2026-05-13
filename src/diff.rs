@@ -344,7 +344,11 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(not(feature = "markdown"))]
     {
-        let _ = &opts.fail_on;
+        if !opts.fail_on.is_empty() {
+            log::warn!(
+                "--fail-on was set but the `markdown` feature is disabled; no doc-metric thresholds are evaluated"
+            );
+        }
     }
 
     Ok(())
@@ -384,6 +388,16 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
     }
     if enabled.is_empty() {
         return Vec::new();
+    }
+    // If the caller asked to gate on doc metrics but no markdown files are
+    // in the diff, log a warning so users notice the flag silently matched
+    // nothing. The gate itself still returns success (no docs → no metric
+    // breach possible) so existing CI doesn't break.
+    if docs.iter().all(|f| f.head.is_none()) {
+        let flags: Vec<&str> = enabled.iter().map(String::as_str).collect();
+        log::warn!(
+            "--fail-on {flags:?} has no Markdown files in the diff; no doc-metric thresholds were evaluated"
+        );
     }
     let mut failures: Vec<String> = Vec::new();
     for f in docs {
