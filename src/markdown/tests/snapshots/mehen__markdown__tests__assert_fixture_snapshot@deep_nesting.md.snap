@@ -94,10 +94,29 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 99.39713846153846
-  section_balance_score: 0
+  documentation_maintainability_index: 89.91751113234591
+  section_balance_score: 0.85
   good_scaffold_score: 0
   artifact_debt_score: 0
+grounding:
+  repository_grounding_score: 0.025155279503105588
+  evidence_coverage_score: 0
+ai_era:
+  filler_lazy_structure_risk: 0.6649689440993789
+  labels:
+    - large-unanchored-prose
+    - low-artifact-density
+    - low-repository-grounding
+    - specificity-scarcity
+  top_contributors:
+    - - large-unanchored-prose
+      - 1
+    - - low-artifact-density
+      - 1
+    - - specificity-scarcity
+      - 1
+review:
+  review_criticality_index: 15.621750776397514
 artifacts: []
 prose:
   language_detection:
