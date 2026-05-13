@@ -261,19 +261,42 @@ pub(crate) struct Visuals {
 /// Maintainability aggregate per §23.
 ///
 /// - `documentation_maintainability_index` is the §10.2 DMI on `[0, 100]`
-///   scale. Phase B wires the V / M / R components; L / T / A / S / F / G
-///   terms stay at zero until later phases land — see the TODO comments in
-///   `dmi.rs`.
+///   scale. Phase B wires the V / M / R components; Phase C adds L / T / A;
+///   Phase D wires S / F / G, completing the §10 formula.
 /// - `artifact_debt_score` is the §19 per-artifact debt aggregate (Phase C).
-/// - `section_balance_score` / `good_scaffold_score` are reserved stubs for
-///   Phase D/E; they stay at 0.0 so the on-disk YAML / JSON shape never
-///   needs to rename keys.
+/// - `section_balance_score` is §20's balance measure (Phase D).
+/// - `good_scaffold_score` is §21's scaffold reward (Phase D).
 #[derive(Debug, Default, Clone, Serialize)]
 pub(crate) struct Maintainability {
     pub(crate) documentation_maintainability_index: f64,
     pub(crate) section_balance_score: f64,
     pub(crate) good_scaffold_score: f64,
     pub(crate) artifact_debt_score: f64,
+}
+
+/// §15 + §16 grounding metrics.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Grounding {
+    pub(crate) repository_grounding_score: f64,
+    pub(crate) evidence_coverage_score: f64,
+}
+
+/// §17 AI-era filler/lazy structure risk with diagnostic labels and the top
+/// contributing sub-score values.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct AiEra {
+    pub(crate) filler_lazy_structure_risk: f64,
+    /// Diagnostic labels per §17.11. Sorted alphabetically for determinism.
+    pub(crate) labels: Vec<String>,
+    /// Top-3 contributing sub-scores as `(label, score)` pairs. Sorted by
+    /// `-score, label`. Capped at 3.
+    pub(crate) top_contributors: Vec<(String, f64)>,
+}
+
+/// §18 Review Criticality Index surface.
+#[derive(Debug, Default, Clone, Serialize)]
+pub(crate) struct Review {
+    pub(crate) review_criticality_index: f64,
 }
 
 /// Which kind of artifact this detail row represents. Serialized as
@@ -311,7 +334,7 @@ pub(crate) struct ArtifactRecord {
     pub(crate) burden: f64,
 }
 
-/// Phase-A + Phase-B + Phase-C + Phase-E Markdown metric output.
+/// Phase-A + Phase-B + Phase-C + Phase-D + Phase-E Markdown metric output.
 ///
 /// Emitted per file on the JSON / YAML / TOML path and under the `markdown`
 /// key of the exported schema so later phases can add sibling keys like
@@ -330,6 +353,12 @@ pub(crate) struct MarkdownMetrics {
     pub(crate) visuals: Visuals,
     pub(crate) tables: Tables,
     pub(crate) maintainability: Maintainability,
+    /// §§15–16 grounding + evidence coverage scores (Phase D).
+    pub(crate) grounding: Grounding,
+    /// §17 AI-era filler / lazy structure risk (Phase D).
+    pub(crate) ai_era: AiEra,
+    /// §18 review criticality index (Phase D).
+    pub(crate) review: Review,
     pub(crate) artifacts: Vec<ArtifactRecord>,
     /// §§29–38 Prose metric layer. Always emitted; its presence does NOT
     /// modify DMI / MCC / MRPC / FillerLazyRisk in later phases.

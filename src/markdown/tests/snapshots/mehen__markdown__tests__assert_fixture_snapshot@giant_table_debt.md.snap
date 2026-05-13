@@ -3,26 +3,26 @@ source: src/markdown/tests/mod.rs
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 11
-  ploc: 6
+  dloc: 54
+  ploc: 8
   cloc: 0
-  tloc: 0
+  tloc: 42
   mloc: 0
-  bloc: 5
-  aloc: 0
+  bloc: 4
+  aloc: 42
 loc_ratios:
-  artifact_line_ratio: 0
+  artifact_line_ratio: 0.7777777777777778
   code_line_ratio: 0
-  table_line_ratio: 0
+  table_line_ratio: 0.7777777777777778
   math_line_ratio: 0
-  blank_line_ratio: 0.45454545454545453
+  blank_line_ratio: 0.07407407407407407
 size:
-  words: 24
-  effective_content_units: 0.1
-  sections: 3
-  headings: 3
+  words: 69
+  effective_content_units: 51.9475
+  sections: 2
+  headings: 2
 ecu_inputs:
-  table_cells: 0
+  table_cells: 861
   diagram_nodes: 0
   diagram_edges: 0
   math_tokens: 0
@@ -32,47 +32,37 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 11
+    end_line: 54
     parent_section_id: ~
     child_section_ids:
       - 1
-      - 2
-    word_count: 5
+    word_count: 33
     block_count: 1
   - section_id: 1
-    heading_level: 3
-    heading_text: ~
-    start_line: 5
-    end_line: 8
-    parent_section_id: 0
-    child_section_ids: []
-    word_count: 11
-    block_count: 1
-  - section_id: 2
     heading_level: 2
     heading_text: ~
-    start_line: 9
-    end_line: 11
+    start_line: 7
+    end_line: 54
     parent_section_id: 0
     child_section_ids: []
-    word_count: 8
-    block_count: 1
+    word_count: 36
+    block_count: 2
 complexity:
-  reading_path_complexity: 1
+  reading_path_complexity: 1.15
   reading_path_complexity_raw: 2
-  cognitive_complexity: 1
+  cognitive_complexity: 13.112382190832792
   halstead:
-    operators_distinct: 4
-    operators_total: 6
-    operands_distinct: 24
-    operands_total: 31
-    vocabulary: 28
-    length: 37
-    volume: 177.87213211613133
-    difficulty: 2.5833333333333335
-    effort: 459.5030079666726
+    operators_distinct: 5
+    operators_total: 33
+    operands_distinct: 74
+    operands_total: 96
+    vocabulary: 79
+    length: 129
+    volume: 813.1877165148463
+    difficulty: 3.2432432432432434
+    effort: 2637.3655670751773
     embedded_volume: 0
-    total_volume: 177.87213211613133
+    total_volume: 813.1877165148463
 links:
   total: 0
   internal: 0
@@ -98,35 +88,45 @@ visuals:
   visual_scaffold_score: 0
   visual_net_effect: 0
 tables:
-  count: 0
-  max_cells: 0
-  table_burden_score: 0
+  count: 1
+  max_cells: 861
+  table_burden_score: 0.5648809523809524
   table_scaffold_score: 0
-  hard_warnings: 0
+  hard_warnings: 1
 maintainability:
-  documentation_maintainability_index: 90.25999999999999
-  section_balance_score: 0.6499999999999999
+  documentation_maintainability_index: 86.20510351966873
+  section_balance_score: 0.85
   good_scaffold_score: 0
-  artifact_debt_score: 0
+  artifact_debt_score: 0.15
 grounding:
-  repository_grounding_score: 0.15
-  evidence_coverage_score: 0
+  repository_grounding_score: 0
+  evidence_coverage_score: 0.23076923076923078
 ai_era:
-  filler_lazy_structure_risk: 0.52
+  filler_lazy_structure_risk: 0.42884057971014494
   labels:
-    - large-unanchored-prose
     - low-artifact-density
     - low-repository-grounding
+    - specificity-scarcity
   top_contributors:
-    - - large-unanchored-prose
+    - - low-repository-grounding
       - 1
     - - low-artifact-density
-      - 1
-    - - low-repository-grounding
-      - 0.85
+      - 0.6666666666666667
+    - - specificity-scarcity
+      - 0.6461352657004831
 review:
-  review_criticality_index: 1.95
-artifacts: []
+  review_criticality_index: 12.826872185788062
+artifacts:
+  - id: 0
+    kind: table
+    start_line: 9
+    end_line: 50
+    language_tag: ~
+    size: 861
+    has_explanation: true
+    has_label: true
+    oversized: true
+    burden: 0.5648809523809524
 prose:
   language_detection:
     dominant_language: en
@@ -135,19 +135,13 @@ prose:
         end_line: 1
         language: en
       - start_line: 3
-        end_line: 3
-        language: en
-      - start_line: 5
         end_line: 5
         language: en
       - start_line: 7
         end_line: 7
         language: en
-      - start_line: 9
-        end_line: 9
-        language: en
-      - start_line: 11
-        end_line: 11
+      - start_line: 52
+        end_line: 54
         language: en
   english:
     readability:
@@ -166,31 +160,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.71
-      hapax_ratio: 0.727
-      dis_ratio: 0.182
-      lexical_density: 0.677
-      avg_sentence_words: 5.167
-      p90_sentence_words: 11
-      max_sentence_words: 11
-      stddev_sentence_words: 3.337
-      avg_word_chars: 4.806
+      mattr_50: 0.708
+      hapax_ratio: 0.688
+      dis_ratio: 0.188
+      lexical_density: 0.653
+      avg_sentence_words: 12.5
+      p90_sentence_words: 21
+      max_sentence_words: 21
+      stddev_sentence_words: 7.274
+      avg_word_chars: 4.947
       p90_word_chars: 9
       sentence_count: 6
-      words_total: 31
+      words_total: 75
     wording:
-      passive_ratio: 0
-      hedge_density: 0
+      passive_ratio: 0.167
+      hedge_density: 0.013
       weasel_density: 0
       wordy_density: 0
-      adverb_density: 0.032
-      nominalization_density: 0
+      adverb_density: 0.013
+      nominalization_density: 0.04
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.969
+      wording_quality_score: 1
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -199,6 +193,7 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 31
+    words_counted: 75
     sentences_counted: 6
-    blocks_stripped: []
+    blocks_stripped:
+      - table
