@@ -31,6 +31,10 @@ typs2 = "typs2"
 inh = "inh"
 
 [default.extend-words]
+# Intentional misspellings in negative-path tests for the `--fail-on`
+# value parser (`src/diff.rs` rejects unknown names via clap).
+borken = "borken"
+hihg = "hihg"
 # Intentional name of a removed language parser
 Ccomment = "Ccomment"
 "Winn" = "Winn"
