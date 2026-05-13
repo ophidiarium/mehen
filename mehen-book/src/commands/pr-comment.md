@@ -303,30 +303,43 @@ render:
 - Drill-down tables are **never** row-capped — they are already inside
   `<details>`. Reviewers who expand them have opted in to the full picture.
 
-## `--fail-on` flag
+## `--fail-on` flag (planned)
 
-The PR comment is **advisory by default**. A CI gate is available but
-opt-in:
+The PR comment is **advisory by default**. A CI gate is planned for a
+future release but is **not yet implemented in the CLI**; until it lands,
+the flags below are design notes rather than runnable commands. The
+current `mehen diff` CLI accepts only `--from`, `--to`, `--metrics`,
+`--paths`, `--include`, `--exclude`, `--output-format`, `--show-unchanged`,
+and `--ignore-generated`.
+
+Planned spelling once the gate ships:
 
 ```bash
+# Planned (not yet implemented):
 mehen diff --fail-on dmi-drop,new-broken-link
 ```
 
-Available gate conditions map directly onto the severity-1/2 rule ids and
-band-crossing indicators. The gate is independent of the comment — the
-comment renders in every case so reviewers always see the signal, but the
-job exits with a non-zero status when any configured condition is hit.
+Planned gate conditions will map directly onto the severity-1/2 rule ids
+and band-crossing indicators. The gate will be independent of the
+comment — the comment renders in every case so reviewers always see the
+signal, but the job exits with a non-zero status when any configured
+condition is hit.
 
-Common examples:
+Planned examples:
 
 ```bash
-# Strict: block on any objective defect or filler escalation.
-mehen diff --fail-on new-broken-link,new-inclusive-flag,filler-risk-high
+# Planned — strict: block on any objective defect or filler escalation.
+mehen diff --fail-on new-broken-link,new-inclusive-flag,filler-high
 
-# README-only guard.
-mehen diff --fail-on dmi-drop,readability-target-breach \
+# Planned — README-only guard.
+mehen diff --fail-on dmi-drop,all \
            --paths README.md
 ```
+
+Until the gate lands, CI can approximate a gate by parsing the JSON
+output of `mehen diff --output-format json` and failing the job on
+specific deltas, or by relying on the existing `thresholds` input of the
+GitHub Action for per-metric numeric limits.
 
 ## Reference mock (§39.9)
 
@@ -354,7 +367,7 @@ unchanged but on-alert, and touches the changelog:
 - ⚠️ **docs/generated/overview.md** — filler/lazy risk 0.79 (HIGH); top contributors: large-unanchored-prose 0.82, lazy-sectioning 0.71, specificity-scarcity 0.64
 - ⚠️ **docs/architecture/runtime.md** — mermaid diagram at L171 has no caption or nearby explanation
 - ⚠️ **docs/architecture/runtime.md** — unlabelled code fence at L214
-- 🟢 **README.md** — DMI 71 → 74, crossed "Good" → "Good" (§10.4); FKGL 10.1 → 9.4
+- 🟢 **README.md** — DMI 71 → 74 (within "Good"; §10.4); FKGL 10.1 → 9.4 (≥ 0.5 grade improvement; §31.13)
 - 🟢 **README.md** — 3 sentence(s) previously over 30 words now under
 
 > Legend: 🟢 improvement · 🔴 regression · ⚠️ attention · 🆕 new file · ⚪ no material change

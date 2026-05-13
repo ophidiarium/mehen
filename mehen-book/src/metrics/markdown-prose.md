@@ -445,7 +445,7 @@ markdown:
         weasel_density:        0.0
         wordy_density:         0.0
         adverb_density:        0.0
-        nominalization_density:0.0
+        nominalization_density: 0.0
         expletive_count:       0
         lexical_illusions:     0
         cliche_density:        0.0
@@ -476,7 +476,7 @@ markdown:
         politeness_dominant:      desumasu | dearu | mixed
         keitai_jotai_mix_count:   0
         weak_phrase_count:        0
-        redundant_expression_count:0
+        redundant_expression_count: 0
         doubled_joshi_count:      0
         long_kanji_run_count:     0
       style_conformance:
@@ -485,7 +485,7 @@ markdown:
     short_doc_warning: false
     words_counted:     0
     sentences_counted: 0
-    blocks_stripped:   [code, frontmatter, html, alt_text]
+    blocks_stripped:   [code, frontmatter, html, mdx, math, table]
 ```
 
 ## See also
