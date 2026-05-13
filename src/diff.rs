@@ -413,26 +413,42 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
             }
         }
         if enabled.contains("new-broken-link") {
-            // Identity-based diff: one link fixed + one new broken link must
-            // still trip the gate, even when the total count is unchanged.
-            // Key by (line, destination) so two broken links to the same URL
-            // at different lines count separately. See §39.4.
-            let head_broken: std::collections::BTreeSet<(u64, &str)> = head
-                .link_records
-                .iter()
-                .filter(|l| matches!(l.resolved, Some(false)))
-                .map(|l| (l.line, l.destination.as_str()))
-                .collect();
-            let base_broken: std::collections::BTreeSet<(u64, &str)> = base
-                .map(|b| {
-                    b.link_records
-                        .iter()
-                        .filter(|l| matches!(l.resolved, Some(false)))
-                        .map(|l| (l.line, l.destination.as_str()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            if head_broken.difference(&base_broken).next().is_some() {
+            // Identity-based diff keyed on (class, destination) — line
+            // numbers MAY change without a new broken link (e.g. a doc
+            // prepends content, shifting every link down one line). The CI
+            // gate fires only when a key appears more often in head than in
+            // base. Line numbers still flow through to the callout layer for
+            // the PR comment; they just don't drive the fail-on decision.
+            // See §39.4.
+            let mut head_counts: std::collections::BTreeMap<
+                (crate::markdown::types::LinkClass, &str),
+                usize,
+            > = std::collections::BTreeMap::new();
+            for l in &head.link_records {
+                if matches!(l.resolved, Some(false)) {
+                    *head_counts
+                        .entry((l.class, l.destination.as_str()))
+                        .or_insert(0) += 1;
+                }
+            }
+            let mut base_counts: std::collections::BTreeMap<
+                (crate::markdown::types::LinkClass, &str),
+                usize,
+            > = std::collections::BTreeMap::new();
+            if let Some(b) = base {
+                for l in &b.link_records {
+                    if matches!(l.resolved, Some(false)) {
+                        *base_counts
+                            .entry((l.class, l.destination.as_str()))
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+            let has_new_broken = head_counts.iter().any(|(key, head_n)| {
+                let base_n = base_counts.get(key).copied().unwrap_or(0);
+                *head_n > base_n
+            });
+            if has_new_broken {
                 failures.push(format!("new-broken-link:{}", f.path.display()));
             }
         }
@@ -1072,5 +1088,138 @@ src/value.txt linguist-generated=true
                 .unwrap()
         );
         assert!(filter.is_generated(Path::new("src/value.txt")).unwrap());
+    }
+
+    // ── `--fail-on new-broken-link` gating tests ───────────────────────
+    //
+    // Ensure the CI gate keys on `(class, destination)` identity — a link
+    // that merely shifts to a different line number MUST NOT trip the gate,
+    // but a duplicate broken destination MUST.
+
+    #[cfg(feature = "markdown")]
+    fn broken_link_for_fail_on(
+        line: u64,
+        class: crate::markdown::types::LinkClass,
+        destination: &str,
+    ) -> crate::markdown::types::LinkRecord {
+        crate::markdown::types::LinkRecord {
+            line,
+            class,
+            destination: destination.to_string(),
+            text: String::new(),
+            is_image: false,
+            is_bare_url: false,
+            resolved: Some(false),
+        }
+    }
+
+    #[cfg(feature = "markdown")]
+    fn minimal_md_metrics(path: &str) -> crate::markdown::types::MarkdownMetrics {
+        crate::markdown::types::MarkdownMetrics {
+            path: path.to_string(),
+            loc: Default::default(),
+            loc_ratios: Default::default(),
+            size: Default::default(),
+            ecu_inputs: Default::default(),
+            sections: vec![],
+            complexity: Default::default(),
+            links: Default::default(),
+            link_records: vec![],
+            visuals: Default::default(),
+            tables: Default::default(),
+            maintainability: Default::default(),
+            grounding: Default::default(),
+            ai_era: Default::default(),
+            review: Default::default(),
+            artifacts: vec![],
+            prose: Default::default(),
+        }
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_ignores_line_only_shift() {
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![broken_link_for_fail_on(
+            42,
+            crate::markdown::types::LinkClass::Relative,
+            "./guide.md",
+        )];
+        let mut base = minimal_md_metrics("docs/a.md");
+        base.link_records = vec![broken_link_for_fail_on(
+            10,
+            crate::markdown::types::LinkClass::Relative,
+            "./guide.md",
+        )];
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec!["new-broken-link".to_string()];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert!(
+            failures.is_empty(),
+            "line-only shift must not trip new-broken-link; got: {failures:?}",
+        );
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_trips_on_new_occurrence() {
+        // Head has 2 broken refs to the same destination; base has 1. The
+        // second occurrence is net-new so the gate must fire.
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![
+            broken_link_for_fail_on(10, crate::markdown::types::LinkClass::Relative, "./g.md"),
+            broken_link_for_fail_on(20, crate::markdown::types::LinkClass::Relative, "./g.md"),
+        ];
+        let mut base = minimal_md_metrics("docs/a.md");
+        base.link_records = vec![broken_link_for_fail_on(
+            10,
+            crate::markdown::types::LinkClass::Relative,
+            "./g.md",
+        )];
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec!["new-broken-link".to_string()];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].starts_with("new-broken-link:"));
+    }
+
+    #[cfg(feature = "markdown")]
+    #[test]
+    fn fail_on_new_broken_link_trips_on_brand_new_destination() {
+        let mut head = minimal_md_metrics("docs/a.md");
+        head.link_records = vec![broken_link_for_fail_on(
+            5,
+            crate::markdown::types::LinkClass::Relative,
+            "./added.md",
+        )];
+        let base = minimal_md_metrics("docs/a.md");
+
+        let doc = DocDiffFile {
+            path: PathBuf::from("docs/a.md"),
+            head: Some(head),
+            base: Some(base),
+            is_new: false,
+            is_deleted: false,
+        };
+
+        let flags = vec!["new-broken-link".to_string()];
+        let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
+        assert_eq!(failures.len(), 1);
     }
 }
