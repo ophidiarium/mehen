@@ -263,6 +263,7 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
             halstead,
         },
         links: link_agg,
+        link_records,
         visuals: visual_analysis.aggregate,
         tables: tables_agg,
         maintainability: Maintainability {

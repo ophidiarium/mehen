@@ -129,6 +129,21 @@ links:
   link_debt_score: 0.45
   information_scent_score: 0.3
   review_burden: 4.3
+link_records:
+  - line: 18
+    class: relative
+    destination: "./local.png"
+    text: alt text
+    is_image: true
+    is_bare_url: false
+    resolved: false
+  - line: 20
+    class: external_vendor
+    destination: "https://www.rust-lang.org"
+    text: rust-lang
+    is_image: false
+    is_bare_url: false
+    resolved: ~
 visuals:
   images: 1
   diagrams: 0

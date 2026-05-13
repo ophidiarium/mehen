@@ -99,6 +99,133 @@ links:
   link_debt_score: 0.55
   information_scent_score: 0.45
   review_burden: 35.5
+link_records:
+  - line: 9
+    class: internal
+    destination: "#install"
+    text: installation
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 9
+    class: internal
+    destination: "#usage"
+    text: usage
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 10
+    class: relative
+    destination: "./architecture.md#runtime"
+    text: architecture doc
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 14
+    class: external
+    destination: "https://docs.example.com/install"
+    text: official docs
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 15
+    class: relative
+    destination: "../scripts/setup.sh"
+    text: setup script
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 16
+    class: relative
+    destination: "../CONTRIBUTING.md"
+    text: contributing
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 20
+    class: reference_definition
+    destination: ""
+    text: API reference
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 20
+    class: reference_definition
+    destination: ""
+    text: api-ref
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 20
+    class: relative
+    destination: "./quickstart.md"
+    text: quickstart
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 21
+    class: external
+    destination: "https://vendor-a.com/api"
+    text: vendor-a
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 22
+    class: external
+    destination: "https://vendor-b.org"
+    text: vendor-b
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 22
+    class: external
+    destination: "https://vendor-c.io"
+    text: vendor-c
+    is_image: false
+    is_bare_url: false
+    resolved: ~
+  - line: 24
+    class: footnote
+    destination: "1"
+    text: "[^1]"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 24
+    class: footnote
+    destination: "2"
+    text: "[^2]"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 26
+    class: footnote
+    destination: "1"
+    text: "[^1]"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 27
+    class: relative
+    destination: "./adr/007.md"
+    text: adr-007
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 27
+    class: footnote
+    destination: "2"
+    text: "[^2]"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 29
+    class: reference_definition
+    destination: ""
+    text: api-ref
+    is_image: false
+    is_bare_url: false
+    resolved: true
 visuals:
   images: 0
   diagrams: 0

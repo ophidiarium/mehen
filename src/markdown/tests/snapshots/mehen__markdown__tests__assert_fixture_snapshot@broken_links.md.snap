@@ -79,6 +79,42 @@ links:
   link_debt_score: 0.65
   information_scent_score: 0.12
   review_burden: 8.7
+link_records:
+  - line: 6
+    class: relative
+    destination: "./does-not-exist.md"
+    text: Missing file
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 7
+    class: internal
+    destination: "#nowhere"
+    text: Missing anchor
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 8
+    class: reference_definition
+    destination: ""
+    text: Stale reference
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 8
+    class: reference_definition
+    destination: ""
+    text: stale
+    is_image: false
+    is_bare_url: false
+    resolved: true
+  - line: 9
+    class: external
+    destination: "https://example.com"
+    text: click here
+    is_image: false
+    is_bare_url: false
+    resolved: ~
 visuals:
   images: 0
   diagrams: 0
