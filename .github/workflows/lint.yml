@@ -79,6 +79,8 @@ jobs:
           # documentation-metrics section. Any path that matches one of
           # mehen's registered Markdown extensions (md/markdown/mdown/
           # mkd/mkdn/mdx) is routed through the documentation pipeline.
+          # Keep this list in sync with every root Markdown file in the
+          # repo so doc-only PRs do not silently skip the self-check.
           paths: |
             src
             docs
@@ -86,3 +88,4 @@ jobs:
             README.md
             AGENTS.md
             CLAUDE.md
+            CHANGELOG.md
