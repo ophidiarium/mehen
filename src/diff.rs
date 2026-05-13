@@ -373,7 +373,13 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             };
             #[cfg(not(feature = "markdown"))]
             let doc_ref: Option<&[()]> = None;
-            print_json(&diffs, doc_ref);
+            if let Err(e) = print_json(&diffs, doc_ref) {
+                // Surface the error loudly — exit code 2 mirrors the
+                // --fail-on gate and is distinct from the generic exit 1
+                // that covers setup/IO errors in run_diff_inner.
+                log::error!("diff: failed to emit JSON output: {e}");
+                std::process::exit(2);
+            }
         }
     }
 
@@ -738,34 +744,34 @@ fn format_f64(v: f64) -> String {
 /// Emit a single JSON document with a `source_code` key and an optional
 /// `markdown` key. Downstream consumers (`jq`, `serde_json`) see one top-level
 /// object, not two concatenated arrays.
+///
+/// Serialization errors bubble up as `Err` so `run_diff_inner` exits
+/// non-zero instead of silently writing an empty `""` to stdout.
 #[cfg(feature = "markdown")]
-fn print_json(diffs: &[FileDiff], docs: Option<&[DocDiffFile]>) {
+fn print_json(
+    diffs: &[FileDiff],
+    docs: Option<&[DocDiffFile]>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut payload = serde_json::Map::new();
-    payload.insert(
-        "source_code".to_string(),
-        serde_json::to_value(diffs).unwrap_or(serde_json::Value::Null),
-    );
+    payload.insert("source_code".to_string(), serde_json::to_value(diffs)?);
     if let Some(docs) = docs {
         payload.insert(
             "markdown".to_string(),
             serde_json::Value::Array(doc_json_payload(docs)),
         );
     }
-    let json =
-        serde_json::to_string_pretty(&serde_json::Value::Object(payload)).unwrap_or_default();
-    writeln!(std::io::stdout().lock(), "{json}").unwrap();
+    let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
+    writeln!(std::io::stdout().lock(), "{json}")?;
+    Ok(())
 }
 
 #[cfg(not(feature = "markdown"))]
-fn print_json(diffs: &[FileDiff], _docs: Option<&[()]>) {
+fn print_json(diffs: &[FileDiff], _docs: Option<&[()]>) -> Result<(), Box<dyn std::error::Error>> {
     let mut payload = serde_json::Map::new();
-    payload.insert(
-        "source_code".to_string(),
-        serde_json::to_value(diffs).unwrap_or(serde_json::Value::Null),
-    );
-    let json =
-        serde_json::to_string_pretty(&serde_json::Value::Object(payload)).unwrap_or_default();
-    writeln!(std::io::stdout().lock(), "{json}").unwrap();
+    payload.insert("source_code".to_string(), serde_json::to_value(diffs)?);
+    let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
+    writeln!(std::io::stdout().lock(), "{json}")?;
+    Ok(())
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -1264,6 +1270,45 @@ src/value.txt linguist-generated=true
         let flags = vec![FailOn::NewBrokenLink];
         let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
         assert_eq!(failures.len(), 1);
+    }
+
+    // ── print_json error-propagation ────────────────────────────────────
+
+    #[test]
+    fn print_json_happy_path_is_ok() {
+        let diffs: Vec<FileDiff> = vec![FileDiff {
+            path: PathBuf::from("a.rs"),
+            metrics: vec![],
+            is_new: false,
+            is_deleted: false,
+        }];
+        #[cfg(feature = "markdown")]
+        let res = print_json(&diffs, None);
+        #[cfg(not(feature = "markdown"))]
+        let res = print_json(&diffs, None);
+        assert!(res.is_ok(), "valid input must serialize cleanly");
+    }
+
+    #[test]
+    fn print_json_returns_result_type() {
+        // §39 regression guard: print_json must return `Result<_, _>` so
+        // callers can exit non-zero on serialization failure. Before, the
+        // emitter used `unwrap_or_default` and silently wrote an empty
+        // JSON document to stdout when serde_json failed.
+        //
+        // We can only exercise the happy path deterministically here —
+        // serde_json's non-finite-float policy varies by version — but a
+        // type-level assertion that the function signature returns
+        // `Result` is enough to lock in the fix: the caller at the
+        // DiffFormat::Json branch uses `if let Err(e) = print_json(..)`
+        // so any future regression to an infallible signature would
+        // break compilation.
+        let diffs: Vec<FileDiff> = vec![];
+        #[cfg(feature = "markdown")]
+        let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
+        #[cfg(not(feature = "markdown"))]
+        let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
+        assert!(res.is_ok());
     }
 
     // ── `--fail-on` CLI-parse validation ────────────────────────────────
