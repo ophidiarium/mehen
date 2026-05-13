@@ -10,22 +10,28 @@
 //! - §7 Markdown Reading Path Complexity (weighted + raw),
 //! - §8 Markdown Cognitive Complexity,
 //! - §9 Markdown Halstead + §9.4 embedded-code adjustment,
-//! - §10 Documentation Maintainability Index core (V/M/R terms),
+//! - §10 Documentation Maintainability Index (full formula — all terms),
 //! - §11 link classification + debt + scent + review burden,
 //! - §12 visuals (images + diagrams),
 //! - §13 tables,
 //! - §14.1 per-code-fence burden (stored in `artifacts`),
 //! - §14.3 per-math-block burden (stored in `artifacts`),
+//! - §15 Repository Grounding Score,
+//! - §16 Evidence Coverage Score,
+//! - §17 Filler / Lazy Structure Risk + diagnostic labels,
+//! - §18 Review Criticality Index,
 //! - §19 artifact debt score,
+//! - §20 Section Balance Score,
+//! - §21 Good Scaffold Score,
 //! - §§29–38 language-aware prose layer.
 //!
-//! Phase D (grounding, filler, RCI) appends more fields; no field ever
-//! shrinks. The prose layer is kept strictly separate per §29.1 — it never
-//! modifies any structural score.
+//! The prose layer is kept strictly separate per §29.1 — it never modifies
+//! any structural score.
 //!
 //! Pipeline order: Phase A (LOC, sections, words, ECU) → Phase B (MRPC,
-//! MCC, Halstead, DMI) → Phase C (links, visuals, tables, artifacts,
-//! artifact debt) → Phase E (prose). Phase C feeds real diagram node/edge
+//! MCC, Halstead) → Phase C (links, visuals, tables, artifacts, artifact
+//! debt) → Phase D (section balance, grounding, filler, good scaffold,
+//! DMI, RCI) → Phase E (prose). Phase C feeds real diagram node/edge
 //! counts back into ECU so §6 does not stay at zero.
 
 use std::path::Path;
@@ -35,6 +41,9 @@ use crate::markdown::code_burden::{CodeFence, analyze_code_fences};
 use crate::markdown::dmi::{DmiInputs, compute_dmi};
 use crate::markdown::ecu::{compute_ecu_inputs, effective_content_units};
 use crate::markdown::embedded_code::embedded_volume;
+use crate::markdown::filler::analyze_filler;
+use crate::markdown::good_scaffold::analyze_good_scaffold;
+use crate::markdown::grounding::analyze_grounding;
 use crate::markdown::halstead::compute_halstead;
 use crate::markdown::links::analyze_links;
 use crate::markdown::loc::{LineClasses, derive_ratios, physical_line_count};
@@ -43,11 +52,13 @@ use crate::markdown::mcc::compute_mcc;
 use crate::markdown::mrpc::compute_mrpc;
 use crate::markdown::nearby::{BlockSpan, collect_blocks, has_prose_within};
 use crate::markdown::prose::analyze_prose;
+use crate::markdown::rci::{RciInputs, compute_rci};
+use crate::markdown::section_balance::analyze_section_balance;
 use crate::markdown::sections::collect_sections;
 use crate::markdown::tables::{aggregate_tables, analyze_tables};
 use crate::markdown::types::{
-    ArtifactKind, ArtifactRecord, Complexity, DiagramRecord, ImageRecord, Maintainability,
-    MarkdownMetrics, Size, TableRecord,
+    AiEra, ArtifactKind, ArtifactRecord, Complexity, DiagramRecord, Grounding, ImageRecord,
+    Maintainability, MarkdownMetrics, Review, Size, TableRecord,
 };
 use crate::markdown::visuals::analyze_visuals;
 use crate::markdown::words::count_words;
@@ -85,19 +96,14 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let ecu_inputs = compute_ecu_inputs(&root, &classes);
     let ecu = effective_content_units(&loc, words, &ecu_inputs);
 
-    // Phase B: complexity surface (MRPC, MCC, Halstead) and DMI core.
+    // Phase B: complexity surface (MRPC, MCC, Halstead). DMI is deferred
+    // until Phase D has computed its inputs.
     let mrpc = compute_mrpc(&root, source);
     let mcc = compute_mcc(&root, source);
     let mut halstead = compute_halstead(&root, source);
     let emb = embedded_volume(&root, source);
     halstead.embedded_volume = emb;
     halstead.total_volume = halstead.volume + emb;
-
-    let dmi = compute_dmi(DmiInputs {
-        mrpc: mrpc.weighted,
-        mcc: mcc.mcc,
-        total_volume: halstead.total_volume,
-    });
 
     // Phase C: block index for nearby-prose queries.
     let blocks: Vec<BlockSpan> = collect_blocks(&root);
@@ -170,6 +176,70 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     };
     let artifact_debt = artifact_debt_score(&debt_inputs);
 
+    // Phase D: section balance (§20).
+    let section_balance = analyze_section_balance(&sections, words);
+
+    // Phase D: grounding (§15) + evidence coverage (§16).
+    let grounding = analyze_grounding(
+        &root,
+        source,
+        path,
+        words,
+        &sections,
+        &link_records,
+        &artifacts,
+        &table_records,
+    );
+
+    // Phase D: filler / lazy risk (§17).
+    let filler = analyze_filler(
+        &root,
+        source,
+        words,
+        &sections,
+        &artifacts,
+        &link_records,
+        &loc,
+        &grounding,
+        &section_balance,
+    );
+
+    // Phase D: good scaffold (§21).
+    let good_scaffold = analyze_good_scaffold(
+        &artifacts,
+        &link_records,
+        &link_agg,
+        &visual_analysis.aggregate,
+        &tables_agg,
+    );
+
+    // Phase D: DMI now that every §10 term is populated.
+    let dmi = compute_dmi(DmiInputs {
+        mrpc: mrpc.weighted,
+        mcc: mcc.mcc,
+        total_volume: halstead.total_volume,
+        link_debt_score: link_agg.link_debt_score,
+        table_burden_score: tables_agg.table_burden_score,
+        artifact_debt_score: artifact_debt,
+        section_imbalance: 1.0 - section_balance.section_balance_score,
+        filler_lazy_risk: filler.filler_lazy_risk,
+        good_scaffold_score: good_scaffold.good_scaffold_score,
+    });
+
+    // Phase D: RCI (§18). `metric_delta_percent` + `changed_links_or_artifacts`
+    // default to 0 — those are `mehen diff` inputs (Phase F).
+    let rci = compute_rci(RciInputs {
+        mcc: mcc.mcc,
+        words,
+        mdh_volume_total: halstead.total_volume,
+        repository_grounding_score: grounding.repository_grounding_score,
+        evidence_coverage_score: grounding.evidence_coverage_score,
+        link_review_burden: link_agg.review_burden,
+        embedded_code_complexity: halstead.embedded_volume,
+        metric_delta_percent: 0.0,
+        changed_links_or_artifacts: 0,
+    });
+
     // §§29–38 Prose layer. Kept strictly separate per §29.1 — it never
     // modifies any structural score.
     let prose = analyze_prose(&root, source.as_bytes());
@@ -197,9 +267,21 @@ pub(crate) fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
         tables: tables_agg,
         maintainability: Maintainability {
             documentation_maintainability_index: dmi,
-            section_balance_score: 0.0,
-            good_scaffold_score: 0.0,
+            section_balance_score: section_balance.section_balance_score,
+            good_scaffold_score: good_scaffold.good_scaffold_score,
             artifact_debt_score: artifact_debt,
+        },
+        grounding: Grounding {
+            repository_grounding_score: grounding.repository_grounding_score,
+            evidence_coverage_score: grounding.evidence_coverage_score,
+        },
+        ai_era: AiEra {
+            filler_lazy_structure_risk: filler.filler_lazy_risk,
+            labels: filler.labels,
+            top_contributors: filler.top_contributors,
+        },
+        review: Review {
+            review_criticality_index: rci.review_criticality_index,
         },
         artifacts,
         prose,

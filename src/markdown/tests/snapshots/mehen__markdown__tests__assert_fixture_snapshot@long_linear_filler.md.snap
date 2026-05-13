@@ -1,0 +1,368 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 302
+  ploc: 260
+  cloc: 0
+  tloc: 0
+  mloc: 0
+  bloc: 42
+  aloc: 0
+loc_ratios:
+  artifact_line_ratio: 0
+  code_line_ratio: 0
+  table_line_ratio: 0
+  math_line_ratio: 0
+  blank_line_ratio: 0.1390728476821192
+size:
+  words: 2666
+  effective_content_units: 11.108333333333333
+  sections: 7
+  headings: 7
+ecu_inputs:
+  table_cells: 0
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 302
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+    word_count: 126
+    block_count: 2
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 17
+    end_line: 52
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 307
+    block_count: 5
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 53
+    end_line: 101
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 456
+    block_count: 6
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 102
+    end_line: 160
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 522
+    block_count: 7
+  - section_id: 4
+    heading_level: 2
+    heading_text: ~
+    start_line: 161
+    end_line: 214
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 476
+    block_count: 6
+  - section_id: 5
+    heading_level: 2
+    heading_text: ~
+    start_line: 215
+    end_line: 240
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 225
+    block_count: 3
+  - section_id: 6
+    heading_level: 2
+    heading_text: ~
+    start_line: 241
+    end_line: 302
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 554
+    block_count: 7
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 6
+  cognitive_complexity: 0.2
+  halstead:
+    operators_distinct: 5
+    operators_total: 140
+    operands_distinct: 719
+    operands_total: 2677
+    vocabulary: 724
+    length: 2817
+    volume: 26761.06586391339
+    difficulty: 9.308066759388039
+    effort: 249093.78761368617
+    embedded_volume: 0
+    total_volume: 26761.06586391339
+links:
+  total: 0
+  internal: 0
+  relative: 0
+  external: 0
+  external_vendor: 0
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 0
+  footnote: 0
+  bare_url: 0
+  broken: 0
+  link_debt_score: 0
+  information_scent_score: 0
+  review_burden: 0
+visuals:
+  images: 0
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 0
+tables:
+  count: 0
+  max_cells: 0
+  table_burden_score: 0
+  table_scaffold_score: 0
+  hard_warnings: 0
+maintainability:
+  documentation_maintainability_index: 85.703462799402
+  section_balance_score: 1
+  good_scaffold_score: 0
+  artifact_debt_score: 0
+grounding:
+  repository_grounding_score: 0
+  evidence_coverage_score: 0
+ai_era:
+  filler_lazy_structure_risk: 0.7210765191297824
+  labels:
+    - large-unanchored-prose
+    - low-artifact-density
+    - low-repository-grounding
+    - specificity-scarcity
+  top_contributors:
+    - - large-unanchored-prose
+      - 1
+    - - low-artifact-density
+      - 1
+    - - low-repository-grounding
+      - 1
+review:
+  review_criticality_index: 0
+artifacts: []
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 9
+        language: en
+      - start_line: 11
+        end_line: 15
+        language: en
+      - start_line: 17
+        end_line: 17
+        language: en
+      - start_line: 19
+        end_line: 24
+        language: en
+      - start_line: 26
+        end_line: 30
+        language: en
+      - start_line: 32
+        end_line: 37
+        language: en
+      - start_line: 39
+        end_line: 44
+        language: en
+      - start_line: 46
+        end_line: 51
+        language: en
+      - start_line: 53
+        end_line: 53
+        language: en
+      - start_line: 55
+        end_line: 60
+        language: en
+      - start_line: 62
+        end_line: 68
+        language: en
+      - start_line: 70
+        end_line: 77
+        language: en
+      - start_line: 79
+        end_line: 86
+        language: en
+      - start_line: 88
+        end_line: 94
+        language: en
+      - start_line: 96
+        end_line: 100
+        language: en
+      - start_line: 102
+        end_line: 102
+        language: en
+      - start_line: 104
+        end_line: 110
+        language: en
+      - start_line: 112
+        end_line: 118
+        language: en
+      - start_line: 120
+        end_line: 126
+        language: en
+      - start_line: 128
+        end_line: 134
+        language: en
+      - start_line: 136
+        end_line: 143
+        language: en
+      - start_line: 145
+        end_line: 151
+        language: en
+      - start_line: 153
+        end_line: 159
+        language: en
+      - start_line: 161
+        end_line: 161
+        language: en
+      - start_line: 163
+        end_line: 168
+        language: en
+      - start_line: 170
+        end_line: 176
+        language: en
+      - start_line: 178
+        end_line: 184
+        language: en
+      - start_line: 186
+        end_line: 193
+        language: en
+      - start_line: 195
+        end_line: 203
+        language: en
+      - start_line: 205
+        end_line: 213
+        language: en
+      - start_line: 215
+        end_line: 215
+        language: en
+      - start_line: 217
+        end_line: 224
+        language: en
+      - start_line: 226
+        end_line: 232
+        language: en
+      - start_line: 234
+        end_line: 239
+        language: en
+      - start_line: 241
+        end_line: 241
+        language: en
+      - start_line: 243
+        end_line: 247
+        language: en
+      - start_line: 249
+        end_line: 257
+        language: en
+      - start_line: 259
+        end_line: 267
+        language: en
+      - start_line: 269
+        end_line: 276
+        language: en
+      - start_line: 278
+        end_line: 285
+        language: en
+      - start_line: 287
+        end_line: 294
+        language: en
+      - start_line: 296
+        end_line: 302
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: 37.335
+      flesch_kincaid_grade: 13.207
+      gunning_fog: 15.921
+      smog: 15.053
+      ari: 14.208
+      coleman_liau: 14.311
+      dale_chall_new: 9.904
+      dale_chall_list: ngsl-1.2
+      forcast: 13.1
+      lix: 55.866
+      rix: 7.287
+      ensemble_grade_band:
+        - 13.207
+        - 15.921
+    lexical:
+      mattr_50: 0.81
+      hapax_ratio: 0.525
+      dis_ratio: 0.182
+      lexical_density: 0.531
+      avg_sentence_words: 20.752
+      p90_sentence_words: 31
+      max_sentence_words: 36
+      stddev_sentence_words: 7.387
+      avg_word_chars: 5.363
+      p90_word_chars: 10
+      sentence_count: 129
+      words_total: 2677
+    wording:
+      passive_ratio: 0.248
+      hedge_density: 0.04
+      weasel_density: 0.012
+      wordy_density: 0.009
+      adverb_density: 0.02
+      nominalization_density: 0.049
+      expletive_count: 7
+      lexical_illusions: 0
+      cliche_density: 0.374
+      nonword_count: 0
+      long_sentence_count: 13
+      wording_quality_score: 0.86
+    inclusive_language:
+      flags:
+        - category: condescending
+          surface: clearly
+          preferred: (remove)
+          count: 1
+        - category: condescending
+          surface: simply
+          preferred: (remove)
+          count: 1
+        - category: condescending
+          surface: basic
+          preferred: (remove or restate)
+          count: 1
+      inclusive_language_score: 0.85
+      flag_count: 3
+    short_doc_warning: false
+  japanese: ~
+  meta:
+    short_doc_warning: false
+    words_counted: 2677
+    sentences_counted: 129
+    blocks_stripped: []

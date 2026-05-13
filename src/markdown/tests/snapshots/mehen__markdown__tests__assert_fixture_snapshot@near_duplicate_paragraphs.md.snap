@@ -3,22 +3,22 @@ source: src/markdown/tests/mod.rs
 ---
 path: "<fixture_path>"
 loc:
-  dloc: 23
-  ploc: 12
+  dloc: 27
+  ploc: 14
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 11
+  bloc: 13
   aloc: 0
 loc_ratios:
   artifact_line_ratio: 0
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.4782608695652174
+  blank_line_ratio: 0.48148148148148145
 size:
-  words: 24
-  effective_content_units: 0.1
+  words: 369
+  effective_content_units: 1.5375
   sections: 5
   headings: 5
 ecu_inputs:
@@ -32,50 +32,50 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 23
+    end_line: 27
     parent_section_id: ~
     child_section_ids:
       - 1
       - 2
       - 3
       - 4
-    word_count: 3
-    block_count: 1
+    word_count: 86
+    block_count: 2
   - section_id: 1
     heading_level: 2
     heading_text: ~
-    start_line: 5
-    end_line: 8
+    start_line: 7
+    end_line: 12
     parent_section_id: 0
     child_section_ids: []
-    word_count: 3
-    block_count: 1
+    word_count: 90
+    block_count: 2
   - section_id: 2
     heading_level: 2
     heading_text: ~
-    start_line: 9
-    end_line: 14
+    start_line: 13
+    end_line: 18
     parent_section_id: 0
     child_section_ids: []
-    word_count: 7
+    word_count: 82
     block_count: 2
   - section_id: 3
     heading_level: 2
     heading_text: ~
-    start_line: 15
-    end_line: 20
+    start_line: 19
+    end_line: 24
     parent_section_id: 0
     child_section_ids: []
-    word_count: 7
+    word_count: 66
     block_count: 2
   - section_id: 4
     heading_level: 2
     heading_text: ~
-    start_line: 21
-    end_line: 23
+    start_line: 25
+    end_line: 27
     parent_section_id: 0
     child_section_ids: []
-    word_count: 4
+    word_count: 45
     block_count: 1
 complexity:
   reading_path_complexity: 1
@@ -83,16 +83,16 @@ complexity:
   cognitive_complexity: 0.2
   halstead:
     operators_distinct: 4
-    operators_total: 27
-    operands_distinct: 29
-    operands_total: 29
-    vocabulary: 33
-    length: 56
-    volume: 282.4860706840734
-    difficulty: 2
-    effort: 564.9721413681468
+    operators_total: 33
+    operands_distinct: 159
+    operands_total: 378
+    vocabulary: 163
+    length: 411
+    volume: 3020.327271388973
+    difficulty: 4.754716981132075
+    effort: 14360.801365849455
     embedded_volume: 0
-    total_volume: 282.4860706840734
+    total_volume: 3020.327271388973
 links:
   total: 0
   internal: 0
@@ -124,19 +124,20 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 90.76285714285714
-  section_balance_score: 0.85
+  documentation_maintainability_index: 90.8454104088815
+  section_balance_score: 1
   good_scaffold_score: 0
   artifact_debt_score: 0
 grounding:
-  repository_grounding_score: 0.06785714285714284
+  repository_grounding_score: 0
   evidence_coverage_score: 0
 ai_era:
-  filler_lazy_structure_risk: 0.6447619047619049
+  filler_lazy_structure_risk: 0.76
   labels:
     - large-unanchored-prose
     - low-artifact-density
     - low-repository-grounding
+    - near-duplicate-paragraphs
     - specificity-scarcity
   top_contributors:
     - - large-unanchored-prose
@@ -144,99 +145,106 @@ ai_era:
     - - low-artifact-density
       - 1
     - - low-repository-grounding
-      - 0.9321428571428572
+      - 1
 review:
-  review_criticality_index: 0.8821428571428569
+  review_criticality_index: 0
 artifacts: []
 prose:
   language_detection:
-    dominant_language: ja
+    dominant_language: en
     blocks:
       - start_line: 1
         end_line: 1
-        language: ja
+        language: en
       - start_line: 3
         end_line: 3
-        language: ja
+        language: en
       - start_line: 5
         end_line: 5
-        language: ja
+        language: en
       - start_line: 7
         end_line: 7
-        language: ja
+        language: en
       - start_line: 9
         end_line: 9
-        language: ja
+        language: en
       - start_line: 11
         end_line: 11
-        language: ja
+        language: en
       - start_line: 13
         end_line: 13
-        language: ja
+        language: en
       - start_line: 15
         end_line: 15
-        language: ja
+        language: en
       - start_line: 17
         end_line: 17
-        language: ja
+        language: en
       - start_line: 19
         end_line: 19
-        language: ja
+        language: en
       - start_line: 21
         end_line: 21
-        language: ja
+        language: en
       - start_line: 23
         end_line: 23
-        language: ja
-  english: ~
-  japanese:
-    script_composition:
-      kanji_ratio: 0.216
-      hiragana_ratio: 0.344
-      katakana_ratio: 0.411
-      latin_ratio: 0.026
-      digit_ratio: 0.004
-      script_entropy: 1.701
-      visible_chars: 509
+        language: en
+      - start_line: 25
+        end_line: 25
+        language: en
+      - start_line: 27
+        end_line: 27
+        language: en
+  english:
     readability:
-      tateishi_rs: 39.972
-      jouyou_grade_mean: 4
-      hyougai_ratio: 0.027
+      flesch_reading_ease: 46.52
+      flesch_kincaid_grade: 9.8
+      gunning_fog: 10.168
+      smog: 11.143
+      ari: 9.961
+      coleman_liau: 13.35
+      dale_chall_new: 10.549
+      dale_chall_list: ngsl-1.2
+      forcast: 11.7
+      lix: 48.172
+      rix: 4.387
+      ensemble_grade_band:
+        - 9.8
+        - 13.35
     lexical:
-      avg_sentence_chars: 23.364
-      p90_sentence_chars: 36
-      max_sentence_chars: 42
-      comma_period_ratio: 0.294
-      jukugo_density: 0.709
-      sentence_count: 22
-      char_count: 514
+      mattr_50: 0.753
+      hapax_ratio: 0.381
+      dis_ratio: 0.439
+      lexical_density: 0.614
+      avg_sentence_words: 12.194
+      p90_sentence_words: 18
+      max_sentence_words: 22
+      stddev_sentence_words: 5.772
+      avg_word_chars: 5.37
+      p90_word_chars: 8
+      sentence_count: 31
+      words_total: 378
     wording:
-      politeness_dominant: keitai
-      keitai_count: 10
-      jotai_count: 0
-      honorific_count: 0
-      keitai_jotai_mix_count: 0
-      weak_phrase_count: 0
-      redundant_expression_count: 1
-      doubled_joshi_count: 6
-      long_kanji_run_count: 0
-      max_comma_violation_count: 0
-      max_ten_violation_count: 0
+      passive_ratio: 0.387
+      hedge_density: 0.003
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0.005
+      nominalization_density: 0.024
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.724
-    style_conformance:
-      violations:
-        - rule: rule-3-jouyou-only
-          severity: warn
-          count: 3
-        - rule: rule-5-trailing-chouonpu
-          severity: warn
-          count: 6
-      total_violations: 9
-      violation_density_per_1000: 17.682
+      wording_quality_score: 0.929
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
     short_doc_warning: false
+  japanese: ~
   meta:
     short_doc_warning: false
-    words_counted: 514
-    sentences_counted: 22
+    words_counted: 378
+    sentences_counted: 31
     blocks_stripped: []
