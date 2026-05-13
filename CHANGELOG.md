@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/ophidiarium/mehen/compare/v0.5.0...v0.6.0) (2026-05-13)
+
+
+### Features
+
+* **diff:** add Markdown Documentation Metrics section to PR comment (§39) ([#89](https://github.com/ophidiarium/mehen/issues/89)) ([1563333](https://github.com/ophidiarium/mehen/commit/15633339e9c4b3f68a0513682a68d6fb813cc611))
+* **markdown:** add EN+JA prose metric layer (Tier 0, §§29-38) ([#85](https://github.com/ophidiarium/mehen/issues/85)) ([da64470](https://github.com/ophidiarium/mehen/commit/da644705c5d006ee902601505a2dd5437acc9953))
+* **markdown:** add grounding, evidence, filler risk, RCI, section balance, good scaffold (§§15–21) ([#87](https://github.com/ophidiarium/mehen/issues/87)) ([a948fbc](https://github.com/ophidiarium/mehen/commit/a948fbc43b136becfe5c5fbd5bd36a93d3ecb89a))
+* **markdown:** add link debt, visual scaffold, table burden, and artifact debt (§§11–14, §19) ([#84](https://github.com/ophidiarium/mehen/issues/84)) ([9e23a0a](https://github.com/ophidiarium/mehen/commit/9e23a0a93a50759cd0bbdd5a52920e46b01b2893))
+* **markdown:** add MRPC, MCC, Markdown Halstead, and DMI core (§§7–10) ([#83](https://github.com/ophidiarium/mehen/issues/83)) ([2fdd4d1](https://github.com/ophidiarium/mehen/commit/2fdd4d11ac7458eb1a9d6b6ba45aa7cba0e5c9ea))
+
 ## [0.5.0](https://github.com/ophidiarium/mehen/compare/v0.4.3...v0.5.0) (2026-05-11)
 
 
