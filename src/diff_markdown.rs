@@ -1195,22 +1195,38 @@ fn emit_new_diagram_parse_errors(
     base: Option<&MarkdownMetrics>,
     out: &mut Vec<Callout>,
 ) {
-    let head_list = diagram_artifact_lines(head);
-    let base_list = base.map(diagram_artifact_lines).unwrap_or_default();
-    let new_count = head_list.len().saturating_sub(base_list.len());
-    if new_count == 0 {
+    // §39.5.2 `diagram_parse_error_added`: only emit when a diagram parser
+    // actually failed in head. We use the aggregate
+    // `visuals.diagram_parse_error_count` on `MarkdownMetrics` as the source
+    // of truth — fed by Phase C's per-diagram `parse_error` flag — to avoid
+    // the previous false positive that fired on *any* new diagram.
+    //
+    // TODO(phase-next): thread `parse_error` through `ArtifactRecord` so we
+    // can point at the specific diagram instead of the first entry by index.
+    let head_errors = head.visuals.diagram_parse_error_count;
+    let base_errors = base
+        .map(|b| b.visuals.diagram_parse_error_count)
+        .unwrap_or(0);
+    if head_errors <= base_errors {
         return;
     }
-    if let Some((line, lang)) = head_list.get(base_list.len()) {
-        out.push(callout(
-            1,
-            1.0,
-            "diagram_parse_error_added",
-            &row.path,
-            *line,
-            tmpl_diagram_parse_error_added(&row.display_path, lang, *line),
-        ));
+    let head_diagrams = head.visuals.diagrams;
+    let base_diagrams = base.map(|b| b.visuals.diagrams).unwrap_or(0);
+    if head_diagrams <= base_diagrams {
+        return;
     }
+    let head_list = diagram_artifact_lines(head);
+    let Some((line, lang)) = head_list.first() else {
+        return;
+    };
+    out.push(callout(
+        1,
+        (head_errors - base_errors) as f64,
+        "diagram_parse_error_added",
+        &row.path,
+        *line,
+        tmpl_diagram_parse_error_added(&row.display_path, lang, *line),
+    ));
 }
 
 fn diagram_artifact_lines(m: &MarkdownMetrics) -> Vec<(u64, String)> {

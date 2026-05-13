@@ -254,8 +254,19 @@ pub(crate) struct Visuals {
     pub(crate) diagram_nodes_total: u64,
     pub(crate) diagram_edges_total: u64,
     pub(crate) diagram_cycles_total: u64,
+    /// Count of diagrams whose parser reported `parse_error = true`. Phase F
+    /// uses this as an aggregate signal for the `diagram_parse_error_added`
+    /// callout. TODO(phase-next): expose parse-error flag per-artifact so the
+    /// diff emitter can point at the specific diagram instead of relying on a
+    /// file-level count.
+    #[serde(skip_serializing_if = "is_zero_u64", default)]
+    pub(crate) diagram_parse_error_count: u64,
     pub(crate) visual_scaffold_score: f64,
     pub(crate) visual_net_effect: f64,
+}
+
+fn is_zero_u64(v: &u64) -> bool {
+    *v == 0
 }
 
 /// Maintainability aggregate per §23.
