@@ -39,7 +39,7 @@ detection.
 
 ### Example
 
-```markdown
+````markdown
 # Auth API
 
 Brief intro paragraph.
@@ -51,7 +51,7 @@ export async function login(): Promise<Session> { /* … */ }
 | Field | Required |
 |---|---|
 | `email` | yes |
-```
+````
 
 Expected shape:
 

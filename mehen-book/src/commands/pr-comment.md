@@ -90,8 +90,8 @@ inference:
 
 | Indicator | Rule |
 |---|---|
-| 🟢 improvement | Delta crosses a band boundary in the "better" direction, OR `|delta| ≥ noticeable_threshold` in the "better" direction. |
-| 🔴 regression | Delta crosses a band boundary in the "worse" direction, OR `|delta| ≥ noticeable_threshold` in the "worse" direction. |
+| 🟢 improvement | Delta crosses a band boundary in the "better" direction, OR `\|delta\| ≥ noticeable_threshold` in the "better" direction. |
+| 🔴 regression | Delta crosses a band boundary in the "worse" direction, OR `\|delta\| ≥ noticeable_threshold` in the "worse" direction. |
 | ⚠️ attention | Value is in a "warn" or worse band AND did not improve (used even when delta is zero — the state matters). |
 | 🆕 new | File is new in the PR; no `main` value exists. |
 | ⚪ unchanged | None of the above applies. |
