@@ -104,8 +104,52 @@ pub(crate) struct DiffOpts {
     ignore_generated: bool,
     /// Exit non-zero when the named thresholds are crossed
     /// (comma-separated: `dmi-drop`, `new-broken-link`, `filler-high`, `all`).
-    #[clap(long, value_delimiter = ',')]
-    fail_on: Vec<String>,
+    #[clap(
+        long,
+        value_delimiter = ',',
+        value_parser = parse_fail_on_flag,
+    )]
+    fail_on: Vec<FailOn>,
+}
+
+/// Identifies one of the documented doc-metric CI gates. Any other value is
+/// rejected by clap at parse time rather than being silently ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum FailOn {
+    DmiDrop,
+    NewBrokenLink,
+    FillerHigh,
+    All,
+}
+
+impl FailOn {
+    #[cfg(feature = "markdown")]
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::DmiDrop => "dmi-drop",
+            Self::NewBrokenLink => "new-broken-link",
+            Self::FillerHigh => "filler-high",
+            Self::All => "all",
+        }
+    }
+}
+
+/// Custom clap value parser so misspelled flags (e.g. `new-borken-link`)
+/// produce an `InvalidValue` error at CLI-parse time instead of being
+/// silently dropped downstream.
+fn parse_fail_on_flag(raw: &str) -> Result<FailOn, clap::Error> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "dmi-drop" => Ok(FailOn::DmiDrop),
+        "new-broken-link" => Ok(FailOn::NewBrokenLink),
+        "filler-high" => Ok(FailOn::FillerHigh),
+        "all" => Ok(FailOn::All),
+        other => Err(clap::Error::raw(
+            clap::error::ErrorKind::InvalidValue,
+            format!(
+                "unknown --fail-on value `{other}`; expected one of: dmi-drop, new-broken-link, filler-high, all\n"
+            ),
+        )),
+    }
 }
 
 // ── Orchestration ──────────────────────────────────────────────────────
@@ -371,19 +415,18 @@ fn doc_json_payload(files: &[DocDiffFile]) -> Vec<serde_json::Value> {
 }
 
 #[cfg(feature = "markdown")]
-fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
-    let mut enabled = std::collections::BTreeSet::new();
+fn evaluate_fail_on(flags: &[FailOn], docs: &[DocDiffFile]) -> Vec<String> {
+    let mut enabled: std::collections::BTreeSet<FailOn> = std::collections::BTreeSet::new();
     for f in flags {
-        let trimmed = f.trim().to_ascii_lowercase();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if trimmed == "all" {
-            enabled.insert("dmi-drop".to_string());
-            enabled.insert("new-broken-link".to_string());
-            enabled.insert("filler-high".to_string());
-        } else {
-            enabled.insert(trimmed);
+        match f {
+            FailOn::All => {
+                enabled.insert(FailOn::DmiDrop);
+                enabled.insert(FailOn::NewBrokenLink);
+                enabled.insert(FailOn::FillerHigh);
+            }
+            other => {
+                enabled.insert(*other);
+            }
         }
     }
     if enabled.is_empty() {
@@ -394,7 +437,7 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
     // nothing. The gate itself still returns success (no docs → no metric
     // breach possible) so existing CI doesn't break.
     if docs.iter().all(|f| f.head.is_none()) {
-        let flags: Vec<&str> = enabled.iter().map(String::as_str).collect();
+        let flags: Vec<&str> = enabled.iter().copied().map(FailOn::as_str).collect();
         log::warn!(
             "--fail-on {flags:?} has no Markdown files in the diff; no doc-metric thresholds were evaluated"
         );
@@ -403,7 +446,7 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
     for f in docs {
         let Some(head) = &f.head else { continue };
         let base = f.base.as_ref();
-        if enabled.contains("dmi-drop")
+        if enabled.contains(&FailOn::DmiDrop)
             && let Some(b) = base
         {
             let hd = head.maintainability.documentation_maintainability_index;
@@ -412,7 +455,7 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
                 failures.push(format!("dmi-drop:{}", f.path.display()));
             }
         }
-        if enabled.contains("new-broken-link") {
+        if enabled.contains(&FailOn::NewBrokenLink) {
             // Identity-based diff keyed on (class, destination) — line
             // numbers MAY change without a new broken link (e.g. a doc
             // prepends content, shifting every link down one line). The CI
@@ -452,7 +495,7 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
                 failures.push(format!("new-broken-link:{}", f.path.display()));
             }
         }
-        if enabled.contains("filler-high") && head.ai_era.filler_lazy_structure_risk >= 0.60 {
+        if enabled.contains(&FailOn::FillerHigh) && head.ai_era.filler_lazy_structure_risk >= 0.60 {
             failures.push(format!("filler-high:{}", f.path.display()));
         }
     }
@@ -1160,7 +1203,7 @@ src/value.txt linguist-generated=true
             is_deleted: false,
         };
 
-        let flags = vec!["new-broken-link".to_string()];
+        let flags = vec![FailOn::NewBrokenLink];
         let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
         assert!(
             failures.is_empty(),
@@ -1193,7 +1236,7 @@ src/value.txt linguist-generated=true
             is_deleted: false,
         };
 
-        let flags = vec!["new-broken-link".to_string()];
+        let flags = vec![FailOn::NewBrokenLink];
         let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
         assert_eq!(failures.len(), 1);
         assert!(failures[0].starts_with("new-broken-link:"));
@@ -1218,8 +1261,74 @@ src/value.txt linguist-generated=true
             is_deleted: false,
         };
 
-        let flags = vec!["new-broken-link".to_string()];
+        let flags = vec![FailOn::NewBrokenLink];
         let failures = evaluate_fail_on(&flags, std::slice::from_ref(&doc));
         assert_eq!(failures.len(), 1);
+    }
+
+    // ── `--fail-on` CLI-parse validation ────────────────────────────────
+
+    #[test]
+    fn fail_on_parser_accepts_every_documented_value() {
+        let cli = TestDiffCli::try_parse_from([
+            "mehen",
+            "--fail-on",
+            "dmi-drop,new-broken-link,filler-high,all",
+        ])
+        .expect("every documented value must parse");
+        assert_eq!(
+            cli.opts.fail_on,
+            vec![
+                FailOn::DmiDrop,
+                FailOn::NewBrokenLink,
+                FailOn::FillerHigh,
+                FailOn::All,
+            ]
+        );
+    }
+
+    #[test]
+    fn fail_on_parser_trims_and_lowercases() {
+        let cli = TestDiffCli::try_parse_from(["mehen", "--fail-on", "  Dmi-Drop , ALL "])
+            .expect("case and whitespace must be normalized");
+        assert_eq!(cli.opts.fail_on, vec![FailOn::DmiDrop, FailOn::All]);
+    }
+
+    #[test]
+    fn fail_on_parser_rejects_unknown_value() {
+        // Regression: before, typos like `new-borken-link` were silently
+        // dropped into an empty filter set. Now clap must error at parse
+        // time so the mistake is loud.
+        let err = TestDiffCli::try_parse_from(["mehen", "--fail-on", "new-borken-link"])
+            .expect_err("unknown value must be rejected");
+        // Clap wraps custom value-parser errors under ValueValidation; the
+        // raw ErrorKind::InvalidValue we produce survives either way. Accept
+        // both so the test is robust across clap internals.
+        assert!(
+            matches!(
+                err.kind(),
+                clap::error::ErrorKind::InvalidValue | clap::error::ErrorKind::ValueValidation,
+            ),
+            "expected InvalidValue or ValueValidation, got: {:?}",
+            err.kind(),
+        );
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("new-borken-link"),
+            "error must mention the offending value, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn fail_on_parser_rejects_partial_match_in_list() {
+        // Mix of a valid and a misspelled flag must still fail the whole
+        // parse so no value is silently dropped.
+        let err = TestDiffCli::try_parse_from(["mehen", "--fail-on", "dmi-drop,filler-hihg"])
+            .expect_err("list with an invalid entry must be rejected");
+        assert!(matches!(
+            err.kind(),
+            clap::error::ErrorKind::InvalidValue | clap::error::ErrorKind::ValueValidation,
+        ));
+        assert!(err.to_string().contains("filler-hihg"));
     }
 }
