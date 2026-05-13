@@ -399,20 +399,26 @@ fn evaluate_fail_on(flags: &[String], docs: &[DocDiffFile]) -> Vec<String> {
             }
         }
         if enabled.contains("new-broken-link") {
-            let head_broken = head
+            // Identity-based diff: one link fixed + one new broken link must
+            // still trip the gate, even when the total count is unchanged.
+            // Key by (line, destination) so two broken links to the same URL
+            // at different lines count separately. See §39.4.
+            let head_broken: std::collections::BTreeSet<(u64, &str)> = head
                 .link_records
                 .iter()
                 .filter(|l| matches!(l.resolved, Some(false)))
-                .count();
-            let base_broken = base
+                .map(|l| (l.line, l.destination.as_str()))
+                .collect();
+            let base_broken: std::collections::BTreeSet<(u64, &str)> = base
                 .map(|b| {
                     b.link_records
                         .iter()
                         .filter(|l| matches!(l.resolved, Some(false)))
-                        .count()
+                        .map(|l| (l.line, l.destination.as_str()))
+                        .collect()
                 })
-                .unwrap_or(0);
-            if head_broken > base_broken {
+                .unwrap_or_default();
+            if head_broken.difference(&base_broken).next().is_some() {
                 failures.push(format!("new-broken-link:{}", f.path.display()));
             }
         }
