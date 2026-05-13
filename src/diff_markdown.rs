@@ -1253,12 +1253,11 @@ fn emit_new_diagram_parse_errors(
     let base_errors = base
         .map(|b| b.visuals.diagram_parse_error_count)
         .unwrap_or(0);
+    // Parse errors grew is the authoritative signal — whether through an
+    // added diagram or an existing diagram getting edited into an invalid
+    // state. The previous guard on diagram *count* grow suppressed the
+    // "existing diagram broken" case (Codex P2 on PR #89).
     if head_errors <= base_errors {
-        return;
-    }
-    let head_diagrams = head.visuals.diagrams;
-    let base_diagrams = base.map(|b| b.visuals.diagrams).unwrap_or(0);
-    if head_diagrams <= base_diagrams {
         return;
     }
     let head_list = diagram_artifact_lines(head);
