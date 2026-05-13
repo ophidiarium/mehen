@@ -1,5 +1,6 @@
 ---
 source: src/markdown/tests/mod.rs
+assertion_line: 33
 ---
 path: "<fixture_path>"
 loc:
@@ -122,17 +123,17 @@ complexity:
   reading_path_complexity_raw: 10
   cognitive_complexity: 7.759999999999999
   halstead:
-    operators_distinct: 9
-    operators_total: 69
+    operators_distinct: 8
+    operators_total: 67
     operands_distinct: 144
     operands_total: 225
-    vocabulary: 153
-    length: 294
-    volume: 2133.67202575164
-    difficulty: 7.03125
-    effort: 15002.381431066218
+    vocabulary: 152
+    length: 292
+    volume: 2116.3948339255267
+    difficulty: 6.25
+    effort: 13227.467712034542
     embedded_volume: 0
-    total_volume: 2133.67202575164
+    total_volume: 2116.3948339255267
 links:
   total: 7
   internal: 0
