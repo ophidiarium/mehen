@@ -100,38 +100,105 @@ const ALLOWED_FUNCS: &[&str] = &[
     "format_value",
     "build_file_link",
     "render",
-    "print_doc_json",
-    "evaluate_fail_on",
 ];
+
+/// Strip the trailing content of a `//` line comment. String literals in
+/// emitter code may contain `//` (URLs), but the linter's `line_is_comment`
+/// already skips whole-line comments, and brace-depth tracking only needs
+/// approximate accuracy.
+fn strip_line_comment(line: &str) -> &str {
+    if let Some(idx) = line.find("//") {
+        &line[..idx]
+    } else {
+        line
+    }
+}
+
+/// Count `{` minus `}` tokens on a single line (approximate, line-comment
+/// stripped). Good enough for the emitter file's structure; the linter
+/// doesn't need lexical-perfection, only "did we leave the `fn` body yet".
+fn net_braces(line: &str) -> i32 {
+    let trimmed = strip_line_comment(line);
+    let open = trimmed.matches('{').count() as i32;
+    let close = trimmed.matches('}').count() as i32;
+    open - close
+}
+
+/// Shared per-line state update: advance brace depth, promote a function
+/// signature into a body once the opening `{` appears, and clear
+/// `current_fn` once the body closes.
+fn advance_scope(
+    line: &str,
+    depth: &mut i32,
+    current_fn: &mut Option<String>,
+    fn_open_depth: &mut i32,
+    inside_body: &mut bool,
+) {
+    *depth += net_braces(line);
+    if current_fn.is_some() && !*inside_body && *depth > *fn_open_depth {
+        *inside_body = true;
+    }
+    if current_fn.is_some() && *inside_body && *depth <= *fn_open_depth {
+        *current_fn = None;
+        *inside_body = false;
+    }
+}
 
 #[test]
 fn all_format_calls_live_inside_template_or_allow_list() {
     let src = diff_markdown_source();
+    // Track the enclosing top-level function using brace depth so that code
+    // between two `fn` definitions (e.g. a `const` initialized with
+    // `format!`) is attributed to `(top-level)` rather than the preceding
+    // function. `inside_body` flips to true only after we actually see the
+    // opening `{`, so a multi-line signature doesn't clear the association
+    // prematurely.
     let mut current_fn: Option<String> = None;
+    let mut fn_open_depth: i32 = 0;
+    let mut inside_body: bool = false;
+    let mut depth: i32 = 0;
     let mut hits: Vec<(usize, String)> = Vec::new();
 
     for (idx, line) in src.lines().enumerate() {
         let line_no = idx + 1;
-        // Track enclosing fn by string search. Accept both `fn NAME(` and
-        // any of the visibility-prefixed forms (`pub fn`, `pub(crate) fn`,
-        // etc.). Only top-level (column 0) declarations count as enclosing.
+        // Top-level `fn` declarations start a new enclosing function.
         if let Some(name) = parse_top_level_fn(line) {
             current_fn = Some(name);
+            fn_open_depth = depth;
+            inside_body = false;
+            advance_scope(
+                line,
+                &mut depth,
+                &mut current_fn,
+                &mut fn_open_depth,
+                &mut inside_body,
+            );
             continue;
         }
         if line_is_comment(line) {
+            advance_scope(
+                line,
+                &mut depth,
+                &mut current_fn,
+                &mut fn_open_depth,
+                &mut inside_body,
+            );
             continue;
         }
         if line.contains("format!(") || line.contains("write!(") || line.contains("writeln!(") {
             let enclosing = current_fn.as_deref().unwrap_or("(top-level)");
-            if enclosing.starts_with("tmpl_") {
-                continue;
+            let permitted = enclosing.starts_with("tmpl_") || ALLOWED_FUNCS.contains(&enclosing);
+            if !permitted {
+                hits.push((line_no, format!("fn {enclosing}: {}", line.trim())));
             }
-            if ALLOWED_FUNCS.contains(&enclosing) {
-                continue;
-            }
-            hits.push((line_no, format!("fn {enclosing}: {}", line.trim())));
         }
+        advance_scope(
+            line,
+            &mut depth,
+            &mut current_fn,
+            &mut fn_open_depth,
+            &mut inside_body,
+        );
     }
     assert!(
         hits.is_empty(),

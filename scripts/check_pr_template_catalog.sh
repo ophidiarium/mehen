@@ -45,8 +45,6 @@ ALLOWED_FUNCS=(
     "format_value"
     "build_file_link"
     "render"
-    "print_doc_json"
-    "evaluate_fail_on"
 )
 
 allowed_pattern="$(IFS='|'; echo "${ALLOWED_FUNCS[*]}")"

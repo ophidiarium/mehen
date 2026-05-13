@@ -2264,12 +2264,10 @@ fn tmpl_image_missing_alt_added(file: &str, dest: &str, line: u64) -> String {
     format!("\u{26A0}\u{FE0F} **{file}** \u{2014} image `{dest}` at L{line} has no alt text")
 }
 
-#[allow(dead_code)]
-fn tmpl_artifact_unexplained_added(file: &str, artifact_type: &str, line: u64) -> String {
-    format!(
-        "\u{26A0}\u{FE0F} **{file}** \u{2014} {artifact_type} at L{line} has no explanatory prose within \u{00B1}2 blocks"
-    )
-}
+// TODO(phase-next): reintroduce `tmpl_artifact_unexplained_added` when the
+// §39.5.2 severity-4 callout for artifacts with `has_explanation == false`
+// gets wired up. The previous definition was dead-code-only and the
+// accompanying signal still needs to be routed through `emit_callouts_for_file`.
 
 fn tmpl_broken_links_resolved(file: &str, n: u64) -> String {
     format!("\u{1F7E2} **{file}** \u{2014} {n} previously broken link(s) resolved")
