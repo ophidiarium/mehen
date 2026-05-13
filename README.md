@@ -31,19 +31,23 @@ Today `mehen` supports:
 - Kotlin
 - PowerShell
 - C (`.c`, `.h`)
+- Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdx`) — documentation metrics only
 
 Because TypeScript is a superset of JavaScript, `mehen` analyzes `.js`/`.mjs`/`.cjs`
 files through the TypeScript grammar and `.jsx` files through the TSX grammar.
 
-Planned next: Zig, Starlark and PHP.
+Markdown files receive a dedicated documentation metric suite (maintainability,
+reading path complexity, link debt, filler/lazy risk, readability) rather than
+the code-style metrics — Markdown has no functions, classes, or interfaces to
+score. See the [Markdown metric chapter](mehen-book/src/metrics/markdown.md).
 
-A dedicated research effort is underway to expand support to Markdown documentation, with metrics like readability and structural complexity.
+Planned next: Zig, Starlark and PHP.
 
 We also providing comprehensive support for polyglot monorepos, with per-file language detection and reporting.
 
 ## What Mehen Computes
 
-`mehen` provides a broad metric set, including:
+`mehen` provides a broad metric set for source code, including:
 
 - Cyclomatic complexity
 - Cognitive complexity
@@ -53,6 +57,26 @@ We also providing comprehensive support for polyglot monorepos, with per-file la
 - NArgs / NOM / NExit
 - LOC family (SLOC, PLOC, LLOC, CLOC, blanks)
 - NPA / NPM / WMC
+
+### Markdown documentation metrics
+
+For Markdown (README, ADRs, runbooks, API references, tutorials, generated
+docs), `mehen` ships a dedicated metric suite that treats code fences,
+diagrams, tables, images, links, math, and repository references as
+first-class document constructs instead of stripping them before counting
+words. The structural layer covers a Markdown LOC family (prose vs. code
+vs. tables vs. math vs. blank lines), Markdown Reading Path Complexity, a
+Markdown Cognitive Complexity analogue, Markdown Halstead, a Documentation
+Maintainability Index (DMI), link debt, table burden, visual scaffold,
+repository grounding, evidence coverage, filler/lazy structure risk, and a
+review criticality index. An opt-in language-aware prose layer adds
+English readability (Flesch, Flesch-Kincaid, Fog, SMOG, ARI, Coleman-Liau,
+Dale-Chall, FORCAST, LIX/RIX), lexical diversity (MATTR, hapax, density),
+wording quality (passive, hedges, weasels, wordy, adverbs, nominalizations,
+cliches, illusions), inclusive-language flags, Japanese script composition,
+the Tateishi simplified readability score, a Jōyō-grade proxy, JTF
+rule conformance, and a textlint-ja subset. Full reference in the
+[Markdown metric chapter](mehen-book/src/metrics/markdown.md) of the book.
 
 ## Distribution
 
@@ -138,6 +162,20 @@ only supported languages in changed files under those roots:
 
 Thresholds are optional. When configured, the action fails if an adverse
 per-file metric delta exceeds the configured limit.
+
+When enabled and a PR touches one or more Markdown files, `mehen diff`
+will also emit a Documentation Metrics section inside the same sticky
+comment, anchored by `<!-- mehen-docs -->`. Once fully wired, it will
+report DMI, word count, FKGL / Tateishi RS, link debt, and filler risk
+per file, plus a template-driven callout list for objective defects
+(broken links, new inclusive-language flags, long sentences, heading
+skips, unlabelled code fences, etc.). The full specification — anchor
+rules, cell format, callout template catalog, planned `--fail-on`
+gating — is in
+[`commands/pr-comment.md`](mehen-book/src/commands/pr-comment.md). Until
+the Markdown renderer emits the anchor and the callout catalog is
+wired end-to-end, the GitHub Action only publishes the source-code
+metrics section.
 
 ## Reporting and Integrations
 
