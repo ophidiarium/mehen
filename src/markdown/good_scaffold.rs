@@ -142,7 +142,7 @@ mod tests {
             mk_code(None, false, true),
         ];
         let score = bounded_labelled_code_example_score(&arts);
-        assert!(score - (1.0 / 3.0) < 1e-9);
+        assert!((score - (1.0 / 3.0)).abs() < 1e-9);
     }
 
     #[test]

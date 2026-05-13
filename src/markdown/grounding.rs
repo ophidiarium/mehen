@@ -162,7 +162,23 @@ pub(crate) fn analyze_grounding(
     );
 
     // §16: per-section evidence anchors.
-    let per_section_anchors = compute_per_section_anchors(sections, links, artifacts, tables);
+    //
+    // Walk the tree once more to attribute each resolved `path_like_token`
+    // to its enclosing section so §16.1 "path-like token resolved to
+    // repository" actually shows up in per-section anchor density.
+    let base_dir = file_path
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let per_section_resolved_paths =
+        collect_per_section_resolved_paths(root, source, &base_dir, sections);
+    let per_section_anchors = compute_per_section_anchors(
+        sections,
+        links,
+        artifacts,
+        tables,
+        &per_section_resolved_paths,
+    );
 
     let mut per_section_evidence: Vec<f64> = Vec::with_capacity(sections.len());
     let mut anchored_words: u64 = 0;
@@ -516,6 +532,7 @@ fn compute_per_section_anchors(
     links: &[LinkRecord],
     artifacts: &[ArtifactRecord],
     tables: &[TableRecord],
+    per_section_resolved_paths: &[u64],
 ) -> Vec<u64> {
     let n = sections.len();
     if n == 0 {
@@ -546,11 +563,15 @@ fn compute_per_section_anchors(
 
     for a in artifacts {
         let is_anchor = match a.kind {
-            ArtifactKind::Code => a.has_label,       // labelled fence
-            ArtifactKind::Diagram => a.has_label, // parseable diagram (Phase C marks parse_error separately but diagrams without titles won't have has_label)
-            ArtifactKind::Image => a.has_label,   // image with alt/caption
+            ArtifactKind::Code => a.has_label, // labelled fence
+            // §16.1 "parseable diagram": a diagram counts only when it
+            // has a label AND parsed cleanly — diagrams that errored
+            // during parsing (Phase C sets `oversized`/parse-error in
+            // the diagram analyzer) are not evidence.
+            ArtifactKind::Diagram => a.has_label && !a.oversized,
+            ArtifactKind::Image => a.has_label, // image with alt/caption
             ArtifactKind::Math => a.has_explanation, // math with nearby explanation
-            ArtifactKind::Table => false,         // handled below to check header separately
+            ArtifactKind::Table => false,       // handled below to check header separately
             ArtifactKind::Html => false,
         };
         if !is_anchor {
@@ -570,7 +591,127 @@ fn compute_per_section_anchors(
         }
     }
 
+    // §16.1 "path-like token resolved to repository": credit each
+    // section for every resolved `path_like_token` that lives inside it.
+    for (idx, count) in per_section_resolved_paths.iter().enumerate() {
+        if idx < anchors.len() {
+            anchors[idx] = anchors[idx].saturating_add(*count);
+        }
+    }
+
     anchors
+}
+
+/// Walk the AST and tally the number of resolved `path_like_token`s per
+/// section. Prose-context-gated (same logic as `visit_token_counts`) so
+/// tokens inside code fences / HTML / front-matter don't double-count.
+fn collect_per_section_resolved_paths(
+    root: &Node<'_>,
+    source: &str,
+    base: &Path,
+    sections: &[Section],
+) -> Vec<u64> {
+    let mut counts: Vec<u64> = vec![0; sections.len()];
+    if sections.is_empty() {
+        return counts;
+    }
+    visit_per_section_resolved_paths(root, source, base, &mut counts, sections, false);
+    counts
+}
+
+fn visit_per_section_resolved_paths(
+    node: &Node<'_>,
+    source: &str,
+    base: &Path,
+    counts: &mut [u64],
+    sections: &[Section],
+    inside_prose: bool,
+) {
+    use Markdown::*;
+    let kind: Markdown = node.kind_id().into();
+    // Skip non-prose containers — mirrors the gating in visit_token_counts.
+    if matches!(
+        kind,
+        FencedCodeBlock
+            | IndentedCodeBlock
+            | InlineCode
+            | CodeFenceContent
+            | InlineCodeContent
+            | InlineCodeContent2
+            | InfoString
+            | Language
+            | MathBlock
+            | MathInline
+            | MathBlockContent
+            | MathInlineContent
+            | HtmlBlock
+            | HtmlBlock1
+            | HtmlBlock3
+            | HtmlBlock4
+            | HtmlBlock5
+            | HtmlBlock6
+            | HtmlBlock7
+            | HtmlCommentBlock
+            | MdxJsxBlock
+            | MdxJsxInline
+            | DirectiveBlock
+            | MinusMetadata
+            | PlusMetadata
+            | LinkDestination
+            | LinkDestinationParenthesis
+            | Uri
+    ) {
+        return;
+    }
+    let opens_prose = matches!(
+        kind,
+        Paragraph
+            | AtxHeading
+            | AtxHeading2
+            | AtxHeading3
+            | AtxHeading4
+            | AtxHeading5
+            | AtxHeading6
+            | SetextHeading
+            | SetextHeading2
+            | BlockQuote
+            | PlainBlockQuote
+            | Callout
+            | CalloutHeaderParagraph
+            | ListItemContent
+            | TaskListItemContent
+            | LinkLabel
+            | FootnoteLabel
+            | PipeTableCell
+            | PipeTableHeader
+            | PipeTableRow
+    );
+    let next_inside = inside_prose || opens_prose;
+    if next_inside && matches!(kind, PathLikeToken) {
+        let text = node_text(node, source);
+        if repo_resolves(base, &text) {
+            let line = (node.start_row() as u64) + 1;
+            if let Some(idx) = locate_section_by_line(sections, line) {
+                counts[idx] = counts[idx].saturating_add(1);
+            }
+        }
+    }
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            visit_per_section_resolved_paths(
+                &cursor.node(),
+                source,
+                base,
+                counts,
+                sections,
+                next_inside,
+            );
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
 }
 
 fn locate_section_by_line(sections: &[Section], line: u64) -> Option<usize> {

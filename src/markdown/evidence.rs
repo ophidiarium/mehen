@@ -27,8 +27,9 @@
 //! - Issue/PR/Scholarly reference link.
 //! - Path-like token resolved to repo (rolls into §15 counts).
 //!
-//! The implementation is in `grounding::compute_per_section_anchors` and the
-//! aggregate is produced inline by `grounding::analyze_grounding`.
-
-#[allow(unused_imports)]
-pub(crate) use crate::markdown::grounding::GroundingOutputs as EvidenceOutputs;
+//! The implementation is in `grounding::compute_per_section_anchors` and
+//! the aggregate is produced inline by `grounding::analyze_grounding`.
+//! This module is intentionally empty: it exists to group the §16 design
+//! notes alongside the source tree so future Phase-D consumers know
+//! where the anchor-counting logic lives without adding a second cache
+//! of the same values.
