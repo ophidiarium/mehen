@@ -41,8 +41,6 @@ reading path complexity, link debt, filler/lazy risk, readability) rather than
 the code-style metrics — Markdown has no functions, classes, or interfaces to
 score. See the [Markdown metric chapter](mehen-book/src/metrics/markdown.md).
 
-Planned next: Zig, Starlark and PHP.
-
 We also providing comprehensive support for polyglot monorepos, with per-file language detection and reporting.
 
 ## What Mehen Computes
@@ -135,11 +133,11 @@ permissions:
   issues: write
 
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v6
     with:
       fetch-depth: 0
 
-  - uses: ophidiarium/mehen@v1
+  - uses: ophidiarium/mehen@v0
     with:
       paths: src
 ```
@@ -148,7 +146,7 @@ For polyglot monorepos, pass each root you want tracked. `mehen` will analyze
 only supported languages in changed files under those roots:
 
 ```yaml
-- uses: ophidiarium/mehen@v1
+- uses: ophidiarium/mehen@v0
   with:
     paths: |
       crates/api/src
