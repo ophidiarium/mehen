@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/ophidiarium/mehen/compare/v0.6.0...v0.6.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* update README.md ([8fe00df](https://github.com/ophidiarium/mehen/commit/8fe00dfd2844ea153b06eb3765fdd1cca2844b5b))
+
 ## [0.6.0](https://github.com/ophidiarium/mehen/compare/v0.5.0...v0.6.0) (2026-05-13)
 
 
