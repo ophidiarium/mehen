@@ -692,9 +692,12 @@ impl Checker for PhpCode {
 
     #[inline(always)]
     fn is_else_if(node: &Node) -> bool {
-        // PHP has a dedicated `else_if_clause` named node, so a nested
-        // `if_statement` never appears as the body of another `if_statement`.
-        // No flattening needed.
+        // PHP has a dedicated `else_if_clause` named node for the `elseif`
+        // keyword. The `else if` (with a space) form parses as a nested
+        // `if_statement` whose direct parent is an `else_clause`. We
+        // flatten this case so the cognitive-complexity score matches
+        // `elseif`: the inner `if`'s structural cost has already been paid
+        // by the outer `else_clause`'s `+1`.
         if node.kind_id() != Php::IfStatement {
             return false;
         }
