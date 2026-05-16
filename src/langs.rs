@@ -4,7 +4,7 @@ use tree_sitter::Language;
 
 #[cfg(feature = "markdown")]
 use crate::languages::Markdown;
-use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Php, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -112,6 +112,16 @@ mk_langs!(
         tree_sitter_c,
         [c, h],
         ["c"]
+    ),
+    (
+        Php,
+        "The `PHP` language",
+        "php",
+        PhpCode,
+        PhpParser,
+        tree_sitter_php,
+        [php, php3, php4, php5, php7, php8, phtml],
+        ["php"]
     ),
     (
         Markdown,
@@ -224,6 +234,16 @@ mk_langs!(
         tree_sitter_c,
         [c, h],
         ["c"]
+    ),
+    (
+        Php,
+        "The `PHP` language",
+        "php",
+        PhpCode,
+        PhpParser,
+        tree_sitter_php,
+        [php, php3, php4, php5, php7, php8, phtml],
+        ["php"]
     )
 );
 

@@ -339,6 +339,12 @@ impl Halstead for CCode {
     }
 }
 
+impl Halstead for crate::langs::PhpCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
 // Markdown is a documentation language; classical Halstead is a code metric
 // and does not apply. A Markdown-specific Halstead analogue will land in
 // Phase B via the dedicated pipeline.

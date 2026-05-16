@@ -454,6 +454,36 @@ implement_metric_trait!(
     RubyCode
 );
 
+impl NArgs for crate::langs::PhpCode {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
+        // PHP function/anonymous-function/method `parameters` field is a
+        // `formal_parameters` node. Each parameter is a `simple_parameter`,
+        // `variadic_parameter`, or `property_promotion_parameter`. The
+        // default `compute_args` walks the parameters child via
+        // `is_non_arg`, which excludes `(` / `)` / `,` — every remaining
+        // child counts as one parameter.
+        if Self::is_func(node) {
+            if let Some(params) = node.child_by_field_name("parameters") {
+                params.act_on_child(&mut |n| {
+                    if !Self::is_non_arg(n) {
+                        stats.fn_nargs += 1;
+                    }
+                });
+            }
+            return;
+        }
+        if Self::is_closure(node)
+            && let Some(params) = node.child_by_field_name("parameters")
+        {
+            params.act_on_child(&mut |n| {
+                if !Self::is_non_arg(n) {
+                    stats.closure_nargs += 1;
+                }
+            });
+        }
+    }
+}
+
 // Markdown documents have no function parameters.
 #[cfg(feature = "markdown")]
 impl NArgs for crate::langs::MarkdownCode {}

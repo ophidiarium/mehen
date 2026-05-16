@@ -4,8 +4,8 @@ use std::fmt;
 
 use crate::checker::Checker;
 use crate::langs::{
-    CCode, GoCode, KotlinCode, LANG, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, LANG, PhpCode, PowershellCode, PythonCode, RubyCode, RustCode,
+    TsxCode, TypescriptCode,
 };
 use crate::metrics::cyclomatic;
 use crate::spaces::SpaceKind;
@@ -197,7 +197,8 @@ impl_wmc!(
     RustCode,
     RubyCode,
     KotlinCode,
-    PowershellCode
+    PowershellCode,
+    PhpCode
 );
 
 // Go has no class-like constructs; WMC is not applicable.
@@ -220,7 +221,8 @@ impl Wmc for crate::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
 
@@ -385,6 +387,35 @@ mod tests {
              end",
             "foo.rb",
             |metric| {
+                insta::assert_json_snapshot!(
+                    metric.wmc,
+                    @r###"
+                    {
+                      "classes": 3.0,
+                      "interfaces": 0.0,
+                      "total": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn php_wmc_class_sums_method_cyclomatics() {
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public function a(int $x): int {
+                     if ($x > 0) {
+                         return 1;
+                     }
+                     return 0;
+                 }
+                 public function b(): int { return 1; }
+             }",
+            "foo.php",
+            |metric| {
+                // class C: a cyc=2 (if), b cyc=1 -> classes = 3
                 insta::assert_json_snapshot!(
                     metric.wmc,
                     @r###"

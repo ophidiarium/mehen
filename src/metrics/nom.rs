@@ -217,6 +217,8 @@ implement_metric_trait!(
     CCode
 );
 
+impl Nom for crate::langs::PhpCode {}
+
 // Markdown documents have no functions or closures.
 #[cfg(feature = "markdown")]
 impl Nom for crate::langs::MarkdownCode {}

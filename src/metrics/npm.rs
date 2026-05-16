@@ -635,6 +635,58 @@ impl Npm for PowershellCode {
     }
 }
 
+impl Npm for crate::langs::PhpCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        use crate::languages::Php::*;
+
+        if node.kind_id() != MethodDeclaration {
+            return;
+        }
+        // Method must be a direct child of a class / interface / trait / enum
+        // body's `declaration_list`, which itself is the body of the
+        // declaring class-like.
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        if parent.kind_id() != DeclarationList {
+            return;
+        }
+        let grand = match parent.parent() {
+            Some(g) => g,
+            None => return,
+        };
+        let container = match grand.kind_id().into() {
+            ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+                SpaceKind::Class
+            }
+            InterfaceDeclaration => SpaceKind::Interface,
+            _ => return,
+        };
+        // PHP visibility: scan modifier children for `private` / `protected`.
+        // Default access (no modifier) is public. Interface methods are
+        // implicitly public.
+        let public = container == SpaceKind::Interface || php_member_is_public(node, code);
+        record_method(stats, container, public);
+    }
+}
+
+/// Whether a PHP class member declaration (method or property) is considered
+/// public. PHP defaults to `public` when no visibility modifier is present.
+pub(crate) fn php_member_is_public(node: &Node, code: &[u8]) -> bool {
+    use crate::languages::Php::*;
+    for child in node.children() {
+        if child.kind_id() != VisibilityModifier {
+            continue;
+        }
+        let text = &code[child.start_byte()..child.end_byte()];
+        if text == b"private" || text == b"protected" {
+            return false;
+        }
+    }
+    true
+}
+
 // Markdown has no methods; NPM opts out via `applies_to(LANG::Markdown)`.
 #[cfg(feature = "markdown")]
 impl Npm for crate::langs::MarkdownCode {

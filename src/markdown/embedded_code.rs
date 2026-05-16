@@ -94,6 +94,7 @@ fn synthetic_path(lang: LANG) -> std::path::PathBuf {
         LANG::Kotlin => "fence.kt",
         LANG::Powershell => "fence.ps1",
         LANG::C => "fence.c",
+        LANG::Php => "fence.php",
         #[cfg(feature = "markdown")]
         LANG::Markdown => "fence.md",
     };
@@ -118,6 +119,7 @@ fn map_fence_to_lang(info: &str) -> Option<LANG> {
         "kotlin" | "kt" | "kts" => LANG::Kotlin,
         "powershell" | "pwsh" | "ps1" => LANG::Powershell,
         "c" => LANG::C,
+        "php" => LANG::Php,
         _ => return None,
     })
 }
