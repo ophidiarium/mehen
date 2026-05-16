@@ -553,6 +553,44 @@ impl Npa for PowershellCode {
     }
 }
 
+impl Npa for crate::langs::PhpCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        use crate::languages::Php::*;
+
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        if node.kind_id() != PropertyDeclaration {
+            return;
+        }
+        // Property must be a direct child of a class-like body's
+        // `declaration_list`.
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        if parent.kind_id() != DeclarationList {
+            return;
+        }
+        let grand = match parent.parent() {
+            Some(g) => g,
+            None => return,
+        };
+        let container = match grand.kind_id().into() {
+            ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+                SpaceKind::Class
+            }
+            InterfaceDeclaration => SpaceKind::Interface,
+            _ => return,
+        };
+        let public = crate::metrics::npm::php_member_is_public(node, code);
+        stats.record_attribute(container, public);
+    }
+}
+
 // Markdown has no classes; NPA opts out via `applies_to(LANG::Markdown)`.
 #[cfg(feature = "markdown")]
 impl Npa for crate::langs::MarkdownCode {

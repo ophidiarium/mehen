@@ -245,6 +245,22 @@ impl Exit for CCode {
     }
 }
 
+impl Exit for crate::langs::PhpCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use crate::languages::Php::*;
+
+        // Function exit points in PHP: `return`, `throw`, and `exit`/`die`.
+        // `break` / `continue` are loop-flow controls, not function exits,
+        // mirroring the convention used for Ruby / Kotlin / PowerShell.
+        match node.kind_id().into() {
+            ReturnStatement | ThrowExpression | ExitStatement => {
+                stats.exit += 1;
+            }
+            _ => {}
+        }
+    }
+}
+
 // Markdown documents have no return statements.
 #[cfg(feature = "markdown")]
 impl Exit for crate::langs::MarkdownCode {

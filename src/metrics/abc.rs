@@ -678,6 +678,65 @@ impl Abc for CCode {
     }
 }
 
+impl Abc for crate::langs::PhpCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use crate::languages::Php::*;
+
+        match node.kind_id().into() {
+            // A: assignment, augmented assignment, reference assignment,
+            // and pre/post increment/decrement.
+            AssignmentExpression
+            | AugmentedAssignmentExpression
+            | ReferenceAssignmentExpression
+            | UpdateExpression => {
+                stats.assignments += 1.;
+            }
+            // B: function calls, method calls, scoped calls, nullsafe member
+            // calls, and `new` expressions.
+            FunctionCallExpression
+            | MemberCallExpression
+            | NullsafeMemberCallExpression
+            | ScopedCallExpression
+            | ObjectCreationExpression => {
+                stats.branches += 1.;
+            }
+            // C: every structural conditional, switch cases, ternary, match
+            // arm, comparison, and short-circuit boolean operator (including
+            // PHP word-form `and` / `or`).
+            IfStatement
+            | ElseIfClause
+            | ElseIfClause2
+            | ElseClause
+            | ElseClause2
+            | CaseStatement
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | ConditionalExpression
+            | MatchConditionalExpression
+            | CatchClause
+            | EQEQ
+            | EQEQEQ
+            | BANGEQ
+            | BANGEQEQ
+            | LTGT
+            | LT
+            | LTEQ
+            | GT
+            | GTEQ
+            | LTEQGT
+            | AMPAMP
+            | PIPEPIPE
+            | And
+            | Or => {
+                stats.conditions += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 // Markdown is a documentation language; ABC is a code metric and has no
 // meaning on prose. The dedicated Markdown pipeline handles document metrics.
 #[cfg(feature = "markdown")]

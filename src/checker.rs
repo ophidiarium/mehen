@@ -1,10 +1,10 @@
 #[cfg(feature = "markdown")]
 use crate::langs::MarkdownCode;
 use crate::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
-    TypescriptCode, TypescriptParser,
+    CCode, GoCode, KotlinCode, PhpCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TsxParser, TypescriptCode, TypescriptParser,
 };
-use crate::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Go, Kotlin, Php, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::node::Node;
 
 macro_rules! check_if_func {
@@ -625,6 +625,81 @@ impl Checker for CCode {
         }
         if let Some(parent) = node.parent() {
             return parent.kind_id() == C::ElseClause;
+        }
+        false
+    }
+}
+
+impl Checker for PhpCode {
+    fn is_comment(node: &Node) -> bool {
+        node.kind_id() == Php::Comment
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::Program
+                | Php::FunctionDefinition
+                | Php::MethodDeclaration
+                | Php::AnonymousFunction
+                | Php::ArrowFunction
+                | Php::ClassDeclaration
+                | Php::AnonymousClass
+                | Php::InterfaceDeclaration
+                | Php::TraitDeclaration
+                | Php::EnumDeclaration
+        )
+    }
+
+    fn is_func(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::FunctionDefinition | Php::MethodDeclaration
+        )
+    }
+
+    fn is_closure(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::AnonymousFunction | Php::ArrowFunction
+        )
+    }
+
+    fn is_call(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::FunctionCallExpression
+                | Php::MemberCallExpression
+                | Php::ScopedCallExpression
+                | Php::NullsafeMemberCallExpression
+                | Php::ObjectCreationExpression
+        )
+    }
+
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::LPAREN | Php::LPAREN2 | Php::RPAREN | Php::RPAREN2 | Php::COMMA
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Php::String | Php::EncapsedString | Php::Heredoc | Php::Nowdoc
+        )
+    }
+
+    #[inline(always)]
+    fn is_else_if(node: &Node) -> bool {
+        // PHP has a dedicated `else_if_clause` named node, so a nested
+        // `if_statement` never appears as the body of another `if_statement`.
+        // No flattening needed.
+        if node.kind_id() != Php::IfStatement {
+            return false;
+        }
+        if let Some(parent) = node.parent() {
+            return matches!(parent.kind_id().into(), Php::ElseClause | Php::ElseClause2);
         }
         false
     }
