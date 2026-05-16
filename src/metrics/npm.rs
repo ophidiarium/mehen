@@ -673,6 +673,8 @@ impl Npm for crate::langs::PhpCode {
 
 /// Whether a PHP class member declaration (method or property) is considered
 /// public. PHP defaults to `public` when no visibility modifier is present.
+/// PHP keywords are case-insensitive, so `Private`, `PROTECTED`, etc. must be
+/// recognized too.
 pub(crate) fn php_member_is_public(node: &Node, code: &[u8]) -> bool {
     use crate::languages::Php::*;
     for child in node.children() {
@@ -680,7 +682,9 @@ pub(crate) fn php_member_is_public(node: &Node, code: &[u8]) -> bool {
             continue;
         }
         let text = &code[child.start_byte()..child.end_byte()];
-        if text == b"private" || text == b"protected" {
+        if let Ok(text) = std::str::from_utf8(text)
+            && (text.eq_ignore_ascii_case("private") || text.eq_ignore_ascii_case("protected"))
+        {
             return false;
         }
     }
@@ -696,10 +700,44 @@ impl Npm for crate::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
+        KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
+
+    #[test]
+    fn php_npm_visibility_keywords_are_case_insensitive() {
+        // PHP keywords are case-insensitive per the language spec, so
+        // `PRIVATE` / `Protected` must be recognized as non-public.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public function a() {}
+                 PRIVATE function b() {}
+                 Protected function c() {}
+             }",
+            "foo.php",
+            |metric| {
+                // public: a. non-public: b, c.
+                insta::assert_json_snapshot!(
+                    metric.npm,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_methods": 3.0,
+                  "interface_methods": 0.0,
+                  "classes_average": 0.3333333333333333,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_methods": 3.0,
+                  "average": 0.3333333333333333
+                }
+                "#
+                );
+            },
+        );
+    }
 
     #[test]
     fn python_npm_counts_public_and_private_methods() {
