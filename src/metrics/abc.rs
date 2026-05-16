@@ -692,29 +692,42 @@ impl Abc for crate::langs::PhpCode {
                 stats.assignments += 1.;
             }
             // B: function calls, method calls, scoped calls, nullsafe member
-            // calls, and `new` expressions.
+            // calls, `new` expressions, and the language-level transfer-of-
+            // control intrinsics (`include` / `require` / `yield`), which
+            // mehen counts as branches in other languages too (e.g. Ruby
+            // `yield`).
             FunctionCallExpression
             | MemberCallExpression
             | NullsafeMemberCallExpression
             | ScopedCallExpression
-            | ObjectCreationExpression => {
+            | ObjectCreationExpression
+            | IncludeExpression
+            | IncludeOnceExpression
+            | RequireExpression
+            | RequireOnceExpression
+            | YieldExpression => {
                 stats.branches += 1.;
             }
-            // C: every structural conditional, switch cases, ternary, match
-            // arm, comparison, and short-circuit boolean operator (including
-            // PHP word-form `and` / `or`).
+            // C: every structural conditional, switch cases (including
+            // `default`), ternary, match arms (conditional and `default`),
+            // comparison, and short-circuit boolean operators (including
+            // PHP word-form `and` / `or`). Per Fitzpatrick's original ABC
+            // spec, `default` cases count as conditions too — same as how
+            // mehen handles other languages' `else_clause`.
             IfStatement
             | ElseIfClause
             | ElseIfClause2
             | ElseClause
             | ElseClause2
             | CaseStatement
+            | DefaultStatement
             | ForStatement
             | ForeachStatement
             | WhileStatement
             | DoStatement
             | ConditionalExpression
             | MatchConditionalExpression
+            | MatchDefaultExpression
             | CatchClause
             | EQEQ
             | EQEQEQ
