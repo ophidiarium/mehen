@@ -557,37 +557,95 @@ impl Npa for crate::langs::PhpCode {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
         use crate::languages::Php::*;
 
-        if !matches!(
-            stats.space_kind,
-            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
-        ) {
-            return;
-        }
-        if node.kind_id() != PropertyDeclaration {
-            return;
-        }
-        // Property must be a direct child of a class-like body's
-        // `declaration_list`.
-        let parent = match node.parent() {
-            Some(p) => p,
-            None => return,
-        };
-        if parent.kind_id() != DeclarationList {
-            return;
-        }
-        let grand = match parent.parent() {
-            Some(g) => g,
-            None => return,
-        };
-        let container = match grand.kind_id().into() {
-            ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
-                SpaceKind::Class
+        match node.kind_id().into() {
+            PropertyDeclaration => {
+                if !matches!(
+                    stats.space_kind,
+                    SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+                ) {
+                    return;
+                }
+                // Must be a direct child of a class-like body's
+                // `declaration_list`.
+                let Some(parent) = node.parent() else {
+                    return;
+                };
+                if parent.kind_id() != DeclarationList {
+                    return;
+                }
+                let Some(grand) = parent.parent() else {
+                    return;
+                };
+                let container = match grand.kind_id().into() {
+                    ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+                        SpaceKind::Class
+                    }
+                    InterfaceDeclaration => SpaceKind::Interface,
+                    _ => return,
+                };
+                // PHP allows multiple properties per declaration: `public $a, $b;`
+                // produces a single `property_declaration` with one
+                // `visibility_modifier` and one `property_element` per declared
+                // name. Count each `property_element`.
+                let public = crate::metrics::npm::php_member_is_public(node, code);
+                for child in node.children() {
+                    if child.kind_id() == PropertyElement {
+                        stats.record_attribute(container, public);
+                    }
+                }
             }
-            InterfaceDeclaration => SpaceKind::Interface,
-            _ => return,
-        };
-        let public = crate::metrics::npm::php_member_is_public(node, code);
-        stats.record_attribute(container, public);
+            PropertyPromotionParameter => {
+                // Constructor property promotion (`__construct(public int $id)`)
+                // declares a real class property. The node lives inside the
+                // constructor's `formal_parameters`, so the enclosing space at
+                // this point is the method (Function space) — `stats.space_kind`
+                // is `Function`. Walk up to find the owning class-like
+                // declaration; metric merge will still roll the attribute up
+                // into the right class scope through the method's stats.
+                if !is_php_promoted_param_in_constructor(node) {
+                    return;
+                }
+                let Some(container) = php_promoted_param_container(node) else {
+                    return;
+                };
+                let public = crate::metrics::npm::php_member_is_public(node, code);
+                stats.record_attribute(container, public);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn is_php_promoted_param_in_constructor(node: &Node) -> bool {
+    use crate::languages::Php::*;
+    // node -> formal_parameters -> method_declaration (with `name == __construct`)
+    let Some(params) = node.parent() else {
+        return false;
+    };
+    if params.kind_id() != FormalParameters {
+        return false;
+    }
+    let Some(method) = params.parent() else {
+        return false;
+    };
+    method.kind_id() == MethodDeclaration
+}
+
+fn php_promoted_param_container(node: &Node) -> Option<SpaceKind> {
+    use crate::languages::Php::*;
+    // node -> formal_parameters -> method_declaration -> declaration_list -> class-like
+    let method = node.parent()?.parent()?;
+    let decl_list = method.parent()?;
+    if decl_list.kind_id() != DeclarationList {
+        return None;
+    }
+    let owner = decl_list.parent()?;
+    match owner.kind_id().into() {
+        ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+            Some(SpaceKind::Class)
+        }
+        InterfaceDeclaration => Some(SpaceKind::Interface),
+        _ => None,
     }
 }
 
@@ -600,9 +658,78 @@ impl Npa for crate::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
     };
     use crate::tools::check_metrics;
+
+    #[test]
+    fn php_npa_counts_each_property_in_grouped_declaration() {
+        // `public $a, $b;` is one property_declaration with two
+        // property_element children — count both.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public $a, $b;
+                 private $c;
+             }",
+            "foo.php",
+            |metric| {
+                // class_attributes: 3 (a, b, c). class_npa: 2 (a, b).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 2.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 3.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 0.6666666666666666,
+                  "interfaces_average": null,
+                  "total": 2.0,
+                  "total_attributes": 3.0,
+                  "average": 0.6666666666666666
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn php_npa_counts_promoted_constructor_properties() {
+        // PHP 8 constructor property promotion: `public int $id` in the
+        // ctor declares a real property and must contribute to NPA.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public function __construct(
+                     public int $id,
+                     private string $name
+                 ) {}
+             }",
+            "foo.php",
+            |metric| {
+                // 2 attributes total (id, name); 1 public (id).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 2.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 0.5,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_attributes": 2.0,
+                  "average": 0.5
+                }
+                "#
+                );
+            },
+        );
+    }
 
     #[test]
     fn python_npa_counts_class_body_assignments() {
