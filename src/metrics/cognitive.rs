@@ -832,6 +832,66 @@ impl Cognitive for CCode {
     }
 }
 
+impl Cognitive for crate::langs::PhpCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        use crate::languages::Php::*;
+
+        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+
+        match node.kind_id().into() {
+            IfStatement if !Self::is_else_if(node) => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            IfStatement => {}
+            ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | SwitchStatement
+            | MatchExpression
+            | TryStatement
+            | CatchClause
+            | ConditionalExpression => {
+                increase_nesting(stats, &mut nesting, depth, lambda);
+            }
+            ElseIfClause | ElseIfClause2 => {
+                increment_by_one(stats);
+                stats.boolean_seq.reset();
+            }
+            ElseClause | ElseClause2 => {
+                increment_by_one(stats);
+            }
+            ExpressionStatement | ReturnStatement | EchoStatement => {
+                stats.boolean_seq.reset();
+            }
+            UnaryOpExpression | UnaryOpExpression2 => {
+                stats.boolean_seq.not_operator(node.kind_id());
+            }
+            BinaryExpression => {
+                compute_booleans::<crate::languages::Php>(node, stats, &AMPAMP, &PIPEPIPE);
+                compute_booleans::<crate::languages::Php>(node, stats, &And, &Or);
+            }
+            AnonymousFunction | ArrowFunction => {
+                lambda += 1;
+            }
+            FunctionDefinition | MethodDeclaration => {
+                nesting = 0;
+                increment_function_depth_any::<crate::languages::Php>(
+                    &mut depth,
+                    node,
+                    &[FunctionDefinition, MethodDeclaration],
+                );
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
 // Markdown is a documentation language; Cognitive is a code metric. The
 // dedicated Markdown pipeline computes its own MCC analogue (Phase B).
 #[cfg(feature = "markdown")]

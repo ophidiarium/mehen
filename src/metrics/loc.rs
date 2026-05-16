@@ -961,6 +961,64 @@ impl Loc for PowershellCode {
     }
 }
 
+impl Loc for crate::langs::PhpCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        use crate::languages::Php::*;
+
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        match node.kind_id().into() {
+            // Containers and string internals must not contribute their own
+            // physical line.
+            Program | CompoundStatement | DeclarationList | StringContent | EncapsedString
+            | String | Heredoc | HeredocBody | Nowdoc | NowdocBody => {}
+            Comment => {
+                add_cloc_lines(stats, start, end);
+            }
+            // LLOC: count statement-shaped nodes and declarations exactly once.
+            ExpressionStatement
+            | EmptyStatement
+            | EchoStatement
+            | UnsetStatement
+            | DeclareStatement
+            | NamespaceDefinition
+            | NamespaceUseDeclaration
+            | GlobalDeclaration
+            | FunctionStaticDeclaration
+            | TryStatement
+            | ContinueStatement
+            | BreakStatement
+            | ReturnStatement
+            | WhileStatement
+            | DoStatement
+            | ForStatement
+            | ForeachStatement
+            | IfStatement
+            | SwitchStatement
+            | CaseStatement
+            | DefaultStatement
+            | NamedLabelStatement
+            | GotoStatement
+            | FunctionDefinition
+            | MethodDeclaration
+            | ClassDeclaration
+            | TraitDeclaration
+            | InterfaceDeclaration
+            | EnumDeclaration
+            | ConstDeclaration
+            | ConstDeclaration2
+            | PropertyDeclaration
+            | UseDeclaration => {
+                stats.lloc.logical_lines += 1;
+            }
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
 // Markdown uses the dedicated `src/markdown/loc.rs` LOC-family pipeline.
 // The source-code `Loc` trait is intentionally a no-op here so the generic
 // `metrics()` walker produces an empty LOC struct rather than misleading

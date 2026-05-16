@@ -1,10 +1,10 @@
 #[cfg(feature = "markdown")]
 use crate::langs::MarkdownCode;
 use crate::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    CCode, GoCode, KotlinCode, PhpCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
     TypescriptCode,
 };
-use crate::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::languages::{C, Kotlin, Php, Powershell, Python, Ruby, Rust, Tsx, Typescript};
 use crate::metrics::halstead::HalsteadType;
 use crate::node::Node;
 use crate::spaces::SpaceKind;
@@ -653,6 +653,77 @@ impl Getter for CCode {
             Identifier | FieldIdentifier | TypeIdentifier | StatementIdentifier
             | PrimitiveType | NumberLiteral | CharLiteral | StringLiteral | ConcatenatedString
             | True | False | NULL | Nullptr | SystemLibString => HalsteadType::Operand,
+
+            _ => HalsteadType::Unknown,
+        }
+    }
+}
+
+impl Getter for PhpCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        use Php::*;
+        match node.kind_id().into() {
+            FunctionDefinition | MethodDeclaration | AnonymousFunction | ArrowFunction => {
+                SpaceKind::Function
+            }
+            ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+                SpaceKind::Class
+            }
+            InterfaceDeclaration => SpaceKind::Interface,
+            Program => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
+        if let Some(name) = node.child_by_field_name("name") {
+            let bytes = &code[name.start_byte()..name.end_byte()];
+            return std::str::from_utf8(bytes).ok();
+        }
+        Some("<anonymous>")
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Php::*;
+
+        match node.kind_id().into() {
+            // Keywords and structural / control-flow operators.
+            Function | Fn | Class | Interface | Trait | Enum | Namespace | Use | As
+            | Insteadof | Const | Static | Public | Protected | Private | Final | Abstract
+            | Readonly | VarModifier | Extends | Implements | New | Clone | Instanceof
+            | If | Else | Elseif | Endif | Switch | Case | Default | Endswitch | Match
+            | While | Endwhile | Do | For | Endfor | Foreach | Endforeach | Continue
+            | Break | Return | Throw | Try | Catch | Finally | Goto | Yield | Yieldfrom
+            | Echo | Print | Exit | Unset | Declare | Enddeclare | Global | List | Array
+            | Include | IncludeOnce | Require | RequireOnce
+            | And | Or | Xor
+            // Punctuation-like operators.
+            | LPAREN | LPAREN2 | LBRACE | LBRACK | COMMA | SEMI | COLON | COLONCOLON
+            | DOT | DASHGT | QMARKDASHGT | EQGT | DOTDOTDOT | HASHLBRACK | AT | BSLASH
+            // Assignment family.
+            | EQ | PLUSEQ | DASHEQ | STAREQ | STARSTAREQ | SLASHEQ | PERCENTEQ | DOTEQ
+            | LTLTEQ | GTGTEQ | AMPEQ | CARETEQ | PIPEEQ | QMARKQMARKEQ
+            // Arithmetic / bitwise / unary / ternary / null-coalesce.
+            | PLUS | DASH | STAR | STARSTAR | SLASH | PERCENT
+            | PLUSPLUS | DASHDASH | TILDE | BANG
+            | AMPAMP | PIPEPIPE | QMARKQMARK | QMARK
+            | AMP | PIPE | CARET | LTLT | GTGT
+            // Comparison.
+            | EQEQ | EQEQEQ | BANGEQ | BANGEQEQ | LTGT
+            | LT | GT | LTEQ | GTEQ | LTEQGT
+            // Pipe operator (PHP 8.5).
+            | PIPEGT
+            // String delimiters when emitted as anonymous tokens act as
+            // operators; the wrapper string nodes are the operands.
+            | DQUOTE | DQUOTE2 | SQUOTE | SQUOTE2 | BQUOTE | LTLTLT
+            | DOLLAR => HalsteadType::Operator,
+
+            // Operands: identifiers, variables, literals, names.
+            Name | Name2 | NamespaceName | QualifiedName | RelativeName
+            | VariableName | DynamicVariableName
+            | Integer | Float | Boolean | Null
+            | String | EncapsedString | Heredoc | Nowdoc
+            | Zelf | Parent => HalsteadType::Operand,
 
             _ => HalsteadType::Unknown,
         }

@@ -2,7 +2,7 @@ use crate::checker::Checker;
 #[cfg(feature = "markdown")]
 use crate::langs::MarkdownCode;
 use crate::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    CCode, GoCode, KotlinCode, PhpCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
     TypescriptCode,
 };
 
@@ -18,5 +18,6 @@ impl Alterator for RubyCode {}
 impl Alterator for KotlinCode {}
 impl Alterator for PowershellCode {}
 impl Alterator for CCode {}
+impl Alterator for PhpCode {}
 #[cfg(feature = "markdown")]
 impl Alterator for MarkdownCode {}

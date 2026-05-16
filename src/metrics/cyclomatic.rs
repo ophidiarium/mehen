@@ -330,6 +330,39 @@ impl Cyclomatic for CCode {
     }
 }
 
+impl Cyclomatic for crate::langs::PhpCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use crate::languages::Php::*;
+
+        match node.kind_id().into() {
+            // Decision-point set aligned with Sonar's cyclomatic rule for PHP:
+            // every `if` / `elseif`, every `case` (not `default`), loops,
+            // ternary (`conditional_expression`), `match` arms, `catch`,
+            // and each short-circuit boolean operator (`&&` / `||` /
+            // `and` / `or`). `xor` is intentionally excluded because it
+            // doesn't short-circuit and therefore doesn't add a path.
+            IfStatement
+            | ElseIfClause
+            | ElseIfClause2
+            | CaseStatement
+            | ForStatement
+            | ForeachStatement
+            | WhileStatement
+            | DoStatement
+            | ConditionalExpression
+            | MatchConditionalExpression
+            | CatchClause
+            | AMPAMP
+            | PIPEPIPE
+            | And
+            | Or => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 // Markdown is a documentation language; cyclomatic is a code metric. The
 // dedicated Markdown pipeline computes its own MRPC analogue (Phase B).
 #[cfg(feature = "markdown")]
@@ -340,10 +373,40 @@ impl Cyclomatic for crate::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        GoParser, KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser,
         TypescriptParser,
     };
     use crate::tools::check_metrics;
+
+    #[test]
+    fn php_basic_decision_points() {
+        // Decision points: function f opens unit (+1), function (+1),
+        // if (+1), elseif (+1), else (no), && (+1), || (+1).
+        check_metrics::<PhpParser>(
+            "<?php
+             function f($a, $b) { // +2 (+1 unit space)
+                 if ($a > 0 && $b > 0) {  // +2 (if + &&)
+                     return 1;
+                 } elseif ($a < 0 || $b < 0) {  // +2 (elseif + ||)
+                     return -1;
+                 }
+                 return 0;
+             }",
+            "foo.php",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 6.0,
+                      "average": 3.0,
+                      "min": 1.0,
+                      "max": 5.0
+                    }"###
+                );
+            },
+        );
+    }
 
     #[test]
     fn typescript_for_variants_count_once() {
