@@ -715,8 +715,7 @@ impl Getter for PhpCode {
             | PIPEGT
             // String delimiters when emitted as anonymous tokens act as
             // operators; the wrapper string nodes are the operands.
-            | DQUOTE | DQUOTE2 | SQUOTE | SQUOTE2 | BQUOTE | LTLTLT
-            | DOLLAR => HalsteadType::Operator,
+            | DQUOTE | DQUOTE2 | SQUOTE | SQUOTE2 | BQUOTE | LTLTLT => HalsteadType::Operator,
 
             // Operands: identifiers, variables, literals, names.
             Name | Name2 | NamespaceName | QualifiedName | RelativeName
