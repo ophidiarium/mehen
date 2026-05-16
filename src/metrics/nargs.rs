@@ -456,28 +456,31 @@ implement_metric_trait!(
 
 impl NArgs for crate::langs::PhpCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        // PHP function/anonymous-function/method `parameters` field is a
-        // `formal_parameters` node. Each parameter is a `simple_parameter`,
-        // `variadic_parameter`, or `property_promotion_parameter`. The
-        // default `compute_args` walks the parameters child via
-        // `is_non_arg`, which excludes `(` / `)` / `,` — every remaining
-        // child counts as one parameter.
-        if Self::is_func(node) {
-            if let Some(params) = node.child_by_field_name("parameters") {
-                params.act_on_child(&mut |n| {
-                    if !Self::is_non_arg(n) {
-                        stats.fn_nargs += 1;
-                    }
-                });
-            }
-            return;
-        }
-        if Self::is_closure(node)
+        use crate::languages::Php::*;
+
+        // PHP function / anonymous-function / arrow-function / method
+        // declarations expose their parameters via the `parameters` field
+        // (a `formal_parameters` node). Use a positive filter on the three
+        // parameter kinds — `simple_parameter`, `variadic_parameter`, and
+        // `property_promotion_parameter` — instead of negating `is_non_arg`,
+        // because `formal_parameters` may also contain `attribute_group`
+        // and other non-parameter children that a negative filter would
+        // miscount.
+        let is_func = Self::is_func(node);
+        let is_closure = Self::is_closure(node);
+        if (is_func || is_closure)
             && let Some(params) = node.child_by_field_name("parameters")
         {
             params.act_on_child(&mut |n| {
-                if !Self::is_non_arg(n) {
-                    stats.closure_nargs += 1;
+                if matches!(
+                    n.kind_id().into(),
+                    SimpleParameter | VariadicParameter | PropertyPromotionParameter
+                ) {
+                    if is_func {
+                        stats.fn_nargs += 1;
+                    } else {
+                        stats.closure_nargs += 1;
+                    }
                 }
             });
         }
