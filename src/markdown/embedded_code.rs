@@ -33,7 +33,16 @@ fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
     if matches!(kind, Markdown::FencedCodeBlock) {
         let info = fence_info_tag(node, source);
         let lang = info.as_deref().and_then(map_fence_to_lang);
-        if let (Some(lang), Some(body)) = (lang, fenced_code_content(node, source)) {
+        if let (Some(lang), Some(mut body)) = (lang, fenced_code_content(node, source)) {
+            // PHP's mixed grammar (`LANGUAGE_PHP`) treats input outside
+            // `<?php ... ?>` tags as inline text, so a tag-less fence
+            // contributes no operators/operands and silently zero-counts.
+            // Markdown PHP fences conventionally omit the opening tag, so
+            // prepend one when missing — `?>` close is optional and absent
+            // when the file is pure PHP.
+            if matches!(lang, LANG::Php) && !body.contains("<?php") && !body.contains("<?=") {
+                body.insert_str(0, "<?php\n");
+            }
             // Hand `body` off by value — `analyze_fence` feeds the
             // bytes straight into `get_function_spaces` via
             // `into_bytes`, so no intermediate `to_vec()` clone is
@@ -213,6 +222,29 @@ mod tests {
         let tree = parse(src);
         let root = crate::node::Node(tree.root_node());
         assert_eq!(embedded_volume(&root, src), 0.0);
+    }
+
+    #[test]
+    fn php_fence_without_tag_produces_positive_volume() {
+        // tree-sitter-php's mixed grammar treats untagged input as plain
+        // text. Markdown PHP fences typically omit `<?php`, so we must
+        // prepend the tag before analysis to surface real metrics.
+        let src = "```php\nfunction f($x) { if ($x > 0) { return 1; } return 0; }\n```\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let v = embedded_volume(&root, src);
+        assert!(v > 0.0, "expected positive embedded volume, got {v}");
+    }
+
+    #[test]
+    fn php_fence_with_explicit_tag_is_not_double_wrapped() {
+        // A fence that already starts with `<?php` must not get a second
+        // tag — that would corrupt the grammar's tag tracking.
+        let src = "```php\n<?php\nfunction f() { return 1; }\n?>\n```\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let v = embedded_volume(&root, src);
+        assert!(v > 0.0, "expected positive embedded volume, got {v}");
     }
 
     #[test]
