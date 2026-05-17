@@ -10,15 +10,21 @@ use std::process::Command;
 
 use insta::assert_snapshot;
 
-/// Build the transitional pre-1.0 binary once and return its path for
-/// reuse across fixtures.
-///
-/// The pre-1.0 `mehen` binary was renamed to `mehen-pre1` during the v1
-/// rewrite; the new 1.0 `mehen` binary lives in `crates/mehen-cli/`.
-/// These golden tests still exercise the legacy diff pipeline until
-/// phase 5 ports it into `mehen-engine`.
+/// Locate the `mehen` binary built by `crates/mehen-cli/`. Test
+/// invocations of `mehen diff …` flow through the new CLI which
+/// delegates to the legacy diff implementation in the `mehen` library
+/// during the v1 transition (phase 5 follow-up replaces the legacy
+/// implementation with the `mehen-engine` orchestrator).
 fn mehen_bin() -> String {
-    env!("CARGO_BIN_EXE_mehen-pre1").to_string()
+    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("target");
+    path.push(if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    });
+    path.push("mehen");
+    path.to_string_lossy().into_owned()
 }
 
 fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {

@@ -10,18 +10,10 @@ keywords = ["metrics"]
 description = "Tool to compute and export code metrics"
 license.workspace = true
 
-# Library + transitional binary. The published `mehen` binary lives in
-# `crates/mehen-cli/` (and is what users install). The legacy
-# `mehen-pre1` binary stays alongside it in this crate during the v1
-# rewrite so the existing `tests/pr_comment_golden.rs` keeps exercising
-# the diff/Markdown pipelines until phase 5 ports them into
-# `mehen-engine` and `mehen-report`. The legacy binary disappears
-# entirely once the pre-1.0 metric and Markdown machinery has been
-# physically relocated.
-[[bin]]
-name = "mehen-pre1"
-path = "src/bin/mehen_pre1.rs"
-
+# Library-only crate. The `mehen` binary lives in `crates/mehen-cli/`;
+# this crate hosts the metric, diff, and Markdown machinery the v1 CLI
+# delegates into during the transition. As pieces relocate into the new
+# `crates/mehen-*` workspace this crate shrinks and is eventually deleted.
 
 [dependencies]
 clap = { version = "^4.6", features = ["derive"] }

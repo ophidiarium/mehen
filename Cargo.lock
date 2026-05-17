@@ -1639,6 +1639,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
+ "mehen",
  "mehen-core",
  "mehen-engine",
  "mehen-metrics",

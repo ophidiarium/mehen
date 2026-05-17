@@ -18,7 +18,7 @@ use crate::mk_globset;
 const LINGUIST_GENERATED_ATTR: &str = "linguist-generated";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum DiffFormat {
+pub enum DiffFormat {
     Markdown,
     Json,
 }
@@ -68,30 +68,30 @@ impl FileDiff {
 pub struct DiffOpts {
     /// Base revision to compare from.
     #[clap(long)]
-    from: Option<String>,
+    pub from: Option<String>,
     /// Head revision to compare to.
     #[clap(long)]
-    to: Option<String>,
+    pub to: Option<String>,
     /// Comma-separated metrics to compare
     /// (default: cyclomatic,cognitive,nom.functions,loc.lloc,mi.visual_studio).
     /// Prefix with + for higher-is-better, - for lower-is-better.
     #[clap(long, short = 'M', value_delimiter = ',')]
-    metrics: Vec<String>,
+    pub metrics: Vec<String>,
     /// Repository-relative files or directories to compare.
     #[clap(long, short, value_parser, num_args(0..))]
-    paths: Vec<PathBuf>,
+    pub paths: Vec<PathBuf>,
     /// Glob to include files.
     #[clap(long, short = 'I', num_args(0..))]
-    include: Vec<String>,
+    pub include: Vec<String>,
     /// Glob to exclude files.
     #[clap(long, short = 'X', num_args(0..))]
-    exclude: Vec<String>,
+    pub exclude: Vec<String>,
     /// Output format.
     #[clap(long, short = 'O', value_enum)]
-    output_format: Option<DiffFormat>,
+    pub output_format: Option<DiffFormat>,
     /// Show files where all metrics are unchanged.
     #[clap(long)]
-    show_unchanged: bool,
+    pub show_unchanged: bool,
     /// Skip files marked as generated via `linguist-generated` git attributes.
     #[clap(
         long,
@@ -101,7 +101,7 @@ pub struct DiffOpts {
         require_equals = true,
         default_missing_value = "true"
     )]
-    ignore_generated: bool,
+    pub ignore_generated: bool,
     /// Exit non-zero when the named thresholds are crossed
     /// (comma-separated: `dmi-drop`, `new-broken-link`, `filler-high`, `all`).
     #[clap(
@@ -109,13 +109,13 @@ pub struct DiffOpts {
         value_delimiter = ',',
         value_parser = parse_fail_on_flag,
     )]
-    fail_on: Vec<FailOn>,
+    pub fail_on: Vec<FailOn>,
 }
 
 /// Identifies one of the documented doc-metric CI gates. Any other value is
 /// rejected by clap at parse time rather than being silently ignored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum FailOn {
+pub enum FailOn {
     DmiDrop,
     NewBrokenLink,
     FillerHigh,

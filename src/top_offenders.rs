@@ -31,7 +31,7 @@ use crate::tools::{guess_language, read_file_with_eol};
 // ── CLI args ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum TopOffendersFormat {
+pub enum TopOffendersFormat {
     Markdown,
     Json,
 }
@@ -53,35 +53,35 @@ pub struct TopOffendersOpts {
         num_args = 1,
         allow_hyphen_values = true
     )]
-    metrics: Vec<String>,
+    pub metrics: Vec<String>,
 
     /// Maximum number of offenders to return.
     #[clap(long, default_value_t = 10)]
-    max_results: usize,
+    pub max_results: usize,
 
     /// Output format.
     #[clap(long, short = 'O', value_enum, default_value_t = TopOffendersFormat::Markdown)]
-    output_format: TopOffendersFormat,
+    pub output_format: TopOffendersFormat,
 
     /// Glob to include files. Repeat the flag for multiple patterns.
     #[clap(long, short = 'I', num_args = 1)]
-    include: Vec<String>,
+    pub include: Vec<String>,
 
     /// Glob to exclude files. Repeat the flag for multiple patterns.
     #[clap(long, short = 'X', num_args = 1)]
-    exclude: Vec<String>,
+    pub exclude: Vec<String>,
 
     /// Number of parser jobs.
     #[clap(long, short = 'j')]
-    num_jobs: Option<usize>,
+    pub num_jobs: Option<usize>,
 
     /// Language type override (skip auto-detection).
     #[clap(long, short)]
-    language_type: Option<String>,
+    pub language_type: Option<String>,
 
     /// One or more files or directories to analyze.
     #[clap(required = true, num_args = 1..)]
-    paths: Vec<PathBuf>,
+    pub paths: Vec<PathBuf>,
 }
 
 // ── Per-file offender data ─────────────────────────────────────────────

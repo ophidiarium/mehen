@@ -19,6 +19,12 @@ mehen-engine = { workspace = true }
 mehen-metrics = { workspace = true }
 mehen-report = { workspace = true }
 
+# Transitional dependency: phase 5 wires `mehen diff` and
+# `mehen top-offenders` by delegating to the still-legacy implementation
+# in the root `mehen` library. The dependency goes away once
+# `src/diff.rs` and `src/top_offenders.rs` move into `mehen-engine`.
+mehen = { path = "../.." }
+
 camino = { workspace = true }
 clap = { workspace = true }
 env_logger = { workspace = true }

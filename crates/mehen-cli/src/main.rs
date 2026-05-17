@@ -1,10 +1,10 @@
 //! `mehen` — 1.0 CLI binary.
 //!
-//! Phase 1-5 scope: define the new command surface (`metrics`, `diff`,
-//! `top-offenders`) and exit code contract per the rewrite plan §2 / §4.1,
-//! and wire `mehen metrics` end-to-end through the engine. `diff` and
-//! `top-offenders` remain stubs until the orchestrators land in follow-up
-//! phases.
+//! `metrics` runs through the new architecture (mehen-engine + per-language
+//! analyzer crates). `diff` and `top-offenders` delegate to the legacy
+//! implementations in the root `mehen` library; phase 5 follow-up ports
+//! those orchestrators into `mehen-engine` and removes the `mehen` lib
+//! dependency.
 
 mod args;
 mod commands;
@@ -26,16 +26,15 @@ fn main() {
 fn run(cli: Cli) -> ExitCode {
     match cli.command {
         Command::Metrics(args) => commands::metrics(args),
-        Command::Diff(_args) => not_yet_implemented("diff"),
-        Command::TopOffenders(_args) => not_yet_implemented("top-offenders"),
+        Command::Diff(opts) => {
+            // `run_diff` calls `process::exit` itself on failure, so this
+            // path never returns ExitCode unless the diff succeeded.
+            mehen::diff::run_diff(opts);
+            ExitCode::Success
+        }
+        Command::TopOffenders(opts) => {
+            mehen::top_offenders::run_top_offenders(opts);
+            ExitCode::Success
+        }
     }
-}
-
-fn not_yet_implemented(name: &str) -> ExitCode {
-    log::error!(
-        "`mehen {name}` is not yet wired up in the 1.0 binary; \
-         use the pre-1.0 binary at the workspace root until Phase 5 ports \
-         the orchestrators."
-    );
-    ExitCode::SetupError
 }
