@@ -72,6 +72,26 @@ opt-level = 3
 opt-level = 3
 
 [workspace]
+members = [
+    "crates/mehen-core",
+    "crates/mehen-metrics",
+    "crates/mehen-tree-sitter",
+    "crates/mehen-markdown",
+    "crates/mehen-python",
+    "crates/mehen-typescript",
+    "crates/mehen-php",
+    "crates/mehen-ruby",
+    "crates/mehen-rust",
+    "crates/mehen-go",
+    "crates/mehen-c",
+    "crates/mehen-kotlin",
+    "crates/mehen-powershell",
+    "crates/mehen-engine",
+    "crates/mehen-git",
+    "crates/mehen-report",
+    "crates/mehen-cli",
+    "xtask",
+]
 exclude = ["enums"]
 
 [workspace.package]
@@ -81,6 +101,65 @@ edition = "2024"
 rust-version = "1.93.1"
 repository = "https://github.com/ophidiarium/mehen"
 license = "MPL-2.0"
+
+[workspace.dependencies]
+# Internal crates (path-only, never published)
+mehen-core = { path = "crates/mehen-core" }
+mehen-metrics = { path = "crates/mehen-metrics" }
+mehen-tree-sitter = { path = "crates/mehen-tree-sitter" }
+mehen-markdown = { path = "crates/mehen-markdown" }
+mehen-python = { path = "crates/mehen-python" }
+mehen-typescript = { path = "crates/mehen-typescript" }
+mehen-php = { path = "crates/mehen-php" }
+mehen-ruby = { path = "crates/mehen-ruby" }
+mehen-rust = { path = "crates/mehen-rust" }
+mehen-go = { path = "crates/mehen-go" }
+mehen-c = { path = "crates/mehen-c" }
+mehen-kotlin = { path = "crates/mehen-kotlin" }
+mehen-powershell = { path = "crates/mehen-powershell" }
+mehen-engine = { path = "crates/mehen-engine" }
+mehen-git = { path = "crates/mehen-git" }
+mehen-report = { path = "crates/mehen-report" }
+
+# Shared third-party deps with pinned versions
+camino = { version = "^1.1", features = ["serde1"] }
+clap = { version = "^4.6", features = ["derive"] }
+crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
+env_logger = "^0.11"
+globset = "^0.4"
+log = "^0.4"
+num = "^0.4"
+num-derive = "^0.4"
+num-format = "^0.4"
+num-traits = "^0.2"
+owo-colors = "^4"
+regex = "^1.7"
+serde = { version = "^1.0", features = ["derive"] }
+serde_cbor = "^0.11"
+serde_json = "^1.0"
+serde_norway = "^0.9"
+smol_str = { version = "^0.3", features = ["serde"] }
+toml = "^1.1"
+walkdir = "^2.3"
+gix = { version = "^0.83", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
+
+tree-sitter = "=0.26.8"
+tree-sitter-typescript = "=0.23.2"
+tree-sitter-python = "=0.25.0"
+tree-sitter-rust = "=0.24.2"
+tree-sitter-go = "=0.25.0"
+tree-sitter-ruby = "=0.23.1"
+tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
+tree-sitter-pwsh = "=0.38.0"
+tree-sitter-c = "=0.24.2"
+tree-sitter-php = "=0.24.2"
+tree-sitter-markdown-text = "=0.2.1"
+unicode-script = "^0.5"
+unicode-segmentation = "^1.12"
+
+insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }
+pretty_assertions = "^1.3"
+tempfile = "^3"
 
 [profile.release]
 opt-level = 3

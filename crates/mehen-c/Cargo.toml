@@ -1,0 +1,17 @@
+[package]
+name = "mehen-c"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — C language analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
+mehen-tree-sitter = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-c = { workspace = true }

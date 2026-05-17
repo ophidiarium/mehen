@@ -1,0 +1,15 @@
+[package]
+name = "mehen-metrics"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — shared metric contracts, formulas, and accumulators (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+serde = { workspace = true }
+smol_str = { workspace = true }

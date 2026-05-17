@@ -1,0 +1,14 @@
+[package]
+name = "mehen-tree-sitter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — shared tree-sitter wrapper and CST traversal helpers (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+tree-sitter = { workspace = true }

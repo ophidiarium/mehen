@@ -1,0 +1,76 @@
+use core::fmt;
+
+use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
+
+/// A metric identifier in mehen's open metric namespace.
+///
+/// The shared contract names a *minimum* metric set for source-code languages
+/// (`cyclomatic`, `cognitive`, `halstead.volume`, …). Language analyzers may
+/// publish additional keys under the same namespace (for example,
+/// `cloudformation.iam_spcm`, `terraform.dependency_depth`,
+/// `markdown.heading_skip`).
+///
+/// Keys are stored as `SmolStr` so common keys are inline and free of
+/// allocation, while custom namespaced keys remain available without changing
+/// the type.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MetricKey(SmolStr);
+
+impl MetricKey {
+    pub fn new(key: impl Into<SmolStr>) -> Self {
+        Self(key.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for MetricKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.as_str())
+    }
+}
+
+impl From<&str> for MetricKey {
+    fn from(s: &str) -> Self {
+        Self::new(s)
+    }
+}
+
+impl From<String> for MetricKey {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
+/// Stable string keys for the source-code minimum metric family. Language
+/// analyzers should prefer these constants over ad-hoc string literals so that
+/// renames stay in one place.
+pub mod keys {
+    pub const CYCLOMATIC: &str = "cyclomatic";
+    pub const COGNITIVE: &str = "cognitive";
+    pub const LOC: &str = "loc";
+    pub const LOC_LLOC: &str = "loc.lloc";
+    pub const LOC_SLOC: &str = "loc.sloc";
+    pub const LOC_PLOC: &str = "loc.ploc";
+    pub const LOC_CLOC: &str = "loc.cloc";
+    pub const LOC_BLANK: &str = "loc.blank";
+    pub const HALSTEAD_VOLUME: &str = "halstead.volume";
+    pub const HALSTEAD_DIFFICULTY: &str = "halstead.difficulty";
+    pub const HALSTEAD_EFFORT: &str = "halstead.effort";
+    pub const HALSTEAD_VOCABULARY: &str = "halstead.vocabulary";
+    pub const HALSTEAD_LENGTH: &str = "halstead.length";
+    pub const MI_VS: &str = "mi.visual_studio";
+    pub const MI_ORIGINAL: &str = "mi.original";
+    pub const MI_SEI: &str = "mi.sei";
+    pub const ABC: &str = "abc";
+    pub const NARGS: &str = "nargs";
+    pub const NOM: &str = "nom";
+    pub const NEXIT: &str = "nexit";
+    pub const NPA: &str = "npa";
+    pub const NPM: &str = "npm";
+    pub const WMC: &str = "wmc";
+}

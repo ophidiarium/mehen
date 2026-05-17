@@ -1,0 +1,18 @@
+[package]
+name = "mehen-markdown"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — Markdown documentation metrics analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-markdown-text = { workspace = true }
+unicode-script = { workspace = true }
+unicode-segmentation = { workspace = true }
