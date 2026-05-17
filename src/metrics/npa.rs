@@ -602,7 +602,7 @@ impl Npa for crate::langs::PhpCode {
                 // is `Function`. Walk up to find the owning class-like
                 // declaration; metric merge will still roll the attribute up
                 // into the right class scope through the method's stats.
-                if !is_php_promoted_param_in_constructor(node) {
+                if !is_php_promoted_param_in_constructor(node, code) {
                     return;
                 }
                 let Some(container) = php_promoted_param_container(node) else {
@@ -616,9 +616,14 @@ impl Npa for crate::langs::PhpCode {
     }
 }
 
-fn is_php_promoted_param_in_constructor(node: &Node) -> bool {
+fn is_php_promoted_param_in_constructor(node: &Node, code: &[u8]) -> bool {
     use crate::languages::Php::*;
-    // node -> formal_parameters -> method_declaration (with `name == __construct`)
+    // node -> formal_parameters -> method_declaration whose name is `__construct`.
+    // The tree-sitter-php grammar accepts `property_promotion_parameter` in
+    // any method (PHP itself rejects it at runtime), so we must verify the
+    // method name to avoid attributing promoted-style params on a regular
+    // method as class properties. PHP method names are case-insensitive,
+    // so use ASCII-case-insensitive comparison.
     let Some(params) = node.parent() else {
         return false;
     };
@@ -628,7 +633,14 @@ fn is_php_promoted_param_in_constructor(node: &Node) -> bool {
     let Some(method) = params.parent() else {
         return false;
     };
-    method.kind_id() == MethodDeclaration
+    if method.kind_id() != MethodDeclaration {
+        return false;
+    }
+    let Some(name) = method.child_by_field_name("name") else {
+        return false;
+    };
+    code.get(name.start_byte()..name.end_byte())
+        .is_some_and(|bytes| bytes.eq_ignore_ascii_case(b"__construct"))
 }
 
 fn php_promoted_param_container(node: &Node) -> Option<SpaceKind> {
@@ -724,6 +736,44 @@ mod tests {
                   "total": 1.0,
                   "total_attributes": 2.0,
                   "average": 0.5
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn php_npa_does_not_count_promoted_params_outside_constructor() {
+        // The tree-sitter-php grammar accepts `property_promotion_parameter`
+        // syntactically inside any method, even though PHP rejects it at
+        // runtime outside `__construct`. We must not attribute these as
+        // class properties — the regular property declarations are the
+        // only real attributes here.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public $real;
+                 public function notConstructor(public int $bogus) {}
+             }",
+            "foo.php",
+            |metric| {
+                // Only `$real` is an attribute. `$bogus` is a promoted-style
+                // parameter on a non-constructor method and must not be
+                // counted.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 1.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 1.0,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_attributes": 1.0,
+                  "average": 1.0
                 }
                 "#
                 );
