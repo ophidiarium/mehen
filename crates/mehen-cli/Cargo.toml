@@ -9,11 +9,8 @@ license.workspace = true
 description = "Mehen 1.0 — CLI binary (internal; published as `mehen`)."
 publish = false
 
-# During the v1 rewrite, the 1.0 binary ships under `mehen-next` so it
-# coexists with the pre-1.0 `mehen` binary at the workspace root for
-# parity testing. The rename is reverted in the final phase-5 commit.
 [[bin]]
-name = "mehen-next"
+name = "mehen"
 path = "src/main.rs"
 
 [dependencies]

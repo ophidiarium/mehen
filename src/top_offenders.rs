@@ -37,7 +37,7 @@ pub(crate) enum TopOffendersFormat {
 }
 
 #[derive(clap::Args, Debug)]
-pub(crate) struct TopOffendersOpts {
+pub struct TopOffendersOpts {
     /// Metric to rank by. Repeatable; order matters — the first `--metric` is
     /// the primary sort key, the next breaks ties, etc.
     ///
@@ -240,7 +240,7 @@ fn resolve_num_jobs(requested: Option<usize>, available: Option<usize>) -> usize
 
 // ── Orchestration ──────────────────────────────────────────────────────
 
-pub(crate) fn run_top_offenders(opts: TopOffendersOpts) {
+pub fn run_top_offenders(opts: TopOffendersOpts) {
     let selectors = parse_metric_selectors(&opts.metrics);
     if selectors.is_empty() {
         // `parse_metric_selectors` logs each unknown name via `log::warn!`;

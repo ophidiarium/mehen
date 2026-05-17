@@ -16,7 +16,7 @@ fn write_python(dir: &std::path::Path, name: &str, body: &str) -> std::path::Pat
 
 #[test]
 fn version_prints_name_and_version() {
-    let output = Command::new(env!("CARGO_BIN_EXE_mehen-next"))
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .arg("--version")
         .output()
         .expect("failed to run mehen --version");
@@ -27,7 +27,7 @@ fn version_prints_name_and_version() {
 
 #[test]
 fn help_succeeds() {
-    let output = Command::new(env!("CARGO_BIN_EXE_mehen-next"))
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .arg("--help")
         .output()
         .expect("failed to run mehen --help");
@@ -50,7 +50,7 @@ fn metrics_emits_json_for_python_file() {
         "def foo(x):\n    if x:\n        return 1\n    return 2\n",
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_mehen-next"))
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args(["metrics", path.to_str().unwrap(), "--pretty"])
         .output()
         .expect("failed to run mehen metrics");
@@ -78,7 +78,7 @@ fn metrics_rejects_unknown_language() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = write_python(dir.path(), "sample.unknown", "def f(): pass\n");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_mehen-next"))
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args(["metrics", path.to_str().unwrap()])
         .output()
         .expect("failed to run mehen metrics");
@@ -91,7 +91,7 @@ fn metrics_rejects_unknown_language() {
 
 #[test]
 fn top_offenders_requires_paths() {
-    let output = Command::new(env!("CARGO_BIN_EXE_mehen-next"))
+    let output = Command::new(env!("CARGO_BIN_EXE_mehen"))
         .args(["top-offenders"])
         .output()
         .expect("failed to run mehen top-offenders");

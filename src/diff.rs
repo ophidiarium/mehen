@@ -65,7 +65,7 @@ impl FileDiff {
 // ── CLI args ───────────────────────────────────────────────────────────
 
 #[derive(clap::Args, Debug)]
-pub(crate) struct DiffOpts {
+pub struct DiffOpts {
     /// Base revision to compare from.
     #[clap(long)]
     from: Option<String>,
@@ -154,7 +154,7 @@ fn parse_fail_on_flag(raw: &str) -> Result<FailOn, clap::Error> {
 
 // ── Orchestration ──────────────────────────────────────────────────────
 
-pub(crate) fn run_diff(opts: DiffOpts) {
+pub fn run_diff(opts: DiffOpts) {
     if let Err(e) = run_diff_inner(opts) {
         log::error!("{e}");
         std::process::exit(1);
