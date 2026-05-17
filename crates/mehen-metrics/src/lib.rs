@@ -9,26 +9,38 @@
 //!   decisions, whether a Ruby rescue modifier counts toward cognitive,
 //!   etc.).
 //!
-//! The primary public surface in 1.0 is the set of typed accumulator
-//! structs — `LocStats`, `CyclomaticStats`, `CognitiveStats`,
-//! `HalsteadStats`, `AbcStats`, `NargsStats`, `NomStats`, `NexitStats`,
-//! `MiStats`, `WmcStats`, `NpaStats`, `NpmStats` — plus the
-//! `HalsteadBuilder` event sink that language crates use to emit
-//! token-level operator/operand events.
-//!
-//! Phase-2 deliverable. The 1.0 first phase wires up the namespace and the
-//! Halstead event protocol; per-stat structs land as language crates need
-//! them, in [Phase 3 of the rewrite plan].
+//! Phase 1 ships the typed accumulator surface — `LocStats`,
+//! `CyclomaticStats`, `CognitiveStats`, `HalsteadStats`, `AbcStats`,
+//! `NargsStats`, `NomStats`, `NexitStats`, `MiStats`, `WmcStats`,
+//! `NpaStats`, `NpmStats` — plus the `HalsteadBuilder` event sink and the
+//! `MetricTreeBuilder` helper that language crates use to assemble a
+//! `MetricSpace` tree without each crate re-implementing id allocation.
 
 #![forbid(unsafe_code)]
 
+mod abc;
+mod cognitive;
+mod counters;
+mod cyclomatic;
+mod halstead;
 mod halstead_builder;
+mod loc;
+mod mi;
 mod selector;
 mod threshold;
+mod tree_builder;
 
+pub use abc::AbcStats;
+pub use cognitive::CognitiveStats;
+pub use counters::{NargsStats, NexitStats, NomStats, NpaStats, NpmStats, WmcStats};
+pub use cyclomatic::CyclomaticStats;
+pub use halstead::HalsteadStats;
 pub use halstead_builder::{HalsteadBuilder, HalsteadCounts, HalsteadOperand, HalsteadOperator};
-pub use selector::{MetricSelector, SelectorParseError};
+pub use loc::{LineClass, LocStats};
+pub use mi::MiStats;
+pub use selector::{MetricSelector, SelectorAggregator, SelectorParseError};
 pub use threshold::{Polarity, Threshold, ThresholdEvaluation, ThresholdViolation};
+pub use tree_builder::MetricTreeBuilder;
 
 // Re-export the metric key namespace so language crates only need
 // `mehen_metrics::keys::*`.
