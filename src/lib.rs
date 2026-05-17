@@ -17,8 +17,12 @@ pub mod checker;
 pub use mehen_engine::ci;
 pub mod concurrent_files;
 pub mod diff;
+/// Markdown documentation diff renderer was relocated to
+/// `crates/mehen-report/src/github_markdown_docs.rs` per plan §8.1.
+/// Re-exported under the original `crate::diff_markdown` path so
+/// `src/diff.rs` keeps compiling unchanged.
 #[cfg(feature = "markdown")]
-pub mod diff_markdown;
+pub use mehen_report::github_markdown_docs as diff_markdown;
 pub mod formats;
 pub mod getter;
 pub mod git;

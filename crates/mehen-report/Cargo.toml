@@ -13,5 +13,13 @@ publish = false
 mehen-core = { workspace = true }
 mehen-engine = { workspace = true }
 mehen-metrics = { workspace = true }
+mehen-markdown = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[features]
+default = ["docs-diff"]
+# Enables the Markdown documentation-diff renderer ported from the
+# pre-1.0 `src/diff_markdown.rs`. Off when the consumer doesn't want
+# the `mehen-markdown` types in scope.
+docs-diff = ["dep:mehen-markdown"]

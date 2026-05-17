@@ -6,6 +6,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "docs-diff")]
+pub mod github_markdown_docs;
 mod json;
 mod markdown;
 

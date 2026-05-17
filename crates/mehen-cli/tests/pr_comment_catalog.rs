@@ -14,8 +14,9 @@ fn diff_markdown_source() -> String {
         .and_then(|p| p.parent())
         .expect("workspace root")
         .to_path_buf();
-    let path = workspace_root.join("src").join("diff_markdown.rs");
-    std::fs::read_to_string(&path).expect("failed to read src/diff_markdown.rs")
+    let path = workspace_root.join("crates/mehen-report/src/github_markdown_docs.rs");
+    std::fs::read_to_string(&path)
+        .expect("failed to read crates/mehen-report/src/github_markdown_docs.rs")
 }
 
 /// Each phrase from §39.5.3. Exact, verbatim match with the spec.

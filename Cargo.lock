@@ -1593,6 +1593,7 @@ dependencies = [
  "log",
  "mehen-engine",
  "mehen-markdown",
+ "mehen-report",
  "num",
  "num-derive",
  "num-format",
@@ -1786,6 +1787,7 @@ version = "0.7.0"
 dependencies = [
  "mehen-core",
  "mehen-engine",
+ "mehen-markdown",
  "mehen-metrics",
  "serde",
  "serde_json",

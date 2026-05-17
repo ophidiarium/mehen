@@ -16,11 +16,11 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use crate::markdown::types::{ArtifactKind, LinkClass, MarkdownMetrics};
+use mehen_markdown::types::{ArtifactKind, LinkClass, MarkdownMetrics};
 
 /// Anchor used so upserts can replace the Markdown-docs block independently
 /// of the source-code block.
-pub(crate) const DOC_ANCHOR: &str = "<!-- mehen-docs -->";
+pub const DOC_ANCHOR: &str = "<!-- mehen-docs -->";
 
 /// Documentation section heading (§39.1).
 const DOC_HEADING: &str = "## \u{1F4DD} Documentation Metrics";
@@ -92,16 +92,16 @@ const FILLER_WARN_THRESHOLD: f64 = 0.60;
 /// Per-file input for the Markdown-docs renderer. The analyzer is called
 /// once per side and the result attached here.
 #[derive(Debug, Clone)]
-pub(crate) struct DocDiffFile {
-    pub(crate) path: PathBuf,
-    pub(crate) head: Option<MarkdownMetrics>,
-    pub(crate) base: Option<MarkdownMetrics>,
-    pub(crate) is_new: bool,
-    pub(crate) is_deleted: bool,
+pub struct DocDiffFile {
+    pub path: PathBuf,
+    pub head: Option<MarkdownMetrics>,
+    pub base: Option<MarkdownMetrics>,
+    pub is_new: bool,
+    pub is_deleted: bool,
 }
 
 impl DocDiffFile {
-    pub(crate) fn has_data(&self) -> bool {
+    pub fn has_data(&self) -> bool {
         self.head.is_some() || self.base.is_some()
     }
 }
@@ -109,22 +109,22 @@ impl DocDiffFile {
 /// Render context — carries PR-level refs that show up inside cells (file
 /// links) and headings (base label).
 #[derive(Debug, Clone)]
-pub(crate) struct DocRenderCtx<'a> {
-    pub(crate) base_label: &'a str,
-    pub(crate) repo_url: Option<&'a str>,
-    pub(crate) head_sha: Option<&'a str>,
+pub struct DocRenderCtx<'a> {
+    pub base_label: &'a str,
+    pub repo_url: Option<&'a str>,
+    pub head_sha: Option<&'a str>,
     /// Long-sentence threshold in words (§33.10 profile-configurable).
-    pub(crate) long_sentence_threshold: u64,
+    pub long_sentence_threshold: u64,
     /// Readability profile label used in `readability_target_breach`.
-    pub(crate) readability_profile: &'a str,
+    pub readability_profile: &'a str,
     /// Readability target (grade level) for `readability_target_breach`.
-    pub(crate) readability_target: f64,
+    pub readability_target: f64,
     /// Passive-ratio max for `passive_ratio_breach`.
-    pub(crate) passive_max: f64,
+    pub passive_max: f64,
 }
 
 impl<'a> DocRenderCtx<'a> {
-    pub(crate) fn new(base_label: &'a str) -> Self {
+    pub fn new(base_label: &'a str) -> Self {
         Self {
             base_label,
             repo_url: None,
@@ -141,7 +141,7 @@ impl<'a> DocRenderCtx<'a> {
 
 /// Renders the Markdown-docs section, or returns `None` when no files are
 /// eligible (§39.1: suppressed entirely when no `.md` in the PR diff).
-pub(crate) fn render_doc_section(files: &[DocDiffFile], ctx: &DocRenderCtx<'_>) -> Option<String> {
+pub fn render_doc_section(files: &[DocDiffFile], ctx: &DocRenderCtx<'_>) -> Option<String> {
     let eligible: Vec<&DocDiffFile> = files.iter().filter(|f| f.has_data()).collect();
     if eligible.is_empty() {
         return None;
@@ -559,7 +559,7 @@ where
 
 fn english_cell<T>(file: &DocDiffFile, extract: T, kind: CellKind) -> Cell
 where
-    T: Fn(&crate::markdown::prose::english::EnglishReport) -> f64,
+    T: Fn(&mehen_markdown::prose::english::EnglishReport) -> f64,
 {
     let head = file
         .head
@@ -578,7 +578,7 @@ where
 
 fn english_readability_cell<T>(file: &DocDiffFile, extract: T) -> Cell
 where
-    T: Fn(&crate::markdown::prose::english::readability::ReadabilityReport) -> Option<f64>,
+    T: Fn(&mehen_markdown::prose::english::readability::ReadabilityReport) -> Option<f64>,
 {
     let head = file
         .head
@@ -597,7 +597,7 @@ where
 
 fn japanese_cell<T>(file: &DocDiffFile, extract: T, kind: CellKind) -> Cell
 where
-    T: Fn(&crate::markdown::prose::japanese::JapaneseReport) -> f64,
+    T: Fn(&mehen_markdown::prose::japanese::JapaneseReport) -> f64,
 {
     let head = file
         .head
@@ -2542,7 +2542,7 @@ fn render_filler_contributors(rows: &[(DocRow, &DocDiffFile)]) -> Option<String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::markdown::types::{
+    use mehen_markdown::types::{
         AiEra, ArtifactRecord, Complexity, EcuInputs, Grounding, LocFamily, LocRatios,
         Maintainability, MarkdownMetrics, Review, Size, Visuals,
     };
@@ -2565,7 +2565,7 @@ mod tests {
             ai_era: AiEra::default(),
             review: Review::default(),
             artifacts: Vec::<ArtifactRecord>::new(),
-            prose: crate::markdown::prose::ProseReport::default(),
+            prose: mehen_markdown::prose::ProseReport::default(),
         }
     }
 
@@ -2645,8 +2645,8 @@ mod tests {
         line: u64,
         class: LinkClass,
         destination: &str,
-    ) -> crate::markdown::types::LinkRecord {
-        crate::markdown::types::LinkRecord {
+    ) -> mehen_markdown::types::LinkRecord {
+        mehen_markdown::types::LinkRecord {
             line,
             class,
             destination: destination.to_string(),
@@ -2709,7 +2709,7 @@ mod tests {
         // has a value, letting the standard deletion path show `0.0 (was:
         // X.Y) 🔴`.
         let mut base = empty_metrics("docs/a.md");
-        let mut en = crate::markdown::prose::english::EnglishReport::default();
+        let mut en = mehen_markdown::prose::english::EnglishReport::default();
         en.readability.flesch_kincaid_grade = Some(12.7);
         en.short_doc_warning = false;
         base.prose.english = Some(en);

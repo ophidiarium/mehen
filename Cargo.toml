@@ -21,6 +21,7 @@ license.workspace = true
 [dependencies]
 mehen-engine = { workspace = true }
 mehen-markdown = { workspace = true, optional = true }
+mehen-report = { workspace = true }
 
 clap = { version = "^4.6", features = ["derive"] }
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
