@@ -38,10 +38,15 @@ fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
             // `<?php ... ?>` tags as inline text, so a tag-less fence
             // contributes no operators/operands and silently zero-counts.
             // Markdown PHP fences conventionally omit the opening tag, so
-            // prepend one when missing — `?>` close is optional and absent
-            // when the file is pure PHP.
-            if matches!(lang, LANG::Php) && !body.contains("<?php") && !body.contains("<?=") {
-                body.insert_str(0, "<?php\n");
+            // prepend one when the fence body doesn't already open with
+            // one. Use `trim_start().starts_with` rather than `contains`
+            // so an opening tag inside a string or comment doesn't
+            // suppress the prefix injection.
+            if matches!(lang, LANG::Php) {
+                let leading = body.trim_start();
+                if !leading.starts_with("<?php") && !leading.starts_with("<?=") {
+                    body.insert_str(0, "<?php\n");
+                }
             }
             // Hand `body` off by value — `analyze_fence` feeds the
             // bytes straight into `get_function_spaces` via
@@ -241,6 +246,35 @@ mod tests {
         // A fence that already starts with `<?php` must not get a second
         // tag — that would corrupt the grammar's tag tracking.
         let src = "```php\n<?php\nfunction f() { return 1; }\n?>\n```\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let v = embedded_volume(&root, src);
+        assert!(v > 0.0, "expected positive embedded volume, got {v}");
+    }
+
+    #[test]
+    fn php_fence_with_tag_in_string_still_gets_prefix() {
+        // `body.contains("<?php")` would falsely match a `<?php` literal
+        // *inside* a quoted string, leaving the actual code untagged and
+        // therefore parsed as plain text. Detect by leading content only:
+        // since the body starts with `$msg = ...` (an assignment, not
+        // `<?php`), we must inject the tag and produce real metrics.
+        let src = "```php\n$msg = \"open with <?php tag\"; if ($x) { return 1; }\n```\n";
+        let tree = parse(src);
+        let root = crate::node::Node(tree.root_node());
+        let v = embedded_volume(&root, src);
+        assert!(
+            v > 0.0,
+            "expected positive embedded volume even when `<?php` appears in a string, got {v}"
+        );
+    }
+
+    #[test]
+    fn php_fence_with_leading_whitespace_before_tag_is_not_double_wrapped() {
+        // A fence whose first non-whitespace content is `<?php` must NOT
+        // get a second tag — `trim_start().starts_with` is what makes the
+        // leading-whitespace case behave the same as a flush-left tag.
+        let src = "```php\n   \n<?php\nfunction f() { return 1; }\n```\n";
         let tree = parse(src);
         let root = crate::node::Node(tree.root_node());
         let v = embedded_volume(&root, src);
