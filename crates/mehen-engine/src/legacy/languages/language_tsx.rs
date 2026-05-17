@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Tsx {
+pub(crate) enum Tsx {
     End = 0,
     Identifier = 1,
     HashBangLine = 2,

@@ -13,7 +13,7 @@ use crate::legacy::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_lo
 
 /// The `Cyclomatic` metric.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     cyclomatic_sum: f64,
     cyclomatic: f64,
     n: usize,
@@ -62,7 +62,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Cyclomatic` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         //Calculate minimum and maximum values
         self.cyclomatic_max = self.cyclomatic_max.max(other.cyclomatic_max);
         self.cyclomatic_min = self.cyclomatic_min.min(other.cyclomatic_min);
@@ -72,11 +72,11 @@ impl Stats {
     }
 
     /// Returns the `Cyclomatic` metric value
-    pub fn cyclomatic(&self) -> f64 {
+    pub(crate) fn cyclomatic(&self) -> f64 {
         self.cyclomatic
     }
     /// Returns the sum
-    pub fn cyclomatic_sum(&self) -> f64 {
+    pub(crate) fn cyclomatic_sum(&self) -> f64 {
         self.cyclomatic_sum
     }
 
@@ -84,30 +84,30 @@ impl Stats {
     ///
     /// This value is computed dividing the `Cyclomatic` value for the
     /// number of spaces.
-    pub fn cyclomatic_average(&self) -> f64 {
+    pub(crate) fn cyclomatic_average(&self) -> f64 {
         self.cyclomatic_sum() / self.n as f64
     }
     /// Returns the `Cyclomatic` maximum value
-    pub fn cyclomatic_max(&self) -> f64 {
+    pub(crate) fn cyclomatic_max(&self) -> f64 {
         self.cyclomatic_max
     }
     /// Returns the `Cyclomatic` minimum value
-    pub fn cyclomatic_min(&self) -> f64 {
+    pub(crate) fn cyclomatic_min(&self) -> f64 {
         self.cyclomatic_min
     }
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.cyclomatic_sum += self.cyclomatic;
     }
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         self.cyclomatic_max = self.cyclomatic_max.max(self.cyclomatic);
         self.cyclomatic_min = self.cyclomatic_min.min(self.cyclomatic);
         self.compute_sum();
     }
 }
 
-pub trait Cyclomatic
+pub(crate) trait Cyclomatic
 where
     Self: Checker,
 {

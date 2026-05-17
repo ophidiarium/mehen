@@ -14,7 +14,7 @@ use mehen_metrics::{MetricSelector, SelectorAggregator};
 
 use crate::detection::detect_language;
 use crate::registry::AnalyzerRegistry;
-use crate::report::{TopOffenderEntry, TopOffendersInput, TopOffendersReport};
+use mehen_core::{TopOffenderEntry, TopOffendersInput, TopOffendersReport};
 
 /// Run `mehen top-offenders` against `input.paths` and return a ranked
 /// report.

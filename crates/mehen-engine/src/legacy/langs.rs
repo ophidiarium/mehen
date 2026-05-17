@@ -249,8 +249,8 @@ mk_langs!(
     )
 );
 
-pub mod fake {
-    pub fn get_true<'a>(_ext: &str, _mode: &str) -> Option<&'a str> {
+pub(crate) mod fake {
+    pub(crate) fn get_true<'a>(_ext: &str, _mode: &str) -> Option<&'a str> {
         None
     }
 }

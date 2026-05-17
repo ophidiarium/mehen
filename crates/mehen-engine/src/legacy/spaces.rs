@@ -27,7 +27,7 @@ use crate::legacy::traits::*;
 /// The list of supported space kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SpaceKind {
+pub(crate) enum SpaceKind {
     /// An unknown space
     #[default]
     Unknown,
@@ -62,7 +62,7 @@ impl fmt::Display for SpaceKind {
 
 /// All metrics data.
 #[derive(Default, Debug, Clone, Serialize)]
-pub struct CodeMetrics {
+pub(crate) struct CodeMetrics {
     /// `NArgs` data
     pub nargs: nargs::Stats,
     /// `NExits` data
@@ -108,7 +108,7 @@ impl CodeMetrics {
     /// Applies per-language applicability rules to the metrics, marking any
     /// metric that does not make sense for the given language as disabled so
     /// it is omitted from output (rather than serialized as a measured zero).
-    pub fn apply_language_rules(&mut self, lang: LANG) {
+    pub(crate) fn apply_language_rules(&mut self, lang: LANG) {
         if !wmc::Stats::applies_to(lang) {
             self.wmc.mark_not_applicable();
         }
@@ -120,7 +120,7 @@ impl CodeMetrics {
         }
     }
 
-    pub fn merge(&mut self, other: &CodeMetrics) {
+    pub(crate) fn merge(&mut self, other: &CodeMetrics) {
         self.cognitive.merge(&other.cognitive);
         self.cyclomatic.merge(&other.cyclomatic);
         self.halstead.merge(&other.halstead);
@@ -138,7 +138,7 @@ impl CodeMetrics {
 
 /// Function space data.
 #[derive(Debug, Clone, Serialize)]
-pub struct FuncSpace {
+pub(crate) struct FuncSpace {
     /// The name of a function space
     ///
     /// If `None`, an error is occurred in parsing
@@ -294,7 +294,7 @@ struct State<'a> {
 ///
 /// metrics(&parser, &path).unwrap();
 /// ```
-pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
+pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
     let code = parser.get_code();
     let node = parser.get_root();
     let mut cursor = node.cursor();

@@ -7,7 +7,7 @@ use crate::legacy::langs::{
 };
 
 /// Marker trait for language implementations used by `Parser`.
-pub trait Alterator: Checker {}
+pub(crate) trait Alterator: Checker {}
 
 impl Alterator for PythonCode {}
 impl Alterator for GoCode {}

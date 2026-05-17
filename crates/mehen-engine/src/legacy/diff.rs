@@ -3,20 +3,20 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::ci;
 #[cfg(feature = "markdown")]
-use crate::legacy::diff_markdown::{DocDiffFile, DocRenderCtx, render_doc_section};
-#[cfg(feature = "markdown")]
 use crate::legacy::langs::LANG;
 use crate::legacy::langs::{get_from_ext, get_function_spaces};
 use crate::legacy::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
 use crate::legacy::mk_globset;
 use mehen_git::{ChangeStatus, GitError};
+#[cfg(feature = "markdown")]
+use mehen_report::github_markdown_docs::{DocDiffFile, DocRenderCtx, render_doc_section};
 
 // ── Types ──────────────────────────────────────────────────────────────
 
 const LINGUIST_GENERATED_ATTR: &str = "linguist-generated";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum DiffFormat {
+pub(crate) enum DiffFormat {
     Markdown,
     Json,
 }
@@ -113,7 +113,7 @@ pub struct DiffOpts {
 /// Identifies one of the documented doc-metric CI gates. Any other value is
 /// rejected by clap at parse time rather than being silently ignored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum FailOn {
+pub(crate) enum FailOn {
     DmiDrop,
     NewBrokenLink,
     FillerHigh,

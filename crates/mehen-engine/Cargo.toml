@@ -13,6 +13,7 @@ publish = false
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
 mehen-git = { workspace = true }
+mehen-report = { workspace = true, optional = true }
 
 # Language analyzer crates — feature-gated via the `default` feature set.
 # Phase 1 keeps every language compiled in so the registry is exercised.
@@ -78,9 +79,13 @@ default = [
 ]
 # Legacy `markdown` feature — gates the markdown analyzer & document
 # diff renderer in the relocated `legacy/` machinery (matches the
-# pre-1.0 root-crate `markdown` feature).
+# pre-1.0 root-crate `markdown` feature). Pulls in `mehen-report`'s
+# `docs-diff` feature so `legacy::diff` can call into the
+# `github_markdown_docs` template catalog.
 markdown = [
     "dep:mehen-markdown",
+    "dep:mehen-report",
+    "mehen-report/docs-diff",
     "dep:tree-sitter-markdown-text",
 ]
 lang-markdown = ["dep:mehen-markdown"]

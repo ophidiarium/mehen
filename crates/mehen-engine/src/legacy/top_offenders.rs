@@ -31,7 +31,7 @@ use crate::legacy::tools::{guess_language, read_file_with_eol};
 // ── CLI args ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum TopOffendersFormat {
+pub(crate) enum TopOffendersFormat {
     Markdown,
     Json,
 }

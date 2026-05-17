@@ -5,7 +5,7 @@ fn parent_kind(node: &Node) -> Option<Rust> {
     node.parent().map(|parent| parent.kind_id().into())
 }
 
-pub fn is_inside_rust_macro_tokens(node: &Node) -> bool {
+pub(crate) fn is_inside_rust_macro_tokens(node: &Node) -> bool {
     let mut current = *node;
     while let Some(parent) = current.parent() {
         if matches!(
@@ -19,14 +19,14 @@ pub fn is_inside_rust_macro_tokens(node: &Node) -> bool {
     false
 }
 
-pub fn is_rust_comparison_operator(node: &Node) -> bool {
+pub(crate) fn is_rust_comparison_operator(node: &Node) -> bool {
     matches!(
         node.kind_id().into(),
         Rust::EQEQ | Rust::BANGEQ | Rust::LT | Rust::GT | Rust::LTEQ | Rust::GTEQ
     ) && parent_kind(node).is_some_and(|kind| kind == Rust::BinaryExpression)
 }
 
-pub fn is_rust_logical_operator(node: &Node) -> bool {
+pub(crate) fn is_rust_logical_operator(node: &Node) -> bool {
     matches!(node.kind_id().into(), Rust::AMPAMP | Rust::PIPEPIPE)
         && parent_kind(node).is_some_and(|kind| {
             matches!(
@@ -36,7 +36,7 @@ pub fn is_rust_logical_operator(node: &Node) -> bool {
         })
 }
 
-pub fn is_rust_tail_expression(node: &Node) -> bool {
+pub(crate) fn is_rust_tail_expression(node: &Node) -> bool {
     parent_kind(node).is_some_and(|kind| kind == Rust::Block)
         && matches!(
             node.kind_id().into(),

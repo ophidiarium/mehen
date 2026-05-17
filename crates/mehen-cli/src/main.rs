@@ -32,11 +32,11 @@ fn run(cli: Cli) -> ExitCode {
     match cli.command {
         Command::Metrics(args) => commands::metrics(args),
         Command::Diff(opts) => {
-            mehen_engine::legacy::diff::run_diff(opts);
+            mehen_engine::run_diff(opts);
             ExitCode::Success
         }
         Command::TopOffenders(opts) => {
-            mehen_engine::legacy::top_offenders::run_top_offenders(opts);
+            mehen_engine::run_top_offenders(opts);
             ExitCode::Success
         }
     }

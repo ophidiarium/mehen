@@ -15,7 +15,7 @@ use crate::legacy::macros::implement_metric_trait;
 
 /// The `Mi` metric.
 #[derive(Default, Clone, Debug)]
-pub struct Stats {
+pub(crate) struct Stats {
     halstead_length: f64,
     halstead_vocabulary: f64,
     halstead_volume: f64,
@@ -50,13 +50,13 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
-    pub fn merge(&self, _other: &Self) {}
+    pub(crate) fn merge(&self, _other: &Self) {}
 
     /// Returns the `Mi` metric calculated using the original formula.
     ///
     /// Its value can be negative.
     #[inline(always)]
-    pub fn mi_original(&self) -> f64 {
+    pub(crate) fn mi_original(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         16.2_f64.mul_add(
             -self.sloc.ln(),
@@ -72,7 +72,7 @@ impl Stats {
     ///
     /// Its value can be negative.
     #[inline(always)]
-    pub fn mi_sei(&self) -> f64 {
+    pub(crate) fn mi_sei(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         50.0_f64.mul_add(
             (self.comments_percentage * 2.4).sqrt().sin(),
@@ -89,7 +89,7 @@ impl Stats {
     /// Returns the `Mi` metric calculated using the derivative formula
     /// employed by Microsoft Visual Studio.
     #[inline(always)]
-    pub fn mi_visual_studio(&self) -> f64 {
+    pub(crate) fn mi_visual_studio(&self) -> f64 {
         // http://www.projectcodemeter.com/cost_estimation/help/GL_maintainability.htm
         let formula = 16.2_f64.mul_add(
             -self.sloc.ln(),
@@ -102,7 +102,7 @@ impl Stats {
     }
 }
 
-pub trait Mi
+pub(crate) trait Mi
 where
     Self: Checker,
 {

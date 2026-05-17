@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Kotlin {
+pub(crate) enum Kotlin {
     End = 0,
     AlphaIdentifier = 1,
     HASHBANG = 2,

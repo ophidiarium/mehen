@@ -24,7 +24,7 @@ use crate::legacy::preproc::PreprocResults;
 use crate::legacy::traits::*;
 
 #[derive(Debug)]
-pub struct Parser<
+pub(crate) struct Parser<
     T: LanguageInfo
         + Alterator
         + Checker
@@ -49,7 +49,7 @@ pub struct Parser<
 
 type FilterFn = dyn Fn(&Node) -> bool;
 
-pub struct Filter {
+pub(crate) struct Filter {
     filters: Vec<Box<FilterFn>>,
 }
 
@@ -62,7 +62,7 @@ impl std::fmt::Debug for Filter {
 }
 
 impl Filter {
-    pub fn any(&self, node: &Node) -> bool {
+    pub(crate) fn any(&self, node: &Node) -> bool {
         for f in &self.filters {
             if f(node) {
                 return true;

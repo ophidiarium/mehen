@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum C {
+pub(crate) enum C {
     End = 0,
     Identifier = 1,
     HASHinclude = 2,

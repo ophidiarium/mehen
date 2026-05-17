@@ -18,27 +18,25 @@
 #![allow(unsafe_code)]
 #![allow(clippy::upper_case_acronyms)]
 
-pub mod alterator;
-pub mod checker;
-pub mod concurrent_files;
-pub mod diff;
-#[cfg(feature = "markdown")]
-pub mod diff_markdown;
-pub mod formats;
-pub mod getter;
-pub mod langs;
-pub mod languages;
-pub mod macros;
-pub mod metric_selector;
-pub mod metrics;
-pub mod node;
-pub mod parser;
-pub mod preproc;
-pub mod rust_metric_helpers;
-pub mod spaces;
-pub mod tools;
-pub mod top_offenders;
-pub mod traits;
+pub(crate) mod alterator;
+pub(crate) mod checker;
+pub(crate) mod concurrent_files;
+pub(crate) mod diff;
+pub(crate) mod formats;
+pub(crate) mod getter;
+pub(crate) mod langs;
+pub(crate) mod languages;
+pub(crate) mod macros;
+pub(crate) mod metric_selector;
+pub(crate) mod metrics;
+pub(crate) mod node;
+pub(crate) mod parser;
+pub(crate) mod preproc;
+pub(crate) mod rust_metric_helpers;
+pub(crate) mod spaces;
+pub(crate) mod tools;
+pub(crate) mod top_offenders;
+pub(crate) mod traits;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
@@ -46,7 +44,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 ///
 /// Used by both the `diff` and `top-offenders` orchestrators to turn the
 /// user's `--include` / `--exclude` flags into a usable matcher.
-pub fn mk_globset(elems: Vec<String>) -> GlobSet {
+pub(crate) fn mk_globset(elems: Vec<String>) -> GlobSet {
     if elems.is_empty() {
         return GlobSet::empty();
     }

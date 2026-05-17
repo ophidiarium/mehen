@@ -12,7 +12,7 @@ use crate::legacy::spaces::FuncSpace;
 /// [`Polarity::LowerIsBetter`], while `Mi` is [`Polarity::HigherIsBetter`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Polarity {
+pub(crate) enum Polarity {
     LowerIsBetter,
     HigherIsBetter,
 }
@@ -20,7 +20,7 @@ pub enum Polarity {
 /// A selector for a single metric column: name, display label, polarity,
 /// and a function that extracts the value from a [`FuncSpace`].
 #[derive(Debug, Clone)]
-pub struct MetricSelector {
+pub(crate) struct MetricSelector {
     pub name: &'static str,
     pub label: &'static str,
     pub polarity: Polarity,
@@ -86,7 +86,7 @@ pub const DEFAULT_METRICS: &[&str] = &[
 /// the contract `diff` expects. Callers that want "no fallback" (e.g.
 /// `top-offenders`, where `--metric` is required) should enforce that at the
 /// CLI layer before calling this function.
-pub fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
+pub(crate) fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     let specs: Vec<&str> = if specs.is_empty() {
         DEFAULT_METRICS.to_vec()
     } else {

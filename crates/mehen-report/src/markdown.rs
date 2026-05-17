@@ -1,4 +1,4 @@
-use mehen_engine::{DiffReport, MetricsReport};
+use mehen_core::{DiffReport, MetricsReport};
 
 /// Phase 1 placeholder for the single-file Markdown renderer. Phase 5 wires
 /// real layout — heading, per-space tables, diagnostics callout — once the

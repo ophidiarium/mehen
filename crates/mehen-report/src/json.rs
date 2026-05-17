@@ -1,4 +1,4 @@
-use mehen_engine::{DiffReport, MetricsReport};
+use mehen_core::{DiffReport, MetricsReport};
 
 /// Render a `MetricsReport` as JSON. Pretty-printed when `pretty=true`.
 pub fn render_metrics_json(report: &MetricsReport, pretty: bool) -> serde_json::Result<String> {

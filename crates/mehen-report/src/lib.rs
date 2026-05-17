@@ -1,13 +1,15 @@
 //! `mehen-report` — rendering and serialization.
 //!
 //! Phase 1 scope: render shapes that downstream callers can rely on while
-//! the orchestrators are filled in. The pre-1.0 Markdown documentation
-//! diff renderer lives in `mehen-engine::legacy::diff_markdown` for the
-//! duration of the v1 transition (it is a peer of the legacy `diff`
-//! orchestrator and breaks the otherwise-cyclic dep on `mehen-engine`).
+//! the orchestrators are filled in. Per the rewrite plan §8.1 the pre-1.0
+//! Markdown documentation diff renderer lives here under
+//! `github_markdown_docs` (gated by the `docs-diff` feature so consumers
+//! that don't need the Markdown analyzer don't pay for it).
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "docs-diff")]
+pub mod github_markdown_docs;
 mod json;
 mod markdown;
 

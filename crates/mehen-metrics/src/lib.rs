@@ -26,8 +26,6 @@ mod halstead;
 mod halstead_builder;
 mod loc;
 mod mi;
-mod selector;
-mod threshold;
 mod tree_builder;
 
 pub use abc::AbcStats;
@@ -38,10 +36,14 @@ pub use halstead::HalsteadStats;
 pub use halstead_builder::{HalsteadBuilder, HalsteadCounts, HalsteadOperand, HalsteadOperator};
 pub use loc::{LineClass, LocStats};
 pub use mi::MiStats;
-pub use selector::{MetricSelector, SelectorAggregator, SelectorParseError};
-pub use threshold::{Polarity, Threshold, ThresholdEvaluation, ThresholdViolation};
 pub use tree_builder::MetricTreeBuilder;
 
-// Re-export the metric key namespace so language crates only need
-// `mehen_metrics::keys::*`.
-pub use mehen_core::{MetricKey, keys};
+// Re-export the metric key namespace and the selector/threshold contract
+// surface from `mehen-core` so existing `mehen_metrics::*` consumers
+// keep compiling. Per the plan §4.2 these are contract types that
+// belong to `mehen-core`; per §8.2 the selector catalogue may live in
+// either crate.
+pub use mehen_core::{
+    MetricKey, MetricSelector, Polarity, SelectorAggregator, SelectorParseError, Threshold,
+    ThresholdEvaluation, ThresholdViolation, keys,
+};

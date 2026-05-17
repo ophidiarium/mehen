@@ -1638,6 +1638,7 @@ dependencies = [
  "mehen-php",
  "mehen-powershell",
  "mehen-python",
+ "mehen-report",
  "mehen-ruby",
  "mehen-rust",
  "mehen-typescript",
@@ -1765,7 +1766,7 @@ name = "mehen-report"
 version = "0.7.0"
 dependencies = [
  "mehen-core",
- "mehen-engine",
+ "mehen-markdown",
  "mehen-metrics",
  "serde",
  "serde_json",

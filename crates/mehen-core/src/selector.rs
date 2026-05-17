@@ -1,7 +1,7 @@
 use core::fmt;
 use core::str::FromStr;
 
-use mehen_core::MetricKey;
+use crate::MetricKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// A metric reference used by `mehen diff --threshold`, `mehen top-offenders

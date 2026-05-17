@@ -9,7 +9,7 @@ use crate::legacy::metrics::halstead::HalsteadType;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
-pub trait Getter {
+pub(crate) trait Getter {
     fn get_func_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
         Self::get_func_space_name(node, code)
     }

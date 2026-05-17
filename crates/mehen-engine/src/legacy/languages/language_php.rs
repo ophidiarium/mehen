@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Php {
+pub(crate) enum Php {
     End = 0,
     Name = 1,
     PhpTag = 2,

@@ -14,7 +14,7 @@ use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
 #[derive(Default, Clone, Debug)]
-pub struct Stats {
+pub(crate) struct Stats {
     u_operators: u64,
     operators: u64,
     u_operands: u64,
@@ -23,7 +23,7 @@ pub struct Stats {
 
 /// Specifies the type of nodes accepted by the `Halstead` metric.
 #[derive(Debug)]
-pub enum HalsteadType {
+pub(crate) enum HalsteadType {
     /// The node is an `Halstead` operator
     Operator,
     /// The node is an `Halstead` operand
@@ -33,20 +33,20 @@ pub enum HalsteadType {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct HalsteadMaps<'a> {
+pub(crate) struct HalsteadMaps<'a> {
     pub operators: HashMap<u16, u64>,
     pub operands: HashMap<&'a [u8], u64>,
 }
 
 impl<'a> HalsteadMaps<'a> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         HalsteadMaps {
             operators: HashMap::default(),
             operands: HashMap::default(),
         }
     }
 
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         for (k, v) in &other.operators {
             *self.operators.entry(*k).or_insert(0) += v;
         }
@@ -55,7 +55,7 @@ impl<'a> HalsteadMaps<'a> {
         }
     }
 
-    pub fn finalize(&self, stats: &mut Stats) {
+    pub(crate) fn finalize(&self, stats: &mut Stats) {
         stats.u_operators = self.operators.len() as u64;
         stats.operators = self.operators.values().sum::<u64>();
         stats.u_operands = self.operands.len() as u64;
@@ -124,41 +124,41 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
-    pub fn merge(&self, _other: &Self) {}
+    pub(crate) fn merge(&self, _other: &Self) {}
 
     /// Returns `η1`, the number of distinct operators
     #[inline(always)]
-    pub fn u_operators(&self) -> f64 {
+    pub(crate) fn u_operators(&self) -> f64 {
         self.u_operators as f64
     }
 
     /// Returns `N1`, the number of total operators
     #[inline(always)]
-    pub fn operators(&self) -> f64 {
+    pub(crate) fn operators(&self) -> f64 {
         self.operators as f64
     }
 
     /// Returns `η2`, the number of distinct operands
     #[inline(always)]
-    pub fn u_operands(&self) -> f64 {
+    pub(crate) fn u_operands(&self) -> f64 {
         self.u_operands as f64
     }
 
     /// Returns `N2`, the number of total operands
     #[inline(always)]
-    pub fn operands(&self) -> f64 {
+    pub(crate) fn operands(&self) -> f64 {
         self.operands as f64
     }
 
     /// Returns the program length
     #[inline(always)]
-    pub fn length(&self) -> f64 {
+    pub(crate) fn length(&self) -> f64 {
         self.operands() + self.operators()
     }
 
     /// Returns the calculated estimated program length
     #[inline(always)]
-    pub fn estimated_program_length(&self) -> f64 {
+    pub(crate) fn estimated_program_length(&self) -> f64 {
         self.u_operators().mul_add(
             self.u_operators().log2(),
             self.u_operands() * self.u_operands().log2(),
@@ -167,13 +167,13 @@ impl Stats {
 
     /// Returns the purity ratio
     #[inline(always)]
-    pub fn purity_ratio(&self) -> f64 {
+    pub(crate) fn purity_ratio(&self) -> f64 {
         self.estimated_program_length() / self.length()
     }
 
     /// Returns the program vocabulary
     #[inline(always)]
-    pub fn vocabulary(&self) -> f64 {
+    pub(crate) fn vocabulary(&self) -> f64 {
         self.u_operands() + self.u_operators()
     }
 
@@ -181,26 +181,26 @@ impl Stats {
     ///
     /// Unit of measurement: bits
     #[inline(always)]
-    pub fn volume(&self) -> f64 {
+    pub(crate) fn volume(&self) -> f64 {
         // Assumes a uniform binary encoding for the vocabulary is used.
         self.length() * self.vocabulary().log2()
     }
 
     /// Returns the estimated difficulty required to program
     #[inline(always)]
-    pub fn difficulty(&self) -> f64 {
+    pub(crate) fn difficulty(&self) -> f64 {
         self.u_operators() / 2. * self.operands() / self.u_operands()
     }
 
     /// Returns the estimated level of difficulty required to program
     #[inline(always)]
-    pub fn level(&self) -> f64 {
+    pub(crate) fn level(&self) -> f64 {
         1. / self.difficulty()
     }
 
     /// Returns the estimated effort required to program
     #[inline(always)]
-    pub fn effort(&self) -> f64 {
+    pub(crate) fn effort(&self) -> f64 {
         self.difficulty() * self.volume()
     }
 
@@ -208,7 +208,7 @@ impl Stats {
     ///
     /// Unit of measurement: seconds
     #[inline(always)]
-    pub fn time(&self) -> f64 {
+    pub(crate) fn time(&self) -> f64 {
         // The floating point `18.` aims to describe the processing rate of the
         // human brain. It is called Stoud number, S, and its
         // unit of measurement is moments/seconds.
@@ -228,7 +228,7 @@ impl Stats {
     /// This metric represents the average amount of work a programmer can do
     /// without introducing an error.
     #[inline(always)]
-    pub fn bugs(&self) -> f64 {
+    pub(crate) fn bugs(&self) -> f64 {
         // The floating point `3000.` represents the number of elementary
         // mental discriminations.
         // A mental discrimination, in psychology, is the ability to perceive
@@ -253,7 +253,7 @@ impl Stats {
     }
 }
 
-pub trait Halstead
+pub(crate) trait Halstead
 where
     Self: Checker,
 {

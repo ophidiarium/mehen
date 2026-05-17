@@ -25,9 +25,9 @@ pub enum Command {
     /// Analyze exactly one file and emit a metrics report.
     Metrics(MetricsArgs),
     /// Compare metrics between two git revisions.
-    Diff(mehen_engine::legacy::diff::DiffOpts),
+    Diff(mehen_engine::DiffOpts),
     /// Rank files by one or more metrics (worst offenders first).
-    TopOffenders(mehen_engine::legacy::top_offenders::TopOffendersOpts),
+    TopOffenders(mehen_engine::TopOffendersOpts),
 }
 
 #[derive(Debug, Args)]

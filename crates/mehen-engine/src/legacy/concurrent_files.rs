@@ -124,7 +124,7 @@ where
 
 /// Series of errors that might happen when processing files concurrently.
 #[derive(Debug)]
-pub enum ConcurrentErrors {
+pub(crate) enum ConcurrentErrors {
     /// Producer side error.
     ///
     /// An error occurred inside the producer thread.
@@ -158,7 +158,7 @@ impl std::error::Error for ConcurrentErrors {}
 
 /// Data related to files.
 #[derive(Debug)]
-pub struct FilesData {
+pub(crate) struct FilesData {
     /// Kind of files included in a search.
     pub include: GlobSet,
     /// Kind of files excluded from a search.
@@ -168,7 +168,7 @@ pub struct FilesData {
 }
 
 /// A runner to process files concurrently.
-pub struct ConcurrentRunner<Config> {
+pub(crate) struct ConcurrentRunner<Config> {
     proc_files: Box<ProcFilesFunction<Config>>,
     proc_dir_paths: Box<ProcDirPathsFunction<Config>>,
     proc_path: Box<ProcPathFunction<Config>>,
@@ -189,7 +189,7 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
     /// * `num_jobs` - Number of jobs utilized to process files concurrently.
     /// * `proc_files` - Function that processes each file found during
     ///   the search.
-    pub fn new<ProcFiles>(num_jobs: usize, proc_files: ProcFiles) -> Self
+    pub(crate) fn new<ProcFiles>(num_jobs: usize, proc_files: ProcFiles) -> Self
     where
         ProcFiles: 'static + Fn(PathBuf, &Config) -> std::io::Result<()> + Send + Sync,
     {
@@ -208,7 +208,7 @@ impl<Config: 'static + Send + Sync> ConcurrentRunner<Config> {
     /// * `config` - Information used to process a file.
     /// * `files_data` - Information about the files to be included or excluded
     ///   from a search more the number of paths considered in the search.
-    pub fn run(
+    pub(crate) fn run(
         self,
         config: Config,
         files_data: FilesData,

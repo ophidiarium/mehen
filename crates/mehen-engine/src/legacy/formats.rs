@@ -6,7 +6,7 @@ use std::str::FromStr;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
-pub enum Format {
+pub(crate) enum Format {
     Cbor,
     Json,
     Toml,
@@ -18,7 +18,7 @@ impl Format {
         &["cbor", "json", "toml", "yaml"]
     }
 
-    pub fn dump_formats<T: Serialize>(
+    pub(crate) fn dump_formats<T: Serialize>(
         &self,
         space: T,
         path: PathBuf,

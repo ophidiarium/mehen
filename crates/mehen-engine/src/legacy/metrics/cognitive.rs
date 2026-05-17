@@ -24,7 +24,7 @@ use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
 /// The `Cognitive Complexity` metric.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     structural: usize,
     structural_sum: usize,
     structural_min: usize,
@@ -77,27 +77,27 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Cognitive Complexity` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.structural_min = self.structural_min.min(other.structural_min);
         self.structural_max = self.structural_max.max(other.structural_max);
         self.structural_sum += other.structural_sum;
     }
 
     /// Returns the `Cognitive Complexity` metric value
-    pub fn cognitive(&self) -> f64 {
+    pub(crate) fn cognitive(&self) -> f64 {
         self.structural as f64
     }
     /// Returns the `Cognitive Complexity` sum metric value
-    pub fn cognitive_sum(&self) -> f64 {
+    pub(crate) fn cognitive_sum(&self) -> f64 {
         self.structural_sum as f64
     }
 
     /// Returns the `Cognitive Complexity` minimum metric value
-    pub fn cognitive_min(&self) -> f64 {
+    pub(crate) fn cognitive_min(&self) -> f64 {
         self.structural_min as f64
     }
     /// Returns the `Cognitive Complexity` maximum metric value
-    pub fn cognitive_max(&self) -> f64 {
+    pub(crate) fn cognitive_max(&self) -> f64 {
         self.structural_max as f64
     }
 
@@ -107,26 +107,26 @@ impl Stats {
     /// for the total number of functions/closures in a space.
     ///
     /// If there are no functions in a code, its value is `NAN`.
-    pub fn cognitive_average(&self) -> f64 {
+    pub(crate) fn cognitive_average(&self) -> f64 {
         self.cognitive_sum() / self.total_space_functions as f64
     }
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.structural_sum += self.structural;
     }
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         self.structural_min = self.structural_min.min(self.structural);
         self.structural_max = self.structural_max.max(self.structural);
         self.compute_sum();
     }
 
-    pub fn finalize(&mut self, total_space_functions: usize) {
+    pub(crate) fn finalize(&mut self, total_space_functions: usize) {
         self.total_space_functions = total_space_functions;
     }
 }
 
-pub trait Cognitive
+pub(crate) trait Cognitive
 where
     Self: Checker,
 {

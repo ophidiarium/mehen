@@ -87,7 +87,7 @@ macro_rules! is_js_func_and_closure_checker {
     };
 }
 
-pub trait Checker {
+pub(crate) trait Checker {
     fn is_comment(_: &Node) -> bool;
     fn is_func_space(_: &Node) -> bool;
     fn is_func(_: &Node) -> bool;

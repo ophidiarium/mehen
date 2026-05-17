@@ -12,7 +12,7 @@ use crate::legacy::node::Node;
 
 /// The `Nom` metric suite.
 #[derive(Clone, Debug)]
-pub struct Stats {
+pub(crate) struct Stats {
     functions: usize,
     closures: usize,
     functions_sum: usize,
@@ -90,7 +90,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Nom` metric suite into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.functions_min = self.functions_min.min(other.functions_min);
         self.functions_max = self.functions_max.max(other.functions_max);
         self.closures_min = self.closures_min.min(other.closures_min);
@@ -102,85 +102,85 @@ impl Stats {
 
     /// Counts the number of function definitions in a scope
     #[inline(always)]
-    pub fn functions(&self) -> f64 {
+    pub(crate) fn functions(&self) -> f64 {
         // Only function definitions are considered, not general declarations
         self.functions as f64
     }
 
     /// Counts the number of closures in a scope
     #[inline(always)]
-    pub fn closures(&self) -> f64 {
+    pub(crate) fn closures(&self) -> f64 {
         self.closures as f64
     }
 
     /// Return the sum metric for functions
     #[inline(always)]
-    pub fn functions_sum(&self) -> f64 {
+    pub(crate) fn functions_sum(&self) -> f64 {
         // Only function definitions are considered, not general declarations
         self.functions_sum as f64
     }
 
     /// Return the sum metric for closures
     #[inline(always)]
-    pub fn closures_sum(&self) -> f64 {
+    pub(crate) fn closures_sum(&self) -> f64 {
         self.closures_sum as f64
     }
 
     /// Returns the average number of function definitions over all spaces
     #[inline(always)]
-    pub fn functions_average(&self) -> f64 {
+    pub(crate) fn functions_average(&self) -> f64 {
         self.functions_sum() / self.space_count as f64
     }
 
     /// Returns the average number of closures over all spaces
     #[inline(always)]
-    pub fn closures_average(&self) -> f64 {
+    pub(crate) fn closures_average(&self) -> f64 {
         self.closures_sum() / self.space_count as f64
     }
 
     /// Returns the average number of function definitions and closures over all spaces
     #[inline(always)]
-    pub fn average(&self) -> f64 {
+    pub(crate) fn average(&self) -> f64 {
         self.total() / self.space_count as f64
     }
 
     /// Counts the number of function definitions in a scope
     #[inline(always)]
-    pub fn functions_min(&self) -> f64 {
+    pub(crate) fn functions_min(&self) -> f64 {
         // Only function definitions are considered, not general declarations
         self.functions_min as f64
     }
 
     /// Counts the number of closures in a scope
     #[inline(always)]
-    pub fn closures_min(&self) -> f64 {
+    pub(crate) fn closures_min(&self) -> f64 {
         self.closures_min as f64
     }
     /// Counts the number of function definitions in a scope
     #[inline(always)]
-    pub fn functions_max(&self) -> f64 {
+    pub(crate) fn functions_max(&self) -> f64 {
         // Only function definitions are considered, not general declarations
         self.functions_max as f64
     }
 
     /// Counts the number of closures in a scope
     #[inline(always)]
-    pub fn closures_max(&self) -> f64 {
+    pub(crate) fn closures_max(&self) -> f64 {
         self.closures_max as f64
     }
     /// Returns the total number of function definitions and
     /// closures in a scope
     #[inline(always)]
-    pub fn total(&self) -> f64 {
+    pub(crate) fn total(&self) -> f64 {
         self.functions_sum() + self.closures_sum()
     }
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.functions_sum += self.functions;
         self.closures_sum += self.closures;
     }
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         self.functions_min = self.functions_min.min(self.functions);
         self.functions_max = self.functions_max.max(self.functions);
         self.closures_min = self.closures_min.min(self.closures);
@@ -189,7 +189,7 @@ impl Stats {
     }
 }
 
-pub trait Nom
+pub(crate) trait Nom
 where
     Self: Checker,
 {

@@ -27,9 +27,12 @@ mod diagnostic;
 mod language;
 mod line_index;
 mod metric_key;
+mod report;
+mod selector;
 mod source;
 mod space;
 mod span;
+mod threshold;
 
 pub use analysis::{
     ContributionReason, LanguageAnalysis, MetricContribution, MetricSet, MetricValue,
@@ -41,9 +44,15 @@ pub use diagnostic::{DiagnosticSeverity, ParseDiagnostic};
 pub use language::{Language, LanguageParseError, language_aliases};
 pub use line_index::LineIndex;
 pub use metric_key::{MetricKey, keys};
+pub use report::{
+    AnalysisErrorRecord, AnalyzeMetricsInput, DiffFile, DiffInput, DiffReport, DiffSide,
+    MetricsReport, TopOffenderEntry, TopOffendersInput, TopOffendersReport,
+};
+pub use selector::{MetricSelector, SelectorAggregator, SelectorParseError};
 pub use source::SourceFile;
 pub use space::{MetricSpace, SpaceId, SpaceKind};
 pub use span::{SourceSpan, byte_offset_checked, byte_offset_clamped};
+pub use threshold::{Polarity, Threshold, ThresholdEvaluation, ThresholdViolation};
 
 /// The result type used by analyzers and the dispatcher.
 pub type Result<T> = core::result::Result<T, AnalysisError>;

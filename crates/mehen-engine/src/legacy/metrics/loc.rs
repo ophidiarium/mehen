@@ -15,7 +15,7 @@ use crate::legacy::rust_metric_helpers::is_rust_tail_expression;
 
 /// The `SLoc` metric suite.
 #[derive(Debug, Clone)]
-pub struct Sloc {
+pub(crate) struct Sloc {
     start: usize,
     end: usize,
     unit: bool,
@@ -37,7 +37,7 @@ impl Default for Sloc {
 
 impl Sloc {
     #[inline(always)]
-    pub fn sloc(&self) -> f64 {
+    pub(crate) fn sloc(&self) -> f64 {
         // This metric counts the number of lines in a file
         // The if construct is needed to count the line of code that represents
         // the function signature in a function space
@@ -51,24 +51,24 @@ impl Sloc {
 
     /// The `Sloc` metric minimum value.
     #[inline(always)]
-    pub fn sloc_min(&self) -> f64 {
+    pub(crate) fn sloc_min(&self) -> f64 {
         self.sloc_min as f64
     }
 
     /// The `Sloc` metric maximum value.
     #[inline(always)]
-    pub fn sloc_max(&self) -> f64 {
+    pub(crate) fn sloc_max(&self) -> f64 {
         self.sloc_max as f64
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.sloc_min = self.sloc_min.min(other.sloc() as usize);
         self.sloc_max = self.sloc_max.max(other.sloc() as usize);
     }
 
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         if self.sloc_min == usize::MAX {
             self.sloc_min = self.sloc_min.min(self.sloc() as usize);
             self.sloc_max = self.sloc_max.max(self.sloc() as usize);
@@ -78,7 +78,7 @@ impl Sloc {
 
 /// The `PLoc` metric suite.
 #[derive(Debug, Clone)]
-pub struct Ploc {
+pub(crate) struct Ploc {
     lines: HashSet<usize>,
     ploc_min: usize,
     ploc_max: usize,
@@ -96,7 +96,7 @@ impl Default for Ploc {
 
 impl Ploc {
     #[inline(always)]
-    pub fn ploc(&self) -> f64 {
+    pub(crate) fn ploc(&self) -> f64 {
         // This metric counts the number of instruction lines in a code
         // https://en.wikipedia.org/wiki/Source_lines_of_code
         self.lines.len() as f64
@@ -104,18 +104,18 @@ impl Ploc {
 
     /// The `Ploc` metric minimum value.
     #[inline(always)]
-    pub fn ploc_min(&self) -> f64 {
+    pub(crate) fn ploc_min(&self) -> f64 {
         self.ploc_min as f64
     }
 
     /// The `Ploc` metric maximum value.
     #[inline(always)]
-    pub fn ploc_max(&self) -> f64 {
+    pub(crate) fn ploc_max(&self) -> f64 {
         self.ploc_max as f64
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         // Merge ploc lines
         for l in &other.lines {
             self.lines.insert(*l);
@@ -126,7 +126,7 @@ impl Ploc {
     }
 
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         if self.ploc_min == usize::MAX {
             self.ploc_min = self.ploc_min.min(self.ploc() as usize);
             self.ploc_max = self.ploc_max.max(self.ploc() as usize);
@@ -136,7 +136,7 @@ impl Ploc {
 
 /// The `CLoc` metric suite.
 #[derive(Debug, Clone)]
-pub struct Cloc {
+pub(crate) struct Cloc {
     only_comment_lines: usize,
     code_comment_lines: usize,
     comment_line_end: Option<usize>,
@@ -158,7 +158,7 @@ impl Default for Cloc {
 
 impl Cloc {
     #[inline(always)]
-    pub fn cloc(&self) -> f64 {
+    pub(crate) fn cloc(&self) -> f64 {
         // Comments are counted regardless of their placement
         // https://en.wikipedia.org/wiki/Source_lines_of_code
         (self.only_comment_lines + self.code_comment_lines) as f64
@@ -166,18 +166,18 @@ impl Cloc {
 
     /// The `Cloc` metric minimum value.
     #[inline(always)]
-    pub fn cloc_min(&self) -> f64 {
+    pub(crate) fn cloc_min(&self) -> f64 {
         self.cloc_min as f64
     }
 
     /// The `Cloc` metric maximum value.
     #[inline(always)]
-    pub fn cloc_max(&self) -> f64 {
+    pub(crate) fn cloc_max(&self) -> f64 {
         self.cloc_max as f64
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         // Merge cloc lines
         self.only_comment_lines += other.only_comment_lines;
         self.code_comment_lines += other.code_comment_lines;
@@ -187,7 +187,7 @@ impl Cloc {
     }
 
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         if self.cloc_min == usize::MAX {
             self.cloc_min = self.cloc_min.min(self.cloc() as usize);
             self.cloc_max = self.cloc_max.max(self.cloc() as usize);
@@ -197,7 +197,7 @@ impl Cloc {
 
 /// The `LLoc` metric suite.
 #[derive(Debug, Clone)]
-pub struct Lloc {
+pub(crate) struct Lloc {
     logical_lines: usize,
     lloc_min: usize,
     lloc_max: usize,
@@ -215,7 +215,7 @@ impl Default for Lloc {
 
 impl Lloc {
     #[inline(always)]
-    pub fn lloc(&self) -> f64 {
+    pub(crate) fn lloc(&self) -> f64 {
         // This metric counts the number of statements in a code
         // https://en.wikipedia.org/wiki/Source_lines_of_code
         self.logical_lines as f64
@@ -223,18 +223,18 @@ impl Lloc {
 
     /// The `Lloc` metric minimum value.
     #[inline(always)]
-    pub fn lloc_min(&self) -> f64 {
+    pub(crate) fn lloc_min(&self) -> f64 {
         self.lloc_min as f64
     }
 
     /// The `Lloc` metric maximum value.
     #[inline(always)]
-    pub fn lloc_max(&self) -> f64 {
+    pub(crate) fn lloc_max(&self) -> f64 {
         self.lloc_max as f64
     }
 
     #[inline(always)]
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         // Merge lloc lines
         self.logical_lines += other.logical_lines;
         self.lloc_min = self.lloc_min.min(other.lloc() as usize);
@@ -242,7 +242,7 @@ impl Lloc {
     }
 
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         if self.lloc_min == usize::MAX {
             self.lloc_min = self.lloc_min.min(self.lloc() as usize);
             self.lloc_max = self.lloc_max.max(self.lloc() as usize);
@@ -252,7 +252,7 @@ impl Lloc {
 
 /// The `Loc` metric suite.
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     sloc: Sloc,
     ploc: Ploc,
     cloc: Cloc,
@@ -337,7 +337,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Loc` metric suite into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.sloc.merge(&other.sloc);
         self.ploc.merge(&other.ploc);
         self.cloc.merge(&other.cloc);
@@ -356,7 +356,7 @@ impl Stats {
     ///
     /// Counts the number of lines in a scope
     #[inline(always)]
-    pub fn sloc(&self) -> f64 {
+    pub(crate) fn sloc(&self) -> f64 {
         self.sloc.sloc()
     }
 
@@ -364,7 +364,7 @@ impl Stats {
     ///
     /// Counts the number of instruction lines in a scope
     #[inline(always)]
-    pub fn ploc(&self) -> f64 {
+    pub(crate) fn ploc(&self) -> f64 {
         self.ploc.ploc()
     }
 
@@ -372,7 +372,7 @@ impl Stats {
     ///
     /// Counts the number of statements in a scope
     #[inline(always)]
-    pub fn lloc(&self) -> f64 {
+    pub(crate) fn lloc(&self) -> f64 {
         self.lloc.lloc()
     }
 
@@ -380,7 +380,7 @@ impl Stats {
     ///
     /// Counts the number of comments in a scope
     #[inline(always)]
-    pub fn cloc(&self) -> f64 {
+    pub(crate) fn cloc(&self) -> f64 {
         self.cloc.cloc()
     }
 
@@ -388,7 +388,7 @@ impl Stats {
     ///
     /// Counts the number of blank lines in a scope
     #[inline(always)]
-    pub fn blank(&self) -> f64 {
+    pub(crate) fn blank(&self) -> f64 {
         self.sloc() - self.ploc() - self.cloc.only_comment_lines as f64
     }
 
@@ -396,7 +396,7 @@ impl Stats {
     ///
     /// This value is computed dividing the `Sloc` value for the number of spaces
     #[inline(always)]
-    pub fn sloc_average(&self) -> f64 {
+    pub(crate) fn sloc_average(&self) -> f64 {
         self.sloc() / self.space_count as f64
     }
 
@@ -404,7 +404,7 @@ impl Stats {
     ///
     /// This value is computed dividing the `Ploc` value for the number of spaces
     #[inline(always)]
-    pub fn ploc_average(&self) -> f64 {
+    pub(crate) fn ploc_average(&self) -> f64 {
         self.ploc() / self.space_count as f64
     }
 
@@ -412,7 +412,7 @@ impl Stats {
     ///
     /// This value is computed dividing the `Lloc` value for the number of spaces
     #[inline(always)]
-    pub fn lloc_average(&self) -> f64 {
+    pub(crate) fn lloc_average(&self) -> f64 {
         self.lloc() / self.space_count as f64
     }
 
@@ -420,7 +420,7 @@ impl Stats {
     ///
     /// This value is computed dividing the `Cloc` value for the number of spaces
     #[inline(always)]
-    pub fn cloc_average(&self) -> f64 {
+    pub(crate) fn cloc_average(&self) -> f64 {
         self.cloc() / self.space_count as f64
     }
 
@@ -428,72 +428,72 @@ impl Stats {
     ///
     /// This value is computed dividing the `Blank` value for the number of spaces
     #[inline(always)]
-    pub fn blank_average(&self) -> f64 {
+    pub(crate) fn blank_average(&self) -> f64 {
         self.blank() / self.space_count as f64
     }
 
     /// The `Sloc` metric minimum value.
     #[inline(always)]
-    pub fn sloc_min(&self) -> f64 {
+    pub(crate) fn sloc_min(&self) -> f64 {
         self.sloc.sloc_min()
     }
 
     /// The `Sloc` metric maximum value.
     #[inline(always)]
-    pub fn sloc_max(&self) -> f64 {
+    pub(crate) fn sloc_max(&self) -> f64 {
         self.sloc.sloc_max()
     }
 
     /// The `Cloc` metric minimum value.
     #[inline(always)]
-    pub fn cloc_min(&self) -> f64 {
+    pub(crate) fn cloc_min(&self) -> f64 {
         self.cloc.cloc_min()
     }
 
     /// The `Cloc` metric maximum value.
     #[inline(always)]
-    pub fn cloc_max(&self) -> f64 {
+    pub(crate) fn cloc_max(&self) -> f64 {
         self.cloc.cloc_max()
     }
 
     /// The `Ploc` metric minimum value.
     #[inline(always)]
-    pub fn ploc_min(&self) -> f64 {
+    pub(crate) fn ploc_min(&self) -> f64 {
         self.ploc.ploc_min()
     }
 
     /// The `Ploc` metric maximum value.
     #[inline(always)]
-    pub fn ploc_max(&self) -> f64 {
+    pub(crate) fn ploc_max(&self) -> f64 {
         self.ploc.ploc_max()
     }
 
     /// The `Lloc` metric minimum value.
     #[inline(always)]
-    pub fn lloc_min(&self) -> f64 {
+    pub(crate) fn lloc_min(&self) -> f64 {
         self.lloc.lloc_min()
     }
 
     /// The `Lloc` metric maximum value.
     #[inline(always)]
-    pub fn lloc_max(&self) -> f64 {
+    pub(crate) fn lloc_max(&self) -> f64 {
         self.lloc.lloc_max()
     }
 
     /// The `Blank` metric minimum value.
     #[inline(always)]
-    pub fn blank_min(&self) -> f64 {
+    pub(crate) fn blank_min(&self) -> f64 {
         self.blank_min as f64
     }
 
     /// The `Blank` metric maximum value.
     #[inline(always)]
-    pub fn blank_max(&self) -> f64 {
+    pub(crate) fn blank_max(&self) -> f64 {
         self.blank_max as f64
     }
 
     #[inline(always)]
-    pub fn compute_minmax(&mut self) {
+    pub(crate) fn compute_minmax(&mut self) {
         self.sloc.compute_minmax();
         self.ploc.compute_minmax();
         self.cloc.compute_minmax();
@@ -506,7 +506,7 @@ impl Stats {
     }
 }
 
-pub trait Loc
+pub(crate) trait Loc
 where
     Self: Checker,
 {

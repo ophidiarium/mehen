@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Ruby {
+pub(crate) enum Ruby {
     End = 0,
     Identifier = 1,
     ProgramToken1 = 2,

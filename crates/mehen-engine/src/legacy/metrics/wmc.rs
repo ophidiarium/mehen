@@ -23,7 +23,7 @@ use crate::legacy::spaces::SpaceKind;
 /// Original paper and definition:
 /// <https://www.researchgate.net/publication/3187649_Kemerer_CF_A_metric_suite_for_object_oriented_design_IEEE_Trans_Softw_Eng_206_476-493>
 #[derive(Debug, Clone, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     cyclomatic: f64,
     class_wmc: f64,
     interface_wmc: f64,
@@ -65,7 +65,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Wmc` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         use SpaceKind::*;
 
         // Merges the cyclomatic complexity of a method
@@ -88,33 +88,33 @@ impl Stats {
 
     /// Returns the sum of the `Wmc` metric values of the classes in a space.
     #[inline(always)]
-    pub fn class_wmc_sum(&self) -> f64 {
+    pub(crate) fn class_wmc_sum(&self) -> f64 {
         self.class_wmc_sum
     }
 
     /// Returns the sum of the `Wmc` metric values of the interfaces in a space.
     #[inline(always)]
-    pub fn interface_wmc_sum(&self) -> f64 {
+    pub(crate) fn interface_wmc_sum(&self) -> f64 {
         self.interface_wmc_sum
     }
 
     /// Returns the total `Wmc` metric value in a space.
     #[inline(always)]
-    pub fn total_wmc(&self) -> f64 {
+    pub(crate) fn total_wmc(&self) -> f64 {
         self.class_wmc_sum() + self.interface_wmc_sum()
     }
 
     // Accumulates the `Wmc` metric values
     // of classes and interfaces into the sums
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.class_wmc_sum += self.class_wmc;
         self.interface_wmc_sum += self.interface_wmc;
     }
 
     // Checks if the `Wmc` metric is disabled
     #[inline(always)]
-    pub fn is_disabled(&self) -> bool {
+    pub(crate) fn is_disabled(&self) -> bool {
         if self.not_applicable {
             return true;
         }
@@ -131,7 +131,7 @@ impl Stats {
     /// Marks this metric as not applicable to the current language so it is
     /// omitted from output rather than serialized as a measured zero.
     #[inline(always)]
-    pub fn mark_not_applicable(&mut self) {
+    pub(crate) fn mark_not_applicable(&mut self) {
         self.not_applicable = true;
     }
 
@@ -140,7 +140,7 @@ impl Stats {
     /// documentation language with no classes or methods and likewise opts
     /// out of `Wmc`.
     #[inline(always)]
-    pub fn applies_to(lang: LANG) -> bool {
+    pub(crate) fn applies_to(lang: LANG) -> bool {
         #[cfg(feature = "markdown")]
         if matches!(lang, LANG::Markdown) {
             return false;
@@ -153,7 +153,7 @@ impl Stats {
     /// aggregation can distinguish "no classes" from "classes with no
     /// counted methods".
     #[inline(always)]
-    pub fn set_space_kind(&mut self, kind: SpaceKind) {
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
         self.space_kind = kind;
         if matches!(
             kind,
@@ -164,7 +164,7 @@ impl Stats {
     }
 }
 
-pub trait Wmc
+pub(crate) trait Wmc
 where
     Self: Checker,
 {

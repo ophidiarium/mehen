@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Powershell {
+pub(crate) enum Powershell {
     End = 0,
     Comment = 1,
     DecimalIntegerLiteral = 2,

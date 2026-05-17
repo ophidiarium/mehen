@@ -1,11 +1,10 @@
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use mehen_core::{
-    AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, MetricSpace, ParseDiagnostic,
-    SourceFile,
+use crate::{
+    AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, MetricSelector, MetricSpace,
+    ParseDiagnostic, SourceFile, SourceSpan, SpaceId, SpaceKind, Threshold, ThresholdViolation,
 };
-use mehen_metrics::{MetricSelector, ThresholdViolation};
 
 /// Inputs to `analyze_metrics`.
 #[derive(Clone, Debug)]
@@ -37,11 +36,7 @@ impl MetricsReport {
             language: Language::Markdown,
             analysis_backend: AnalysisBackend::TreeSitter,
             diagnostics: Vec::new(),
-            root: MetricSpace::new(
-                mehen_core::SpaceId(0),
-                mehen_core::SpaceKind::Unit,
-                mehen_core::SourceSpan::empty(),
-            ),
+            root: MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty()),
         }
     }
 }
@@ -69,7 +64,7 @@ pub struct DiffInput {
     pub from: String,
     pub to: String,
     pub paths: Vec<Utf8PathBuf>,
-    pub thresholds: Vec<mehen_metrics::Threshold>,
+    pub thresholds: Vec<Threshold>,
     pub config: AnalysisConfig,
 }
 

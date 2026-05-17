@@ -3,7 +3,7 @@
 use num_derive::FromPrimitive;
 
 #[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum Markdown {
+pub(crate) enum Markdown {
     End = 0,
     BackslashEscape2 = 1,
     EntityReference = 2,

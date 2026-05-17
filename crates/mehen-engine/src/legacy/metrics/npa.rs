@@ -13,7 +13,7 @@ use crate::legacy::spaces::SpaceKind;
 /// This metric counts the number of public attributes
 /// of classes/interfaces.
 #[derive(Clone, Debug, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     class_npa: usize,
     interface_npa: usize,
     class_na: usize,
@@ -69,7 +69,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npa` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.class_npa_sum += other.class_npa_sum;
         self.interface_npa_sum += other.interface_npa_sum;
         self.class_na_sum += other.class_na_sum;
@@ -82,7 +82,7 @@ impl Stats {
     /// space. `container` specifies whether the attribute belongs to a
     /// class-like (Class / Impl) or interface-like (Interface / Trait) scope.
     #[inline(always)]
-    pub fn record_attribute(&mut self, container: SpaceKind, is_public: bool) {
+    pub(crate) fn record_attribute(&mut self, container: SpaceKind, is_public: bool) {
         match container {
             SpaceKind::Class | SpaceKind::Impl => {
                 self.class_na += 1;
@@ -102,25 +102,25 @@ impl Stats {
 
     /// Returns the number of class public attributes sum in a space.
     #[inline(always)]
-    pub fn class_npa_sum(&self) -> f64 {
+    pub(crate) fn class_npa_sum(&self) -> f64 {
         self.class_npa_sum as f64
     }
 
     /// Returns the number of interface public attributes sum in a space.
     #[inline(always)]
-    pub fn interface_npa_sum(&self) -> f64 {
+    pub(crate) fn interface_npa_sum(&self) -> f64 {
         self.interface_npa_sum as f64
     }
 
     /// Returns the number of class attributes sum in a space.
     #[inline(always)]
-    pub fn class_na_sum(&self) -> f64 {
+    pub(crate) fn class_na_sum(&self) -> f64 {
         self.class_na_sum as f64
     }
 
     /// Returns the number of interface attributes sum in a space.
     #[inline(always)]
-    pub fn interface_na_sum(&self) -> f64 {
+    pub(crate) fn interface_na_sum(&self) -> f64 {
         self.interface_na_sum as f64
     }
 
@@ -134,7 +134,7 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn class_cda(&self) -> f64 {
+    pub(crate) fn class_cda(&self) -> f64 {
         self.class_npa_sum() / self.class_na_sum as f64
     }
 
@@ -148,7 +148,7 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn interface_cda(&self) -> f64 {
+    pub(crate) fn interface_cda(&self) -> f64 {
         // For the Java language it's not necessary to compute the metric value
         // The metric value in Java can only be 1.0 or f64:NAN
         if self.interface_npa_sum == self.interface_na_sum && self.interface_npa_sum != 0 {
@@ -168,26 +168,26 @@ impl Stats {
     /// security metric for not classified attributes.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn total_cda(&self) -> f64 {
+    pub(crate) fn total_cda(&self) -> f64 {
         self.total_npa() / self.total_na()
     }
 
     /// Returns the total number of public attributes in a space.
     #[inline(always)]
-    pub fn total_npa(&self) -> f64 {
+    pub(crate) fn total_npa(&self) -> f64 {
         self.class_npa_sum() + self.interface_npa_sum()
     }
 
     /// Returns the total number of attributes in a space.
     #[inline(always)]
-    pub fn total_na(&self) -> f64 {
+    pub(crate) fn total_na(&self) -> f64 {
         self.class_na_sum() + self.interface_na_sum()
     }
 
     // Accumulates the number of class and interface
     // public and not public attributes into the sums
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.class_npa_sum += self.class_npa;
         self.interface_npa_sum += self.interface_npa;
         self.class_na_sum += self.class_na;
@@ -196,7 +196,7 @@ impl Stats {
 
     // Checks if the `Npa` metric is disabled
     #[inline(always)]
-    pub fn is_disabled(&self) -> bool {
+    pub(crate) fn is_disabled(&self) -> bool {
         if self.not_applicable {
             return true;
         }
@@ -212,7 +212,7 @@ impl Stats {
     /// Marks this metric as not applicable to the current language so it is
     /// omitted from output rather than serialized as a measured zero.
     #[inline(always)]
-    pub fn mark_not_applicable(&mut self) {
+    pub(crate) fn mark_not_applicable(&mut self) {
         self.not_applicable = true;
     }
 
@@ -220,7 +220,7 @@ impl Stats {
     /// Languages without class-like constructs opt out. Markdown has no
     /// classes and likewise opts out.
     #[inline(always)]
-    pub fn applies_to(lang: LANG) -> bool {
+    pub(crate) fn applies_to(lang: LANG) -> bool {
         #[cfg(feature = "markdown")]
         if matches!(lang, LANG::Markdown) {
             return false;
@@ -233,7 +233,7 @@ impl Stats {
     /// aggregation can distinguish "no classes" from "classes with no
     /// counted attributes".
     #[inline(always)]
-    pub fn set_space_kind(&mut self, kind: SpaceKind) {
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
         self.space_kind = kind;
         if matches!(
             kind,
@@ -244,7 +244,7 @@ impl Stats {
     }
 }
 
-pub trait Npa
+pub(crate) trait Npa
 where
     Self: Checker,
 {

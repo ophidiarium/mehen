@@ -23,7 +23,7 @@ use regex::bytes::Regex;
 /// let path = Path::new("Cargo.toml");
 /// read_file_with_eol(&path).unwrap();
 /// ```
-pub fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+pub(crate) fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     read_file_inner(path, true, true)
 }
 
@@ -34,7 +34,7 @@ pub fn read_file_with_eol(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
 /// Markdown file (`"#"`) is a legitimate heading and must still produce
 /// metrics.
 #[cfg(feature = "markdown")]
-pub fn read_file_raw(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+pub(crate) fn read_file_raw(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     read_file_inner(path, false, false)
 }
 
@@ -181,7 +181,7 @@ fn get_emacs_mode(buf: &[u8]) -> Option<String> {
 /// ```
 ///
 /// [`LANG`]: enum.LANG.html
-pub fn guess_language<'a, P: AsRef<Path>>(buf: &[u8], path: P) -> (Option<LANG>, &'a str) {
+pub(crate) fn guess_language<'a, P: AsRef<Path>>(buf: &[u8], path: P) -> (Option<LANG>, &'a str) {
     let ext = path
         .as_ref()
         .extension()
@@ -222,7 +222,7 @@ pub fn guess_language<'a, P: AsRef<Path>>(buf: &[u8], path: P) -> (Option<LANG>,
 }
 
 /// Replaces \n and \r ending characters with a single generic \n
-pub fn remove_blank_lines(data: &mut Vec<u8>) {
+pub(crate) fn remove_blank_lines(data: &mut Vec<u8>) {
     let count_trailing = data
         .iter()
         .rev()
@@ -235,7 +235,11 @@ pub fn remove_blank_lines(data: &mut Vec<u8>) {
 }
 
 #[cfg(test)]
-pub fn check_func_space<T: ParserTrait, F: Fn(FuncSpace)>(source: &str, filename: &str, check: F) {
+pub(crate) fn check_func_space<T: ParserTrait, F: Fn(FuncSpace)>(
+    source: &str,
+    filename: &str,
+    check: F,
+) {
     let path = std::path::PathBuf::from(filename);
     let mut trimmed_bytes = source.trim_end().trim_matches('\n').as_bytes().to_vec();
     trimmed_bytes.push(b'\n');
@@ -246,7 +250,11 @@ pub fn check_func_space<T: ParserTrait, F: Fn(FuncSpace)>(source: &str, filename
 }
 
 #[cfg(test)]
-pub fn check_metrics<T: ParserTrait>(source: &str, filename: &str, check: fn(CodeMetrics) -> ()) {
+pub(crate) fn check_metrics<T: ParserTrait>(
+    source: &str,
+    filename: &str,
+    check: fn(CodeMetrics) -> (),
+) {
     check_func_space::<T, _>(source, filename, |func_space| check(func_space.metrics))
 }
 

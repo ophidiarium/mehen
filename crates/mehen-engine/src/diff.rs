@@ -16,7 +16,7 @@ use mehen_git::{ChangeStatus, GitError};
 
 use crate::detection::detect_language;
 use crate::registry::AnalyzerRegistry;
-use crate::report::{AnalysisErrorRecord, DiffFile, DiffInput, DiffReport, DiffSide};
+use mehen_core::{AnalysisErrorRecord, DiffFile, DiffInput, DiffReport, DiffSide};
 
 /// Run `mehen diff` against the workspace and produce a report.
 ///

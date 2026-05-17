@@ -25,7 +25,7 @@ use crate::legacy::preproc::PreprocResults;
 ///
 /// Allows to call a private library function, getting as result
 /// its output value.
-pub trait Callback {
+pub(crate) trait Callback {
     /// The output type returned by the callee
     type Res;
     /// The input type used by the caller to pass the arguments to the callee
@@ -35,14 +35,14 @@ pub trait Callback {
     fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res;
 }
 
-pub trait LanguageInfo {
+pub(crate) trait LanguageInfo {
     type BaseLang;
 
     fn get_lang() -> LANG;
 }
 
 #[doc(hidden)]
-pub trait ParserTrait {
+pub(crate) trait ParserTrait {
     type Checker: Alterator + Checker;
     type Getter: Getter;
     type Cognitive: Cognitive;
@@ -65,7 +65,7 @@ pub trait ParserTrait {
     fn get_filters(&self, filters: &[String]) -> Filter;
 }
 
-pub trait Search<'a> {
+pub(crate) trait Search<'a> {
     fn act_on_node(&self, pred: &mut dyn FnMut(&Node<'a>));
     fn act_on_child(&self, action: &mut dyn FnMut(&Node<'a>));
 }

@@ -28,7 +28,7 @@ enum MethodRole {
 /// This metric counts the number of public methods
 /// of classes/interfaces.
 #[derive(Clone, Debug, Default)]
-pub struct Stats {
+pub(crate) struct Stats {
     class_npm: usize,
     interface_npm: usize,
     class_nm: usize,
@@ -88,7 +88,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     /// Merges a second `Npm` metric into the first one
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         use SpaceKind::*;
 
         // If the child space was classified as a method, bump the enclosing
@@ -123,25 +123,25 @@ impl Stats {
 
     /// Returns the number of class public methods sum in a space.
     #[inline(always)]
-    pub fn class_npm_sum(&self) -> f64 {
+    pub(crate) fn class_npm_sum(&self) -> f64 {
         self.class_npm_sum as f64
     }
 
     /// Returns the number of interface public methods sum in a space.
     #[inline(always)]
-    pub fn interface_npm_sum(&self) -> f64 {
+    pub(crate) fn interface_npm_sum(&self) -> f64 {
         self.interface_npm_sum as f64
     }
 
     /// Returns the number of class methods sum in a space.
     #[inline(always)]
-    pub fn class_nm_sum(&self) -> f64 {
+    pub(crate) fn class_nm_sum(&self) -> f64 {
         self.class_nm_sum as f64
     }
 
     /// Returns the number of interface methods sum in a space.
     #[inline(always)]
-    pub fn interface_nm_sum(&self) -> f64 {
+    pub(crate) fn interface_nm_sum(&self) -> f64 {
         self.interface_nm_sum as f64
     }
 
@@ -155,7 +155,7 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn class_coa(&self) -> f64 {
+    pub(crate) fn class_coa(&self) -> f64 {
         self.class_npm_sum() / self.class_nm_sum()
     }
 
@@ -169,7 +169,7 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn interface_coa(&self) -> f64 {
+    pub(crate) fn interface_coa(&self) -> f64 {
         // For the Java language it's not necessary to compute the metric value
         // The metric value in Java can only be 1.0 or f64:NAN
         if self.interface_npm_sum == self.interface_nm_sum && self.interface_npm_sum != 0 {
@@ -189,26 +189,26 @@ impl Stats {
     /// security metric for not classified methods.
     /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
     #[inline(always)]
-    pub fn total_coa(&self) -> f64 {
+    pub(crate) fn total_coa(&self) -> f64 {
         self.total_npm() / self.total_nm()
     }
 
     /// Returns the total number of public methods in a space.
     #[inline(always)]
-    pub fn total_npm(&self) -> f64 {
+    pub(crate) fn total_npm(&self) -> f64 {
         self.class_npm_sum() + self.interface_npm_sum()
     }
 
     /// Returns the total number of methods in a space.
     #[inline(always)]
-    pub fn total_nm(&self) -> f64 {
+    pub(crate) fn total_nm(&self) -> f64 {
         self.class_nm_sum() + self.interface_nm_sum()
     }
 
     // Accumulates the number of class and interface
     // public and not public methods into the sums
     #[inline(always)]
-    pub fn compute_sum(&mut self) {
+    pub(crate) fn compute_sum(&mut self) {
         self.class_npm_sum += self.class_npm;
         self.interface_npm_sum += self.interface_npm;
         self.class_nm_sum += self.class_nm;
@@ -217,7 +217,7 @@ impl Stats {
 
     // Checks if the `Npm` metric is disabled
     #[inline(always)]
-    pub fn is_disabled(&self) -> bool {
+    pub(crate) fn is_disabled(&self) -> bool {
         if self.not_applicable {
             return true;
         }
@@ -233,7 +233,7 @@ impl Stats {
     /// Marks this metric as not applicable to the current language so it is
     /// omitted from output rather than serialized as a measured zero.
     #[inline(always)]
-    pub fn mark_not_applicable(&mut self) {
+    pub(crate) fn mark_not_applicable(&mut self) {
         self.not_applicable = true;
     }
 
@@ -241,7 +241,7 @@ impl Stats {
     /// Languages without class-like constructs opt out. Markdown has no
     /// classes or methods and likewise opts out.
     #[inline(always)]
-    pub fn applies_to(lang: LANG) -> bool {
+    pub(crate) fn applies_to(lang: LANG) -> bool {
         #[cfg(feature = "markdown")]
         if matches!(lang, LANG::Markdown) {
             return false;
@@ -254,7 +254,7 @@ impl Stats {
     /// aggregation can distinguish "no classes" from "classes with no
     /// counted methods".
     #[inline(always)]
-    pub fn set_space_kind(&mut self, kind: SpaceKind) {
+    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
         self.space_kind = kind;
         if matches!(
             kind,
@@ -265,7 +265,7 @@ impl Stats {
     }
 }
 
-pub trait Npm
+pub(crate) trait Npm
 where
     Self: Checker,
 {
@@ -502,12 +502,12 @@ impl Npm for CCode {
 ///
 /// Therefore every PowerShell class method and property counts as
 /// public for the purposes of NPM / NPA.
-pub fn powershell_member_is_public(_node: &Node, _code: &[u8]) -> bool {
+pub(crate) fn powershell_member_is_public(_node: &Node, _code: &[u8]) -> bool {
     true
 }
 
 /// Explicit Kotlin visibility on a declaration-like node.
-pub fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
+pub(crate) fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
     for child in node.children() {
         if !matches!(
             child.kind_id().into(),
@@ -533,7 +533,7 @@ pub fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
 
 /// Whether a Kotlin class member is public. Defaults to `public`; explicit
 /// `private`/`protected`/`internal` modifiers override.
-pub fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
+pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
     kotlin_member_visibility(node, code).unwrap_or(true)
 }
 
@@ -565,7 +565,7 @@ fn kotlin_accessor_is_public(node: &Node, code: &[u8]) -> bool {
 /// enums, disambiguated only by the `class` / `interface` / `enum`
 /// keyword child — so to tell an interface from a class we have to look
 /// at the declaration's keyword children.
-pub fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
+pub(crate) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
     // `body_parent` is a `class_body` / `enum_class_body`. Its parent is
     // the `class_declaration` (or `object_declaration`). For interfaces
     // the declaration contains an `interface` keyword child; otherwise
@@ -675,7 +675,7 @@ impl Npm for crate::legacy::langs::PhpCode {
 /// public. PHP defaults to `public` when no visibility modifier is present.
 /// PHP keywords are case-insensitive, so `Private`, `PROTECTED`, etc. must be
 /// recognized too.
-pub fn php_member_is_public(node: &Node, code: &[u8]) -> bool {
+pub(crate) fn php_member_is_public(node: &Node, code: &[u8]) -> bool {
     use crate::legacy::languages::Php::*;
     for child in node.children() {
         if child.kind_id() != VisibilityModifier {
