@@ -1,0 +1,176 @@
+use std::marker::PhantomData;
+use std::path::Path;
+use std::sync::Arc;
+
+use crate::checker::Checker;
+use crate::metrics::abc::Abc;
+use crate::metrics::cognitive::Cognitive;
+use crate::metrics::cyclomatic::Cyclomatic;
+use crate::metrics::exit::Exit;
+use crate::metrics::halstead::Halstead;
+use crate::metrics::loc::Loc;
+use crate::metrics::mi::Mi;
+use crate::metrics::nargs::NArgs;
+use crate::metrics::nom::Nom;
+use crate::metrics::npa::Npa;
+use crate::metrics::npm::Npm;
+use crate::metrics::wmc::Wmc;
+
+use crate::alterator::Alterator;
+use crate::getter::Getter;
+
+use crate::node::{Node, Tree};
+use crate::preproc::PreprocResults;
+use crate::traits::*;
+
+#[derive(Debug)]
+pub(crate) struct Parser<
+    T: LanguageInfo
+        + Alterator
+        + Checker
+        + Getter
+        + Abc
+        + Cognitive
+        + Cyclomatic
+        + Exit
+        + Halstead
+        + Loc
+        + Mi
+        + NArgs
+        + Nom
+        + Npa
+        + Npm
+        + Wmc,
+> {
+    code: Vec<u8>,
+    tree: Tree,
+    phantom: PhantomData<T>,
+}
+
+type FilterFn = dyn Fn(&Node) -> bool;
+
+pub(crate) struct Filter {
+    filters: Vec<Box<FilterFn>>,
+}
+
+impl std::fmt::Debug for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Filter")
+            .field("count", &self.filters.len())
+            .finish()
+    }
+}
+
+impl Filter {
+    pub(crate) fn any(&self, node: &Node) -> bool {
+        for f in &self.filters {
+            if f(node) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+#[inline(always)]
+fn get_fake_code(_code: &[u8], _path: &Path, _pr: Option<Arc<PreprocResults>>) -> Option<Vec<u8>> {
+    None
+}
+
+impl<
+    T: 'static
+        + LanguageInfo
+        + Alterator
+        + Checker
+        + Getter
+        + Abc
+        + Cognitive
+        + Cyclomatic
+        + Exit
+        + Halstead
+        + Loc
+        + Mi
+        + NArgs
+        + Nom
+        + Npa
+        + Npm
+        + Wmc,
+> ParserTrait for Parser<T>
+{
+    type Checker = T;
+    type Getter = T;
+    type Cognitive = T;
+    type Cyclomatic = T;
+    type Halstead = T;
+    type Loc = T;
+    type Nom = T;
+    type Mi = T;
+    type NArgs = T;
+    type Exit = T;
+    type Wmc = T;
+    type Abc = T;
+    type Npm = T;
+    type Npa = T;
+
+    fn new(code: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Self {
+        let fake_code = get_fake_code(&code, path, pr);
+        let code = if let Some(fake) = fake_code {
+            fake
+        } else {
+            code
+        };
+
+        let tree = Tree::new::<T>(&code);
+
+        Self {
+            code,
+            tree,
+            phantom: PhantomData,
+        }
+    }
+
+    #[inline(always)]
+    fn get_root(&self) -> Node<'_> {
+        self.tree.get_root()
+    }
+
+    #[inline(always)]
+    fn get_code(&self) -> &[u8] {
+        &self.code
+    }
+
+    #[inline(always)]
+    fn get_lang() -> crate::langs::LANG {
+        T::get_lang()
+    }
+
+    fn get_filters(&self, filters: &[String]) -> Filter {
+        let mut res: Vec<Box<FilterFn>> = Vec::new();
+        for f in filters {
+            let f = f.as_str();
+            match f {
+                "all" => res.push(Box::new(|_: &Node| -> bool { true })),
+                "call" => res.push(Box::new(T::is_call)),
+                "comment" => res.push(Box::new(T::is_comment)),
+                "error" => res.push(Box::new(T::is_error)),
+                "string" => res.push(Box::new(T::is_string)),
+                "function" => res.push(Box::new(T::is_func)),
+                _ => {
+                    if let Ok(n) = f.parse::<u16>() {
+                        res.push(Box::new(move |node: &Node| -> bool { node.kind_id() == n }));
+                    } else {
+                        let f = f.to_owned();
+                        res.push(Box::new(move |node: &Node| -> bool {
+                            node.kind().contains(&f)
+                        }));
+                    }
+                }
+            }
+        }
+        if res.is_empty() {
+            res.push(Box::new(|_: &Node| -> bool { true }));
+        }
+
+        Filter { filters: res }
+    }
+}

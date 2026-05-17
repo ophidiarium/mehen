@@ -1,0 +1,186 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 10
+  ploc: 3
+  cloc: 0
+  tloc: 4
+  mloc: 0
+  bloc: 3
+  aloc: 4
+loc_ratios:
+  artifact_line_ratio: 0.4
+  code_line_ratio: 0
+  table_line_ratio: 0.4
+  math_line_ratio: 0
+  blank_line_ratio: 0.3
+size:
+  words: 12
+  effective_content_units: 0.5900000000000001
+  sections: 1
+  headings: 1
+ecu_inputs:
+  table_cells: 9
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 10
+    parent_section_id: ~
+    child_section_ids: []
+    word_count: 12
+    block_count: 3
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 1
+  cognitive_complexity: 0.7265624999999999
+  halstead:
+    operators_distinct: 5
+    operators_total: 10
+    operands_distinct: 17
+    operands_total: 18
+    vocabulary: 22
+    length: 28
+    volume: 124.86408532184433
+    difficulty: 2.6470588235294117
+    effort: 330.5225787931173
+    embedded_volume: 0
+    total_volume: 124.86408532184433
+links:
+  total: 0
+  internal: 0
+  relative: 0
+  external: 0
+  external_vendor: 0
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 0
+  footnote: 0
+  bare_url: 0
+  broken: 0
+  link_debt_score: 0
+  information_scent_score: 0
+  review_burden: 0
+visuals:
+  images: 0
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 0
+tables:
+  count: 1
+  max_cells: 9
+  table_burden_score: 0.05
+  table_scaffold_score: 1
+  hard_warnings: 0
+maintainability:
+  documentation_maintainability_index: 94.51
+  section_balance_score: 0.85
+  good_scaffold_score: 0.2
+  artifact_debt_score: 0
+grounding:
+  repository_grounding_score: 0
+  evidence_coverage_score: 0.6153846153846154
+ai_era:
+  filler_lazy_structure_risk: 0.4575
+  labels:
+    - low-artifact-density
+    - low-repository-grounding
+    - specificity-scarcity
+  top_contributors:
+    - - low-repository-grounding
+      - 1
+    - - specificity-scarcity
+      - 1
+    - - low-artifact-density
+      - 0.6666666666666667
+review:
+  review_criticality_index: 6.000000000000001
+artifacts:
+  - id: 0
+    kind: table
+    start_line: 5
+    end_line: 8
+    language_tag: ~
+    size: 9
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 0.05
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 3
+        language: en
+      - start_line: 10
+        end_line: 10
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: ~
+      flesch_kincaid_grade: ~
+      gunning_fog: ~
+      smog: ~
+      ari: ~
+      coleman_liau: ~
+      dale_chall_new: ~
+      dale_chall_list: ngsl-1.2
+      forcast: ~
+      lix: ~
+      rix: ~
+      ensemble_grade_band:
+        - ~
+        - ~
+    lexical:
+      mattr_50: 0.8
+      hapax_ratio: 0.833
+      dis_ratio: 0.083
+      lexical_density: 0.733
+      avg_sentence_words: 5
+      p90_sentence_words: 7
+      max_sentence_words: 7
+      stddev_sentence_words: 1.633
+      avg_word_chars: 5.2
+      p90_word_chars: 8
+      sentence_count: 3
+      words_total: 15
+    wording:
+      passive_ratio: 0
+      hedge_density: 0
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0
+      nominalization_density: 0
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 1
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: true
+  japanese: ~
+  meta:
+    short_doc_warning: true
+    words_counted: 15
+    sentences_counted: 3
+    blocks_stripped:
+      - table

@@ -19,6 +19,12 @@ mehen-engine = { workspace = true }
 mehen-metrics = { workspace = true }
 mehen-report = { workspace = true }
 
+# `diff` and `top-offenders` flatten the still-in-place pre-1.0 arg
+# shapes and delegate to `mehen::diff::run_diff` /
+# `mehen::top_offenders::run_top_offenders`. The dependency goes away
+# when those orchestrators are ported into `mehen-engine`.
+mehen = { path = "../.." }
+
 camino = { workspace = true }
 clap = { workspace = true }
 env_logger = { workspace = true }
@@ -26,5 +32,6 @@ log = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

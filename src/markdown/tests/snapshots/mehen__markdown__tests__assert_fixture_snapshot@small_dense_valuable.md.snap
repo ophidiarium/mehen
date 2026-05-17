@@ -1,0 +1,462 @@
+---
+source: src/markdown/tests/mod.rs
+---
+path: "<fixture_path>"
+loc:
+  dloc: 139
+  ploc: 49
+  cloc: 39
+  tloc: 12
+  mloc: 0
+  bloc: 39
+  aloc: 51
+loc_ratios:
+  artifact_line_ratio: 0.3669064748201439
+  code_line_ratio: 0.2805755395683453
+  table_line_ratio: 0.08633093525179857
+  math_line_ratio: 0
+  blank_line_ratio: 0.2805755395683453
+size:
+  words: 247
+  effective_content_units: 16.479166666666664
+  sections: 9
+  headings: 9
+ecu_inputs:
+  table_cells: 30
+  diagram_nodes: 0
+  diagram_edges: 0
+  math_tokens: 0
+  raw_html_or_mdx_lines: 0
+sections:
+  - section_id: 0
+    heading_level: 1
+    heading_text: ~
+    start_line: 1
+    end_line: 139
+    parent_section_id: ~
+    child_section_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+    word_count: 33
+    block_count: 1
+  - section_id: 1
+    heading_level: 2
+    heading_text: ~
+    start_line: 8
+    end_line: 24
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 28
+    block_count: 5
+  - section_id: 2
+    heading_level: 2
+    heading_text: ~
+    start_line: 25
+    end_line: 42
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 34
+    block_count: 5
+  - section_id: 3
+    heading_level: 2
+    heading_text: ~
+    start_line: 43
+    end_line: 56
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 35
+    block_count: 3
+  - section_id: 4
+    heading_level: 2
+    heading_text: ~
+    start_line: 57
+    end_line: 70
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 16
+    block_count: 4
+  - section_id: 5
+    heading_level: 2
+    heading_text: ~
+    start_line: 71
+    end_line: 81
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 19
+    block_count: 3
+  - section_id: 6
+    heading_level: 2
+    heading_text: ~
+    start_line: 82
+    end_line: 109
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 53
+    block_count: 9
+  - section_id: 7
+    heading_level: 2
+    heading_text: ~
+    start_line: 110
+    end_line: 131
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 29
+    block_count: 5
+  - section_id: 8
+    heading_level: 2
+    heading_text: ~
+    start_line: 132
+    end_line: 139
+    parent_section_id: 0
+    child_section_ids: []
+    word_count: 0
+    block_count: 1
+complexity:
+  reading_path_complexity: 1
+  reading_path_complexity_raw: 10
+  cognitive_complexity: 12.901249999999997
+  halstead:
+    operators_distinct: 14
+    operators_total: 134
+    operands_distinct: 210
+    operands_total: 307
+    vocabulary: 224
+    length: 441
+    volume: 3443.0435206274033
+    difficulty: 10.233333333333333
+    effort: 35233.81202775376
+    embedded_volume: 0
+    total_volume: 3443.0435206274033
+links:
+  total: 0
+  internal: 0
+  relative: 0
+  external: 0
+  external_vendor: 0
+  scholarly: 0
+  issue_pr: 0
+  absolute_same_repo: 0
+  image: 0
+  footnote: 0
+  bare_url: 0
+  broken: 0
+  link_debt_score: 0
+  information_scent_score: 0
+  review_burden: 0
+visuals:
+  images: 0
+  diagrams: 0
+  diagram_nodes_total: 0
+  diagram_edges_total: 0
+  diagram_cycles_total: 0
+  visual_scaffold_score: 0
+  visual_net_effect: 0
+tables:
+  count: 2
+  max_cells: 15
+  table_burden_score: 0.016666666666666666
+  table_scaffold_score: 1
+  hard_warnings: 0
+maintainability:
+  documentation_maintainability_index: 99.9910030392779
+  section_balance_score: 0.85
+  good_scaffold_score: 0.4
+  artifact_debt_score: 0
+grounding:
+  repository_grounding_score: 0.2
+  evidence_coverage_score: 0.6666666666666667
+ai_era:
+  filler_lazy_structure_risk: 0.16425101214574903
+  labels:
+    - low-repository-grounding
+  top_contributors:
+    - - low-repository-grounding
+      - 0.8
+    - - specificity-scarcity
+      - 0.03542510121457498
+    - - hollow-references
+      - 0
+review:
+  review_criticality_index: 19.431808035714283
+artifacts:
+  - id: 0
+    kind: code
+    start_line: 12
+    end_line: 15
+    language_tag: bash
+    size: 2
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 1
+    kind: code
+    start_line: 19
+    end_line: 21
+    language_tag: bash
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 2
+    kind: code
+    start_line: 30
+    end_line: 32
+    language_tag: sh
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 3
+    kind: code
+    start_line: 36
+    end_line: 38
+    language_tag: sql
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 4
+    kind: code
+    start_line: 48
+    end_line: 50
+    language_tag: sh
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 5
+    kind: code
+    start_line: 61
+    end_line: 63
+    language_tag: bash
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 6
+    kind: code
+    start_line: 67
+    end_line: 69
+    language_tag: json
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 7
+    kind: code
+    start_line: 75
+    end_line: 77
+    language_tag: bash
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 8
+    kind: code
+    start_line: 87
+    end_line: 97
+    language_tag: yaml
+    size: 9
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 9
+    kind: code
+    start_line: 115
+    end_line: 117
+    language_tag: sh
+    size: 1
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 1
+  - id: 10
+    kind: table
+    start_line: 121
+    end_line: 126
+    language_tag: ~
+    size: 15
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 0.016666666666666666
+  - id: 11
+    kind: table
+    start_line: 134
+    end_line: 139
+    language_tag: ~
+    size: 15
+    has_explanation: true
+    has_label: true
+    oversized: false
+    burden: 0.016666666666666666
+prose:
+  language_detection:
+    dominant_language: en
+    blocks:
+      - start_line: 1
+        end_line: 1
+        language: en
+      - start_line: 3
+        end_line: 6
+        language: en
+      - start_line: 8
+        end_line: 8
+        language: en
+      - start_line: 10
+        end_line: 10
+        language: en
+      - start_line: 17
+        end_line: 17
+        language: en
+      - start_line: 23
+        end_line: 23
+        language: en
+      - start_line: 25
+        end_line: 25
+        language: en
+      - start_line: 27
+        end_line: 28
+        language: en
+      - start_line: 34
+        end_line: 34
+        language: en
+      - start_line: 40
+        end_line: 41
+        language: en
+      - start_line: 43
+        end_line: 43
+        language: en
+      - start_line: 45
+        end_line: 46
+        language: en
+      - start_line: 52
+        end_line: 55
+        language: en
+      - start_line: 57
+        end_line: 57
+        language: en
+      - start_line: 59
+        end_line: 59
+        language: en
+      - start_line: 65
+        end_line: 65
+        language: en
+      - start_line: 71
+        end_line: 71
+        language: en
+      - start_line: 73
+        end_line: 73
+        language: en
+      - start_line: 79
+        end_line: 80
+        language: en
+      - start_line: 82
+        end_line: 82
+        language: en
+      - start_line: 84
+        end_line: 85
+        language: en
+      - start_line: 99
+        end_line: 101
+        language: en
+      - start_line: 103
+        end_line: 103
+        language: en
+      - start_line: 105
+        end_line: 105
+        language: en
+      - start_line: 106
+        end_line: 106
+        language: en
+      - start_line: 107
+        end_line: 107
+        language: en
+      - start_line: 108
+        end_line: 108
+        language: en
+      - start_line: 110
+        end_line: 110
+        language: en
+      - start_line: 112
+        end_line: 113
+        language: en
+      - start_line: 119
+        end_line: 119
+        language: en
+      - start_line: 128
+        end_line: 130
+        language: en
+      - start_line: 132
+        end_line: 132
+        language: en
+  english:
+    readability:
+      flesch_reading_ease: 59.518
+      flesch_kincaid_grade: 6.529
+      gunning_fog: 7.236
+      smog: 8.499
+      ari: 5.958
+      coleman_liau: 9.764
+      dale_chall_new: 10.858
+      dale_chall_list: ngsl-1.2
+      forcast: 11.4
+      lix: 34.267
+      rix: 1.767
+      ensemble_grade_band:
+        - 5.958
+        - 9.764
+    lexical:
+      mattr_50: 0.798
+      hapax_ratio: 0.735
+      dis_ratio: 0.169
+      lexical_density: 0.676
+      avg_sentence_words: 6.326
+      p90_sentence_words: 12
+      max_sentence_words: 21
+      stddev_sentence_words: 4.285
+      avg_word_chars: 5.261
+      p90_word_chars: 9
+      sentence_count: 43
+      words_total: 272
+    wording:
+      passive_ratio: 0
+      hedge_density: 0.007
+      weasel_density: 0
+      wordy_density: 0
+      adverb_density: 0.004
+      nominalization_density: 0.037
+      expletive_count: 0
+      lexical_illusions: 0
+      cliche_density: 0
+      nonword_count: 0
+      long_sentence_count: 0
+      wording_quality_score: 1
+    inclusive_language:
+      flags: []
+      inclusive_language_score: 1
+      flag_count: 0
+    short_doc_warning: false
+  japanese: ~
+  meta:
+    short_doc_warning: false
+    words_counted: 272
+    sentences_counted: 43
+    blocks_stripped:
+      - code
+      - table

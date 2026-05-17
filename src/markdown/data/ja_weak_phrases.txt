@@ -1,0 +1,44 @@
+# Japanese weak phrases (ja-no-weak-phrase).
+# Source: textlint-rule-preset-ja-technical-writing (MIT).
+# Each line is a substring match. Any occurrence inside a Japanese block
+# counts as one weak-phrase hit.
+かもしれない
+かも知れない
+かもしれません
+かも知れません
+と思います
+と思う
+と思われる
+と考えられる
+のような気がする
+気がする
+気がします
+感じがする
+感じがします
+だと思います
+と言える
+言えるだろう
+とも言える
+と考えられます
+らしいです
+らしい
+ようです
+ようだ
+かもしれず
+でしょう
+でしょうか
+可能性がある
+可能性があります
+可能性を持つ
+ではないか
+かと思われる
+おそらく
+多分
+たぶん
+たぶん〜だろう
+ほぼ
+ほとんど
+ほとんどの
+〜的な
+〜的で
+〜的に

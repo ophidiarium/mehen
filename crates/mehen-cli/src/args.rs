@@ -15,14 +15,20 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// Subcommands flatten the still-in-place `mehen::diff::DiffOpts` /
+/// `mehen::top_offenders::TopOffendersOpts` argument shapes from the
+/// root crate so the existing pre-1.0 tests against those flag surfaces
+/// keep passing through the new binary. Each pre-1.0 argument is
+/// physically reachable via `cargo run -p mehen-cli --bin mehen --
+/// diff …`.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Analyze exactly one file and emit a metrics report.
     Metrics(MetricsArgs),
     /// Compare metrics between two git revisions.
-    Diff(DiffArgs),
+    Diff(mehen::diff::DiffOpts),
     /// Rank files by one or more metrics (worst offenders first).
-    TopOffenders(TopOffendersArgs),
+    TopOffenders(mehen::top_offenders::TopOffendersOpts),
 }
 
 #[derive(Debug, Args)]
@@ -47,86 +53,12 @@ pub struct MetricsArgs {
     pub profile: Profile,
 }
 
-#[derive(Debug, Args)]
-pub struct DiffArgs {
-    /// Base revision.
-    #[arg(long, default_value = "origin/main")]
-    pub from: String,
-
-    /// Head revision.
-    #[arg(long, default_value = "HEAD")]
-    pub to: String,
-
-    /// Restrict diff to these path prefixes.
-    #[arg(long, num_args = 0..)]
-    pub paths: Vec<PathBuf>,
-
-    /// Output format. `github-markdown` is the action-friendly comment body;
-    /// `json` is the machine output the action consumes for thresholds.
-    #[arg(long, default_value = "github-markdown")]
-    pub format: DiffFormat,
-
-    /// Threshold rules. Repeatable; format `selector=value` (e.g.
-    /// `cognitive=5`, `loc.lloc=120`).
-    #[arg(long = "threshold", num_args = 0..)]
-    pub thresholds: Vec<String>,
-
-    /// Built-in profile preset.
-    #[arg(long, default_value = "default")]
-    pub profile: Profile,
-}
-
-#[derive(Debug, Args)]
-pub struct TopOffendersArgs {
-    /// Roots to walk. At least one path is required.
-    #[arg(required = true, num_args = 1..)]
-    pub paths: Vec<PathBuf>,
-
-    /// Metric selectors. Repeatable; ranks by the first selector and breaks
-    /// ties with subsequent selectors.
-    #[arg(long = "metric", num_args = 0..)]
-    pub metrics: Vec<String>,
-
-    /// Glob to include files.
-    #[arg(long, num_args = 0..)]
-    pub include: Vec<String>,
-
-    /// Glob to exclude files.
-    #[arg(long, num_args = 0..)]
-    pub exclude: Vec<String>,
-
-    /// Maximum number of results to print.
-    #[arg(long, default_value_t = 20)]
-    pub max_results: usize,
-
-    /// Output format.
-    #[arg(long, default_value = "markdown")]
-    pub format: TopOffendersFormat,
-
-    /// Built-in profile preset.
-    #[arg(long, default_value = "default")]
-    pub profile: Profile,
-}
-
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum OutputFormat {
     Json,
     Markdown,
     Yaml,
     Toml,
-}
-
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum DiffFormat {
-    #[value(name = "github-markdown")]
-    GithubMarkdown,
-    Json,
-}
-
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum TopOffendersFormat {
-    Markdown,
-    Json,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
