@@ -43,7 +43,7 @@ pub use line_index::LineIndex;
 pub use metric_key::{MetricKey, keys};
 pub use source::SourceFile;
 pub use space::{MetricSpace, SpaceId, SpaceKind};
-pub use span::SourceSpan;
+pub use span::{SourceSpan, byte_offset_checked, byte_offset_clamped};
 
 /// The result type used by analyzers and the dispatcher.
 pub type Result<T> = core::result::Result<T, AnalysisError>;

@@ -9,7 +9,7 @@
 
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricSpace,
-    Result, SourceFile, SourceSpan, SpaceId, SpaceKind,
+    Result, SourceFile, SourceSpan, SpaceId, SpaceKind, byte_offset_clamped,
 };
 
 pub struct RubyAnalyzer;
@@ -38,7 +38,7 @@ impl LanguageAnalyzer for RubyAnalyzer {
     fn analyze(&self, source: &SourceFile, _config: &AnalysisConfig) -> Result<LanguageAnalysis> {
         let span = SourceSpan {
             start_byte: 0,
-            end_byte: source.text.len() as u32,
+            end_byte: byte_offset_clamped(source.text.len()),
             start_line: 1,
             end_line: source.line_index.line_count(),
         };

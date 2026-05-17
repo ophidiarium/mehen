@@ -73,7 +73,8 @@ pub struct DiffArgs {
 
 #[derive(Debug, Args)]
 pub struct TopOffendersArgs {
-    /// Roots to walk.
+    /// Roots to walk. At least one path is required.
+    #[arg(required = true, num_args = 1..)]
     pub paths: Vec<PathBuf>,
 
     /// Metric selectors. Repeatable; ranks by the first selector and breaks

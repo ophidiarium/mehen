@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 pub struct AnalysisConfig {
     /// If true, analyzers should populate `LanguageAnalysis::contributions`
     /// with explainable evidence. When false, analyzers may skip the work
-    /// for performance. Default: true (the engine flips it for production).
+    /// for performance.
+    ///
+    /// Defaults to `false` via the derived `Default` impl (matches `bool`'s
+    /// default). [`AnalysisConfig::production`] sets it to `true`;
+    /// [`AnalysisConfig::benchmark`] keeps it `false`.
     pub emit_contributions: bool,
 
     /// Maximum recursion depth for [`crate::LanguageDispatcher::analyze`]

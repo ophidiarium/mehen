@@ -15,6 +15,7 @@
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer,
     LanguageDispatcher, MetricSpace, Result, SourceFile, SourceSpan, SpaceId, SpaceKind,
+    byte_offset_clamped,
 };
 
 pub struct MarkdownAnalyzer;
@@ -46,7 +47,7 @@ impl LanguageAnalyzer for MarkdownAnalyzer {
         // embedded-code path that requires a `LanguageDispatcher`.
         let span = SourceSpan {
             start_byte: 0,
-            end_byte: source.text.len() as u32,
+            end_byte: byte_offset_clamped(source.text.len()),
             start_line: 1,
             end_line: source.line_index.line_count(),
         };

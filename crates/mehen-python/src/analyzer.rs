@@ -1,10 +1,10 @@
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricKey,
-    Result, SourceFile, SourceSpan, SpaceKind,
+    Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
 };
 use mehen_metrics::{
     CognitiveStats, CyclomaticStats, HalsteadBuilder, HalsteadOperand, HalsteadOperator,
-    HalsteadStats, LocStats, MetricTreeBuilder, MiStats, keys,
+    HalsteadStats, LineClass, LocStats, MetricTreeBuilder, MiStats, keys,
 };
 use mehen_tree_sitter::{TreeSitterParser, node_span, text_of};
 use smol_str::SmolStr;
@@ -72,7 +72,12 @@ impl LanguageAnalyzer for PythonAnalyzer {
         };
         walker.push_state();
         walker.visit(root);
-        let unit_state = walker.pop_state();
+        let mut unit_state = walker.pop_state();
+        // LOC classification is computed once over the whole source for
+        // the unit-level state; nested spaces fill in `total` only from
+        // their span. The pre-1.0 implementation does richer per-space
+        // line accounting that Phase 3+ will port over.
+        classify_unit_loc(&source.text, &mut unit_state.loc);
         // Top-level metric set comes from the unit-level state we just
         // popped. Any spaces opened during the walk are already attached
         // to the root unit by the tree builder.
@@ -92,7 +97,7 @@ impl LanguageAnalyzer for PythonAnalyzer {
 fn empty_analysis(source: &SourceFile) -> LanguageAnalysis {
     let span = SourceSpan {
         start_byte: 0,
-        end_byte: source.text.len() as u32,
+        end_byte: byte_offset_clamped(source.text.len()),
         start_line: 1,
         end_line: source.line_index.line_count(),
     };
@@ -178,6 +183,11 @@ impl<'a> Walker<'a> {
         // pre-1.0 `Cyclomatic for PythonCode`.
         if is_python_decision(&node) {
             self.current_state().cyclomatic.record_decision();
+            // Phase 1 cognitive uses the cyclomatic decision set as a
+            // first approximation. The pre-1.0 cognitive rules add
+            // nesting penalties and binary-sequence handling that
+            // Phase 3+ will port over from `Cognitive for PythonCode`.
+            self.current_state().cognitive.record_increment(1);
         }
 
         // Halstead operator/operand events. The classification here is
@@ -216,12 +226,52 @@ impl<'a> Walker<'a> {
 
         // Finalize the opened space, if any.
         if opened_space {
-            let state = self.pop_state();
+            let mut state = self.pop_state();
+            // Per-space LOC: classify the lines covered by this space's
+            // span. The pre-1.0 analyzer does richer accounting (visible
+            // statement detection, comment-on-code-line handling); the
+            // Phase 1 demo classifies lines as Code/Comment/Blank from
+            // the source text alone.
+            classify_span_loc(self.source_text, &node, &mut state.loc);
             // Emit metrics into the just-finished space's MetricSet, then
             // close it so it attaches to the parent.
             apply_state_to(state, self.tree.metrics_mut());
             self.tree.close();
         }
+    }
+}
+
+/// Classify every line of `source` and feed the result into `loc`.
+fn classify_unit_loc(source: &str, loc: &mut LocStats) {
+    for line in source.lines() {
+        loc.observe(classify_line(line));
+    }
+}
+
+/// Classify the lines covered by `node`'s byte range.
+fn classify_span_loc(source: &[u8], node: &Node<'_>, loc: &mut LocStats) {
+    let start = node.start_byte().min(source.len());
+    let end = node.end_byte().min(source.len());
+    if start >= end {
+        return;
+    }
+    let slice = match core::str::from_utf8(&source[start..end]) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    for line in slice.lines() {
+        loc.observe(classify_line(line));
+    }
+}
+
+fn classify_line(line: &str) -> LineClass {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        LineClass::Blank
+    } else if trimmed.starts_with('#') {
+        LineClass::Comment
+    } else {
+        LineClass::Code
     }
 }
 

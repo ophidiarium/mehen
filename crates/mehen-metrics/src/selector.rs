@@ -9,9 +9,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// Format examples:
 ///
-/// - `cognitive` — top-level metric, "average" aggregator implied.
+/// - `cognitive` — bare key; maps to [`SelectorAggregator::Root`] (file-
+///   level / root-unit value only, no aggregation across nested spaces).
 /// - `cognitive.max` — explicit max-of-spaces aggregator.
-/// - `loc.lloc` — namespaced metric.
+/// - `loc.lloc` — namespaced metric, also resolves to
+///   [`SelectorAggregator::Root`].
 /// - `loc.lloc.sum` — namespaced metric with explicit aggregator.
 ///
 /// Aggregator suffixes recognized: `min`, `max`, `avg`, `sum`. Anything else

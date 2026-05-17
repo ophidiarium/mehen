@@ -49,20 +49,19 @@ pub fn metrics(args: MetricsArgs) -> ExitCode {
         }
     };
 
-    let source = SourceFile::new(path.clone(), language, text);
+    let source = SourceFile::new(path, language, text);
     let input = AnalyzeMetricsInput {
         source,
         config: AnalysisConfig::production(),
     };
 
-    let mut report = match mehen_engine::analyze_metrics(input) {
+    let report = match mehen_engine::analyze_metrics(input) {
         Ok(r) => r,
         Err(e) => {
             log::error!("analysis failed: {e}");
             return ExitCode::SetupError;
         }
     };
-    report.path = path;
 
     match args.format {
         OutputFormat::Json => match render_metrics_json(&report, args.pretty) {

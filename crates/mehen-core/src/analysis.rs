@@ -36,13 +36,24 @@ impl From<i64> for MetricValue {
 
 impl From<u64> for MetricValue {
     fn from(v: u64) -> Self {
-        MetricValue::Int(v as i64)
+        // Saturate large counts into a `Float` so values that exceed
+        // `i64::MAX` are still representable instead of silently wrapping
+        // to a negative integer.
+        if v <= i64::MAX as u64 {
+            MetricValue::Int(v as i64)
+        } else {
+            MetricValue::Float(v as f64)
+        }
     }
 }
 
 impl From<usize> for MetricValue {
     fn from(v: usize) -> Self {
-        MetricValue::Int(v as i64)
+        if v <= i64::MAX as usize {
+            MetricValue::Int(v as i64)
+        } else {
+            MetricValue::Float(v as f64)
+        }
     }
 }
 
