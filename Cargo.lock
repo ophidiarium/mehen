@@ -1644,6 +1644,7 @@ dependencies = [
  "mehen-metrics",
  "mehen-report",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1802,6 +1803,7 @@ name = "mehen-tree-sitter"
 version = "0.6.1"
 dependencies = [
  "mehen-core",
+ "mehen-metrics",
  "tree-sitter",
 ]
 

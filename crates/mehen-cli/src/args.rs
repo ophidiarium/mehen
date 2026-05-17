@@ -4,7 +4,16 @@ use clap::{Args, Parser, Subcommand};
 
 /// `mehen` — code metrics CLI.
 #[derive(Debug, Parser)]
-#[command(name = "mehen", about = "Compute and report code metrics.", version)]
+#[command(
+    // The package's binary is built as `mehen-next` during the v1
+    // rewrite to coexist with the pre-1.0 `mehen` binary at the
+    // workspace root. The displayed program name stays `mehen` so the
+    // help text reads correctly to users.
+    name = "mehen",
+    bin_name = "mehen",
+    about = "Compute and report code metrics.",
+    version
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::checker::Checker;
 use crate::langs::LANG;
@@ -22,7 +22,6 @@ use crate::metrics::npa::{self, Npa};
 use crate::metrics::npm::{self, Npm};
 use crate::metrics::wmc::{self, Wmc};
 
-use crate::output::dump_metrics::*;
 use crate::traits::*;
 
 /// The list of supported space kinds.
@@ -366,30 +365,6 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
         state.space.name = path.to_str().map(|name| name.to_string());
         state.space
     })
-}
-
-/// Configuration options for computing
-/// the metrics of a code.
-#[derive(Debug)]
-pub(crate) struct MetricsCfg {
-    /// Path to the file containing the code
-    pub(crate) path: PathBuf,
-}
-
-pub(crate) struct Metrics {
-    _guard: (),
-}
-
-impl Callback for Metrics {
-    type Res = std::io::Result<()>;
-    type Cfg = MetricsCfg;
-
-    fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res {
-        match metrics(parser, &cfg.path) {
-            Some(space) => dump_root(&space),
-            _ => Ok(()),
-        }
-    }
 }
 
 #[cfg(test)]
