@@ -17,6 +17,10 @@ use exit::ExitCode;
 
 fn main() {
     env_logger::init();
+    // Register the legacy embedded-code dispatch so the moved
+    // `mehen-markdown` analyzer can fold fenced-code metrics into its
+    // output. Idempotent — safe to call multiple times.
+    mehen::init_markdown();
     let cli = Cli::parse();
 
     let code = run(cli);

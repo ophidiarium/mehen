@@ -1591,6 +1591,8 @@ dependencies = [
  "globset",
  "insta",
  "log",
+ "mehen-engine",
+ "mehen-markdown",
  "num",
  "num-derive",
  "num-format",
@@ -1717,8 +1719,18 @@ dependencies = [
 name = "mehen-markdown"
 version = "0.7.0"
 dependencies = [
+ "insta",
+ "mehen",
  "mehen-core",
  "mehen-metrics",
+ "num",
+ "num-derive",
+ "num-traits",
+ "pretty_assertions",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tree-sitter",
  "tree-sitter-markdown-text",
  "unicode-script",

@@ -39,16 +39,26 @@ impl OutputLanguage {
     about = "Generate enums for a target language to use with tree-sitter."
 )]
 struct Opts {
-    /// Output directory.
+    /// Output directory. When `--per-crate` is enabled, this is the
+    /// workspace root and files land in
+    /// `{output}/crates/mehen-{language}/src/grammar.rs`. Otherwise
+    /// files are written directly to this directory.
     #[clap(long, short, default_value = ".", value_parser)]
     output: PathBuf,
-    /// Target language.
+    /// Target language for the emitted code (Rust by default).
     #[clap(long, short, default_value = "rust", value_parser = PossibleValuesParser::new(OutputLanguage::variants())
         .map(|s| s.parse::<OutputLanguage>().unwrap()))]
     language: OutputLanguage,
-    /// File name template.
+    /// File-name template for the legacy single-directory layout.
+    /// Ignored when `--per-crate` is set.
     #[clap(long, short, default_value = "language_$")]
     file_template: String,
+    /// Write each language's generated kind file to its owning analyzer
+    /// crate at `crates/mehen-{lang}/src/grammar.rs`. This is the
+    /// rewrite-plan §6.7 layout: kind enums become a private module
+    /// inside the owning language crate.
+    #[clap(long)]
+    per_crate: bool,
 }
 
 fn main() {
@@ -56,7 +66,12 @@ fn main() {
 
     match opts.language {
         OutputLanguage::Rust => {
-            if let Some(err) = generate_rust(&opts.output, &opts.file_template).err() {
+            let result = if opts.per_crate {
+                generate_rust_per_crate(&opts.output)
+            } else {
+                generate_rust(&opts.output, &opts.file_template)
+            };
+            if let Some(err) = result.err() {
                 eprintln!("{:?}", err);
             }
         }

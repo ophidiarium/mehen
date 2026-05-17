@@ -12,7 +12,24 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
+num = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-markdown-text = { workspace = true }
 unicode-script = { workspace = true }
 unicode-segmentation = { workspace = true }
+
+[dev-dependencies]
+# Tests rely on the legacy `mehen` library to drive the
+# embedded-code fence dispatch (the rich pre-1.0 metric analyzer for
+# Rust/Python/etc.). Phase-6+ replaces this with the rewrite-plan
+# §4.7 `LanguageDispatcher` once per-language analyzers reach parity.
+mehen = { path = "../.." }
+
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

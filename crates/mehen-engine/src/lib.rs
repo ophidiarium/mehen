@@ -17,8 +17,9 @@
 //! commits; this implementation keeps each operation single-threaded
 //! and predictable.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
+pub mod ci;
 mod detection;
 mod diff;
 mod dispatcher;

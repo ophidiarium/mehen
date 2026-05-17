@@ -19,6 +19,9 @@ license.workspace = true
 
 
 [dependencies]
+mehen-engine = { workspace = true }
+mehen-markdown = { workspace = true, optional = true }
+
 clap = { version = "^4.6", features = ["derive"] }
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 env_logger = "^0.11"
@@ -54,7 +57,12 @@ unicode-segmentation = { version = "^1.12", optional = true }
 
 [features]
 default = ["markdown"]
-markdown = ["dep:tree-sitter-markdown-text", "dep:unicode-script", "dep:unicode-segmentation"]
+markdown = [
+    "dep:mehen-markdown",
+    "dep:tree-sitter-markdown-text",
+    "dep:unicode-script",
+    "dep:unicode-segmentation",
+]
 # Tier 1/2 placeholders per §37.1. OFF by default; not wired yet — reserved
 # so the crate compiles with or without them and future phases can flip them
 # on without a feature-name churn.
