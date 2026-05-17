@@ -1,0 +1,798 @@
+use std::collections::HashMap;
+
+use serde::Serialize;
+use serde::ser::{SerializeStruct, Serializer};
+use std::fmt;
+
+use crate::legacy::checker::Checker;
+use crate::legacy::getter::Getter;
+use crate::legacy::langs::{
+    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
+};
+use crate::legacy::node::Node;
+
+/// The `Halstead` metric suite.
+#[derive(Default, Clone, Debug)]
+pub struct Stats {
+    u_operators: u64,
+    operators: u64,
+    u_operands: u64,
+    operands: u64,
+}
+
+/// Specifies the type of nodes accepted by the `Halstead` metric.
+#[derive(Debug)]
+pub enum HalsteadType {
+    /// The node is an `Halstead` operator
+    Operator,
+    /// The node is an `Halstead` operand
+    Operand,
+    /// The node is unknown to the `Halstead` metric
+    Unknown,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct HalsteadMaps<'a> {
+    pub operators: HashMap<u16, u64>,
+    pub operands: HashMap<&'a [u8], u64>,
+}
+
+impl<'a> HalsteadMaps<'a> {
+    pub fn new() -> Self {
+        HalsteadMaps {
+            operators: HashMap::default(),
+            operands: HashMap::default(),
+        }
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        for (k, v) in &other.operators {
+            *self.operators.entry(*k).or_insert(0) += v;
+        }
+        for (k, v) in &other.operands {
+            *self.operands.entry(*k).or_insert(0) += v;
+        }
+    }
+
+    pub fn finalize(&self, stats: &mut Stats) {
+        stats.u_operators = self.operators.len() as u64;
+        stats.operators = self.operators.values().sum::<u64>();
+        stats.u_operands = self.operands.len() as u64;
+        stats.operands = self.operands.values().sum::<u64>();
+    }
+}
+
+impl Serialize for Stats {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut st = serializer.serialize_struct("halstead", 14)?;
+        st.serialize_field("n1", &self.u_operators())?;
+        st.serialize_field("N1", &self.operators())?;
+        st.serialize_field("n2", &self.u_operands())?;
+        st.serialize_field("N2", &self.operands())?;
+        st.serialize_field("length", &self.length())?;
+        st.serialize_field("estimated_program_length", &self.estimated_program_length())?;
+        st.serialize_field("purity_ratio", &self.purity_ratio())?;
+        st.serialize_field("vocabulary", &self.vocabulary())?;
+        st.serialize_field("volume", &self.volume())?;
+        st.serialize_field("difficulty", &self.difficulty())?;
+        st.serialize_field("level", &self.level())?;
+        st.serialize_field("effort", &self.effort())?;
+        st.serialize_field("time", &self.time())?;
+        st.serialize_field("bugs", &self.bugs())?;
+        st.end()
+    }
+}
+
+impl fmt::Display for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "n1: {}, \
+             N1: {}, \
+             n2: {}, \
+             N2: {}, \
+             length: {}, \
+             estimated program length: {}, \
+             purity ratio: {}, \
+             size: {}, \
+             volume: {}, \
+             difficulty: {}, \
+             level: {}, \
+             effort: {}, \
+             time: {}, \
+             bugs: {}",
+            self.u_operators(),
+            self.operators(),
+            self.u_operands(),
+            self.operands(),
+            self.length(),
+            self.estimated_program_length(),
+            self.purity_ratio(),
+            self.vocabulary(),
+            self.volume(),
+            self.difficulty(),
+            self.level(),
+            self.effort(),
+            self.time(),
+            self.bugs(),
+        )
+    }
+}
+
+impl Stats {
+    pub fn merge(&self, _other: &Self) {}
+
+    /// Returns `η1`, the number of distinct operators
+    #[inline(always)]
+    pub fn u_operators(&self) -> f64 {
+        self.u_operators as f64
+    }
+
+    /// Returns `N1`, the number of total operators
+    #[inline(always)]
+    pub fn operators(&self) -> f64 {
+        self.operators as f64
+    }
+
+    /// Returns `η2`, the number of distinct operands
+    #[inline(always)]
+    pub fn u_operands(&self) -> f64 {
+        self.u_operands as f64
+    }
+
+    /// Returns `N2`, the number of total operands
+    #[inline(always)]
+    pub fn operands(&self) -> f64 {
+        self.operands as f64
+    }
+
+    /// Returns the program length
+    #[inline(always)]
+    pub fn length(&self) -> f64 {
+        self.operands() + self.operators()
+    }
+
+    /// Returns the calculated estimated program length
+    #[inline(always)]
+    pub fn estimated_program_length(&self) -> f64 {
+        self.u_operators().mul_add(
+            self.u_operators().log2(),
+            self.u_operands() * self.u_operands().log2(),
+        )
+    }
+
+    /// Returns the purity ratio
+    #[inline(always)]
+    pub fn purity_ratio(&self) -> f64 {
+        self.estimated_program_length() / self.length()
+    }
+
+    /// Returns the program vocabulary
+    #[inline(always)]
+    pub fn vocabulary(&self) -> f64 {
+        self.u_operands() + self.u_operators()
+    }
+
+    /// Returns the program volume.
+    ///
+    /// Unit of measurement: bits
+    #[inline(always)]
+    pub fn volume(&self) -> f64 {
+        // Assumes a uniform binary encoding for the vocabulary is used.
+        self.length() * self.vocabulary().log2()
+    }
+
+    /// Returns the estimated difficulty required to program
+    #[inline(always)]
+    pub fn difficulty(&self) -> f64 {
+        self.u_operators() / 2. * self.operands() / self.u_operands()
+    }
+
+    /// Returns the estimated level of difficulty required to program
+    #[inline(always)]
+    pub fn level(&self) -> f64 {
+        1. / self.difficulty()
+    }
+
+    /// Returns the estimated effort required to program
+    #[inline(always)]
+    pub fn effort(&self) -> f64 {
+        self.difficulty() * self.volume()
+    }
+
+    /// Returns the estimated time required to program.
+    ///
+    /// Unit of measurement: seconds
+    #[inline(always)]
+    pub fn time(&self) -> f64 {
+        // The floating point `18.` aims to describe the processing rate of the
+        // human brain. It is called Stoud number, S, and its
+        // unit of measurement is moments/seconds.
+        // A moment is the time required by the human brain to carry out the
+        // most elementary decision.
+        // 5 <= S <= 20. Halstead uses 18.
+        // The value of S has been empirically developed from psychological
+        // reasoning, and its recommended value for
+        // programming applications is 18.
+        //
+        // Source: https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
+        self.effort() / 18.
+    }
+
+    /// Returns the estimated number of delivered bugs.
+    ///
+    /// This metric represents the average amount of work a programmer can do
+    /// without introducing an error.
+    #[inline(always)]
+    pub fn bugs(&self) -> f64 {
+        // The floating point `3000.` represents the number of elementary
+        // mental discriminations.
+        // A mental discrimination, in psychology, is the ability to perceive
+        // and respond to differences among stimuli.
+        //
+        // The value above is obtained starting from a constant that
+        // is different for every language and assumes that natural language is
+        // the language of the brain.
+        // For programming languages, the English language constant
+        // has been considered.
+        //
+        // After every 3000 mental discriminations a result is produced.
+        // This result, whether correct or incorrect, is more than likely
+        // either used as an input for the next operation or is output to the
+        // environment.
+        // If incorrect the error should become apparent.
+        // Thus, an opportunity for error occurs every 3000
+        // mental discriminations.
+        //
+        // Source: https://docs.lib.purdue.edu/cgi/viewcontent.cgi?article=1145&context=cstech
+        self.effort().powf(2. / 3.) / 3000.
+    }
+}
+
+pub trait Halstead
+where
+    Self: Checker,
+{
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>);
+}
+
+#[inline(always)]
+fn get_id<'a>(node: &Node<'a>, code: &'a [u8]) -> &'a [u8] {
+    &code[node.start_byte()..node.end_byte()]
+}
+
+#[inline(always)]
+fn compute_halstead<'a, T: Getter>(
+    node: &Node<'a>,
+    code: &'a [u8],
+    halstead_maps: &mut HalsteadMaps<'a>,
+) {
+    match T::get_op_type(node) {
+        HalsteadType::Operator => {
+            *halstead_maps.operators.entry(node.kind_id()).or_insert(0) += 1;
+        }
+        HalsteadType::Operand => {
+            *halstead_maps
+                .operands
+                .entry(get_id(node, code))
+                .or_insert(0) += 1;
+        }
+        HalsteadType::Unknown => {}
+    }
+}
+
+impl Halstead for PythonCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for TypescriptCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for TsxCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for RustCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for GoCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for RubyCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for KotlinCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for PowershellCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for CCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+impl Halstead for crate::legacy::langs::PhpCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
+// Markdown is a documentation language; classical Halstead is a code metric
+// and does not apply. A Markdown-specific Halstead analogue will land in
+// Phase B via the dedicated pipeline.
+#[cfg(feature = "markdown")]
+impl Halstead for crate::legacy::langs::MarkdownCode {
+    fn compute<'a>(_node: &Node<'a>, _code: &'a [u8], _halstead_maps: &mut HalsteadMaps<'a>) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::legacy::langs::{
+        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
+        TypescriptParser,
+    };
+    use crate::legacy::tools::check_metrics;
+
+    #[test]
+    fn python_operators_and_operands() {
+        check_metrics::<PythonParser>(
+            "def foo():
+                 def bar():
+                     def toto():
+                        a = 1 + 1
+                     b = 2 + a
+                 c = 3 + 3",
+            "foo.py",
+            |metric| {
+                // unique operators: def, =, +
+                // operators: def, def, def, =, =, =, +, +, +
+                // unique operands: foo, bar, toto, a, b, c, 1, 2, 3
+                // operands: foo, bar, toto, a, b, c, 1, 1, 2, a, 3, 3
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r#"
+                {
+                  "n1": 5.0,
+                  "N1": 15.0,
+                  "n2": 9.0,
+                  "N2": 12.0,
+                  "length": 27.0,
+                  "estimated_program_length": 40.13896548741762,
+                  "purity_ratio": 1.4866283513858378,
+                  "vocabulary": 14.0,
+                  "volume": 102.79858289555531,
+                  "difficulty": 3.3333333333333335,
+                  "level": 0.3,
+                  "effort": 342.6619429851844,
+                  "time": 19.03677461028802,
+                  "bugs": 0.01632259960095138
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_operators_and_operands() {
+        check_metrics::<RustParser>(
+            "fn main() {
+              let a = 5; let b = 5; let c = 5;
+              let avg = (a + b + c) / 3;
+              println!(\"{}\", avg);
+            }",
+            "foo.rs",
+            |metric| {
+                // unique operators: fn, (), {}, let, =, +, /, ;, !, ,
+                // unique operands: main, a, b, c, avg, 5, 3, println, "{}"
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r###"
+                    {
+                      "n1": 10.0,
+                      "N1": 23.0,
+                      "n2": 9.0,
+                      "N2": 15.0,
+                      "length": 38.0,
+                      "estimated_program_length": 61.74860596185443,
+                      "purity_ratio": 1.6249633147856428,
+                      "vocabulary": 19.0,
+                      "volume": 161.42124551085624,
+                      "difficulty": 8.333333333333334,
+                      "level": 0.12,
+                      "effort": 1345.177045923802,
+                      "time": 74.7320581068779,
+                      "bugs": 0.040619232256751396
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_operators_and_operands() {
+        check_metrics::<TypescriptParser>(
+            "function main() {
+              var a, b, c, avg;
+              a = 5; b = 5; c = 5;
+              avg = (a + b + c) / 3;
+              console.log(\"{}\", avg);
+            }",
+            "foo.ts",
+            |metric| {
+                // unique operators: function, (), {}, var, =, +, /, ,, ., ;
+                // unique operands: main, a, b, c, avg, 3, 5, console.log, console, log, "{}"
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r###"
+                    {
+                      "n1": 10.0,
+                      "N1": 24.0,
+                      "n2": 11.0,
+                      "N2": 21.0,
+                      "length": 45.0,
+                      "estimated_program_length": 71.27302875388389,
+                      "purity_ratio": 1.583845083419642,
+                      "vocabulary": 21.0,
+                      "volume": 197.65428402504423,
+                      "difficulty": 9.545454545454545,
+                      "level": 0.10476190476190476,
+                      "effort": 1886.699983875422,
+                      "time": 104.81666577085679,
+                      "bugs": 0.05089564733125986
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn tsx_operators_and_operands() {
+        check_metrics::<TsxParser>(
+            "function main() {
+              var a, b, c, avg;
+              a = 5; b = 5; c = 5;
+              avg = (a + b + c) / 3;
+              console.log(\"{}\", avg);
+            }",
+            "foo.ts",
+            |metric| {
+                // unique operators: function, (), {}, var, =, +, /, ,, ., ;
+                // unique operands: main, a, b, c, avg, 3, 5, console.log, console, log, "{}"
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r###"
+                    {
+                      "n1": 10.0,
+                      "N1": 24.0,
+                      "n2": 11.0,
+                      "N2": 21.0,
+                      "length": 45.0,
+                      "estimated_program_length": 71.27302875388389,
+                      "purity_ratio": 1.583845083419642,
+                      "vocabulary": 21.0,
+                      "volume": 197.65428402504423,
+                      "difficulty": 9.545454545454545,
+                      "level": 0.10476190476190476,
+                      "effort": 1886.699983875422,
+                      "time": 104.81666577085679,
+                      "bugs": 0.05089564733125986
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_wrong_operators() {
+        check_metrics::<PythonParser>("()[]{}", "foo.py", |metric| {
+            insta::assert_json_snapshot!(
+                metric.halstead,
+                @r#"
+            {
+              "n1": 3.0,
+              "N1": 3.0,
+              "n2": 0.0,
+              "N2": 0.0,
+              "length": 3.0,
+              "estimated_program_length": null,
+              "purity_ratio": null,
+              "vocabulary": 3.0,
+              "volume": 4.754887502163468,
+              "difficulty": null,
+              "level": null,
+              "effort": null,
+              "time": null,
+              "bugs": null
+            }
+            "#
+            );
+        });
+    }
+
+    #[test]
+    fn python_check_metrics() {
+        check_metrics::<PythonParser>(
+            "def f():
+                 pass",
+            "foo.py",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r#"
+                {
+                  "n1": 4.0,
+                  "N1": 4.0,
+                  "n2": 1.0,
+                  "N2": 1.0,
+                  "length": 5.0,
+                  "estimated_program_length": 8.0,
+                  "purity_ratio": 1.6,
+                  "vocabulary": 5.0,
+                  "volume": 11.60964047443681,
+                  "difficulty": 2.0,
+                  "level": 0.5,
+                  "effort": 23.21928094887362,
+                  "time": 1.289960052715201,
+                  "bugs": 0.002712967490108627
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn go_operators_and_operands() {
+        check_metrics::<GoParser>(
+            "package main
+
+            func add(a, b int) int {
+                return a + b
+            }",
+            "foo.go",
+            |metric| {
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    @r###"
+                    {
+                      "n1": 7.0,
+                      "N1": 7.0,
+                      "n2": 5.0,
+                      "N2": 8.0,
+                      "length": 15.0,
+                      "estimated_program_length": 31.26112492884004,
+                      "purity_ratio": 2.0840749952560027,
+                      "vocabulary": 12.0,
+                      "volume": 53.77443751081734,
+                      "difficulty": 5.6,
+                      "level": 0.17857142857142858,
+                      "effort": 301.1368500605771,
+                      "time": 16.729825003365395,
+                      "bugs": 0.014975730436275946
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_operators_and_operands() {
+        check_metrics::<KotlinParser>(
+            "fun add(a: Int, b: Int): Int {
+                 return a + b
+             }",
+            "foo.kt",
+            |metric| {
+                // Only core counts are locked in; derived measures shift with
+                // the vocabulary in ways that aren't meaningful to assert.
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    {
+                        ".estimated_program_length" => "[masked]",
+                        ".purity_ratio" => "[masked]",
+                        ".volume" => "[masked]",
+                        ".difficulty" => "[masked]",
+                        ".level" => "[masked]",
+                        ".effort" => "[masked]",
+                        ".time" => "[masked]",
+                        ".bugs" => "[masked]"
+                    },
+                    @r###"
+                    {
+                      "n1": 7.0,
+                      "N1": 9.0,
+                      "n2": 4.0,
+                      "N2": 8.0,
+                      "length": 17.0,
+                      "estimated_program_length": "[masked]",
+                      "purity_ratio": "[masked]",
+                      "vocabulary": 11.0,
+                      "volume": "[masked]",
+                      "difficulty": "[masked]",
+                      "level": "[masked]",
+                      "effort": "[masked]",
+                      "time": "[masked]",
+                      "bugs": "[masked]"
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_operators_and_operands() {
+        check_metrics::<RubyParser>(
+            "def add(a, b)
+                 a + b
+             end",
+            "foo.rb",
+            |metric| {
+                // Just assert the core counts; full MI/etc. follow from them.
+                // Unique operators: def, +, (, ,
+                // Unique operands: add, a, b
+                insta::assert_json_snapshot!(
+                    metric.halstead,
+                    {
+                        ".estimated_program_length" => "[masked]",
+                        ".purity_ratio" => "[masked]",
+                        ".volume" => "[masked]",
+                        ".difficulty" => "[masked]",
+                        ".level" => "[masked]",
+                        ".effort" => "[masked]",
+                        ".time" => "[masked]",
+                        ".bugs" => "[masked]"
+                    },
+                    @r###"
+                    {
+                      "n1": 4.0,
+                      "N1": 4.0,
+                      "n2": 3.0,
+                      "N2": 5.0,
+                      "length": 9.0,
+                      "estimated_program_length": "[masked]",
+                      "purity_ratio": "[masked]",
+                      "vocabulary": 7.0,
+                      "volume": "[masked]",
+                      "difficulty": "[masked]",
+                      "level": "[masked]",
+                      "effort": "[masked]",
+                      "time": "[masked]",
+                      "bugs": "[masked]"
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_operator_wrappers_do_not_double_count() {
+        // Regression for coderabbitai flag on PR #69:
+        // tree-sitter-pwsh nests every operator leaf token (e.g. `-eq`,
+        // `-f`, `=`, `2>`) inside a named wrapper rule
+        // (`comparison_operator`, `format_operator`, `assignment_operator`,
+        // `file_redirection_operator`, `merging_redirection_operator`).
+        // `Halstead::compute` walks every named and anonymous child, so
+        // classifying BOTH the leaf and the wrapper as `Operator` would
+        // double-count. `get_op_type` classifies only the leaves; this
+        // test locks that invariant in by asserting the semantically
+        // correct operator counts.
+        check_metrics::<PowershellParser>("$x = $a -eq $b", "foo.ps1", |metric| {
+            // Operators: `=` and `-eq` → 2 distinct, 2 total.
+            // Operands: `$x`, `$a`, `$b` → 3 distinct, 3 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+            assert_eq!(metric.halstead.u_operands(), 3.0);
+            assert_eq!(metric.halstead.operands(), 3.0);
+        });
+
+        // Same invariant for the format operator `-f`.
+        check_metrics::<PowershellParser>("$s = \"{0}\" -f $a", "foo.ps1", |metric| {
+            // Operators: `=` and `-f` → 2 distinct, 2 total.
+            assert_eq!(metric.halstead.u_operators(), 2.0);
+            assert_eq!(metric.halstead.operators(), 2.0);
+        });
+    }
+
+    #[test]
+    fn powershell_function_and_command_names_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69: the
+        // PowerShell operand set must include the identifier leaves that
+        // drive function declarations (`function_name`) and command
+        // invocations (`command_name`, `path_command_name_token`).
+        // Without these, Halstead N2 and volume are suppressed for a
+        // normal cmdlet-heavy script, and downstream MI degrades.
+        //
+        // Simple cmdlet call: `Get-Item /tmp` → operands are
+        // `Get-Item` and `/tmp` (a generic_token argument).
+        check_metrics::<PowershellParser>("Get-Item /tmp", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Path-style command: `./build.sh arg1` → operands are
+        // `./build.sh` (a path_command_name_token leaf) and `arg1`.
+        // Must not double-count the `path_command_name` wrapper.
+        check_metrics::<PowershellParser>("./build.sh arg1", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+
+        // Function declaration: the function_name leaf counts once per
+        // declaration. `function Greet { }` → one unique operand `Greet`.
+        // The function body `{ }` contributes no operands.
+        check_metrics::<PowershellParser>("function Greet { }", "foo.ps1", |metric| {
+            assert_eq!(metric.halstead.u_operands(), 1.0);
+            assert_eq!(metric.halstead.operands(), 1.0);
+        });
+    }
+
+    #[test]
+    fn powershell_string_literals_count_as_operands() {
+        // Regression for chatgpt-codex-connector flag on PR #69:
+        // double-quoted ("expandable") and here-string double-quoted
+        // literals have no content-leaf node (their text lives inside
+        // the wrapper's byte range directly), so they landed in
+        // `HalsteadType::Unknown` and were dropped from N2. Verbatim
+        // (single-quoted) strings have a `verbatim_string_characters`
+        // leaf, so those were already counted.
+        //
+        // The fix classifies the `expandable_string_literal` /
+        // `expandable_here_string_literal` wrapper kinds themselves as
+        // operands (empty or not), matching the verbatim branch.
+        //
+        // This script has 4 distinct strings plus 4 `$` variables;
+        // expected n2 = 8 (it was 6 before the fix because both
+        // `""` / `"world"` fell into Unknown).
+        check_metrics::<PowershellParser>(
+            "$a = ''
+             $b = \"\"
+             $c = 'hello'
+             $d = \"world\"",
+            "foo.ps1",
+            |metric| {
+                assert_eq!(metric.halstead.u_operands(), 8.0);
+                assert_eq!(metric.halstead.operands(), 8.0);
+            },
+        );
+
+        // Empty expandable `""` on its own — n2 = 1 (just the string),
+        // and N2 = 1. Pre-fix: n2 = 0, N2 = 0.
+        check_metrics::<PowershellParser>("$x = \"\"", "foo.ps1", |metric| {
+            // Operators: `=` → n1=1, N1=1.
+            // Operands: `$x`, `""` → n2=2, N2=2.
+            assert_eq!(metric.halstead.u_operators(), 1.0);
+            assert_eq!(metric.halstead.operators(), 1.0);
+            assert_eq!(metric.halstead.u_operands(), 2.0);
+            assert_eq!(metric.halstead.operands(), 2.0);
+        });
+    }
+}

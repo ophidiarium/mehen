@@ -27,6 +27,13 @@ mod registry;
 mod report;
 mod top_offenders;
 
+/// Pre-1.0 metric machinery relocated from `mehen/src/` under §8 of
+/// the rewrite plan. The transitional `mehen` library re-exports the
+/// contents of this module so existing tests, snapshots and CLI
+/// orchestrators keep compiling under their original `crate::*` paths
+/// while each piece migrates into its plan-defined home.
+pub mod legacy;
+
 pub use detection::detect_language;
 pub use diff::analyze_diff;
 pub use dispatcher::EngineDispatcher;

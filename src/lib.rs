@@ -1,53 +1,42 @@
-//! Pre-1.0 `mehen` library — the metric and markdown machinery the test
-//! suite still exercises during the v1 rewrite.
+//! Pre-1.0 `mehen` library — transitional thin re-export wrapper.
 //!
-//! Per the rewrite plan §8, contents of this crate get redistributed into
-//! the new `crates/mehen-*` workspace one module at a time. When the
-//! redistribution is complete the entire crate is deleted; the published
-//! `mehen` binary lives in `crates/mehen-cli/`.
+//! Per rewrite plan §8, every module previously living here has been
+//! physically relocated:
+//!
+//! - `markdown` → `crates/mehen-markdown/`
+//! - `git` → `crates/mehen-git/`
+//! - `ci`, `diff`, `top_offenders`, `concurrent_files`,
+//!   `metric_selector`, `tools`, `formats`, `langs`, `languages`,
+//!   `macros`, `traits`, `parser`, `node`, `checker`, `getter`,
+//!   `spaces`, `alterator`, `preproc`, `rust_metric_helpers`,
+//!   `metrics` → `crates/mehen-engine/src/legacy/`
+//! - `diff_markdown` → `crates/mehen-report/src/github_markdown_docs.rs`
+//!
+//! The re-exports below preserve the pre-1.0 public path
+//! (`crate::diff::*`, `crate::langs::LANG`, `crate::metrics::*`, etc.)
+//! so existing tests and the `crates/mehen-cli/src/args.rs` flatten
+//! continue working while each module is gradually rehomed into its
+//! plan-defined destination crate.
 
 #![allow(clippy::upper_case_acronyms)]
 
-pub mod alterator;
-pub mod checker;
-/// CI environment detection — physically relocated to
-/// `crates/mehen-engine/src/ci.rs` per plan §8.1. Re-exported under the
-/// original `crate::ci` path so the still-in-place `src/diff.rs` keeps
-/// compiling unchanged during the rest of the move.
 pub use mehen_engine::ci;
-pub mod concurrent_files;
-pub mod diff;
-/// Markdown documentation diff renderer was relocated to
-/// `crates/mehen-report/src/github_markdown_docs.rs` per plan §8.1.
-/// Re-exported under the original `crate::diff_markdown` path so
-/// `src/diff.rs` keeps compiling unchanged.
-#[cfg(feature = "markdown")]
-pub use mehen_report::github_markdown_docs as diff_markdown;
-pub mod formats;
-pub mod getter;
-/// Git operations were physically relocated to `crates/mehen-git/`
-/// per plan §8.1. Re-exported under the original `crate::git` path so
-/// `src/diff.rs` keeps compiling unchanged.
+pub use mehen_engine::legacy::{
+    alterator, checker, concurrent_files, diff, formats, getter, langs, languages, macros,
+    metric_selector, metrics, mk_globset, node, parser, preproc, rust_metric_helpers, spaces,
+    tools, top_offenders, traits,
+};
 pub use mehen_git as git;
-pub mod langs;
-pub mod languages;
-pub mod macros;
-/// Markdown analyzer was physically relocated to
-/// `crates/mehen-markdown/` per plan §8.1. Re-exported under the
-/// original `crate::markdown` path so the still-in-place `src/diff.rs`
-/// and `src/diff_markdown.rs` keep compiling unchanged during the
-/// rest of the move. The legacy `embedded_volume` dispatch is wired
-/// in [`init_markdown`].
+
 #[cfg(feature = "markdown")]
 pub use mehen_markdown as markdown;
+
+#[cfg(feature = "markdown")]
+pub use mehen_engine::legacy::diff_markdown;
 
 /// Register the embedded-code dispatch callback the moved
 /// [`mehen_markdown::analyze_markdown`] uses to fold fenced source
 /// snippets into Markdown metrics.
-///
-/// Called once at process startup from `crates/mehen-cli/src/main.rs`
-/// and the `mehen` library's test setup; idempotent — subsequent
-/// calls are silent no-ops by design of the underlying `OnceLock`.
 #[cfg(feature = "markdown")]
 pub fn init_markdown() {
     use mehen_markdown::{EmbeddedFenceMetrics, FenceLanguage};
@@ -56,7 +45,7 @@ pub fn init_markdown() {
         let bytes = body.into_bytes();
         let path = synthetic_path(lang);
         let legacy_lang = legacy_lang_for(lang);
-        let space = crate::langs::get_function_spaces(
+        let space = mehen_engine::legacy::langs::get_function_spaces(
             &legacy_lang,
             bytes,
             std::path::Path::new(&path),
@@ -85,8 +74,8 @@ pub fn init_markdown() {
         std::path::PathBuf::from(name)
     }
 
-    fn legacy_lang_for(lang: FenceLanguage) -> crate::langs::LANG {
-        use crate::langs::LANG;
+    fn legacy_lang_for(lang: FenceLanguage) -> mehen_engine::legacy::langs::LANG {
+        use mehen_engine::legacy::langs::LANG;
         match lang {
             FenceLanguage::Rust => LANG::Rust,
             FenceLanguage::Python => LANG::Python,
@@ -102,33 +91,4 @@ pub fn init_markdown() {
     }
 
     mehen_markdown::set_legacy_dispatch(legacy_dispatch);
-}
-pub mod metric_selector;
-pub mod metrics;
-pub mod node;
-pub mod parser;
-pub mod preproc;
-pub mod rust_metric_helpers;
-pub mod spaces;
-pub mod tools;
-pub mod top_offenders;
-pub mod traits;
-
-use globset::{Glob, GlobSet, GlobSetBuilder};
-
-/// Build a `GlobSet` from a list of glob strings, ignoring empty entries.
-///
-/// Used by both the `diff` and `top-offenders` orchestrators to turn the
-/// user's `--include` / `--exclude` flags into a usable matcher.
-pub fn mk_globset(elems: Vec<String>) -> GlobSet {
-    if elems.is_empty() {
-        return GlobSet::empty();
-    }
-    let mut globset = GlobSetBuilder::new();
-    elems.iter().filter(|e| !e.is_empty()).for_each(|e| {
-        if let Ok(glob) = Glob::new(e) {
-            globset.add(glob);
-        }
-    });
-    globset.build().map_or(GlobSet::empty(), |globset| globset)
 }

@@ -1,0 +1,1134 @@
+use serde::Serialize;
+use serde::ser::{SerializeStruct, Serializer};
+use std::fmt;
+
+use crate::legacy::checker::Checker;
+use crate::legacy::langs::{LANG, *};
+use crate::legacy::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::node::Node;
+use crate::legacy::spaces::SpaceKind;
+
+/// The `Npa` metric.
+///
+/// This metric counts the number of public attributes
+/// of classes/interfaces.
+#[derive(Clone, Debug, Default)]
+pub struct Stats {
+    class_npa: usize,
+    interface_npa: usize,
+    class_na: usize,
+    interface_na: usize,
+    class_npa_sum: usize,
+    interface_npa_sum: usize,
+    class_na_sum: usize,
+    interface_na_sum: usize,
+    space_kind: SpaceKind,
+    not_applicable: bool,
+    /// True once any class-like or interface-like space has been observed in
+    /// the subtree being aggregated. Kept separate from the numeric sums so
+    /// an empty class (no attributes) still keeps unit-level `npa` visible.
+    has_class_like: bool,
+}
+
+impl Serialize for Stats {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut st = serializer.serialize_struct("npa", 9)?;
+        st.serialize_field("classes", &self.class_npa_sum())?;
+        st.serialize_field("interfaces", &self.interface_npa_sum())?;
+        st.serialize_field("class_attributes", &self.class_na_sum())?;
+        st.serialize_field("interface_attributes", &self.interface_na_sum())?;
+        st.serialize_field("classes_average", &self.class_cda())?;
+        st.serialize_field("interfaces_average", &self.interface_cda())?;
+        st.serialize_field("total", &self.total_npa())?;
+        st.serialize_field("total_attributes", &self.total_na())?;
+        st.serialize_field("average", &self.total_cda())?;
+        st.end()
+    }
+}
+
+impl fmt::Display for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "classes: {}, interfaces: {}, class_attributes: {}, interface_attributes: {}, classes_average: {}, interfaces_average: {}, total: {}, total_attributes: {}, average: {}",
+            self.class_npa_sum(),
+            self.interface_npa_sum(),
+            self.class_na_sum(),
+            self.interface_na_sum(),
+            self.class_cda(),
+            self.interface_cda(),
+            self.total_npa(),
+            self.total_na(),
+            self.total_cda()
+        )
+    }
+}
+
+impl Stats {
+    /// Merges a second `Npa` metric into the first one
+    pub fn merge(&mut self, other: &Self) {
+        self.class_npa_sum += other.class_npa_sum;
+        self.interface_npa_sum += other.interface_npa_sum;
+        self.class_na_sum += other.class_na_sum;
+        self.interface_na_sum += other.interface_na_sum;
+        self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
+    }
+
+    /// Increments the attribute counters on the enclosing class/interface
+    /// space. `container` specifies whether the attribute belongs to a
+    /// class-like (Class / Impl) or interface-like (Interface / Trait) scope.
+    #[inline(always)]
+    pub fn record_attribute(&mut self, container: SpaceKind, is_public: bool) {
+        match container {
+            SpaceKind::Class | SpaceKind::Impl => {
+                self.class_na += 1;
+                if is_public {
+                    self.class_npa += 1;
+                }
+            }
+            SpaceKind::Interface | SpaceKind::Trait => {
+                self.interface_na += 1;
+                if is_public {
+                    self.interface_npa += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Returns the number of class public attributes sum in a space.
+    #[inline(always)]
+    pub fn class_npa_sum(&self) -> f64 {
+        self.class_npa_sum as f64
+    }
+
+    /// Returns the number of interface public attributes sum in a space.
+    #[inline(always)]
+    pub fn interface_npa_sum(&self) -> f64 {
+        self.interface_npa_sum as f64
+    }
+
+    /// Returns the number of class attributes sum in a space.
+    #[inline(always)]
+    pub fn class_na_sum(&self) -> f64 {
+        self.class_na_sum as f64
+    }
+
+    /// Returns the number of interface attributes sum in a space.
+    #[inline(always)]
+    pub fn interface_na_sum(&self) -> f64 {
+        self.interface_na_sum as f64
+    }
+
+    /// Returns the class `Cda` metric value
+    ///
+    /// The `Class Data Accessibility` metric value for a class
+    /// is computed by dividing the `Npa` value of the class
+    /// by the total number of attributes defined in the class.
+    ///
+    /// This metric is an adaptation of the `Classified Class Data Accessibility` (`CCDA`)
+    /// security metric for not classified attributes.
+    /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
+    #[inline(always)]
+    pub fn class_cda(&self) -> f64 {
+        self.class_npa_sum() / self.class_na_sum as f64
+    }
+
+    /// Returns the interface `Cda` metric value
+    ///
+    /// The `Class Data Accessibility` metric value for an interface
+    /// is computed by dividing the `Npa` value of the interface
+    /// by the total number of attributes defined in the interface.
+    ///
+    /// This metric is an adaptation of the `Classified Class Data Accessibility` (`CCDA`)
+    /// security metric for not classified attributes.
+    /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
+    #[inline(always)]
+    pub fn interface_cda(&self) -> f64 {
+        // For the Java language it's not necessary to compute the metric value
+        // The metric value in Java can only be 1.0 or f64:NAN
+        if self.interface_npa_sum == self.interface_na_sum && self.interface_npa_sum != 0 {
+            1.0
+        } else {
+            self.interface_npa_sum() / self.interface_na_sum()
+        }
+    }
+
+    /// Returns the total `Cda` metric value
+    ///
+    /// The total `Class Data Accessibility` metric value
+    /// is computed by dividing the total `Npa` value
+    /// by the total number of attributes.
+    ///
+    /// This metric is an adaptation of the `Classified Class Data Accessibility` (`CCDA`)
+    /// security metric for not classified attributes.
+    /// Paper: <https://ieeexplore.ieee.org/abstract/document/5381538>
+    #[inline(always)]
+    pub fn total_cda(&self) -> f64 {
+        self.total_npa() / self.total_na()
+    }
+
+    /// Returns the total number of public attributes in a space.
+    #[inline(always)]
+    pub fn total_npa(&self) -> f64 {
+        self.class_npa_sum() + self.interface_npa_sum()
+    }
+
+    /// Returns the total number of attributes in a space.
+    #[inline(always)]
+    pub fn total_na(&self) -> f64 {
+        self.class_na_sum() + self.interface_na_sum()
+    }
+
+    // Accumulates the number of class and interface
+    // public and not public attributes into the sums
+    #[inline(always)]
+    pub fn compute_sum(&mut self) {
+        self.class_npa_sum += self.class_npa;
+        self.interface_npa_sum += self.interface_npa;
+        self.class_na_sum += self.class_na;
+        self.interface_na_sum += self.interface_na;
+    }
+
+    // Checks if the `Npa` metric is disabled
+    #[inline(always)]
+    pub fn is_disabled(&self) -> bool {
+        if self.not_applicable {
+            return true;
+        }
+        match self.space_kind {
+            SpaceKind::Function | SpaceKind::Unknown => true,
+            // Use the presence flag — an empty class (no attributes) is
+            // still class-like and should keep `npa` visible at the unit.
+            SpaceKind::Unit => !self.has_class_like,
+            _ => false,
+        }
+    }
+
+    /// Marks this metric as not applicable to the current language so it is
+    /// omitted from output rather than serialized as a measured zero.
+    #[inline(always)]
+    pub fn mark_not_applicable(&mut self) {
+        self.not_applicable = true;
+    }
+
+    /// Returns whether the `Npa` metric is meaningful for the given language.
+    /// Languages without class-like constructs opt out. Markdown has no
+    /// classes and likewise opts out.
+    #[inline(always)]
+    pub fn applies_to(lang: LANG) -> bool {
+        #[cfg(feature = "markdown")]
+        if matches!(lang, LANG::Markdown) {
+            return false;
+        }
+        !matches!(lang, LANG::Go | LANG::C)
+    }
+
+    /// Records the kind of the enclosing space. Also flags the stats as
+    /// having observed a class-like space if applicable, so unit-level
+    /// aggregation can distinguish "no classes" from "classes with no
+    /// counted attributes".
+    #[inline(always)]
+    pub fn set_space_kind(&mut self, kind: SpaceKind) {
+        self.space_kind = kind;
+        if matches!(
+            kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            self.has_class_like = true;
+        }
+    }
+}
+
+pub trait Npa
+where
+    Self: Checker,
+{
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats);
+}
+
+/// Whether a Python attribute name should be considered public. Dunder names
+/// (e.g. `__init__`) are public by convention; single or double leading
+/// underscore signals non-public.
+fn python_attr_is_public(name: &str) -> bool {
+    if name.starts_with("__") && name.ends_with("__") {
+        return true;
+    }
+    !name.starts_with('_')
+}
+
+impl Npa for PythonCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        // Python class attributes are assignments at the top level of a class
+        // body: `name: T = value`, `name = value`.
+        let parent = match node.parent() {
+            Some(p) => p,
+            None => return,
+        };
+        // Direct child of class body: parent is the `block`, grand-parent is
+        // the class definition.
+        let grand = match parent.parent() {
+            Some(g) => g,
+            None => return,
+        };
+        if grand.kind_id() != Python::ClassDefinition {
+            return;
+        }
+        // The attribute is an `expression_statement` wrapping an `assignment`
+        // whose left side is a bare identifier.
+        if node.kind_id() != Python::ExpressionStatement {
+            return;
+        }
+        let inner = match node.child(0) {
+            Some(c) => c,
+            None => return,
+        };
+        if inner.kind_id() != Python::Assignment {
+            return;
+        }
+        let left = match inner.child_by_field_name("left") {
+            Some(l) => l,
+            None => return,
+        };
+        if left.kind_id() != Python::Identifier {
+            return;
+        }
+        let text = match std::str::from_utf8(&code[left.start_byte()..left.end_byte()]) {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+        stats.record_attribute(SpaceKind::Class, python_attr_is_public(text));
+    }
+}
+
+impl Npa for TypescriptCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        let kind_id = node.kind_id();
+        let container = if kind_id == Typescript::PublicFieldDefinition {
+            SpaceKind::Class
+        } else if kind_id == Typescript::PropertySignature {
+            SpaceKind::Interface
+        } else {
+            return;
+        };
+        let is_public = ts_field_is_public(node, code, |id| match id.into() {
+            Typescript::AccessibilityModifier => TsFieldKind::Modifier,
+            Typescript::PrivatePropertyIdentifier => TsFieldKind::PrivateName,
+            _ => TsFieldKind::Other,
+        });
+        stats.record_attribute(container, is_public);
+    }
+}
+
+impl Npa for TsxCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        let kind_id = node.kind_id();
+        let container = if kind_id == Tsx::PublicFieldDefinition {
+            SpaceKind::Class
+        } else if kind_id == Tsx::PropertySignature {
+            SpaceKind::Interface
+        } else {
+            return;
+        };
+        let is_public = ts_field_is_public(node, code, |id| match id.into() {
+            Tsx::AccessibilityModifier => TsFieldKind::Modifier,
+            Tsx::PrivatePropertyIdentifier => TsFieldKind::PrivateName,
+            _ => TsFieldKind::Other,
+        });
+        stats.record_attribute(container, is_public);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TsFieldKind {
+    Modifier,
+    /// A `#name` field identifier (ECMAScript private class fields).
+    PrivateName,
+    Other,
+}
+
+fn ts_field_is_public(node: &Node, code: &[u8], classify: impl Fn(u16) -> TsFieldKind) -> bool {
+    for child in node.children() {
+        match classify(child.kind_id()) {
+            TsFieldKind::Modifier => {
+                let text = &code[child.start_byte()..child.end_byte()];
+                if text == b"private" || text == b"protected" {
+                    return false;
+                }
+            }
+            TsFieldKind::PrivateName => return false,
+            TsFieldKind::Other => {}
+        }
+    }
+    true
+}
+
+impl Npa for RustCode {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
+        // Rust struct fields live in `struct_item`, which is *not* pushed as
+        // a FuncSpace, so attributes are collected at the containing
+        // unit/impl scope. Two shapes to handle:
+        //   - `struct S { pub a: u32, b: u32 }` -> each field is a
+        //     `FieldDeclaration` named node; `pub` is a visibility child.
+        //   - `struct S(pub u32, u32)` -> fields live directly as type
+        //     children of `OrderedFieldDeclarationList`, with an optional
+        //     preceding `visibility_modifier` sibling.
+        match node.kind_id().into() {
+            Rust::FieldDeclaration => {
+                let is_public = node
+                    .children()
+                    .any(|c| c.kind_id() == Rust::VisibilityModifier);
+                stats.record_attribute(SpaceKind::Class, is_public);
+            }
+            Rust::OrderedFieldDeclarationList => {
+                // Walk positional fields, pairing each type with the
+                // immediately preceding `visibility_modifier` if any.
+                let mut pending_pub = false;
+                for child in node.children() {
+                    match child.kind_id().into() {
+                        Rust::LPAREN | Rust::RPAREN | Rust::COMMA => {
+                            pending_pub = false;
+                        }
+                        Rust::AttributeItem => {}
+                        Rust::VisibilityModifier => {
+                            pending_pub = true;
+                        }
+                        _ => {
+                            stats.record_attribute(SpaceKind::Class, pending_pub);
+                            pending_pub = false;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Npa for RubyCode {
+    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
+        if !matches!(stats.space_kind, SpaceKind::Class) {
+            return;
+        }
+        // Ruby attributes exposed through `attr_accessor`, `attr_reader`,
+        // `attr_writer` are public by convention. Detecting those requires a
+        // call-site match — treat any `@instance_variable` assignment that's a
+        // direct statement of the class body as an attribute, and count it as
+        // non-public (encapsulated) by default.
+        if node.kind_id() != Ruby::Assignment {
+            return;
+        }
+        // Ruby class bodies are wrapped in a `body_statement` node, so walk
+        // one step up if we land on that wrapper. Mirrors the same hop done
+        // in the npm detector.
+        let mut container = node.parent();
+        if let Some(c) = container
+            && matches!(c.kind_id().into(), Ruby::BodyStatement)
+        {
+            container = c.parent();
+        }
+        let in_class = container.is_some_and(|p| {
+            matches!(
+                p.kind_id().into(),
+                Ruby::Class | Ruby::SingletonClass | Ruby::Module
+            )
+        });
+        if !in_class {
+            return;
+        }
+        let left = match node.child_by_field_name("left") {
+            Some(l) => l,
+            None => return,
+        };
+        if left.kind_id() != Ruby::InstanceVariable {
+            return;
+        }
+        stats.record_attribute(SpaceKind::Class, false);
+    }
+}
+
+// Go has no class-like constructs; Npa is not applicable.
+impl Npa for GoCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+// C has no class-like constructs; Npa is not applicable.
+impl Npa for CCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+/// Resolve the class-vs-interface container for a `class_parameter` node
+/// (primary constructor parameter). The parent chain is:
+/// `class_parameter > primary_constructor > class_declaration`.
+fn kotlin_constructor_param_container(node: &Node) -> Option<SpaceKind> {
+    let decl = node.parent()?.parent()?; // class_declaration
+    match decl.kind_id().into() {
+        Kotlin::ClassDeclaration => {
+            if decl.children().any(|c| c.kind_id() == Kotlin::Interface) {
+                Some(SpaceKind::Interface)
+            } else {
+                Some(SpaceKind::Class)
+            }
+        }
+        _ => None,
+    }
+}
+
+impl Npa for KotlinCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        if !matches!(
+            stats.space_kind,
+            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+        ) {
+            return;
+        }
+        match node.kind_id().into() {
+            Kotlin::PropertyDeclaration => {
+                // Must be a direct member of a class/object/interface body, not a
+                // local `val`/`var` inside a function.
+                let parent = match node.parent() {
+                    Some(p) => p,
+                    None => return,
+                };
+                if !matches!(
+                    parent.kind_id().into(),
+                    Kotlin::ClassBody | Kotlin::EnumClassBody
+                ) {
+                    return;
+                }
+                let Some(container) = crate::legacy::metrics::npm::kotlin_member_container(&parent)
+                else {
+                    return;
+                };
+                stats.record_attribute(
+                    container,
+                    crate::legacy::metrics::npm::kotlin_member_is_public(node, code),
+                );
+            }
+            Kotlin::ClassParameter => {
+                // Constructor property: `class C(val x: Int)`. Only parameters
+                // with `val` or `var` (wrapped in a `binding_pattern_kind` node)
+                // are properties; plain parameters are not.
+                if !node
+                    .children()
+                    .any(|c| c.kind_id() == Kotlin::BindingPatternKind)
+                {
+                    return;
+                }
+                let Some(container) = kotlin_constructor_param_container(node) else {
+                    return;
+                };
+                stats.record_attribute(
+                    container,
+                    crate::legacy::metrics::npm::kotlin_member_is_public(node, code),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Npa for PowershellCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        // Only record attributes when we're already inside a class-like
+        // space. PowerShell doesn't have interfaces, so we only route to
+        // `SpaceKind::Class`.
+        if !matches!(stats.space_kind, SpaceKind::Class) {
+            return;
+        }
+        if node.kind_id() != Powershell::ClassPropertyDefinition {
+            return;
+        }
+        let public = crate::legacy::metrics::npm::powershell_member_is_public(node, code);
+        stats.record_attribute(SpaceKind::Class, public);
+    }
+}
+
+impl Npa for crate::legacy::langs::PhpCode {
+    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
+        use crate::legacy::languages::Php::*;
+
+        match node.kind_id().into() {
+            PropertyDeclaration => {
+                if !matches!(
+                    stats.space_kind,
+                    SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+                ) {
+                    return;
+                }
+                // Must be a direct child of a class-like body's
+                // `declaration_list`.
+                let Some(parent) = node.parent() else {
+                    return;
+                };
+                if parent.kind_id() != DeclarationList {
+                    return;
+                }
+                let Some(grand) = parent.parent() else {
+                    return;
+                };
+                let container = match grand.kind_id().into() {
+                    ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+                        SpaceKind::Class
+                    }
+                    InterfaceDeclaration => SpaceKind::Interface,
+                    _ => return,
+                };
+                // PHP allows multiple properties per declaration: `public $a, $b;`
+                // produces a single `property_declaration` with one
+                // `visibility_modifier` and one `property_element` per declared
+                // name. Count each `property_element`.
+                let public = crate::legacy::metrics::npm::php_member_is_public(node, code);
+                for child in node.children() {
+                    if child.kind_id() == PropertyElement {
+                        stats.record_attribute(container, public);
+                    }
+                }
+            }
+            PropertyPromotionParameter => {
+                // Constructor property promotion (`__construct(public int $id)`)
+                // declares a real class property. The node lives inside the
+                // constructor's `formal_parameters`, so the enclosing space at
+                // this point is the method (Function space) — `stats.space_kind`
+                // is `Function`. Walk up to find the owning class-like
+                // declaration; metric merge will still roll the attribute up
+                // into the right class scope through the method's stats.
+                if !is_php_promoted_param_in_constructor(node, code) {
+                    return;
+                }
+                let Some(container) = php_promoted_param_container(node) else {
+                    return;
+                };
+                let public = crate::legacy::metrics::npm::php_member_is_public(node, code);
+                stats.record_attribute(container, public);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn is_php_promoted_param_in_constructor(node: &Node, code: &[u8]) -> bool {
+    use crate::legacy::languages::Php::*;
+    // node -> formal_parameters -> method_declaration whose name is `__construct`.
+    // The tree-sitter-php grammar accepts `property_promotion_parameter` in
+    // any method (PHP itself rejects it at runtime), so we must verify the
+    // method name to avoid attributing promoted-style params on a regular
+    // method as class properties. PHP method names are case-insensitive,
+    // so use ASCII-case-insensitive comparison.
+    let Some(params) = node.parent() else {
+        return false;
+    };
+    if params.kind_id() != FormalParameters {
+        return false;
+    }
+    let Some(method) = params.parent() else {
+        return false;
+    };
+    if method.kind_id() != MethodDeclaration {
+        return false;
+    }
+    let Some(name) = method.child_by_field_name("name") else {
+        return false;
+    };
+    code.get(name.start_byte()..name.end_byte())
+        .is_some_and(|bytes| bytes.eq_ignore_ascii_case(b"__construct"))
+}
+
+fn php_promoted_param_container(node: &Node) -> Option<SpaceKind> {
+    use crate::legacy::languages::Php::*;
+    // node -> formal_parameters -> method_declaration -> declaration_list -> class-like
+    let method = node.parent()?.parent()?;
+    let decl_list = method.parent()?;
+    if decl_list.kind_id() != DeclarationList {
+        return None;
+    }
+    let owner = decl_list.parent()?;
+    match owner.kind_id().into() {
+        ClassDeclaration | AnonymousClass | TraitDeclaration | EnumDeclaration => {
+            Some(SpaceKind::Class)
+        }
+        InterfaceDeclaration => Some(SpaceKind::Interface),
+        _ => None,
+    }
+}
+
+// Markdown has no classes; NPA opts out via `applies_to(LANG::Markdown)`.
+#[cfg(feature = "markdown")]
+impl Npa for crate::legacy::langs::MarkdownCode {
+    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::legacy::langs::{
+        KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        TypescriptParser,
+    };
+    use crate::legacy::tools::check_metrics;
+
+    #[test]
+    fn php_npa_counts_each_property_in_grouped_declaration() {
+        // `public $a, $b;` is one property_declaration with two
+        // property_element children — count both.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public $a, $b;
+                 private $c;
+             }",
+            "foo.php",
+            |metric| {
+                // class_attributes: 3 (a, b, c). class_npa: 2 (a, b).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 2.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 3.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 0.6666666666666666,
+                  "interfaces_average": null,
+                  "total": 2.0,
+                  "total_attributes": 3.0,
+                  "average": 0.6666666666666666
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn php_npa_counts_promoted_constructor_properties() {
+        // PHP 8 constructor property promotion: `public int $id` in the
+        // ctor declares a real property and must contribute to NPA.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public function __construct(
+                     public int $id,
+                     private string $name
+                 ) {}
+             }",
+            "foo.php",
+            |metric| {
+                // 2 attributes total (id, name); 1 public (id).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 2.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 0.5,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_attributes": 2.0,
+                  "average": 0.5
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn php_npa_does_not_count_promoted_params_outside_constructor() {
+        // The tree-sitter-php grammar accepts `property_promotion_parameter`
+        // syntactically inside any method, even though PHP rejects it at
+        // runtime outside `__construct`. We must not attribute these as
+        // class properties — the regular property declarations are the
+        // only real attributes here.
+        check_metrics::<PhpParser>(
+            "<?php
+             class C {
+                 public $real;
+                 public function notConstructor(public int $bogus) {}
+             }",
+            "foo.php",
+            |metric| {
+                // Only `$real` is an attribute. `$bogus` is a promoted-style
+                // parameter on a non-constructor method and must not be
+                // counted.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r#"
+                {
+                  "classes": 1.0,
+                  "interfaces": 0.0,
+                  "class_attributes": 1.0,
+                  "interface_attributes": 0.0,
+                  "classes_average": 1.0,
+                  "interfaces_average": null,
+                  "total": 1.0,
+                  "total_attributes": 1.0,
+                  "average": 1.0
+                }
+                "#
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_npa_counts_class_body_assignments() {
+        check_metrics::<PythonParser>(
+            "class C:
+                 a = 1
+                 _b = 2
+                 __c = 3",
+            "foo.py",
+            |metric| {
+                // public: a. non-public: _b, __c.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 3.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.3333333333333333,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 3.0,
+                      "average": 0.3333333333333333
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn python_npa_counts_annotated_class_attributes() {
+        // PEP-526 class annotations (`x: T = val`, `x: T`) parse as
+        // expression_statement > assignment, so the existing detector should
+        // already cover them. Lock that in: both annotated-with-default and
+        // annotated-only class attributes count as attributes.
+        check_metrics::<PythonParser>(
+            "class C:
+                 a: int = 1
+                 b: int
+                 _c: str = 'x'
+                 __d: bool",
+            "foo.py",
+            |metric| {
+                // 4 attributes total. Public: a, b. Non-public: _c, __d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_attributes": 4.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_npa_counts_public_fields() {
+        check_metrics::<TypescriptParser>(
+            "class C {
+                 a: number = 1;
+                 public b: number = 2;
+                 private c: number = 3;
+                 protected d: number = 4;
+             }",
+            "foo.ts",
+            |metric| {
+                // public: a, b. non-public: c, d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 2.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 2.0,
+                      "total_attributes": 4.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn typescript_npa_counts_ecmascript_private_fields() {
+        // ECMAScript `#name` private fields parse as `public_field_definition`
+        // nodes whose name child is `private_property_identifier`; they must
+        // be counted as non-public.
+        check_metrics::<TypescriptParser>(
+            "class C {
+                 a: number = 1;
+                 #b: number = 2;
+                 #c: number = 3;
+             }",
+            "foo.ts",
+            |metric| {
+                // 3 fields: public = a only; #b, #c are private.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 3.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.3333333333333333,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 3.0,
+                      "average": 0.3333333333333333
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_npa_counts_struct_fields() {
+        check_metrics::<RustParser>(
+            "struct S {
+                 pub a: u32,
+                 b: u32,
+             }",
+            "foo.rs",
+            |metric| {
+                // 2 fields, 1 public.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 2.0,
+                      "average": 0.5
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rust_npa_counts_tuple_struct_fields() {
+        // Tuple-struct fields live as type children of
+        // `ordered_field_declaration_list` with an optional preceding
+        // `visibility_modifier`; they must count the same as named fields.
+        check_metrics::<RustParser>("struct S(pub u32, u32);", "foo.rs", |metric| {
+            // 2 positional fields, 1 public.
+            insta::assert_json_snapshot!(
+                metric.npa,
+                @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 2.0,
+                      "average": 0.5
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn kotlin_npa_counts_class_properties() {
+        check_metrics::<KotlinParser>(
+            "class C {
+                 val a: Int = 1
+                 private val b: Int = 2
+                 protected val c: Int = 3
+                 internal val d: Int = 4
+             }",
+            "foo.kt",
+            |metric| {
+                // public: a. non-public: b, c, d.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.25,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_counts_constructor_properties() {
+        // Constructor parameters with `val`/`var` are class attributes.
+        // Plain parameters (no val/var) are NOT attributes.
+        check_metrics::<KotlinParser>(
+            "class C(val a: Int, private var b: String, internal val c: Long, d: Double) {
+                 protected val e: Int = 0
+             }",
+            "foo.kt",
+            |metric| {
+                // a is public. b/c are non-public constructor properties, e is
+                // a non-public body property, and d is a plain constructor param.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.25,
+                      "interfaces_average": null,
+                      "total": 1.0,
+                      "total_attributes": 4.0,
+                      "average": 0.25
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn kotlin_npa_routes_interface_properties_to_interface_counters() {
+        // Same class-vs-interface routing concern as NPM: tree-sitter-kotlin
+        // uses `class_declaration` for both classes and interfaces, so the
+        // container must be decided by the declaration's leading keyword.
+        check_metrics::<KotlinParser>(
+            "interface Foo {
+                 val a: Int
+                 val b: Int
+             }
+
+             class Bar {
+                 val c: Int = 1
+                 private val d: Int = 2
+             }",
+            "foo.kt",
+            |metric| {
+                // class Bar: 2 attrs, 1 public; interface Foo: 2 attrs, 2 public.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 1.0,
+                      "interfaces": 2.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 2.0,
+                      "classes_average": 0.5,
+                      "interfaces_average": 1.0,
+                      "total": 3.0,
+                      "total_attributes": 4.0,
+                      "average": 0.75
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn ruby_npa_counts_instance_variables_under_body_statement() {
+        // Ruby class bodies are wrapped in a `body_statement` node in the
+        // tree-sitter grammar, so the ivar assignment's parent is
+        // `body_statement`, not `class` directly. The detector must hop
+        // through the wrapper.
+        check_metrics::<RubyParser>(
+            "class C
+                 @x = 1
+                 @y = 2
+             end",
+            "foo.rb",
+            |metric| {
+                // 2 ivar attributes, both non-public by convention.
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 0.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 2.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 0.0,
+                      "interfaces_average": null,
+                      "total": 0.0,
+                      "total_attributes": 2.0,
+                      "average": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn powershell_npa_counts_all_properties_as_public_including_hidden() {
+        // PowerShell has no access-modifier equivalent to `private` /
+        // `protected`. The `hidden` keyword only suppresses a property
+        // from default `Get-Member` / IntelliSense output; the property
+        // is still publicly accessible. Per about_Hidden: "hidden
+        // members are still public". NPA therefore counts every property
+        // as public.
+        check_metrics::<PowershellParser>(
+            "class C {
+                 [int]$a = 1
+                 hidden [int]$b = 2
+                 [int]$c = 3
+                 hidden [int]$d = 4
+             }",
+            "foo.ps1",
+            |metric| {
+                // 4 attributes, all public (a, b, c, d).
+                insta::assert_json_snapshot!(
+                    metric.npa,
+                    @r###"
+                    {
+                      "classes": 4.0,
+                      "interfaces": 0.0,
+                      "class_attributes": 4.0,
+                      "interface_attributes": 0.0,
+                      "classes_average": 1.0,
+                      "interfaces_average": null,
+                      "total": 4.0,
+                      "total_attributes": 4.0,
+                      "average": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+}

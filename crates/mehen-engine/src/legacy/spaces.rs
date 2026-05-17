@@ -1,0 +1,416 @@
+use std::collections::HashMap;
+
+use serde::Serialize;
+use std::fmt;
+use std::path::Path;
+
+use crate::legacy::checker::Checker;
+use crate::legacy::langs::LANG;
+use crate::legacy::node::Node;
+
+use crate::legacy::getter::Getter;
+use crate::legacy::metrics::abc::{self, Abc};
+use crate::legacy::metrics::cognitive::{self, Cognitive};
+use crate::legacy::metrics::cyclomatic::{self, Cyclomatic};
+use crate::legacy::metrics::exit::{self, Exit};
+use crate::legacy::metrics::halstead::{self, Halstead, HalsteadMaps};
+use crate::legacy::metrics::loc::{self, Loc};
+use crate::legacy::metrics::mi::{self, Mi};
+use crate::legacy::metrics::nargs::{self, NArgs};
+use crate::legacy::metrics::nom::{self, Nom};
+use crate::legacy::metrics::npa::{self, Npa};
+use crate::legacy::metrics::npm::{self, Npm};
+use crate::legacy::metrics::wmc::{self, Wmc};
+
+use crate::legacy::traits::*;
+
+/// The list of supported space kinds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SpaceKind {
+    /// An unknown space
+    #[default]
+    Unknown,
+    /// A function space
+    Function,
+    /// A class space
+    Class,
+    /// A `Rust` trait space
+    Trait,
+    /// A `Rust` implementation space
+    Impl,
+    /// A general space
+    Unit,
+    /// An interface
+    Interface,
+}
+
+impl fmt::Display for SpaceKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            SpaceKind::Unknown => "unknown",
+            SpaceKind::Function => "function",
+            SpaceKind::Class => "class",
+            SpaceKind::Trait => "trait",
+            SpaceKind::Impl => "impl",
+            SpaceKind::Unit => "unit",
+            SpaceKind::Interface => "interface",
+        };
+        write!(f, "{s}")
+    }
+}
+
+/// All metrics data.
+#[derive(Default, Debug, Clone, Serialize)]
+pub struct CodeMetrics {
+    /// `NArgs` data
+    pub nargs: nargs::Stats,
+    /// `NExits` data
+    pub nexits: exit::Stats,
+    pub cognitive: cognitive::Stats,
+    /// `Cyclomatic` data
+    pub cyclomatic: cyclomatic::Stats,
+    /// `Halstead` data
+    pub halstead: halstead::Stats,
+    /// `Loc` data
+    pub loc: loc::Stats,
+    /// `Nom` data
+    pub nom: nom::Stats,
+    /// `Mi` data
+    pub mi: mi::Stats,
+    /// `Abc` data
+    pub abc: abc::Stats,
+    /// `Wmc` data
+    #[serde(skip_serializing_if = "wmc::Stats::is_disabled")]
+    pub wmc: wmc::Stats,
+    /// `Npm` data
+    #[serde(skip_serializing_if = "npm::Stats::is_disabled")]
+    pub npm: npm::Stats,
+    /// `Npa` data
+    #[serde(skip_serializing_if = "npa::Stats::is_disabled")]
+    pub npa: npa::Stats,
+}
+
+impl fmt::Display for CodeMetrics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{}", self.nargs)?;
+        writeln!(f, "{}", self.nexits)?;
+        writeln!(f, "{}", self.cognitive)?;
+        writeln!(f, "{}", self.cyclomatic)?;
+        writeln!(f, "{}", self.halstead)?;
+        writeln!(f, "{}", self.loc)?;
+        writeln!(f, "{}", self.nom)?;
+        write!(f, "{}", self.mi)
+    }
+}
+
+impl CodeMetrics {
+    /// Applies per-language applicability rules to the metrics, marking any
+    /// metric that does not make sense for the given language as disabled so
+    /// it is omitted from output (rather than serialized as a measured zero).
+    pub fn apply_language_rules(&mut self, lang: LANG) {
+        if !wmc::Stats::applies_to(lang) {
+            self.wmc.mark_not_applicable();
+        }
+        if !npa::Stats::applies_to(lang) {
+            self.npa.mark_not_applicable();
+        }
+        if !npm::Stats::applies_to(lang) {
+            self.npm.mark_not_applicable();
+        }
+    }
+
+    pub fn merge(&mut self, other: &CodeMetrics) {
+        self.cognitive.merge(&other.cognitive);
+        self.cyclomatic.merge(&other.cyclomatic);
+        self.halstead.merge(&other.halstead);
+        self.loc.merge(&other.loc);
+        self.nom.merge(&other.nom);
+        self.mi.merge(&other.mi);
+        self.nargs.merge(&other.nargs);
+        self.nexits.merge(&other.nexits);
+        self.abc.merge(&other.abc);
+        self.wmc.merge(&other.wmc);
+        self.npm.merge(&other.npm);
+        self.npa.merge(&other.npa);
+    }
+}
+
+/// Function space data.
+#[derive(Debug, Clone, Serialize)]
+pub struct FuncSpace {
+    /// The name of a function space
+    ///
+    /// If `None`, an error is occurred in parsing
+    /// the name of a function space
+    pub name: Option<String>,
+    /// The first line of a function space
+    pub start_line: usize,
+    /// The last line of a function space
+    pub end_line: usize,
+    /// The space kind
+    pub kind: SpaceKind,
+    /// All subspaces contained in a function space
+    pub spaces: Vec<FuncSpace>,
+    /// All metrics of a function space
+    pub metrics: CodeMetrics,
+}
+
+impl FuncSpace {
+    fn new<T: Getter>(node: &Node, code: &[u8], kind: SpaceKind, lang: LANG) -> Self {
+        let (start_position, end_position) = match kind {
+            SpaceKind::Unit => {
+                if node.child_count() == 0 {
+                    (0, 0)
+                } else {
+                    (node.start_row() + 1, node.end_row())
+                }
+            }
+            _ => (node.start_row() + 1, node.end_row() + 1),
+        };
+
+        let mut metrics = CodeMetrics::default();
+        metrics.apply_language_rules(lang);
+        metrics.npa.set_space_kind(kind);
+        metrics.npm.set_space_kind(kind);
+
+        Self {
+            name: T::get_func_space_name(node, code)
+                .map(|name| name.split_whitespace().collect::<Vec<_>>().join(" ")),
+            spaces: Vec::new(),
+            metrics,
+            kind,
+            start_line: start_position,
+            end_line: end_position,
+        }
+    }
+}
+
+#[inline(always)]
+fn compute_halstead_mi_and_wmc<T: ParserTrait>(state: &mut State) {
+    state
+        .halstead_maps
+        .finalize(&mut state.space.metrics.halstead);
+    T::Mi::compute(
+        &state.space.metrics.loc,
+        &state.space.metrics.cyclomatic,
+        &state.space.metrics.halstead,
+        &mut state.space.metrics.mi,
+    );
+    T::Wmc::compute(
+        state.space.kind,
+        &state.space.metrics.cyclomatic,
+        &mut state.space.metrics.wmc,
+    );
+}
+
+#[inline(always)]
+fn compute_averages(state: &mut State) {
+    let nom_functions = state.space.metrics.nom.functions_sum() as usize;
+    let nom_closures = state.space.metrics.nom.closures_sum() as usize;
+    let nom_total = state.space.metrics.nom.total() as usize;
+    // Cognitive average
+    state.space.metrics.cognitive.finalize(nom_total);
+    // Nexit average
+    state.space.metrics.nexits.finalize(nom_total);
+    // Nargs average
+    state
+        .space
+        .metrics
+        .nargs
+        .finalize(nom_functions, nom_closures);
+}
+
+#[inline(always)]
+fn compute_minmax(state: &mut State) {
+    state.space.metrics.cyclomatic.compute_minmax();
+    state.space.metrics.nexits.compute_minmax();
+    state.space.metrics.cognitive.compute_minmax();
+    state.space.metrics.nargs.compute_minmax();
+    state.space.metrics.nom.compute_minmax();
+    state.space.metrics.loc.compute_minmax();
+    state.space.metrics.abc.compute_minmax();
+}
+
+#[inline(always)]
+fn compute_sum(state: &mut State) {
+    state.space.metrics.wmc.compute_sum();
+    state.space.metrics.npm.compute_sum();
+    state.space.metrics.npa.compute_sum();
+}
+
+fn finalize<T: ParserTrait>(state_stack: &mut Vec<State>, diff_level: usize) {
+    if state_stack.is_empty() {
+        return;
+    }
+    for _ in 0..diff_level {
+        if state_stack.len() == 1 {
+            let last_state = state_stack.last_mut().unwrap();
+            compute_minmax(last_state);
+            compute_sum(last_state);
+            compute_halstead_mi_and_wmc::<T>(last_state);
+            compute_averages(last_state);
+            break;
+        } else {
+            let mut state = state_stack.pop().unwrap();
+            compute_minmax(&mut state);
+            compute_sum(&mut state);
+            compute_halstead_mi_and_wmc::<T>(&mut state);
+            compute_averages(&mut state);
+
+            let last_state = state_stack.last_mut().unwrap();
+            last_state.halstead_maps.merge(&state.halstead_maps);
+            compute_halstead_mi_and_wmc::<T>(last_state);
+
+            // Merge function spaces
+            last_state.space.metrics.merge(&state.space.metrics);
+            last_state.space.spaces.push(state.space);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct State<'a> {
+    space: FuncSpace,
+    halstead_maps: HalsteadMaps<'a>,
+}
+
+/// Returns all function spaces data of a code. This function needs a parser to
+/// be created a priori in order to work.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+///
+/// use mehen::{RustParser, metrics, ParserTrait};
+///
+/// let source_code = "fn main() { let a = 42; }";
+///
+/// let path = Path::new("foo.rs");
+/// let source_as_vec = source_code.as_bytes().to_vec();
+///
+/// let parser = RustParser::new(source_as_vec, &path, None);
+///
+/// metrics(&parser, &path).unwrap();
+/// ```
+pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
+    let code = parser.get_code();
+    let node = parser.get_root();
+    let mut cursor = node.cursor();
+    let mut stack = Vec::new();
+    let mut children = Vec::new();
+    let mut state_stack: Vec<State> = Vec::new();
+    let mut last_level = 0;
+    // Initialize nesting_map used for storing nesting information for cognitive
+    // Three type of nesting info: conditionals, functions and lambdas
+    let mut nesting_map = HashMap::<usize, (usize, usize, usize)>::default();
+    nesting_map.insert(node.id(), (0, 0, 0));
+    stack.push((node, 0));
+
+    while let Some((node, level)) = stack.pop() {
+        if level < last_level {
+            finalize::<T>(&mut state_stack, last_level - level);
+            last_level = level;
+        }
+
+        let kind = T::Getter::get_space_kind(&node);
+
+        let func_space = T::Checker::is_func(&node) || T::Checker::is_func_space(&node);
+        let unit = kind == SpaceKind::Unit;
+
+        let new_level = if func_space {
+            let state = State {
+                space: FuncSpace::new::<T::Getter>(&node, code, kind, T::get_lang()),
+                halstead_maps: HalsteadMaps::new(),
+            };
+            state_stack.push(state);
+            last_level = level + 1;
+            last_level
+        } else {
+            level
+        };
+
+        if let Some(state) = state_stack.last_mut() {
+            let last = &mut state.space;
+            T::Cognitive::compute(&node, &mut last.metrics.cognitive, &mut nesting_map);
+            T::Cyclomatic::compute(&node, &mut last.metrics.cyclomatic);
+            T::Halstead::compute(&node, code, &mut state.halstead_maps);
+            T::Loc::compute(&node, &mut last.metrics.loc, func_space, unit);
+            T::Nom::compute(&node, &mut last.metrics.nom);
+            T::NArgs::compute(&node, code, &mut last.metrics.nargs);
+            T::Exit::compute(&node, &mut last.metrics.nexits);
+            T::Abc::compute(&node, &mut last.metrics.abc);
+            T::Npm::compute(&node, code, &mut last.metrics.npm);
+            T::Npa::compute(&node, code, &mut last.metrics.npa);
+        }
+
+        cursor.reset(&node);
+        if cursor.goto_first_child() {
+            loop {
+                children.push((cursor.node(), new_level));
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+            for child in children.drain(..).rev() {
+                stack.push(child);
+            }
+        }
+    }
+
+    finalize::<T>(&mut state_stack, usize::MAX);
+
+    state_stack.pop().map(|mut state| {
+        state.space.name = path.to_str().map(|name| name.to_string());
+        state.space
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::legacy::langs::{GoParser, PythonParser};
+    use crate::legacy::tools::check_func_space;
+
+    fn collect_metric_keys(json: &serde_json::Value, out: &mut std::collections::BTreeSet<String>) {
+        if let Some(metrics) = json.get("metrics").and_then(|m| m.as_object()) {
+            for k in metrics.keys() {
+                out.insert(k.clone());
+            }
+        }
+        if let Some(spaces) = json.get("spaces").and_then(|s| s.as_array()) {
+            for sub in spaces {
+                collect_metric_keys(sub, out);
+            }
+        }
+    }
+
+    #[test]
+    fn go_omits_class_metrics_everywhere() {
+        check_func_space::<GoParser, _>("package main\nfunc f() {}\n", "foo.go", |space| {
+            let json = serde_json::to_value(&space).unwrap();
+            let mut keys = std::collections::BTreeSet::new();
+            collect_metric_keys(&json, &mut keys);
+            for forbidden in ["wmc", "npm", "npa"] {
+                assert!(
+                    !keys.contains(forbidden),
+                    "Go output should not include `{forbidden}`, got keys: {keys:?}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn python_function_omits_class_metrics() {
+        // `wmc`/`npa`/`npm` are also gated by space kind, so a plain function
+        // space should still omit them even in a class-capable language.
+        check_func_space::<PythonParser, _>("def f():\n    pass\n", "foo.py", |space| {
+            let json = serde_json::to_value(&space).unwrap();
+            let mut keys = std::collections::BTreeSet::new();
+            collect_metric_keys(&json, &mut keys);
+            for forbidden in ["wmc", "npm", "npa"] {
+                assert!(!keys.contains(forbidden));
+            }
+        });
+    }
+}

@@ -28,14 +28,43 @@ mehen-kotlin = { workspace = true, optional = true }
 mehen-powershell = { workspace = true, optional = true }
 
 camino = { workspace = true }
+clap = { workspace = true }
 crossbeam = { workspace = true }
+globset = { workspace = true }
+gix = { workspace = true }
 log = { workspace = true }
+num = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
+serde_cbor = { workspace = true }
 serde_json = { workspace = true }
+serde_norway = { workspace = true }
+toml = { workspace = true }
 walkdir = { workspace = true }
+
+# tree-sitter grammars used by the legacy analyzer pipeline.
+tree-sitter = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+tree-sitter-python = { workspace = true }
+tree-sitter-rust = { workspace = true }
+tree-sitter-go = { workspace = true }
+tree-sitter-ruby = { workspace = true }
+tree-sitter-kotlin = { workspace = true }
+tree-sitter-pwsh = { workspace = true }
+tree-sitter-c = { workspace = true }
+tree-sitter-php = { workspace = true }
+tree-sitter-markdown-text = { workspace = true, optional = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 default = [
+    "markdown",
     "lang-markdown",
     "lang-python",
     "lang-typescript",
@@ -47,6 +76,13 @@ default = [
     "lang-kotlin",
     "lang-powershell",
 ]
+# Legacy `markdown` feature — gates the markdown analyzer & document
+# diff renderer in the relocated `legacy/` machinery (matches the
+# pre-1.0 root-crate `markdown` feature).
+markdown = [
+    "dep:mehen-markdown",
+    "dep:tree-sitter-markdown-text",
+]
 lang-markdown = ["dep:mehen-markdown"]
 lang-python = ["dep:mehen-python"]
 lang-typescript = ["dep:mehen-typescript"]
@@ -57,3 +93,17 @@ lang-go = ["dep:mehen-go"]
 lang-c = ["dep:mehen-c"]
 lang-kotlin = ["dep:mehen-kotlin"]
 lang-powershell = ["dep:mehen-powershell"]
+
+[package.metadata.cargo-machete]
+ignored = [
+    "num-traits",
+    "tree-sitter-go",
+    "tree-sitter-python",
+    "tree-sitter-rust",
+    "tree-sitter-ruby",
+    "tree-sitter-kotlin",
+    "tree-sitter-pwsh",
+    "tree-sitter-c",
+    "tree-sitter-php",
+    "tree-sitter-markdown-text",
+]
