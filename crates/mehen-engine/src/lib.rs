@@ -11,25 +11,30 @@
 //! - the only `LanguageDispatcher` implementation in 1.0, exposed to
 //!   `mehen-markdown` for the embedded-code path.
 //!
-//! Phase 1 wires the registry and the dispatcher; the diff/top-offenders
-//! orchestrators are skeleton functions that Phase 5 fills in. This keeps
-//! the workspace compiling without removing the existing pre-1.0 CLI
-//! functionality (which still lives in the root `mehen` crate).
+//! Phase 1 wired the registry and the dispatcher; Phase 5 added the
+//! `analyze_diff` and `rank_top_offenders` orchestrators. The per-file
+//! parallelism unit and recursion/depth limits land in follow-up
+//! commits; this implementation keeps each operation single-threaded
+//! and predictable.
 
 #![forbid(unsafe_code)]
 
 mod detection;
+mod diff;
 mod dispatcher;
 mod registry;
 mod report;
+mod top_offenders;
 
 pub use detection::detect_language;
+pub use diff::analyze_diff;
 pub use dispatcher::EngineDispatcher;
 pub use registry::{AnalyzerRegistry, RegistryError};
 pub use report::{
     AnalysisErrorRecord, AnalyzeMetricsInput, DiffFile, DiffInput, DiffReport, DiffSide,
     MetricsReport, TopOffenderEntry, TopOffendersInput, TopOffendersReport,
 };
+pub use top_offenders::rank_top_offenders;
 
 use mehen_core::{AnalysisError, Result};
 

@@ -1,10 +1,7 @@
 //! `mehen` — 1.0 CLI binary.
 //!
-//! `metrics` runs through the new architecture (mehen-engine + per-language
-//! analyzer crates). `diff` and `top-offenders` delegate to the legacy
-//! implementations in the root `mehen` library; phase 5 follow-up ports
-//! those orchestrators into `mehen-engine` and removes the `mehen` lib
-//! dependency.
+//! Phase 5 surface: `metrics`, `diff`, `top-offenders` all run through
+//! the new architecture (mehen-engine + per-language analyzer crates).
 
 mod args;
 mod commands;
@@ -26,15 +23,7 @@ fn main() {
 fn run(cli: Cli) -> ExitCode {
     match cli.command {
         Command::Metrics(args) => commands::metrics(args),
-        Command::Diff(opts) => {
-            // `run_diff` calls `process::exit` itself on failure, so this
-            // path never returns ExitCode unless the diff succeeded.
-            mehen::diff::run_diff(opts);
-            ExitCode::Success
-        }
-        Command::TopOffenders(opts) => {
-            mehen::top_offenders::run_top_offenders(opts);
-            ExitCode::Success
-        }
+        Command::Diff(args) => commands::diff(args),
+        Command::TopOffenders(args) => commands::top_offenders(args),
     }
 }
