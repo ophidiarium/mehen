@@ -11,4 +11,5 @@ publish = false
 
 [dependencies]
 mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
 tree-sitter = { workspace = true }

@@ -22,6 +22,11 @@
 
 mod parser;
 mod span;
+mod walker;
 
 pub use parser::{TreeSitterError, TreeSitterParser};
 pub use span::{node_span, text_of};
+pub use walker::{
+    LanguageRules, NodeFacts, ScopeOpen, State, WalkResult, apply_state_to,
+    default_line_classifier, empty_space, walk,
+};
