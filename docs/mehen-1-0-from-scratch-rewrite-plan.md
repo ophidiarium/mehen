@@ -122,6 +122,18 @@ Supported formats:
 --format json
 ```
 
+### 2.5 Profiles
+
+Profiles are built-in reporting and threshold presets, not external configuration files in 1.0.
+
+| Profile | Purpose |
+|---|---|
+| `default` | Local developer output, no implicit failure policy. |
+| `ci` | GitHub Action-friendly defaults, stable tables, standard metric selector set. |
+| `strict` | Same output as `ci`, but enables stricter built-in threshold suggestions when explicit thresholds are not provided. |
+
+Explicit CLI flags and action inputs override profile defaults. Repository-local configuration files can be designed after the 1.0 command surface is stable.
+
 ## 3. Core architectural decision
 
 `mehen` should not have one central crate that "calculates all metrics for all languages." That would repeat the weakness of a universal AST model: it looks simple at the abstraction boundary, then loses the syntax-level nuance that makes metrics useful.
@@ -185,7 +197,6 @@ crates/
   mehen-tree-sitter/
   mehen-git/
   mehen-report/
-  mehen-action/
   xtask/
 tests/
   fixtures/
@@ -284,14 +295,81 @@ pub struct SourceSpan {
     pub end_line: u32,
 }
 
+pub enum SpaceKind {
+    Unit,
+    Function,
+    Closure,
+    Class,
+    Interface,
+    Trait,
+    Impl,
+    Enum,
+    Custom(SmolStr),
+}
+
+pub struct MetricSpace {
+    pub id: SpaceId,
+    pub kind: SpaceKind,
+    pub name: Option<String>,
+    pub span: SourceSpan,
+    pub metrics: MetricSet,
+    pub spaces: Vec<MetricSpace>,
+}
+
+pub struct LanguageAnalysis {
+    pub language: Language,
+    pub backend: AnalysisBackend,
+    pub diagnostics: Vec<ParseDiagnostic>,
+    pub root: MetricSpace,
+    pub contributions: Vec<MetricContribution>,
+}
+
 pub trait LanguageAnalyzer {
     fn language(&self) -> Language;
     fn backend(&self) -> AnalysisBackend;
     fn analyze(&self, source: &SourceFile, config: &AnalysisConfig) -> Result<LanguageAnalysis>;
 }
+
+pub trait LanguageDispatcher: Send + Sync {
+    fn analyze(&self, source: SourceFile, config: &AnalysisConfig) -> Result<LanguageAnalysis>;
+}
 ```
 
 Use `camino::Utf8PathBuf` internally for report paths and convert from `PathBuf` only at IO boundaries.
+
+`LanguageAnalysis` is the owned result returned by every language analyzer. It is not a parser AST and it must not borrow from parser arenas, bump allocators, source buffers, tree cursors, or vendor AST nodes. Parser-specific data lives only for the duration of one `analyze` call. This avoids Oxc/Mago/Ruff/Prism lifetime leakage and makes `LanguageAnalysis: Send + 'static`.
+
+`SpaceKind` is intentionally open through `Custom(SmolStr)`. Source-code analyzers should use the standard variants where they fit. Declarative analyzers can publish spaces such as `cloudformation.resource`, `terraform.module`, or `kubernetes.object` without changing the shared enum.
+
+The `Language` enum is not feature-gated. A variant can exist even when its analyzer crate is disabled; in that case `mehen-engine` returns an unsupported-language diagnostic. This keeps `match` statements stable across feature combinations.
+
+`--language` accepts stable lowercase identifiers and aliases:
+
+| Canonical language | Accepted identifiers |
+|---|---|
+| Python | `python`, `py` |
+| TypeScript | `typescript`, `ts`, `mts`, `cts` |
+| JavaScript | `javascript`, `js`, `mjs`, `cjs` |
+| TSX | `tsx` |
+| JSX | `jsx` |
+| PHP | `php` |
+| Ruby | `ruby`, `rb` |
+| Rust | `rust`, `rs` |
+| Go | `go` |
+| Kotlin | `kotlin`, `kt`, `kts` |
+| PowerShell | `powershell`, `pwsh`, `ps1` |
+| C | `c`, `h` |
+| Markdown | `markdown`, `md`, `mdx` |
+
+Detection policy:
+
+- `.py` is Python in 1.0; `.pyi` support is not shipped until the Ruff migration explicitly adds stub-file fixtures and metric rules,
+- Jupyter notebooks are not a 1.0 input format; notebook cell extraction can be considered later,
+- `.ts`, `.mts`, and `.cts` are TypeScript,
+- `.js`, `.mjs`, and `.cjs` are JavaScript,
+- `.tsx` is TSX,
+- `.jsx` is JSX,
+- Markdown detection includes `.md` and `.mdx`, but MDX-specific syntax remains part of the existing Markdown metric compatibility work.
 
 ### 4.3 `mehen-metrics`
 
@@ -311,6 +389,8 @@ Responsibilities:
 - threshold polarity and extraction helpers,
 - test utilities for metric arithmetic.
 
+Metric keys are an open namespace, not a closed enum. The minimum source-code metric family uses stable keys such as `cyclomatic`, `cognitive`, `loc.lloc`, `halstead.volume`, and `mi.visual_studio`. Language families may add namespaced keys such as `cloudformation.resource_count`, `cloudformation.iam_spcm`, or `terraform.dependency_depth`.
+
 Examples of what belongs here:
 
 - `CyclomaticStats`, `CognitiveStats`, `HalsteadStats`, `LocStats`, `MiStats`, `AbcStats`,
@@ -320,6 +400,13 @@ Examples of what belongs here:
 - `MetricTreeBuilder`,
 - generic line indexing and line classification helpers,
 - selector catalogue for `diff` and `top-offenders`.
+
+Halstead protocol:
+
+- language crates emit token-level operator and operand events into a shared `HalsteadBuilder`,
+- language crates own classification, including rules such as "Python string literal is an operand unless it is a docstring",
+- `mehen-metrics` owns `n1`, `n2`, `N1`, `N2` deduplication/totals and the volume/difficulty/effort formulas,
+- token text normalization rules must be deterministic and tested per language.
 
 Examples of what does not belong here:
 
@@ -380,6 +467,8 @@ The language crate may choose its internal style:
 
 The only required output is `LanguageAnalysis` with the standard metric report shape.
 
+Each language crate owns parser lifetimes internally. Arena-backed parsers such as Oxc and Mago must emit owned metric data before the arena is dropped. `LanguageAnalysis` and every value inside it must be owned, deterministic, and safe to move across worker threads.
+
 ### 4.5 `mehen-tree-sitter`
 
 Shared support for tree-sitter-backed language crates.
@@ -420,6 +509,17 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> Result<TopOffendersReport
 
 The registry depends on enabled language crates and selects an analyzer by `Language`. The CLI never selects parsers directly.
 
+Concurrency contract:
+
+- per-file analysis is the parallelism unit,
+- baseline and head versions in `mehen diff` may be analyzed in parallel,
+- analyzers are constructed per worker or per analysis call, not shared as parser instances,
+- parser arenas and mutable parser state live for one `analyze` call,
+- `LanguageAnalysis` is owned and `Send + 'static`,
+- report rendering happens after analysis results are collected and sorted.
+
+`mehen-engine` also implements `LanguageDispatcher` for recursive analysis requests. This is used by Markdown embedded-code metrics and future analyzers that need to analyze nested language fragments. The dispatcher is the only supported re-entrance point from one analyzer into another. It enforces recursion limits, source-size limits, and feature availability.
+
 ### 4.7 `mehen-markdown`
 
 Markdown analysis remains special because it is not source-code function/class analysis.
@@ -434,6 +534,18 @@ Responsibilities:
 Initial rule:
 
 > Move current Markdown analysis as-is before changing parser internals.
+
+Markdown embedded-code analysis must not depend directly on every source-language crate. Instead, `mehen-markdown` accepts a `&dyn LanguageDispatcher` from `mehen-engine`.
+
+```rust
+pub fn analyze_markdown(
+    source: &SourceFile,
+    config: &MarkdownConfig,
+    dispatcher: &dyn LanguageDispatcher,
+) -> Result<LanguageAnalysis>;
+```
+
+The embedded-code path maps fence info strings to `Language`, constructs an embedded `SourceFile`, and calls the dispatcher. Tests can pass a mock dispatcher with canned `LanguageAnalysis` values. This keeps `mehen-markdown` dependent only on `mehen-core` and avoids a dependency fan-out from Markdown to every language crate.
 
 ### 4.8 `mehen-git`
 
@@ -450,6 +562,8 @@ Responsibilities:
 
 Port current `gix` usage, but hide it behind smaller internal structs.
 
+All report paths are repository-relative UTF-8 paths normalized with `/` separators, including on Windows. Filesystem paths can use platform separators internally, but serialized JSON, Markdown tables, snapshots, and sticky comments must never emit backslash-separated paths.
+
 ### 4.9 `mehen-report`
 
 Rendering and serialization.
@@ -465,11 +579,11 @@ Responsibilities:
 
 The current Markdown documentation diff renderer moves here, while consuming `mehen-markdown` report data.
 
-### 4.10 `mehen-action`
+### 4.10 GitHub Action wrapper
 
-Action-facing helper logic if we want it in Rust. The action can also remain a Node wrapper around the binary.
+The GitHub Action remains a Node.js composite-action wrapper around the binary for 1.0. Do not add a Rust `mehen-action` crate unless the Node wrapper becomes a maintenance burden after 1.0.
 
-Responsibilities if created:
+Responsibilities:
 
 - parse action inputs,
 - construct `mehen diff` command lines,
@@ -490,6 +604,7 @@ Responsibilities:
 - tree-sitter kind generation,
 - AST dumps for adapter developers,
 - local syntax-fact dumps,
+- dependency/license audit helper,
 - Ruff revision update helper,
 - generated fixture audits.
 
@@ -497,7 +612,7 @@ Responsibilities:
 
 ### 5.1 Shared metric contract
 
-All languages publish the same metric family:
+Source-code languages publish this minimum metric family:
 
 - cyclomatic complexity,
 - cognitive complexity,
@@ -511,6 +626,8 @@ All languages publish the same metric family:
 - NPA,
 - NPM,
 - WMC.
+
+Other language families can publish additional metrics under the same `MetricKey` namespace. For example, future CloudFormation and Terraform analyzers can add resource, block, graph, dependency, policy-depth, or intrinsic-function metrics without changing the source-code metric contract.
 
 The shared contract includes:
 
@@ -657,6 +774,13 @@ Some of these should not inflate cyclomatic complexity, but they may affect cogn
 
 Use Mago syntax as the target backend for `mehen-php`.
 
+Mago migration prerequisite:
+
+- `mago-syntax` 1.27.1 declares `rust-version = 1.95.0`, which is newer than this workspace's pre-1.0 MSRV; if the pinned Mago version differs, use that version's declared MSRV,
+- the Mago phase must first bump the workspace MSRV and all CI/release toolchains to the required version for the pinned Mago release,
+- the GitHub Action's normal release-binary path means end users do not need that Rust toolchain unless they build `mehen` from source,
+- the release matrix must prove the new MSRV before `mehen-php` flips from tree-sitter to Mago.
+
 PHP-specific metric opportunities:
 
 - attributes,
@@ -674,6 +798,12 @@ PHP-specific metric opportunities:
 ### 6.5 Ruby and Prism
 
 Use `ruby-prism` as the target backend for `mehen-ruby`.
+
+Prism migration prerequisites:
+
+- pin a `ruby-prism` revision only after license audit confirms the crate and vendored Prism sources are compatible with the project license,
+- verify build requirements for every release target; the `ruby-prism` sys layer may require `cc`, `bindgen`, and libclang on platforms where prebuilt bindings are unavailable,
+- Windows CI/release jobs must install the required native toolchain or skip source builds in favor of release binaries.
 
 Ruby-specific metric opportunities:
 
@@ -693,6 +823,13 @@ Ruby-specific metric opportunities:
 The 1.0 rewrite should first port current Markdown analysis unchanged.
 
 Comrak is a strong future parser candidate because it provides a CommonMark/GFM-compatible Rust AST, extension options, source positions, and `parse_document`. However, changing Markdown parsing can move many metrics at once. Do not bundle that risk with the workspace rewrite.
+
+Comrak caveats:
+
+- Comrak source positions are line/column based, so byte spans must be reconstructed through `LineIndex`,
+- GFM extensions are individually toggled,
+- alerts, math, and wikilinks are extension features rather than core GFM; the current analyzer's classifications must be checked one by one before any parser switch,
+- Comrak evaluation must stay experimental until snapshots prove the same Markdown metric definitions still hold.
 
 Plan:
 
@@ -721,6 +858,8 @@ New tree-sitter generator policy:
 - move generator ownership from `enums/` to `mehen-tree-sitter` plus `xtask`,
 - replace `./recreate-grammars.sh` with `cargo xtask tree-sitter generate <language>`,
 - generate kind enums into the owning language crate, for example `crates/mehen-rust/src/generated/kinds.rs`,
+- check generated kind files into git so release builds do not need grammar introspection at build time,
+- CI must run `cargo xtask tree-sitter check-generated` to verify generated files are current,
 - never generate global `src/languages/language_*.rs` files,
 - never expose generated kind enums to `mehen-metrics`,
 - keep generator config next to the owning language crate,
@@ -755,6 +894,28 @@ Bad uses:
 - writing a general parser in `mehen` for a language with active dedicated tooling.
 
 Create shared nom helpers only when the second language needs them. Before that, keep nom code inside the first language crate that uses it.
+
+### 6.9 Future declarative analyzers
+
+The architecture must support declarative languages without forcing them into function/class source-code shapes.
+
+Potential future analyzers:
+
+| Analyzer crate | Likely parser | Metric shape |
+|---|---|---|
+| `mehen-cloudformation` | YAML/JSON parser with tag preservation, likely `saphyr-parser` or similar | resources, parameters, outputs, conditions, intrinsic-function nesting, IAM policy depth, dependency graph metrics. |
+| `mehen-terraform` or `mehen-hcl` | `hcl-edit` / HCL parser with spans | blocks, resources, modules, expressions, dynamic blocks, references, dependency graph metrics. |
+
+Design rules:
+
+- declarative analyzers use `SpaceKind::Custom(...)` for scopes such as `cloudformation.resource` or `terraform.module`,
+- declarative metrics use namespaced `MetricKey`s such as `cloudformation.resource_count` and `terraform.dependency_depth`,
+- graph helpers remain local to the first declarative analyzer that needs them,
+- extract a shared `mehen-graph-metrics` helper only after at least two analyzers need the same graph algorithms,
+- declarative analyzers can still reuse shared accumulators for LOC, Halstead-like token metrics, or block-level complexity where appropriate,
+- Markdown embedded-code and declarative fragment analysis use the same `LanguageDispatcher` re-entrance seam.
+
+CloudFormation and Terraform support are real future candidates, but they should not be included in the 1.0 rewrite scope unless the source-code rewrite has already reached parity.
 
 ## 7. Rebuild order
 
@@ -859,6 +1020,8 @@ Deliverables:
 
 Deliverables:
 
+- workspace MSRV bumped to the Rust version required by the pinned Mago release,
+- CI/release toolchains updated before adding Mago as a required build dependency,
 - Mago integration in `mehen-php`,
 - parity snapshots,
 - improvement snapshots for attributes, promoted properties, enums, traits, anonymous classes, readonly members, null-safe calls, match expressions.
@@ -867,6 +1030,8 @@ Deliverables:
 
 Deliverables:
 
+- license audit for pinned `ruby-prism` and vendored Prism sources,
+- CI/release native build prerequisites documented and installed where source builds require them,
 - Prism integration in `mehen-ruby`,
 - parity snapshots,
 - improvement snapshots for blocks, lambdas, modifier forms, rescue modifiers, endless methods, pattern matching, safe navigation.
@@ -886,6 +1051,7 @@ Deliverables:
 - full parity suite,
 - repository-scale benchmark,
 - binary size report,
+- `cargo xtask audit-licenses`,
 - action integration test,
 - npm/PyPI packaging update,
 - migration guide from pre-1.0 CLI flags,
@@ -901,7 +1067,7 @@ Deliverables:
 | `src/markdown/tests/**` | `crates/mehen-markdown/tests/**` | Keep fixture names stable. |
 | `src/diff_markdown.rs` | `crates/mehen-report/src/github_markdown/docs.rs` | Preserve template catalog behavior. |
 | `src/git.rs` | `crates/mehen-git/src/lib.rs` | Keep `gix`; simplify API. |
-| `src/ci.rs` | `crates/mehen-engine/src/ci.rs` or `mehen-action` | Keep GitHub Actions detection. |
+| `src/ci.rs` | `crates/mehen-engine/src/ci.rs` | Keep GitHub Actions environment detection inside Rust engine code. |
 | `action.yml` and `scripts/github-action.mjs` | root and `scripts/` | Update command names and output paths. |
 
 ### 8.2 Split carefully
@@ -966,11 +1132,28 @@ For source code, preserve current source metric keys.
   "head": "HEAD",
   "files": [],
   "markdown_files": [],
+  "analysis_errors": [],
   "threshold_violations": []
 }
 ```
 
 The GitHub Action consumes JSON for decisions and Markdown output for the comment body.
+
+### 9.3 Diagnostics contract
+
+Parser diagnostics are not automatically fatal. Every analyzer should produce the best partial report it can and attach diagnostics to the report.
+
+Diagnostic classes:
+
+| Class | Meaning | Exit behavior |
+|---|---|---|
+| `warning` | Recoverable parser or analyzer issue; metrics are usable but may be degraded. | Exit 0 unless thresholds fail. |
+| `error` | Analysis for a file failed or is too incomplete to trust. | `mehen metrics` exits 1; `mehen diff` records `analysis_errors`. |
+| `fatal` | IO, unsupported language, toolchain, or internal invariant failure. | Exit 1. |
+
+`mehen diff` separates `analysis_errors` from `threshold_violations`. Exit code 2 remains reserved for threshold or policy failures. Exit code 1 covers setup, IO, unsupported-language, parser-fatal, or analysis-fatal failures.
+
+Baseline and head diagnostics are reported independently. A head-side analysis error should be visible in the GitHub comment even when the baseline parsed cleanly.
 
 ## 10. GitHub Action architecture
 
@@ -993,6 +1176,14 @@ Stable anchors:
 <!-- mehen-source -->
 <!-- mehen-docs -->
 ```
+
+The action should also include a schema marker near the top of the rendered comment:
+
+```text
+<!-- mehen-schema:1 -->
+```
+
+The action updates an existing comment when both the anchor and compatible schema marker are present. If the schema marker is missing or incompatible, the action should append a fresh comment rather than corrupting an older format.
 
 Preserve useful current inputs:
 
@@ -1092,6 +1283,20 @@ Differences must be classified as:
 - parser limitation,
 - metric-definition bug found during rewrite,
 - unsupported syntax now supported.
+
+### 12.3.1 Parity contract
+
+Parity is measured on normalized JSON reports.
+
+Rules:
+
+- integer metrics must match exactly,
+- string, path, language, backend, and diagnostic keys must match exactly unless the phase intentionally changes them,
+- floating-point metrics use per-metric tolerance; default tolerance is `0.001`,
+- Markdown and GitHub comment output must be byte-identical after stable timestamp/version redaction,
+- all intentional drift must be recorded with fixture name, metric key, old value, new value, and reason.
+
+Intentional drift records belong in the relevant language crate's test data and in release notes when the drift can affect user-facing CI output.
 
 ### 12.4 GitHub Action tests
 
@@ -1373,9 +1578,12 @@ Do not publish the 1.0 AGPL package from a tree containing MPL-covered implement
 - Ruff semantic crate manifest: <https://github.com/astral-sh/ruff/blob/main/crates/ruff_python_semantic/Cargo.toml>
 - Oxc parser docs: <https://docs.rs/oxc_parser/latest/oxc_parser/>
 - Mago syntax docs: <https://docs.rs/mago-syntax/latest/mago_syntax/>
+- Mago syntax crate manifest: <https://github.com/carthage-software/mago/blob/main/crates/syntax/Cargo.toml>
 - Ruby Prism Rust docs: <https://ruby.github.io/prism/rust/doc/ruby_prism/index.html>
 - Comrak docs: <https://docs.rs/comrak/latest/comrak/>
 - nom docs: <https://docs.rs/nom/latest/nom/>
+- saphyr-parser docs: <https://docs.rs/saphyr-parser/>
+- hcl-edit docs: <https://docs.rs/hcl-edit/>
 - MPL 2.0 license text: <https://www.mozilla.org/en-US/MPL/2.0/>
 - MPL 2.0 FAQ: <https://www.mozilla.org/en-US/MPL/2.0/FAQ/>
 - GNU AGPLv3 license text: <https://www.gnu.org/licenses/agpl-3.0.en.html>
