@@ -1759,6 +1759,7 @@ dependencies = [
  "mehen-core",
  "mehen-metrics",
  "mehen-tree-sitter",
+ "smol_str",
  "tree-sitter",
  "tree-sitter-python",
 ]
