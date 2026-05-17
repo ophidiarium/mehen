@@ -22,7 +22,7 @@ use mehen_markdown::diagrams;
 /// rewrite-plan §4.7 `LanguageDispatcher` driven by the new
 /// per-language analyzer crates.
 fn ensure_dispatch() {
-    mehen::init_markdown();
+    mehen_engine::init_markdown();
 }
 
 fn load_fixture(name: &str) -> (String, PathBuf) {

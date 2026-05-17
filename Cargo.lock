@@ -1581,50 +1581,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mehen"
-version = "0.6.1"
-dependencies = [
- "clap",
- "crossbeam",
- "env_logger",
- "gix",
- "globset",
- "insta",
- "log",
- "mehen-engine",
- "mehen-git",
- "mehen-markdown",
- "mehen-report",
- "num",
- "num-derive",
- "num-format",
- "num-traits",
- "owo-colors",
- "pretty_assertions",
- "regex",
- "serde",
- "serde_cbor",
- "serde_json",
- "serde_norway",
- "tempfile",
- "toml",
- "tree-sitter",
- "tree-sitter-c",
- "tree-sitter-go",
- "tree-sitter-kotlin-sg",
- "tree-sitter-markdown-text",
- "tree-sitter-php",
- "tree-sitter-pwsh",
- "tree-sitter-python",
- "tree-sitter-ruby",
- "tree-sitter-rust",
- "tree-sitter-typescript",
- "unicode-script",
- "unicode-segmentation",
- "walkdir",
-]
-
-[[package]]
 name = "mehen-c"
 version = "0.7.0"
 dependencies = [
@@ -1644,7 +1600,6 @@ dependencies = [
  "env_logger",
  "insta",
  "log",
- "mehen",
  "mehen-core",
  "mehen-engine",
  "mehen-metrics",
@@ -1745,8 +1700,8 @@ name = "mehen-markdown"
 version = "0.7.0"
 dependencies = [
  "insta",
- "mehen",
  "mehen-core",
+ "mehen-engine",
  "mehen-metrics",
  "num",
  "num-derive",
@@ -1924,16 +1879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-format"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
-dependencies = [
- "arrayvec",
- "itoa",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1984,12 +1929,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "owo-colors"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d211803b9b6b570f68772237e415a029d5a50c65d382910b879fb19d3271f94d"
 
 [[package]]
 name = "parking_lot"

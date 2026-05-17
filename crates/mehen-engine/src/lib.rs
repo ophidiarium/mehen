@@ -34,6 +34,67 @@ mod top_offenders;
 /// while each piece migrates into its plan-defined home.
 pub mod legacy;
 
+/// Register the embedded-code dispatch callback the moved
+/// [`mehen_markdown::analyze_markdown`] uses to fold fenced source
+/// snippets into Markdown metrics. Idempotent — backed by a
+/// `OnceLock` inside `mehen-markdown`, so repeat calls are silent
+/// no-ops.
+#[cfg(feature = "markdown")]
+pub fn init_markdown() {
+    use mehen_markdown::{EmbeddedFenceMetrics, FenceLanguage};
+
+    fn legacy_dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+        let bytes = body.into_bytes();
+        let path = synthetic_path(lang);
+        let legacy_lang = legacy_lang_for(lang);
+        let space = crate::legacy::langs::get_function_spaces(
+            &legacy_lang,
+            bytes,
+            std::path::Path::new(&path),
+            None,
+        )?;
+        Some(EmbeddedFenceMetrics {
+            volume: space.metrics.halstead.volume(),
+            cognitive_sum: space.metrics.cognitive.cognitive_sum(),
+            sloc: space.metrics.loc.sloc(),
+        })
+    }
+
+    fn synthetic_path(lang: FenceLanguage) -> std::path::PathBuf {
+        let name = match lang {
+            FenceLanguage::Rust => "fence.rs",
+            FenceLanguage::Python => "fence.py",
+            FenceLanguage::Typescript => "fence.ts",
+            FenceLanguage::Tsx => "fence.tsx",
+            FenceLanguage::Go => "fence.go",
+            FenceLanguage::Ruby => "fence.rb",
+            FenceLanguage::Kotlin => "fence.kt",
+            FenceLanguage::Powershell => "fence.ps1",
+            FenceLanguage::C => "fence.c",
+            FenceLanguage::Php => "fence.php",
+        };
+        std::path::PathBuf::from(name)
+    }
+
+    fn legacy_lang_for(lang: FenceLanguage) -> crate::legacy::langs::LANG {
+        use crate::legacy::langs::LANG;
+        match lang {
+            FenceLanguage::Rust => LANG::Rust,
+            FenceLanguage::Python => LANG::Python,
+            FenceLanguage::Typescript => LANG::Typescript,
+            FenceLanguage::Tsx => LANG::Tsx,
+            FenceLanguage::Go => LANG::Go,
+            FenceLanguage::Ruby => LANG::Ruby,
+            FenceLanguage::Kotlin => LANG::Kotlin,
+            FenceLanguage::Powershell => LANG::Powershell,
+            FenceLanguage::C => LANG::C,
+            FenceLanguage::Php => LANG::Php,
+        }
+    }
+
+    mehen_markdown::set_legacy_dispatch(legacy_dispatch);
+}
+
 pub use detection::detect_language;
 pub use diff::analyze_diff;
 pub use dispatcher::EngineDispatcher;

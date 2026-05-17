@@ -15,20 +15,19 @@ pub struct Cli {
     pub command: Command,
 }
 
-/// Subcommands flatten the still-in-place `mehen::diff::DiffOpts` /
-/// `mehen::top_offenders::TopOffendersOpts` argument shapes from the
-/// root crate so the existing pre-1.0 tests against those flag surfaces
-/// keep passing through the new binary. Each pre-1.0 argument is
-/// physically reachable via `cargo run -p mehen-cli --bin mehen --
+/// Subcommands flatten the legacy `DiffOpts` / `TopOffendersOpts`
+/// argument shapes so the existing pre-1.0 tests against those flag
+/// surfaces keep passing through the new binary. Each pre-1.0 argument
+/// is physically reachable via `cargo run -p mehen-cli --bin mehen --
 /// diff …`.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Analyze exactly one file and emit a metrics report.
     Metrics(MetricsArgs),
     /// Compare metrics between two git revisions.
-    Diff(mehen::diff::DiffOpts),
+    Diff(mehen_engine::legacy::diff::DiffOpts),
     /// Rank files by one or more metrics (worst offenders first).
-    TopOffenders(mehen::top_offenders::TopOffendersOpts),
+    TopOffenders(mehen_engine::legacy::top_offenders::TopOffendersOpts),
 }
 
 #[derive(Debug, Args)]
