@@ -1,25 +1,46 @@
-//! `mehen-git` — git/repository operations.
+//! `mehen-git` — git/repository operations and changed-file detection.
 //!
-//! Per the rewrite plan §4.8, all repository-relative paths returned from
-//! this crate are forward-slash UTF-8 (`Utf8PathBuf`) so serialized JSON,
-//! Markdown tables, snapshots, and sticky comments never emit
-//! backslash-separated paths on Windows. Internally, callers may convert to
-//! filesystem `PathBuf` for IO, but report-level identity uses `Utf8PathBuf`.
+//! Per rewrite plan §8.1, this is the home of the pre-1.0 `src/git.rs`
+//! helpers. Phase-6+ may introduce a `Utf8PathBuf`-based API per plan
+//! §4.8; for now the API surface matches the pre-1.0 shape (`PathBuf`)
+//! so the still-in-place `src/diff.rs` keeps compiling unchanged.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
-use core::fmt;
+use std::fmt;
+use std::path::{Path, PathBuf};
 
-use camino::{Utf8Path, Utf8PathBuf};
 use gix::diff::tree::recorder::Change;
 use gix::objs::TreeRefIter;
+
+/// Replaces \n and \r ending characters with a single generic \n.
+///
+/// Inlined from the pre-1.0 `src/tools.rs` so this crate has no
+/// dependency on the legacy `mehen` library.
+fn remove_blank_lines(data: &mut Vec<u8>) {
+    let count_trailing = data
+        .iter()
+        .rev()
+        .take_while(|&c| *c == b'\n' || *c == b'\r')
+        .count();
+    if count_trailing > 0 {
+        data.truncate(data.len() - count_trailing);
+    }
+    data.push(b'\n');
+}
 
 #[derive(Debug)]
 pub enum GitError {
     RepoNotFound,
-    ShallowClone { hint: String },
+    ShallowClone {
+        hint: String,
+    },
     RefNotFound(String),
-    BlobNotFound { rev: String, path: Utf8PathBuf },
+    #[allow(dead_code)]
+    BlobNotFound {
+        rev: String,
+        path: PathBuf,
+    },
     Internal(String),
 }
 
@@ -30,16 +51,16 @@ impl fmt::Display for GitError {
             Self::ShallowClone { hint } => write!(f, "Shallow clone detected. {hint}"),
             Self::RefNotFound(r) => write!(f, "Could not resolve ref '{r}'."),
             Self::BlobNotFound { rev, path } => {
-                write!(f, "Could not find '{path}' at rev '{rev}'.")
+                write!(f, "Could not find '{}' at rev '{rev}'.", path.display())
             }
             Self::Internal(msg) => write!(f, "Git error: {msg}"),
         }
     }
 }
 
-impl core::error::Error for GitError {}
+impl std::error::Error for GitError {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChangeStatus {
     Added,
     Modified,
@@ -48,8 +69,7 @@ pub enum ChangeStatus {
 
 #[derive(Debug, Clone)]
 pub struct ChangedFile {
-    /// Repository-relative path, forward-slash separated, UTF-8.
-    pub path: Utf8PathBuf,
+    pub path: PathBuf,
     pub status: ChangeStatus,
 }
 
@@ -57,11 +77,13 @@ pub struct ChangedFile {
 /// Fails fast on shallow clones.
 pub fn open_repo() -> Result<gix::Repository, GitError> {
     let repo = gix::discover(".").map_err(|_| GitError::RepoNotFound)?;
+
     if repo.is_shallow() {
         return Err(GitError::ShallowClone {
             hint: "Use 'actions/checkout' with 'fetch-depth: 0' for full history.".to_string(),
         });
     }
+
     Ok(repo)
 }
 
@@ -84,21 +106,26 @@ pub fn changed_files(
     )
     .map_err(|e| GitError::Internal(e.to_string()))?;
 
-    Ok(recorder
+    let files = recorder
         .records
         .into_iter()
         .map(|change| {
             let (path, status) = match change {
-                Change::Addition { path, .. } => (path.to_string(), ChangeStatus::Added),
-                Change::Deletion { path, .. } => (path.to_string(), ChangeStatus::Deleted),
-                Change::Modification { path, .. } => (path.to_string(), ChangeStatus::Modified),
+                Change::Addition { path, .. } => {
+                    (PathBuf::from(path.to_string()), ChangeStatus::Added)
+                }
+                Change::Deletion { path, .. } => {
+                    (PathBuf::from(path.to_string()), ChangeStatus::Deleted)
+                }
+                Change::Modification { path, .. } => {
+                    (PathBuf::from(path.to_string()), ChangeStatus::Modified)
+                }
             };
-            ChangedFile {
-                path: normalize_repo_relative(&path),
-                status,
-            }
+            ChangedFile { path, status }
         })
-        .collect())
+        .collect();
+
+    Ok(files)
 }
 
 /// Read file content at a specific revision. Returns `None` if the path
@@ -106,11 +133,12 @@ pub fn changed_files(
 pub fn read_blob(
     repo: &gix::Repository,
     rev: &str,
-    path: &Utf8Path,
+    path: &Path,
 ) -> Result<Option<Vec<u8>>, GitError> {
     let tree = resolve_tree(repo, rev)?;
+
     let entry = tree
-        .lookup_entry_by_path(path.as_std_path())
+        .lookup_entry_by_path(path)
         .map_err(|e| GitError::Internal(e.to_string()))?;
 
     let Some(entry) = entry else {
@@ -120,43 +148,28 @@ pub fn read_blob(
     let object = entry
         .object()
         .map_err(|e| GitError::Internal(e.to_string()))?;
+
     let mut data = object.detach().data;
-    normalize_trailing_newlines(&mut data);
+    remove_blank_lines(&mut data);
     Ok(Some(data))
 }
 
-/// Resolve `rev` to a friendly symbolic branch name (`main`, `feature/x`),
-/// or fall back to `rev` unchanged if no matching ref is found.
+/// Try to resolve a rev string to a friendly symbolic branch name.
+///
+/// Resolves `rev` to a commit OID, then scans local and remote branches for
+/// one that points at the same commit.  Returns the short branch name
+/// (e.g. `"main"`) on a match, or falls back to `rev` unchanged.
 pub fn friendly_ref_label(repo: &gix::Repository, rev: &str) -> String {
-    (|| {
+    let friendly_name = (|| {
         let id = repo.rev_parse_single(rev).ok()?;
         let commit = id.object().ok()?.peel_to_commit().ok()?;
         let refs = repo.references().ok()?;
+
         find_branch_for_commit(&refs, commit.id, true)
             .or_else(|| find_branch_for_commit(&refs, commit.id, false))
-    })()
-    .unwrap_or_else(|| rev.to_string())
-}
+    })();
 
-/// Normalize a filesystem-style path string to the report path shape:
-/// repository-relative, forward-slash separated, UTF-8.
-pub fn normalize_repo_relative(path: &str) -> Utf8PathBuf {
-    Utf8PathBuf::from(path.replace('\\', "/"))
-}
-
-/// Replace trailing `\n`/`\r` with a single `\n`. Used to normalize blob
-/// contents fetched from the object database, where line endings may be
-/// preserved verbatim from the working tree.
-fn normalize_trailing_newlines(data: &mut Vec<u8>) {
-    let count_trailing = data
-        .iter()
-        .rev()
-        .take_while(|&c| *c == b'\n' || *c == b'\r')
-        .count();
-    if count_trailing > 0 {
-        data.truncate(data.len() - count_trailing);
-    }
-    data.push(b'\n');
+    friendly_name.unwrap_or_else(|| rev.to_string())
 }
 
 fn find_branch_for_commit(
@@ -179,6 +192,7 @@ fn find_branch_for_commit(
     None
 }
 
+/// Strip standard ref prefixes to produce a short branch name.
 fn shorten_ref_name(full: &str) -> &str {
     full.strip_prefix("refs/heads/")
         .or_else(|| full.strip_prefix("refs/remotes/origin/"))
@@ -193,36 +207,12 @@ fn resolve_tree<'a>(repo: &'a gix::Repository, rev: &str) -> Result<gix::Tree<'a
     let id = repo
         .rev_parse_single(rev)
         .map_err(|_| GitError::RefNotFound(rev.to_string()))?;
+
     let object = id.object().map_err(|e| GitError::Internal(e.to_string()))?;
+
     let commit = object
         .peel_to_commit()
         .map_err(|e| GitError::Internal(e.to_string()))?;
+
     commit.tree().map_err(|e| GitError::Internal(e.to_string()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalize_translates_backslashes() {
-        assert_eq!(
-            normalize_repo_relative("src\\foo\\bar.rs"),
-            Utf8PathBuf::from("src/foo/bar.rs")
-        );
-    }
-
-    #[test]
-    fn normalize_trailing_newlines_collapses_run() {
-        let mut data = b"line\n\n\n".to_vec();
-        normalize_trailing_newlines(&mut data);
-        assert_eq!(data, b"line\n");
-    }
-
-    #[test]
-    fn normalize_trailing_newlines_handles_crlf() {
-        let mut data = b"line\r\n".to_vec();
-        normalize_trailing_newlines(&mut data);
-        assert_eq!(data, b"line\n");
-    }
 }

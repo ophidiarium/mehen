@@ -25,7 +25,10 @@ pub mod diff;
 pub use mehen_report::github_markdown_docs as diff_markdown;
 pub mod formats;
 pub mod getter;
-pub mod git;
+/// Git operations were physically relocated to `crates/mehen-git/`
+/// per plan §8.1. Re-exported under the original `crate::git` path so
+/// `src/diff.rs` keeps compiling unchanged.
+pub use mehen_git as git;
 pub mod langs;
 pub mod languages;
 pub mod macros;

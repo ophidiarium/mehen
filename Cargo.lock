@@ -1592,6 +1592,7 @@ dependencies = [
  "insta",
  "log",
  "mehen-engine",
+ "mehen-git",
  "mehen-markdown",
  "mehen-report",
  "num",
@@ -1690,7 +1691,6 @@ dependencies = [
 name = "mehen-git"
 version = "0.7.0"
 dependencies = [
- "camino",
  "gix",
 ]
 

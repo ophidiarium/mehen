@@ -41,12 +41,17 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
     };
 
     for cf in changed {
+        // mehen-git returns `PathBuf` paths; convert at the boundary.
+        let Ok(utf8_path) = Utf8PathBuf::try_from(cf.path.clone()) else {
+            continue;
+        };
+
         // Filter by `--paths` prefix matching.
-        if !path_is_selected(&cf.path, &input.paths) {
+        if !path_is_selected(&utf8_path, &input.paths) {
             continue;
         }
 
-        let Some(language) = detect_language(&cf.path) else {
+        let Some(language) = detect_language(&utf8_path) else {
             // Skip files we don't recognize.
             continue;
         };
@@ -70,7 +75,7 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
         let Some(analyzer) = analyzer else {
             // Language detected but no analyzer registered (feature off);
             // surface as a non-fatal analysis error.
-            record_unavailable(&mut report, &cf.path, language);
+            record_unavailable(&mut report, &utf8_path, language);
             continue;
         };
 
@@ -79,12 +84,12 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
             (head_text.as_deref(), DiffSide::Head),
         ] {
             let Some(text) = text else { continue };
-            let source = SourceFile::new(cf.path.clone(), language, text.to_string());
+            let source = SourceFile::new(utf8_path.clone(), language, text.to_string());
             match analyzer.analyze(&source, &input.config) {
-                Ok(analysis) => collect_diagnostics(&mut report, &cf.path, side, &analysis),
+                Ok(analysis) => collect_diagnostics(&mut report, &utf8_path, side, &analysis),
                 Err(err) => {
                     report.analysis_errors.push(AnalysisErrorRecord {
-                        path: cf.path.clone(),
+                        path: utf8_path.clone(),
                         side,
                         diagnostics: vec![ParseDiagnostic::error(
                             "analysis.error",
@@ -96,13 +101,9 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
         }
 
         if matches!(language, mehen_core::Language::Markdown) {
-            report.markdown_files.push(DiffFile {
-                path: cf.path.clone(),
-            });
+            report.markdown_files.push(DiffFile { path: utf8_path });
         } else {
-            report.files.push(DiffFile {
-                path: cf.path.clone(),
-            });
+            report.files.push(DiffFile { path: utf8_path });
         }
     }
 

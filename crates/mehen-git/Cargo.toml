@@ -10,5 +10,4 @@ description = "Mehen 1.0 — git/repository operations and changed-file detectio
 publish = false
 
 [dependencies]
-camino = { workspace = true }
 gix = { workspace = true }

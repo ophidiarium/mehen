@@ -20,6 +20,7 @@ license.workspace = true
 
 [dependencies]
 mehen-engine = { workspace = true }
+mehen-git = { workspace = true }
 mehen-markdown = { workspace = true, optional = true }
 mehen-report = { workspace = true }
 
