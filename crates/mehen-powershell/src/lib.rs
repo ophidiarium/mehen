@@ -101,43 +101,49 @@ impl LanguageRules for PowerShellRules {
                 node.child(0).map(|c| c.kind()),
                 Some("return") | Some("throw") | Some("exit")
             );
-        let halstead_operator = matches!(
+        let halstead_operator = is_powershell_operator(kind);
+        let halstead_operand = is_powershell_operand(kind);
+        // ABC classification per pre-1.0 `Abc for PowershellCode`
+        // (`src/metrics/abc.rs:562-632`).
+        let abc_assignment = matches!(
             kind,
-            "+" | "-"
-                | "*"
-                | "/"
-                | "%"
-                | "="
-                | "+="
-                | "-="
-                | "*="
-                | "/="
-                | "%="
-                | "-eq"
-                | "-ne"
-                | "-lt"
-                | "-gt"
-                | "-le"
-                | "-ge"
+            "assignment_expression"
+                | "pre_increment_expression"
+                | "pre_decrement_expression"
+                | "post_increment_expression"
+                | "post_decrement_expression"
+        );
+        let abc_branch = matches!(kind, "command" | "invocation_expression");
+        // Conditions: structural conditionals + comparison / ternary /
+        // null-coalesce wrappers (these wrap a single operator each, so
+        // matching them doesn't double-count) + the leaf logical
+        // operator tokens. Intentionally NOT `logical_expression` /
+        // `logical_argument_expression` / `pipeline_chain` — those
+        // wrappers can hold multiple leaves, so matching them too
+        // would double-count.
+        let abc_condition = matches!(
+            kind,
+            "if_statement"
+                | "elseif_clause"
+                | "for_statement"
+                | "foreach_statement"
+                | "while_statement"
+                | "do_statement"
+                | "switch_clause"
+                | "catch_clause"
+                | "trap_statement"
+                | "ternary_expression"
+                | "ternary_argument_expression"
+                | "null_coalesce_expression"
+                | "null_coalesce_argument_expression"
+                | "comparison_expression"
+                | "comparison_argument_expression"
                 | "&&"
                 | "||"
                 | "-and"
                 | "-or"
-                | "-not"
-                | "!"
-                | "??"
-                | "?"
+                | "-xor"
         );
-        let halstead_operand = matches!(
-            kind,
-            "variable" | "simple_name" | "integer_literal" | "real_literal" | "string_literal"
-        );
-        let abc_assignment = matches!(kind, "assignment_expression");
-        let abc_branch = matches!(
-            kind,
-            "command" | "command_expression" | "invocation_expression"
-        );
-        let abc_condition = matches!(kind, "comparison_expression" | "logical_expression");
         NodeFacts {
             cyclomatic_decision,
             cognitive_increment: u32::from(cyclomatic_decision),
@@ -204,6 +210,94 @@ fn powershell_count_args(node: &Node<'_>) -> u32 {
         }
     }
     count
+}
+
+/// PowerShell Halstead operator classification per pre-1.0
+/// `Getter::get_op_type for PowershellCode` (`src/getter.rs:485-548`).
+/// Wrapper rule kinds (`assignment_operator`, `comparison_operator`,
+/// `format_operator`, `file_redirection_operator`,
+/// `merging_redirection_operator`) are intentionally NOT included —
+/// the walker visits both the wrapper and its leaf token, and matching
+/// only the leaves prevents double-counting.
+fn is_powershell_operator(kind: &str) -> bool {
+    matches!(
+        kind,
+        // Keywords and structural / control-flow markers.
+        "function" | "filter" | "workflow" | "if" | "elseif" | "else"
+        | "switch" | "for" | "foreach" | "in" | "while" | "do" | "until"
+        | "break" | "continue" | "return" | "throw" | "exit"
+        | "try" | "catch" | "finally" | "trap"
+        | "param" | "using" | "namespace" | "module" | "assembly"
+        | "static" | "this" | "base"
+        | "begin" | "process" | "end" | "clean" | "dynamicparam"
+        | "data" | "inlinescript" | "parallel" | "sequence"
+        // Punctuation-like.
+        | "(" | "{" | "[" | "," | ";" | "." | ".." | ":" | "::"
+        | "@(" | "@{" | "$("
+        // Assignment family.
+        | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "??="
+        // Arithmetic / bitwise / unary.
+        | "+" | "-" | "*" | "/" | "%" | "\\" | "..."
+        | "++" | "--" | "!"
+        // Short-circuit / null-coalesce / ternary.
+        | "&&" | "||" | "?" | "??"
+        // Pipeline / invocation / redirection.
+        | "|" | "&"
+        // Word-form logical / comparison / typing operators.
+        | "-and" | "-or" | "-xor" | "-not"
+        | "-band" | "-bor" | "-bxor" | "-bnot"
+        | "-as" | "-is" | "-isnot"
+        | "-f" | "-join"
+        | "-shl" | "-shr"
+        | "-split" | "-isplit" | "-csplit"
+        | "-replace" | "-ireplace" | "-creplace"
+        | "-match" | "-imatch" | "-cmatch"
+        | "-notmatch" | "-inotmatch" | "-cnotmatch"
+        | "-like" | "-ilike" | "-clike"
+        | "-notlike" | "-inotlike" | "-cnotlike"
+        | "-contains" | "-icontains" | "-ccontains"
+        | "-notcontains" | "-inotcontains" | "-cnotcontains"
+        | "-in" | "-notin"
+        | "-eq" | "-ieq" | "-ceq" | "-ne" | "-ine" | "-cne"
+        | "-lt" | "-ilt" | "-clt" | "-le" | "-ile" | "-cle"
+        | "-gt" | "-igt" | "-cgt" | "-ge" | "-ige" | "-cge"
+        | "<" | ">"
+        // File / merging redirection leaf tokens. Names mirror
+        // tree-sitter-pwsh's anonymous tokens for `2>`, `2>>`,
+        // `2>&1`, `*>`, `3>&2`, etc.
+        | ">>" | "*>" | "*>>" | "*>&1" | "*>&2"
+        | "2>" | "2>>" | "2>&1"
+        | "3>" | "3>>" | "3>&1" | "3>&2"
+        | "4>" | "4>>" | "4>&1" | "4>&2"
+        | "5>" | "5>>" | "5>&1" | "5>&2"
+        | "6>" | "6>>" | "6>&1" | "6>&2"
+        | "1>&2"
+    )
+}
+
+/// PowerShell Halstead operand classification per pre-1.0
+/// `Getter::get_op_type for PowershellCode` (`src/getter.rs:485-593`).
+fn is_powershell_operand(kind: &str) -> bool {
+    matches!(
+        kind,
+        // Identifiers, type names, variables.
+        "simple_name" | "type_identifier" | "variable" | "braced_variable"
+        | "generic_token"
+        // Numeric literals.
+        | "decimal_integer_literal" | "hexadecimal_integer_literal" | "real_literal"
+        // Verbatim (single-quoted) string content leaves.
+        | "verbatim_string_characters" | "verbatim_here_string_characters"
+        // Expandable (double-quoted) string wrappers — counted as one
+        // operand each because the wrapper's byte range carries the
+        // text directly (no content-leaf node).
+        | "expandable_string_literal" | "expandable_here_string_literal"
+        // Identifier leaves driving function declarations and command
+        // invocations. The named wrappers `command_name_expr` /
+        // `path_command_name` are intentionally NOT included to avoid
+        // double-counting against their leaf token.
+        | "function_name" | "command_name" | "path_command_name_token"
+        | "command_parameter"
+    )
 }
 
 /// PowerShell LOC classification per pre-1.0

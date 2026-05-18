@@ -760,8 +760,7 @@ impl Abc for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
-        TypescriptParser,
+        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -1136,111 +1135,6 @@ mod tests {
             "foo.kt",
             |metric| {
                 insta::assert_json_snapshot!(metric.abc);
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_abc_basic() {
-        check_metrics::<PowershellParser>(
-            "function f($a, $b) {
-                 $c = $a + $b            # +1 A
-                 Write-Host $c           # +1 B (cmdlet call)
-                 if ($c -gt 0) {         # +1 C (if) + +1 C (comparison)
-                     return $c
-                 }
-             }",
-            "foo.ps1",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.abc,
-                    @r###"
-                    {
-                      "assignments": 1.0,
-                      "branches": 1.0,
-                      "conditions": 2.0,
-                      "magnitude": 2.449489742783178,
-                      "assignments_average": 0.5,
-                      "branches_average": 0.5,
-                      "conditions_average": 1.0,
-                      "assignments_min": 0.0,
-                      "assignments_max": 1.0,
-                      "branches_min": 0.0,
-                      "branches_max": 1.0,
-                      "conditions_min": 0.0,
-                      "conditions_max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_abc_counts_argument_form_decision_operators() {
-        // Regression: tree-sitter-pwsh emits a parallel family of
-        // `*_argument_expression` kinds for expressions that live inside a
-        // method-invocation `argument_list` (e.g. `[Foo]::Bar($a -eq $b)`).
-        // The argument-form comparison / ternary / null-coalesce /
-        // logical operators must contribute to ABC conditions the same as
-        // their regular-form twins.
-        check_metrics::<PowershellParser>(
-            "function f($a, $b, $cond, $x) {
-                 [Foo]::Bar($a -eq $b)     # +1 C comparison (arg form)
-                 [Foo]::Baz($cond ? 1 : 2) # +1 C ternary (arg form)
-                 [Foo]::Qux($x ?? 3)       # +1 C null-coalesce (arg form)
-             }",
-            "foo.ps1",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.abc,
-                    @r###"
-                    {
-                      "assignments": 0.0,
-                      "branches": 3.0,
-                      "conditions": 3.0,
-                      "magnitude": 4.242640687119285,
-                      "assignments_average": 0.0,
-                      "branches_average": 1.5,
-                      "conditions_average": 1.5,
-                      "assignments_min": 0.0,
-                      "assignments_max": 0.0,
-                      "branches_min": 0.0,
-                      "branches_max": 3.0,
-                      "conditions_min": 0.0,
-                      "conditions_max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_abc_logical_operators_are_not_double_counted() {
-        // Regression: the ABC conditions arm intentionally matches only
-        // the *leaf* logical-operator tokens (`DASHand`, `DASHor`,
-        // `DASHxor`, `AMPAMP`, `PIPEPIPE`) and NOT the `LogicalExpression`
-        // / `LogicalArgumentExpression` wrapper kinds. tree-sitter-pwsh
-        // emits a single wrapper that can hold multiple operator leaves
-        // (e.g. `$a -and $b -and $c` is one `logical_expression` with
-        // two `-and` leaves). Counting both wrapper and leaves would
-        // double-count every logical operator; this test locks that
-        // contract in so the next reviewer who eyes the comparison /
-        // ternary / null-coalesce pairs doesn't mistakenly add the
-        // logical wrappers to the arm.
-        check_metrics::<PowershellParser>(
-            "function f($a, $b, $c) {
-                 # statement-form logical: 1 wrapper, 2 leaves -> +2
-                 if ($a -and $b -and $c) { 'x' }   # +1 if + 2 -and leaves
-                 # argument-form logical: 1 wrapper, 1 leaf -> +1
-                 [Foo]::Bar($a -or $b)              # +1 B + 1 -or leaf
-             }",
-            "foo.ps1",
-            |metric| {
-                // Conditions: 1 (if) + 2 (-and, -and) + 1 (-or) = 4.
-                // If the wrappers were also matched, it would be 6.
-                assert_eq!(metric.abc.conditions_sum(), 4.0);
-                assert_eq!(metric.abc.branches_sum(), 1.0);
-                assert_eq!(metric.abc.assignments_sum(), 0.0);
             },
         );
     }

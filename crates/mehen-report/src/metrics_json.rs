@@ -70,6 +70,88 @@ pub struct Nexits {
     pub max: f64,
 }
 
+/// Render the `halstead` family object: 14 fields covering n1/N1/n2/N2,
+/// length, estimated_program_length, purity_ratio, vocabulary, volume,
+/// difficulty, level, effort, time, and bugs. Field ordering matches
+/// the pre-1.0 `halstead::Stats::serialize`.
+pub fn halstead(metrics: &MetricSet) -> Halstead {
+    Halstead {
+        n1: as_f64(metrics, "halstead.n1"),
+        big_n1: as_f64(metrics, "halstead.N1"),
+        n2: as_f64(metrics, "halstead.n2"),
+        big_n2: as_f64(metrics, "halstead.N2"),
+        length: as_f64(metrics, "halstead.length"),
+        estimated_program_length: as_f64(metrics, "halstead.estimated_program_length"),
+        purity_ratio: as_f64(metrics, "halstead.purity_ratio"),
+        vocabulary: as_f64(metrics, "halstead.vocabulary"),
+        volume: as_f64(metrics, "halstead.volume"),
+        difficulty: as_f64(metrics, "halstead.difficulty"),
+        level: as_f64(metrics, "halstead.level"),
+        effort: as_f64(metrics, "halstead.effort"),
+        time: as_f64(metrics, "halstead.time"),
+        bugs: as_f64(metrics, "halstead.bugs"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Halstead {
+    pub n1: f64,
+    #[serde(rename = "N1")]
+    pub big_n1: f64,
+    pub n2: f64,
+    #[serde(rename = "N2")]
+    pub big_n2: f64,
+    pub length: f64,
+    pub estimated_program_length: f64,
+    pub purity_ratio: f64,
+    pub vocabulary: f64,
+    pub volume: f64,
+    pub difficulty: f64,
+    pub level: f64,
+    pub effort: f64,
+    pub time: f64,
+    pub bugs: f64,
+}
+
+/// Render the `abc` family object: 13 fields covering A/B/C totals,
+/// the magnitude formula `sqrt(A² + B² + C²)`, per-class averages, and
+/// per-class min/max bounds. Matches the pre-1.0
+/// `abc::Stats::serialize` field order.
+pub fn abc(metrics: &MetricSet) -> Abc {
+    Abc {
+        assignments: as_f64(metrics, "abc.assignments"),
+        branches: as_f64(metrics, "abc.branches"),
+        conditions: as_f64(metrics, "abc.conditions"),
+        magnitude: as_f64(metrics, "abc"),
+        assignments_average: as_f64(metrics, "abc.assignments_average"),
+        branches_average: as_f64(metrics, "abc.branches_average"),
+        conditions_average: as_f64(metrics, "abc.conditions_average"),
+        assignments_min: as_f64(metrics, "abc.assignments_min"),
+        assignments_max: as_f64(metrics, "abc.assignments_max"),
+        branches_min: as_f64(metrics, "abc.branches_min"),
+        branches_max: as_f64(metrics, "abc.branches_max"),
+        conditions_min: as_f64(metrics, "abc.conditions_min"),
+        conditions_max: as_f64(metrics, "abc.conditions_max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Abc {
+    pub assignments: f64,
+    pub branches: f64,
+    pub conditions: f64,
+    pub magnitude: f64,
+    pub assignments_average: f64,
+    pub branches_average: f64,
+    pub conditions_average: f64,
+    pub assignments_min: f64,
+    pub assignments_max: f64,
+    pub branches_min: f64,
+    pub branches_max: f64,
+    pub conditions_min: f64,
+    pub conditions_max: f64,
+}
+
 /// Render the `nargs` family object: 10 fields covering per-class
 /// argument totals, averages, total, and min/max bounds. Field
 /// ordering matches the pre-1.0 `nargs::Stats::serialize`.

@@ -58,6 +58,7 @@ pub mod keys {
     pub const LOC_PLOC: &str = "loc.ploc";
     pub const LOC_CLOC: &str = "loc.cloc";
     pub const LOC_BLANK: &str = "loc.blank";
+    pub const HALSTEAD: &str = "halstead";
     pub const HALSTEAD_VOLUME: &str = "halstead.volume";
     pub const HALSTEAD_DIFFICULTY: &str = "halstead.difficulty";
     pub const HALSTEAD_EFFORT: &str = "halstead.effort";

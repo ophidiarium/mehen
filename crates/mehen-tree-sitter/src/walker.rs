@@ -193,6 +193,7 @@ fn finalize_state(state: &mut State) {
     state
         .nargs
         .finalize_average(state.nom.functions_sum, state.nom.closures_sum);
+    state.abc.finalize_minmax();
 }
 
 /// Fold a finalized child state's rolled-up totals (sum/min/max/n)
@@ -209,6 +210,8 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
     parent
         .nargs
         .finalize_average(parent.nom.functions_sum, parent.nom.closures_sum);
+    parent.abc.merge(&child.abc);
+    parent.halstead.merge(&child.halstead);
 }
 
 /// Publish a finalized `State` into a `MetricSet` using the shared key
@@ -234,27 +237,131 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     );
 
     let halstead = HalsteadStats::from_counts(state.halstead.counts());
-    target.insert(MetricKey::new(keys::HALSTEAD_VOLUME), halstead.volume());
-    target.insert(
-        MetricKey::new(keys::HALSTEAD_DIFFICULTY),
-        halstead.difficulty(),
-    );
-    target.insert(MetricKey::new(keys::HALSTEAD_EFFORT), halstead.effort());
-    target.insert(
-        MetricKey::new(keys::HALSTEAD_VOCABULARY),
-        halstead.vocabulary(),
-    );
-    target.insert(MetricKey::new(keys::HALSTEAD_LENGTH), halstead.length());
+    publish_halstead(&halstead, target);
 
     let mi = MiStats::compute(&state.loc, &state.cyclomatic, &halstead);
     target.insert(MetricKey::new(keys::MI_VS), mi.mi_visual_studio);
     target.insert(MetricKey::new(keys::MI_ORIGINAL), mi.mi_original);
     target.insert(MetricKey::new(keys::MI_SEI), mi.mi_sei);
 
-    target.insert(MetricKey::new(keys::ABC), state.abc.magnitude());
+    publish_abc(&state.abc, target);
     target.insert(MetricKey::new(keys::NPA), state.npa.public as i64);
     target.insert(MetricKey::new(keys::NPM), state.npm.public as i64);
     target.insert(MetricKey::new(keys::WMC), state.wmc.wmc as i64);
+}
+
+fn publish_halstead(stats: &HalsteadStats, target: &mut MetricSet) {
+    // Legacy `metric.halstead` JSON: 14 fields covering distinct/total
+    // operators / operands plus the derived ratios and quantities.
+    target.insert(MetricKey::new(keys::HALSTEAD_VOLUME), stats.volume());
+    target.insert(
+        MetricKey::new(keys::HALSTEAD_DIFFICULTY),
+        stats.difficulty(),
+    );
+    target.insert(MetricKey::new(keys::HALSTEAD_EFFORT), stats.effort());
+    target.insert(
+        MetricKey::new(keys::HALSTEAD_VOCABULARY),
+        stats.vocabulary(),
+    );
+    target.insert(MetricKey::new(keys::HALSTEAD_LENGTH), stats.length());
+    target.insert(
+        MetricKey::new(format!("{}.n1", keys::HALSTEAD)),
+        stats.u_operators as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.N1", keys::HALSTEAD)),
+        stats.operators as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.n2", keys::HALSTEAD)),
+        stats.u_operands as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.N2", keys::HALSTEAD)),
+        stats.operands as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.length", keys::HALSTEAD)),
+        stats.length(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.estimated_program_length", keys::HALSTEAD)),
+        stats.estimated_program_length(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.purity_ratio", keys::HALSTEAD)),
+        stats.purity_ratio(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.vocabulary", keys::HALSTEAD)),
+        stats.vocabulary(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.level", keys::HALSTEAD)),
+        stats.level(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.time", keys::HALSTEAD)),
+        stats.time(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.bugs", keys::HALSTEAD)),
+        stats.bugs(),
+    );
+}
+
+fn publish_abc(stats: &mehen_metrics::AbcStats, target: &mut MetricSet) {
+    // Legacy `metric.abc` JSON: { assignments, branches, conditions,
+    //   magnitude, *_average, *_min, *_max }.
+    target.insert(MetricKey::new(keys::ABC), stats.magnitude());
+    target.insert(
+        MetricKey::new(format!("{}.assignments", keys::ABC)),
+        stats.assignments_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.branches", keys::ABC)),
+        stats.branches_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.conditions", keys::ABC)),
+        stats.conditions_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.assignments_average", keys::ABC)),
+        stats.assignments_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.branches_average", keys::ABC)),
+        stats.branches_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.conditions_average", keys::ABC)),
+        stats.conditions_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.assignments_min", keys::ABC)),
+        stats.assignments_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.assignments_max", keys::ABC)),
+        stats.assignments_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.branches_min", keys::ABC)),
+        stats.branches_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.branches_max", keys::ABC)),
+        stats.branches_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.conditions_min", keys::ABC)),
+        stats.conditions_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.conditions_max", keys::ABC)),
+        stats.conditions_max as i64,
+    );
 }
 
 fn publish_nargs(
