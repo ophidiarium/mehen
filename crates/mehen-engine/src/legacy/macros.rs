@@ -67,7 +67,7 @@ macro_rules! mk_lang {
     ( $( ($camel:ident, $name:ident, $display: expr, $description:expr) ),* ) => {
         /// The list of supported languages.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum LANG {
+        pub(crate) enum LANG {
             $(
                 #[doc = $description]
                 $camel,
@@ -81,10 +81,10 @@ macro_rules! mk_lang {
             /// ```
             /// use mehen::LANG;
             ///
-            /// println!("{}", LANG::Rust.get_name());
+            /// println!("{}", LANG::Go.get_name());
             /// ```
             #[allow(dead_code)]
-            pub fn get_name(&self) -> &'static str {
+            pub(crate) fn get_name(&self) -> &'static str {
                 match self {
                     $(
                         LANG::$camel => $display,
@@ -94,7 +94,7 @@ macro_rules! mk_lang {
 
             // Returns a tree-sitter language.
             // This function is only used to construct a parser.
-            pub fn get_ts_language(&self) -> Language {
+            pub(crate) fn get_ts_language(&self) -> Language {
                     match self {
                         $(
                             LANG::$camel => get_language!($name),
@@ -120,10 +120,10 @@ macro_rules! mk_action {
         ///
         /// use mehen::{action, Callback, LANG, Metrics, MetricsCfg};
         ///
-        /// let source_code = "fn main() { let a = 42; }";
-        /// let language = LANG::Rust;
+        /// let source_code = "package main\nfunc main() { var a = 42 }";
+        /// let language = LANG::Go;
         ///
-        /// let path = PathBuf::from("foo.rs");
+        /// let path = PathBuf::from("foo.go");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// let cfg = MetricsCfg {
@@ -136,7 +136,7 @@ macro_rules! mk_action {
         /// [`Callback`]: trait.Callback.html
         #[inline(always)]
         #[allow(dead_code)]
-        pub fn action<T: Callback>(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>, cfg: T::Cfg) -> T::Res {
+        pub(crate) fn action<T: Callback>(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>, cfg: T::Cfg) -> T::Res {
             match lang {
                 $(
                     LANG::$camel => {
@@ -156,16 +156,16 @@ macro_rules! mk_action {
         ///
         /// use mehen::{get_function_spaces, LANG};
         ///
-        /// let source_code = "fn main() { let a = 42; }";
-        /// let language = LANG::Rust;
+        /// let source_code = "package main\nfunc main() { var a = 42 }";
+        /// let language = LANG::Go;
         ///
-        /// let path = PathBuf::from("foo.rs");
+        /// let path = PathBuf::from("foo.go");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// get_function_spaces(&language, source_as_vec, &path, None).unwrap();
         /// ```
         #[inline(always)]
-        pub fn get_function_spaces(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<FuncSpace> {
+        pub(crate) fn get_function_spaces(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>) -> Option<FuncSpace> {
             match lang {
                 $(
                     LANG::$camel => {
@@ -193,7 +193,7 @@ macro_rules! mk_extensions {
         /// get_from_ext(ext).unwrap();
         /// ```
         #[allow(dead_code)]
-        pub fn get_from_ext(ext: &str) -> Option<LANG>{
+        pub(crate) fn get_from_ext(ext: &str) -> Option<LANG>{
             match ext {
                 $(
                     $(
@@ -223,7 +223,7 @@ macro_rules! mk_emacs_mode {
         /// get_from_emacs_mode(emacs_mode).unwrap();
         /// ```
         #[allow(dead_code)]
-        pub fn get_from_emacs_mode(mode: &str) -> Option<LANG>{
+        pub(crate) fn get_from_emacs_mode(mode: &str) -> Option<LANG>{
             match mode {
                 $(
                     $(
@@ -239,7 +239,7 @@ macro_rules! mk_emacs_mode {
 macro_rules! mk_code {
     ( $( ($camel:ident, $code:ident, $parser:ident, $name:ident, $docname:expr) ),* ) => {
         $(
-            pub struct $code { _guard: (), }
+            pub(crate) struct $code { _guard: (), }
 
             impl LanguageInfo for $code {
                 type BaseLang = $camel;
@@ -252,7 +252,7 @@ macro_rules! mk_code {
             #[doc = "The `"]
             #[doc = $docname]
             #[doc = "` language parser."]
-            pub type $parser = Parser<$code>;
+            pub(crate) type $parser = Parser<$code>;
         )*
     };
 }

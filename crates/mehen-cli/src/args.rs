@@ -10,9 +10,9 @@ use clap::{Args, Parser, Subcommand};
     about = "Compute and report code metrics.",
     version
 )]
-pub struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
-    pub command: Command,
+    pub(crate) command: Command,
 }
 
 /// Subcommands flatten the legacy `DiffOpts` / `TopOffendersOpts`
@@ -21,7 +21,7 @@ pub struct Cli {
 /// is physically reachable via `cargo run -p mehen-cli --bin mehen --
 /// diff …`.
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub(crate) enum Command {
     /// Analyze exactly one file and emit a metrics report.
     Metrics(MetricsArgs),
     /// Compare metrics between two git revisions.
@@ -31,29 +31,29 @@ pub enum Command {
 }
 
 #[derive(Debug, Args)]
-pub struct MetricsArgs {
+pub(crate) struct MetricsArgs {
     /// Path to the file to analyze. `mehen metrics` never walks directories.
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
 
     /// Override language detection.
     #[arg(long)]
-    pub language: Option<String>,
+    pub(crate) language: Option<String>,
 
     /// Output format.
     #[arg(long, default_value = "json")]
-    pub format: OutputFormat,
+    pub(crate) format: OutputFormat,
 
     /// Pretty-print JSON output.
     #[arg(long)]
-    pub pretty: bool,
+    pub(crate) pretty: bool,
 
     /// Built-in profile preset.
     #[arg(long, default_value = "default")]
-    pub profile: Profile,
+    pub(crate) profile: Profile,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum OutputFormat {
+pub(crate) enum OutputFormat {
     Json,
     Markdown,
     Yaml,
@@ -61,7 +61,7 @@ pub enum OutputFormat {
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum Profile {
+pub(crate) enum Profile {
     Default,
     Ci,
     Strict,

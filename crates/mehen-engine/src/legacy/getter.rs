@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Kotlin, Php, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode};
+use crate::legacy::languages::{C, Kotlin, Php, Ruby};
 use crate::legacy::metrics::halstead::HalsteadType;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
@@ -23,68 +23,6 @@ pub(crate) trait Getter {
 
     fn get_op_type(_node: &Node) -> HalsteadType {
         HalsteadType::Unknown
-    }
-}
-
-impl Getter for RustCode {
-    fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        // we're in a function or in a class or an impl
-        // for an impl: we've  'impl ... type {...'
-        if let Some(name) = node
-            .child_by_field_name("name")
-            .or_else(|| node.child_by_field_name("type"))
-        {
-            let code = &code[name.start_byte()..name.end_byte()];
-            std::str::from_utf8(code).ok()
-        } else {
-            Some("<anonymous>")
-        }
-    }
-
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use Rust::*;
-
-        match node.kind_id().into() {
-            FunctionItem | ClosureExpression => SpaceKind::Function,
-            TraitItem => SpaceKind::Trait,
-            ImplItem => SpaceKind::Impl,
-            SourceFile => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Rust::*;
-
-        match node.kind_id().into() {
-            // `||` is treated as an operator only if it's part of a binary expression.
-            // This prevents misclassification inside macros where closures without arguments (e.g., `let closure = || { /* ... */ };`)
-            // are not recognized as `ClosureExpression` and their `||` node is identified as `PIPEPIPE` instead of `ClosureParameters`.
-            //
-            // Similarly, exclude `/` when it corresponds to the third slash in `///` (`OuterDocCommentMarker`)
-            PIPEPIPE | SLASH => match node.parent() {
-                Some(parent) if matches!(parent.kind_id().into(), BinaryExpression) => {
-                    HalsteadType::Operator
-                }
-                _ => HalsteadType::Unknown,
-            },
-            // Ensure `!` is counted as an operator unless it belongs to an `InnerDocCommentMarker` `//!`
-            BANG => match node.parent() {
-                Some(parent) if !matches!(parent.kind_id().into(), InnerDocCommentMarker) => {
-                    HalsteadType::Operator
-                }
-                _ => HalsteadType::Unknown,
-            },
-            LPAREN | LBRACE | LBRACK | EQGT | PLUS | STAR | Async | Await | Continue | For | If
-            | Let | Loop | Match | Return | Unsafe | While | EQ | COMMA | DASHGT | QMARK | LT
-            | GT | AMP | MutableSpecifier | DOTDOT | DOTDOTEQ | DASH | AMPAMP | PIPE | CARET
-            | EQEQ | BANGEQ | LTEQ | GTEQ | LTLT | GTGT | PERCENT | PLUSEQ | DASHEQ | STAREQ
-            | SLASHEQ | PERCENTEQ | AMPEQ | PIPEEQ | CARETEQ | LTLTEQ | GTGTEQ | Move | DOT
-            | PrimitiveType | Fn | SEMI => HalsteadType::Operator,
-            Identifier | StringLiteral | RawStringLiteral | IntegerLiteral | FloatLiteral
-            | BooleanLiteral | Zelf | CharLiteral | UNDERSCORE => HalsteadType::Operand,
-            _ => HalsteadType::Unknown,
-        }
     }
 }
 

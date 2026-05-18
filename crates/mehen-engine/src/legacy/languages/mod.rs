@@ -1,8 +1,5 @@
 #![allow(clippy::enum_variant_names)]
 
-pub(crate) mod language_rust;
-pub(crate) use language_rust::*;
-
 pub(crate) mod language_go;
 pub(crate) use language_go::*;
 

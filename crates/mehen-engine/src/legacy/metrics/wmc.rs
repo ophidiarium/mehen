@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, PhpCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, PhpCode, RubyCode};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -187,7 +187,7 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(RustCode, RubyCode, KotlinCode, PhpCode);
+impl_wmc!(RubyCode, KotlinCode, PhpCode);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -208,56 +208,8 @@ impl Wmc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn rust_wmc_impl_sums_function_cyclomatics() {
-        check_metrics::<RustParser>(
-            "struct S;
-             impl S {
-                 fn a(&self, x: bool) -> u32 {
-                     if x { 1 } else { 0 }
-                 }
-                 fn b(&self) -> u32 { 1 }
-             }",
-            "foo.rs",
-            |metric| {
-                // impl S: a cyc=2, b cyc=1 -> classes = 3
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_wmc_empty_impl_still_emitted() {
-        // An `impl` block with no functions sums to zero but is still a
-        // class-like space; the metric must remain visible at the unit.
-        check_metrics::<RustParser>(
-            "struct S;
-             impl S {}",
-            "foo.rs",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 0.0,
-                      "interfaces": 0.0,
-                      "total": 0.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_wmc_class_sums_method_cyclomatics() {

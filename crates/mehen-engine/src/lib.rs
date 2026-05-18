@@ -59,14 +59,15 @@ pub fn init_markdown() {
     fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
         match lang {
             // PowerShell (plan §8.2 Phase 3), TypeScript / TSX
-            // (Phase 7 Oxc migration), and Python (Phase 6 Ruff
-            // migration) flow through the new registry. The remaining
-            // languages still use legacy until each per-language crate
-            // reaches parity.
+            // (Phase 7 Oxc migration), Python (Phase 6 Ruff migration),
+            // and Rust (Phase 9 ra_ap_syntax migration) flow through
+            // the new registry. The remaining languages still use legacy
+            // until each per-language crate reaches parity.
             FenceLanguage::Powershell
             | FenceLanguage::Typescript
             | FenceLanguage::Tsx
-            | FenceLanguage::Python => dispatch_via_registry(lang, body),
+            | FenceLanguage::Python
+            | FenceLanguage::Rust => dispatch_via_registry(lang, body),
             _ => dispatch_via_legacy(lang, body),
         }
     }
@@ -129,14 +130,14 @@ pub fn init_markdown() {
     }
 
     /// Map a fence language to its legacy `LANG` variant. Languages
-    /// that have completed their Oxc / Ruff / Mago migration (currently
-    /// PowerShell + TypeScript / TSX + Python) return `None` — they
-    /// route through `dispatch_via_registry`, which lets each migrated
-    /// per-language crate's analyzer drive the embedded fence metrics.
+    /// that have completed their Oxc / Ruff / Mago / ra_ap_syntax
+    /// migration (currently PowerShell + TypeScript / TSX + Python +
+    /// Rust) return `None` — they route through
+    /// `dispatch_via_registry`, which lets each migrated per-language
+    /// crate's analyzer drive the embedded fence metrics.
     fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
         use crate::legacy::langs::LANG;
         Some(match lang {
-            FenceLanguage::Rust => LANG::Rust,
             FenceLanguage::Go => LANG::Go,
             FenceLanguage::Ruby => LANG::Ruby,
             FenceLanguage::Kotlin => LANG::Kotlin,
@@ -146,7 +147,8 @@ pub fn init_markdown() {
             FenceLanguage::Powershell
             | FenceLanguage::Typescript
             | FenceLanguage::Tsx
-            | FenceLanguage::Python => return None,
+            | FenceLanguage::Python
+            | FenceLanguage::Rust => return None,
         })
     }
 

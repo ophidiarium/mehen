@@ -13,3 +13,6 @@ publish = false
 camino = { workspace = true }
 serde = { workspace = true }
 smol_str = { workspace = true }
+
+[lints]
+workspace = true

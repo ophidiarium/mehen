@@ -11,7 +11,7 @@ use mehen_report::render_metrics_json;
 use crate::args::{MetricsArgs, OutputFormat};
 use crate::exit::ExitCode;
 
-pub fn metrics(args: MetricsArgs) -> ExitCode {
+pub(crate) fn metrics(args: MetricsArgs) -> ExitCode {
     let path = match Utf8PathBuf::try_from(args.path.clone()) {
         Ok(p) => p,
         Err(_) => {

@@ -7,7 +7,7 @@ use super::halstead;
 use super::loc;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
 use crate::legacy::macros::implement_metric_trait;
 
 /// The `Mi` metric.
@@ -118,7 +118,7 @@ where
     }
 }
 
-implement_metric_trait!([Mi], RustCode, GoCode, RubyCode, KotlinCode, CCode);
+implement_metric_trait!([Mi], GoCode, RubyCode, KotlinCode, CCode);
 
 impl Mi for crate::legacy::langs::PhpCode {}
 

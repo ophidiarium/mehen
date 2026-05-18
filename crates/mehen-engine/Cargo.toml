@@ -50,8 +50,9 @@ walkdir = { workspace = true }
 # now flow through `mehen-typescript` (Oxc) per plan §8.2.
 # `tree-sitter-python` was removed in Phase 6 — Python now flows through
 # `mehen-python` (Ruff) per plan §6.2.
+# `tree-sitter-rust` was removed in Phase 9 — Rust now flows through
+# `mehen-rust` (ra_ap_syntax) per plan §6.1.
 tree-sitter = { workspace = true }
-tree-sitter-rust = { workspace = true }
 tree-sitter-go = { workspace = true }
 tree-sitter-ruby = { workspace = true }
 tree-sitter-kotlin = { workspace = true }
@@ -104,10 +105,12 @@ lang-powershell = ["dep:mehen-powershell"]
 ignored = [
     "num-traits",
     "tree-sitter-go",
-    "tree-sitter-rust",
     "tree-sitter-ruby",
     "tree-sitter-kotlin",
     "tree-sitter-c",
     "tree-sitter-php",
     "tree-sitter-markdown-text",
 ]
+
+[lints]
+workspace = true

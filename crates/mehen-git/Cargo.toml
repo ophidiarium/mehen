@@ -11,3 +11,6 @@ publish = false
 
 [dependencies]
 gix = { workspace = true }
+
+[lints]
+workspace = true

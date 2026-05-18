@@ -23,3 +23,6 @@ smol_str = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 mehen-report = { workspace = true }
+
+[lints]
+workspace = true

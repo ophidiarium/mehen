@@ -35,3 +35,6 @@ mehen-engine = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

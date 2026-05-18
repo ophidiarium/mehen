@@ -296,6 +296,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "countme"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
+
+[[package]]
 name = "cow-utils"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -431,6 +437,12 @@ name = "dragonbox_ecma"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd8e701084c37e7ef62d3f9e453b618130cbc0ef3573847785952a3ac3f746bf"
+
+[[package]]
+name = "drop_bomb"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bda8e21c04aca2ae33ffc2fd8c23134f3cac46db123ba97bd9d3f3b8a4a85e1"
 
 [[package]]
 name = "dunce"
@@ -999,7 +1011,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39eb0623e15e4cb83c02ce6a959e48fadd1ae3b715b36b5acc01816e01388c82"
 dependencies = [
  "bstr",
- "hashbrown 0.15.5",
+ "hashbrown 0.16.1",
 ]
 
 [[package]]
@@ -1685,6 +1697,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "jod-thread"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a037eddb7d28de1d0fc42411f501b53b75838d313908078d6698d064f3029b24"
+
+[[package]]
 name = "kstring"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,7 +1869,6 @@ dependencies = [
  "tree-sitter-markdown-text",
  "tree-sitter-php",
  "tree-sitter-ruby",
- "tree-sitter-rust",
  "walkdir",
 ]
 
@@ -1981,11 +1998,13 @@ dependencies = [
 name = "mehen-rust"
 version = "0.7.0"
 dependencies = [
+ "insta",
  "mehen-core",
  "mehen-metrics",
- "mehen-tree-sitter",
- "tree-sitter",
- "tree-sitter-rust",
+ "mehen-report",
+ "ra_ap_syntax",
+ "serde_json",
+ "smol_str",
 ]
 
 [[package]]
@@ -2028,6 +2047,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "memoffset"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "miow"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
+dependencies = [
+ "windows-sys",
 ]
 
 [[package]]
@@ -2188,7 +2225,7 @@ dependencies = [
  "allocator-api2",
  "hashbrown 0.17.1",
  "oxc_data_structures",
- "rustc-hash",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -2302,7 +2339,7 @@ dependencies = [
  "oxc_span",
  "oxc_str",
  "oxc_syntax",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "seq-macro",
 ]
 
@@ -2319,7 +2356,7 @@ dependencies = [
  "oxc_span",
  "oxc_str",
  "phf 0.13.1",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "unicode-id-start",
 ]
 
@@ -2523,6 +2560,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pin-project-lite"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
 name = "portable-atomic"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2633,6 +2676,72 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
+name = "ra-ap-rustc_lexer"
+version = "0.165.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6d7c9cc05e0e6b72a214a455a106d9b22b0494164d50a657b17bd319534c218"
+dependencies = [
+ "memchr",
+ "unicode-ident",
+ "unicode-properties",
+]
+
+[[package]]
+name = "ra_ap_edition"
+version = "0.0.333"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8977f8a5c807f0ce139223db8a639fb1e344e0a9ee6237062fe5a8b91f8e4d30"
+
+[[package]]
+name = "ra_ap_parser"
+version = "0.0.333"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b04b67813de1973e21b1352ccc2d1f8c9d4f1c029899ed9e46b24599d9b8c877"
+dependencies = [
+ "drop_bomb",
+ "ra-ap-rustc_lexer",
+ "ra_ap_edition",
+ "rustc-literal-escaper",
+ "tracing",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "ra_ap_stdx"
+version = "0.0.333"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "954f944ee11cc5a571b7368b9534c328ad88027ceada2ce1b833890b1166f62d"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-utils",
+ "itertools",
+ "jod-thread",
+ "libc",
+ "miow",
+ "tracing",
+ "windows-sys",
+]
+
+[[package]]
+name = "ra_ap_syntax"
+version = "0.0.333"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7565fc61811cd59b6e0f5c80305f68020259e1bf39d41a02b86331bd2e9e53b1"
+dependencies = [
+ "either",
+ "itertools",
+ "ra_ap_parser",
+ "ra_ap_stdx",
+ "rowan",
+ "rustc-hash 2.1.2",
+ "rustc-literal-escaper",
+ "smallvec",
+ "smol_str",
+ "tracing",
+ "triomphe",
+]
+
+[[package]]
 name = "rand"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2710,6 +2819,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
 
 [[package]]
+name = "rowan"
+version = "0.15.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62f509095fc8cc0c8c8564016771d458079c11a8d857e65861f045145c0d3208"
+dependencies = [
+ "countme",
+ "hashbrown 0.14.5",
+ "memoffset",
+ "rustc-hash 1.1.0",
+ "text-size",
+]
+
+[[package]]
 name = "ruff_python_ast"
 version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff?tag=0.15.13#2afb467ce397e4a89c13a0a814c62cfecb0e9e49"
@@ -2723,7 +2845,7 @@ dependencies = [
  "ruff_python_trivia",
  "ruff_source_file",
  "ruff_text_size",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "thiserror",
 ]
 
@@ -2740,7 +2862,7 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_trivia",
  "ruff_text_size",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "static_assertions",
  "unicode-ident",
  "unicode-normalization",
@@ -2777,9 +2899,21 @@ dependencies = [
 
 [[package]]
 name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
+
+[[package]]
+name = "rustc-literal-escaper"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab03008eb631b703dd16978282ae36c73282e7922fe101a4bd072a40ecea7b8b"
 
 [[package]]
 name = "rustix"
@@ -3036,6 +3170,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "text-size"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f18aa187839b2bdb1ad2fa35ead8c4c2976b64e4363c386d45ac0f7ee85c9233"
+
+[[package]]
 name = "textwrap"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3093,7 +3233,7 @@ dependencies = [
  "toml_datetime",
  "toml_parser",
  "toml_writer",
- "winnow",
+ "winnow 1.0.3",
 ]
 
 [[package]]
@@ -3111,7 +3251,7 @@ version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
 dependencies = [
- "winnow",
+ "winnow 1.0.3",
 ]
 
 [[package]]
@@ -3119,6 +3259,25 @@ name = "toml_writer"
 version = "1.1.1+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
+
+[[package]]
+name = "tracing"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
+dependencies = [
+ "pin-project-lite",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-core"
+version = "0.1.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "tree-sitter"
@@ -3211,14 +3370,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-rust"
-version = "0.24.2"
+name = "triomphe"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439e577dbe07423ec2582ac62c7531120dbfccfa6e5f92406f93dd271a120e45"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
+checksum = "dd69c5aa8f924c7519d6372789a74eac5b94fb0f8fcf0d4a97eb0bfc3e785f39"
 
 [[package]]
 name = "typenum"
@@ -3273,6 +3428,12 @@ checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-properties"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
 
 [[package]]
 name = "unicode-script"
@@ -3451,6 +3612,12 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
+
+[[package]]
+name = "winnow"
+version = "0.7.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 
 [[package]]
 name = "winnow"

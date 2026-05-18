@@ -14,3 +14,6 @@ mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
 smol_str = { workspace = true }
 tree-sitter = { workspace = true }
+
+[lints]
+workspace = true

@@ -22,6 +22,12 @@ members = [
 ]
 exclude = ["enums"]
 
+[workspace.lints.rust]
+# Catch `pub` items in internal crates that are never re-exported across
+# crate boundaries — they should be `pub(crate)` so dead-code detection
+# stays effective. Members opt in with `[lints] workspace = true`.
+unreachable_pub = "warn"
+
 [workspace.package]
 version = "0.7.0"
 authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
@@ -94,7 +100,15 @@ ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
 
-tree-sitter-rust = "=0.24.2"
+# ra_ap_syntax — replaces tree-sitter-rust for the Rust analyzer
+# (`crates/mehen-rust`). Per the rewrite plan §6.1 we promote rust-analyzer's
+# parser/syntax stack from "later" to "now" because it exposes the richer
+# AST that tree-sitter cannot represent (typed expressions, op_kind,
+# let-chains, etc.) without forcing the workspace onto nightly via
+# rustc_private. Pinned to a specific 0.0.x release because rust-analyzer
+# auto-publishes weekly and breaking changes at the AST level are not
+# semver-tracked. Bump deliberately.
+ra_ap_syntax = "=0.0.333"
 tree-sitter-go = "=0.25.0"
 tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }

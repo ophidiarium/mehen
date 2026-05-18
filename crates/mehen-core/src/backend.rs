@@ -18,6 +18,9 @@ pub enum AnalysisBackend {
     Mago,
     /// `ruby-prism`. Reserved for the Phase 9 Ruby migration.
     Prism,
+    /// rust-analyzer's `ra_ap_syntax` parser. Used by `mehen-rust` from
+    /// Phase 9 of the rewrite onward, replacing tree-sitter-rust.
+    RaApSyntax,
     /// The current pre-1.0 Markdown analyzer.
     MarkdownLegacy,
     /// Comrak. Reserved for the Phase 10 Markdown evaluation.
@@ -34,6 +37,7 @@ impl AnalysisBackend {
             AnalysisBackend::Oxc => "oxc",
             AnalysisBackend::Mago => "mago",
             AnalysisBackend::Prism => "prism",
+            AnalysisBackend::RaApSyntax => "rust-ra-ap-syntax",
             AnalysisBackend::MarkdownLegacy => "markdown-legacy",
             AnalysisBackend::Comrak => "comrak",
             AnalysisBackend::Other(s) => s.as_str(),

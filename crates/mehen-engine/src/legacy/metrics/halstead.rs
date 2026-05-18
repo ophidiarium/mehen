@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -282,12 +282,6 @@ fn compute_halstead<'a, T: Getter>(
     }
 }
 
-impl Halstead for RustCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for GoCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -328,44 +322,8 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser, RustParser};
+    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn rust_operators_and_operands() {
-        check_metrics::<RustParser>(
-            "fn main() {
-              let a = 5; let b = 5; let c = 5;
-              let avg = (a + b + c) / 3;
-              println!(\"{}\", avg);
-            }",
-            "foo.rs",
-            |metric| {
-                // unique operators: fn, (), {}, let, =, +, /, ;, !, ,
-                // unique operands: main, a, b, c, avg, 5, 3, println, "{}"
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r###"
-                    {
-                      "n1": 10.0,
-                      "N1": 23.0,
-                      "n2": 9.0,
-                      "N2": 15.0,
-                      "length": 38.0,
-                      "estimated_program_length": 61.74860596185443,
-                      "purity_ratio": 1.6249633147856428,
-                      "vocabulary": 19.0,
-                      "volume": 161.42124551085624,
-                      "difficulty": 8.333333333333334,
-                      "level": 0.12,
-                      "effort": 1345.177045923802,
-                      "time": 74.7320581068779,
-                      "bugs": 0.040619232256751396
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn go_operators_and_operands() {

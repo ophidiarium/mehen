@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Go, Kotlin, Php, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Ruby};
 use crate::legacy::node::Node;
 
 pub(crate) trait Checker {
@@ -10,45 +10,6 @@ pub(crate) trait Checker {
     fn is_closure(_: &Node) -> bool;
     fn is_non_arg(_: &Node) -> bool;
     fn is_else_if(_: &Node) -> bool;
-}
-
-impl Checker for RustCode {
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Rust::SourceFile
-                | Rust::FunctionItem
-                | Rust::ImplItem
-                | Rust::TraitItem
-                | Rust::ClosureExpression
-        )
-    }
-
-    fn is_func(node: &Node) -> bool {
-        node.kind_id() == Rust::FunctionItem
-    }
-
-    fn is_closure(node: &Node) -> bool {
-        node.kind_id() == Rust::ClosureExpression
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Rust::LPAREN | Rust::COMMA | Rust::RPAREN | Rust::PIPE | Rust::AttributeItem
-        )
-    }
-
-    #[inline(always)]
-    fn is_else_if(node: &Node) -> bool {
-        if node.kind_id() != Rust::IfExpression {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return parent.kind_id() == Rust::ElseClause;
-        }
-        false
-    }
 }
 
 impl Checker for GoCode {

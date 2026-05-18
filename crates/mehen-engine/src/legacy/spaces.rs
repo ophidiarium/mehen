@@ -27,6 +27,7 @@ use crate::legacy::traits::*;
 /// The list of supported space kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 pub(crate) enum SpaceKind {
     /// An unknown space
     #[default]
@@ -35,9 +36,12 @@ pub(crate) enum SpaceKind {
     Function,
     /// A class space
     Class,
-    /// A `Rust` trait space
+    /// A `Rust` trait space (kept for parity with `mehen-core::SpaceKind`;
+    /// no longer constructed by legacy after the Phase 9 Rust migration).
     Trait,
-    /// A `Rust` implementation space
+    /// A `Rust` implementation space (kept for parity with
+    /// `mehen-core::SpaceKind`; no longer constructed by legacy after the
+    /// Phase 9 Rust migration).
     Impl,
     /// A general space
     Unit,
@@ -277,23 +281,6 @@ struct State<'a> {
 
 /// Returns all function spaces data of a code. This function needs a parser to
 /// be created a priori in order to work.
-///
-/// # Examples
-///
-/// ```
-/// use std::path::Path;
-///
-/// use mehen::{RustParser, metrics, ParserTrait};
-///
-/// let source_code = "fn main() { let a = 42; }";
-///
-/// let path = Path::new("foo.rs");
-/// let source_as_vec = source_code.as_bytes().to_vec();
-///
-/// let parser = RustParser::new(source_as_vec, &path, None);
-///
-/// metrics(&parser, &path).unwrap();
-/// ```
 pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<FuncSpace> {
     let code = parser.get_code();
     let node = parser.get_root();

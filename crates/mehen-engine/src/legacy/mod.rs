@@ -31,7 +31,6 @@ pub(crate) mod metrics;
 pub(crate) mod node;
 pub(crate) mod parser;
 pub(crate) mod preproc;
-pub(crate) mod rust_metric_helpers;
 pub(crate) mod spaces;
 pub(crate) mod tools;
 pub(crate) mod top_offenders;

@@ -15,3 +15,6 @@ mehen-metrics = { workspace = true }
 mehen-tree-sitter = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-go = { workspace = true }
+
+[lints]
+workspace = true

@@ -22,3 +22,6 @@ default = ["docs-diff"]
 # pre-1.0 `src/diff_markdown.rs` per plan §8.1. Off when the consumer
 # doesn't need the `mehen-markdown` types in scope.
 docs-diff = ["dep:mehen-markdown"]
+
+[lints]
+workspace = true

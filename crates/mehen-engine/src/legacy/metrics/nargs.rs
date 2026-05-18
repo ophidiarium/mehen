@@ -3,9 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
 #[cfg(test)]
-use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser, RustParser};
+use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser};
 use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
@@ -361,7 +361,7 @@ impl NArgs for CCode {
     }
 }
 
-implement_metric_trait!([NArgs], RustCode, RubyCode);
+implement_metric_trait!([NArgs], RubyCode);
 
 impl NArgs for crate::legacy::langs::PhpCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
@@ -407,60 +407,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rust_no_functions_and_closures() {
-        check_metrics::<RustParser>("let a = 42;", "foo.rs", |metric| {
-            // 0 functions + 0 closures
-            insta::assert_json_snapshot!(
-                metric.nargs,
-                @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 0.0,
-                      "average_functions": 0.0,
-                      "average_closures": 0.0,
-                      "total": 0.0,
-                      "average": 0.0,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn rust_single_function() {
-        check_metrics::<RustParser>(
-            "fn f(a: bool, b: usize) {
-                 if a {
-                     return a;
-                }
-             }",
-            "foo.rs",
-            |metric| {
-                // 1 function
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 2.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.0,
-                      "average_closures": 0.0,
-                      "total": 2.0,
-                      "average": 2.0,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn kotlin_counts_function_constructor_and_lambda_parameters() {
         check_metrics::<KotlinParser>(
             "class C {
@@ -478,132 +424,6 @@ mod tests {
                 assert_eq!(metric.nargs.closure_args_sum(), 1.0);
                 assert_eq!(metric.nargs.fn_args_max(), 3.0);
                 assert_eq!(metric.nargs.closure_args_max(), 1.0);
-            },
-        );
-    }
-
-    #[test]
-    fn rust_single_closure() {
-        check_metrics::<RustParser>("let bar = |i: i32| -> i32 { i + 1 };", "foo.rs", |metric| {
-            // 1 lambda
-            insta::assert_json_snapshot!(
-                metric.nargs,
-                @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 1.0,
-                      "average_functions": 0.0,
-                      "average_closures": 1.0,
-                      "total": 1.0,
-                      "average": 1.0,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 1.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn rust_functions() {
-        check_metrics::<RustParser>(
-            "fn f(a: bool, b: usize) {
-                 if a {
-                     return a;
-                }
-             }
-             fn f1(a: bool, b: usize) {
-                 if a {
-                     return a;
-                }
-             }",
-            "foo.rs",
-            |metric| {
-                // 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 4.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.0,
-                      "average_closures": 0.0,
-                      "total": 4.0,
-                      "average": 2.0,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<RustParser>(
-            "fn f(a: bool, b: usize) {
-                 if a {
-                     return a;
-                }
-             }
-             fn f1(a: bool, b: usize, c: usize) {
-                 if a {
-                     return a;
-                }
-             }",
-            "foo.rs",
-            |metric| {
-                // 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 5.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.5,
-                      "average_closures": 0.0,
-                      "total": 5.0,
-                      "average": 2.5,
-                      "functions_min": 0.0,
-                      "functions_max": 3.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_nested_functions() {
-        check_metrics::<RustParser>(
-            "fn f(a: i32, b: i32) -> i32 {
-                 fn foo(a: i32) -> i32 {
-                     return a;
-                 }
-                 let bar = |a: i32, b: i32| -> i32 { a + 1 };
-                 let bar1 = |b: i32| -> i32 { b + 1 };
-                 return bar(foo(a), a);
-             }",
-            "foo.rs",
-            |metric| {
-                // 2 functions + 2 lambdas = 4
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 3.0,
-                      "total_closures": 3.0,
-                      "average_functions": 1.5,
-                      "average_closures": 1.5,
-                      "total": 6.0,
-                      "average": 1.5,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 2.0
-                    }"###
-                );
             },
         );
     }

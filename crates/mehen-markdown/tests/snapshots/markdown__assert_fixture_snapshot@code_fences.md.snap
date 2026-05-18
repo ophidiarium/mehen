@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -51,8 +51,8 @@ complexity:
     volume: 115.94522208456974
     difficulty: 2.2222222222222223
     effort: 257.65604907682166
-    embedded_volume: 1.3392304845413265
-    total_volume: 117.28445256911107
+    embedded_volume: 0.981458449927413
+    total_volume: 116.92668053449715
 links:
   total: 0
   internal: 0

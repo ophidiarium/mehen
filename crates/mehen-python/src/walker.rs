@@ -49,10 +49,10 @@ use ruff_python_parser::Parsed;
 use ruff_text_size::{Ranged, TextRange};
 use smol_str::SmolStr;
 
-/// Drive the walker over a parsed Python module. Public entry point for
-/// the analyzer — it owns the `MetricTreeBuilder` and produces the final
-/// `MetricSpace`.
-pub fn walk_module(
+/// Drive the walker over a parsed Python module. Crate-internal entry
+/// point — only `mehen_python::PythonAnalyzer::analyze` calls this; not
+/// part of any cross-crate API.
+pub(crate) fn walk_module(
     parsed: &Parsed<ModModule>,
     source: &str,
     line_index: &LineIndex,

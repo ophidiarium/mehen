@@ -12,6 +12,13 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
-mehen-tree-sitter = { workspace = true }
-tree-sitter = { workspace = true }
-tree-sitter-rust = { workspace = true }
+ra_ap_syntax = { workspace = true }
+smol_str = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+mehen-report = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

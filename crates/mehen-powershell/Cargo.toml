@@ -22,3 +22,6 @@ tree-sitter-pwsh = { workspace = true }
 # documented `mehen metrics --format json` schema (plan §9.1).
 mehen-report = { workspace = true }
 insta = { workspace = true }
+
+[lints]
+workspace = true

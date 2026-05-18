@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Ruby, Rust};
+use crate::legacy::languages::{Kotlin, Ruby};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -251,48 +251,6 @@ where
     fn compute(node: &Node, code: &[u8], stats: &mut Stats);
 }
 
-impl Npa for RustCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        // Rust struct fields live in `struct_item`, which is *not* pushed as
-        // a FuncSpace, so attributes are collected at the containing
-        // unit/impl scope. Two shapes to handle:
-        //   - `struct S { pub a: u32, b: u32 }` -> each field is a
-        //     `FieldDeclaration` named node; `pub` is a visibility child.
-        //   - `struct S(pub u32, u32)` -> fields live directly as type
-        //     children of `OrderedFieldDeclarationList`, with an optional
-        //     preceding `visibility_modifier` sibling.
-        match node.kind_id().into() {
-            Rust::FieldDeclaration => {
-                let is_public = node
-                    .children()
-                    .any(|c| c.kind_id() == Rust::VisibilityModifier);
-                stats.record_attribute(SpaceKind::Class, is_public);
-            }
-            Rust::OrderedFieldDeclarationList => {
-                // Walk positional fields, pairing each type with the
-                // immediately preceding `visibility_modifier` if any.
-                let mut pending_pub = false;
-                for child in node.children() {
-                    match child.kind_id().into() {
-                        Rust::LPAREN | Rust::RPAREN | Rust::COMMA => {
-                            pending_pub = false;
-                        }
-                        Rust::AttributeItem => {}
-                        Rust::VisibilityModifier => {
-                            pending_pub = true;
-                        }
-                        _ => {
-                            stats.record_attribute(SpaceKind::Class, pending_pub);
-                            pending_pub = false;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Npa for RubyCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if !matches!(stats.space_kind, SpaceKind::Class) {
@@ -532,7 +490,7 @@ impl Npa for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -639,60 +597,6 @@ mod tests {
                 );
             },
         );
-    }
-
-    #[test]
-    fn rust_npa_counts_struct_fields() {
-        check_metrics::<RustParser>(
-            "struct S {
-                 pub a: u32,
-                 b: u32,
-             }",
-            "foo.rs",
-            |metric| {
-                // 2 fields, 1 public.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 1.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 2.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.5,
-                      "interfaces_average": null,
-                      "total": 1.0,
-                      "total_attributes": 2.0,
-                      "average": 0.5
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_npa_counts_tuple_struct_fields() {
-        // Tuple-struct fields live as type children of
-        // `ordered_field_declaration_list` with an optional preceding
-        // `visibility_modifier`; they must count the same as named fields.
-        check_metrics::<RustParser>("struct S(pub u32, u32);", "foo.rs", |metric| {
-            // 2 positional fields, 1 public.
-            insta::assert_json_snapshot!(
-                metric.npa,
-                @r###"
-                    {
-                      "classes": 1.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 2.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.5,
-                      "interfaces_average": null,
-                      "total": 1.0,
-                      "total_attributes": 2.0,
-                      "average": 0.5
-                    }"###
-            );
-        });
     }
 
     #[test]

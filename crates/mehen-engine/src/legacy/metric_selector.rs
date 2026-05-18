@@ -31,7 +31,7 @@ pub(crate) struct MetricSelector {
 type MetricDef = (&'static str, &'static str, Polarity, fn(&FuncSpace) -> f64);
 
 /// Catalogue of metrics that can be referenced by name from the CLI.
-pub const KNOWN_METRICS: &[MetricDef] = &[
+pub(crate) const KNOWN_METRICS: &[MetricDef] = &[
     ("cyclomatic", "Cyclomatic", Polarity::LowerIsBetter, |s| {
         s.metrics.cyclomatic.cyclomatic_sum()
     }),
@@ -69,7 +69,7 @@ pub const KNOWN_METRICS: &[MetricDef] = &[
 
 /// Default metric set for `diff` (kept here so both diff and top-offenders
 /// can surface the same fallback from a single source of truth).
-pub const DEFAULT_METRICS: &[&str] = &[
+pub(crate) const DEFAULT_METRICS: &[&str] = &[
     "cyclomatic",
     "cognitive",
     "nom.functions",

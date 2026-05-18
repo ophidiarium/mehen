@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Ruby, Rust};
+use crate::legacy::languages::{Kotlin, Ruby};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -292,54 +292,6 @@ fn record_method(stats: &mut Stats, container: SpaceKind, is_public: bool) {
     };
 }
 
-impl Npm for RustCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        match node.kind_id().into() {
-            Rust::FunctionItem => {
-                // Only count functions directly inside an `impl` or `trait`
-                // block. A `FunctionItem` has a body, so the walker already
-                // pushed a new FuncSpace for it — we stamp `method_role` on
-                // this space and `merge` rolls it up into the parent.
-                let grand_kind = match node.parent().and_then(|p| p.parent()) {
-                    Some(g) => g.kind_id(),
-                    None => return,
-                };
-                let container = if grand_kind == Rust::ImplItem {
-                    SpaceKind::Impl
-                } else if grand_kind == Rust::TraitItem {
-                    SpaceKind::Trait
-                } else {
-                    return;
-                };
-                // Rust visibility: `pub` / `pub(...)` modifier. Trait items
-                // are implicitly public by the visibility of the trait they
-                // belong to, so count them as public unconditionally.
-                let is_public = container == SpaceKind::Trait
-                    || node
-                        .children()
-                        .any(|c| c.kind_id() == Rust::VisibilityModifier);
-                record_method(stats, container, is_public);
-            }
-            Rust::FunctionSignatureItem => {
-                // A signature-only trait item (no default body) does not open
-                // a FuncSpace, so `stats` here is the trait's own stats. Bump
-                // its interface counters directly — there's no child merge to
-                // route the count through. Signatures are always public.
-                let grand_is_trait = node
-                    .parent()
-                    .and_then(|p| p.parent())
-                    .is_some_and(|g| g.kind_id() == Rust::TraitItem);
-                if !grand_is_trait || stats.space_kind != SpaceKind::Trait {
-                    return;
-                }
-                stats.interface_nm += 1;
-                stats.interface_npm += 1;
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Npm for RubyCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         if !matches!(node.kind_id().into(), Ruby::Method | Ruby::SingletonMethod) {
@@ -558,7 +510,7 @@ impl Npm for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -588,70 +540,6 @@ mod tests {
                   "total": 1.0,
                   "total_methods": 3.0,
                   "average": 0.3333333333333333
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_npm_counts_pub_in_impl_block() {
-        check_metrics::<RustParser>(
-            "struct S;
-             impl S {
-                 pub fn a(&self) {}
-                 fn b(&self) {}
-             }",
-            "foo.rs",
-            |metric| {
-                // impl S -> 2 methods, 1 public
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 1.0,
-                  "interfaces": 0.0,
-                  "class_methods": 2.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.5,
-                  "interfaces_average": null,
-                  "total": 1.0,
-                  "total_methods": 2.0,
-                  "average": 0.5
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_npm_counts_trait_signature_and_default_methods() {
-        // `function_signature_item` (no body) doesn't open a FuncSpace, so
-        // npm has to bump the trait's interface counters directly at that
-        // node. Default-bodied fns still flow through the regular FuncSpace
-        // + merge path.
-        check_metrics::<RustParser>(
-            "trait T {
-                 fn a(&self);
-                 fn b(&self) {}
-             }",
-            "foo.rs",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 0.0,
-                  "interfaces": 2.0,
-                  "class_methods": 0.0,
-                  "interface_methods": 2.0,
-                  "classes_average": null,
-                  "interfaces_average": 1.0,
-                  "total": 2.0,
-                  "total_methods": 2.0,
-                  "average": 1.0
                 }
                 "#
                 );

@@ -3,10 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Go, Kotlin, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::languages::{C, Go, Kotlin, Ruby};
 use crate::legacy::node::Node;
-use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
 /// The `NExit` metric.
 ///
@@ -112,21 +111,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Exit for RustCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if is_inside_rust_macro_tokens(node) {
-            return;
-        }
-
-        if matches!(
-            node.kind_id().into(),
-            Rust::ReturnExpression | Rust::TryExpression
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
-
 impl Exit for GoCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if matches!(node.kind_id().into(), Go::ReturnStatement) {
@@ -209,60 +193,8 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser, RustParser};
+    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn rust_no_exit() {
-        check_metrics::<RustParser>("let a = 42;", "foo.rs", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn rust_question_mark() {
-        check_metrics::<RustParser>("let _ = a? + b? + c?;", "foo.rs", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 3.0,
-                      "average": null,
-                      "min": 3.0,
-                      "max": 3.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn rust_return_type_is_not_an_exit() {
-        check_metrics::<RustParser>(
-            "fn typed() -> () {}
-             fn explicit() {
-                 return;
-             }
-             fn question() {
-                 a?;
-             }",
-            "foo.rs",
-            |metric| {
-                assert_eq!(metric.nexits.exit_sum(), 2.0);
-                assert_eq!(metric.nexits.exit_max(), 1.0);
-            },
-        );
-    }
 
     #[test]
     fn go_no_exit() {

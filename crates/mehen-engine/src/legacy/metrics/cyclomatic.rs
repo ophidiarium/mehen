@@ -3,10 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Kotlin, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::languages::{C, Kotlin, Ruby};
 use crate::legacy::node::Node;
-use crate::legacy::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
 /// The `Cyclomatic` metric.
 #[derive(Debug, Clone)]
@@ -109,27 +108,6 @@ where
     Self: Checker,
 {
     fn compute(node: &Node, stats: &mut Stats);
-}
-
-impl Cyclomatic for RustCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Rust::*;
-
-        if is_inside_rust_macro_tokens(node) {
-            return;
-        }
-
-        match node.kind_id().into() {
-            IfExpression | ForExpression | WhileExpression | LoopExpression | MatchArm
-            | MatchArm2 | TryExpression => {
-                stats.cyclomatic += 1.;
-            }
-            _ if is_rust_logical_operator(node) => {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
 }
 
 impl Cyclomatic for GoCode {
@@ -265,7 +243,7 @@ impl Cyclomatic for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, PhpParser, RubyParser, RustParser};
+    use crate::legacy::langs::{GoParser, KotlinParser, PhpParser, RubyParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -294,49 +272,6 @@ mod tests {
                       "max": 5.0
                     }"###
                 );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_1_level_nesting() {
-        check_metrics::<RustParser>(
-            "fn f() { // +2 (+1 unit space)
-                 if true { // +1
-                     match true {
-                         true => println!(\"test\"), // +1
-                         false => println!(\"test\"), // +1
-                     }
-                 }
-             }",
-            "foo.rs",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 5.0,
-                      "average": 2.5,
-                      "min": 1.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rust_macro_tokens_are_opaque_for_cyclomatic() {
-        check_metrics::<RustParser>(
-            "fn f() {
-                 maybe!(a && b, if c { d() });
-             }",
-            "foo.rs",
-            |metric| {
-                // Unit + function baselines only; macro token-tree control
-                // tokens are not parsed Rust control flow.
-                assert_eq!(metric.cyclomatic.cyclomatic_sum(), 2.0);
             },
         );
     }

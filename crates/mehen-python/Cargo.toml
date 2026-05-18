@@ -21,3 +21,6 @@ smol_str = { workspace = true }
 insta = { workspace = true }
 mehen-report = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

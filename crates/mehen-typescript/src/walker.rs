@@ -37,8 +37,10 @@ use oxc_span::Span;
 use oxc_syntax::scope::ScopeFlags;
 use smol_str::SmolStr;
 
-/// Public entry point — drive the walker over a parsed program.
-pub fn walk_program<'a>(
+/// Crate-internal entry point — drive the walker over a parsed
+/// program. Only the `*Analyzer::analyze` impls in this crate call
+/// this; not part of any cross-crate API.
+pub(crate) fn walk_program<'a>(
     program: &Program<'a>,
     tokens: &ArenaVec<'a, Token>,
     source: &str,
