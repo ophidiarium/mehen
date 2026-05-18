@@ -89,9 +89,11 @@ impl HalsteadStats {
         self.effort() / 18.0
     }
 
-    /// Estimated number of bugs.
+    /// Estimated number of bugs delivered, per Halstead's
+    /// `B = E^(2/3) / 3000` formula. Matches the pre-1.0 implementation
+    /// in `crates/mehen-engine/src/legacy/metrics/halstead.rs::bugs`.
     pub fn bugs(&self) -> f64 {
-        self.volume() / 3000.0
+        self.effort().powf(2.0 / 3.0) / 3000.0
     }
 }
 

@@ -26,6 +26,7 @@ mod halstead;
 mod halstead_builder;
 mod loc;
 mod mi;
+mod state;
 mod tree_builder;
 
 pub use abc::AbcStats;
@@ -36,6 +37,7 @@ pub use halstead::HalsteadStats;
 pub use halstead_builder::{HalsteadBuilder, HalsteadCounts, HalsteadOperand, HalsteadOperator};
 pub use loc::{LineClass, LocStats};
 pub use mi::MiStats;
+pub use state::{State, apply_state_to, finalize_state, merge_child_into_parent};
 pub use tree_builder::MetricTreeBuilder;
 
 // Re-export the metric key namespace and the selector/threshold contract

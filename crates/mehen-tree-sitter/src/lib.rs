@@ -24,9 +24,10 @@ mod parser;
 mod span;
 mod walker;
 
+pub use mehen_metrics::{State, apply_state_to};
 pub use parser::{TreeSitterError, TreeSitterParser};
 pub use span::{node_span, text_of};
 pub use walker::{
-    CognitiveFact, LanguageRules, LocFact, MemberClassification, NodeFacts, ScopeOpen, State,
-    WalkResult, apply_state_to, empty_space, walk,
+    CognitiveFact, LanguageRules, LocFact, MemberClassification, NodeFacts, ScopeOpen, WalkResult,
+    empty_space, walk,
 };

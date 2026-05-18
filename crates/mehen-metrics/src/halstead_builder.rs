@@ -82,6 +82,16 @@ impl HalsteadBuilder {
         }
     }
 
+    /// Iterator over distinct operator entries — for tests / diagnostics.
+    pub fn operators(&self) -> impl Iterator<Item = &HalsteadOperator> {
+        self.operators.iter()
+    }
+
+    /// Iterator over distinct operand entries — for tests / diagnostics.
+    pub fn operands(&self) -> impl Iterator<Item = &HalsteadOperand> {
+        self.operands.iter()
+    }
+
     /// Merge counts from a child space (post-finalize) into this one.
     pub fn merge(&mut self, other: &HalsteadBuilder) {
         for op in &other.operators {
