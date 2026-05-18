@@ -15,11 +15,13 @@ use std::sync::{Arc, Mutex};
 use std::thread::available_parallelism;
 
 use camino::Utf8PathBuf;
-use mehen_core::{AnalysisConfig, Language, MetricKey, MetricSpace, SourceFile};
+use mehen_core::{AnalysisConfig, Language, SourceFile};
 
 use crate::detection::detect_language;
 use crate::legacy::concurrent_files::{ConcurrentRunner, FilesData};
-use crate::legacy::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
+use crate::legacy::metric_selector::{
+    MetricSelector, Polarity, parse_metric_selectors, read_metric,
+};
 use crate::legacy::mk_globset;
 use crate::registry::AnalyzerRegistry;
 
@@ -92,38 +94,6 @@ struct MetricValue {
 struct FileOffender {
     path: PathBuf,
     metrics: Vec<MetricValue>,
-}
-
-// ── Selector → MetricSet key mapping ───────────────────────────────────
-//
-// The legacy `MetricSelector::extract` was a closure over `FuncSpace`.
-// In the new architecture each metric family publishes its rolled-up
-// values into the root `MetricSpace`'s `MetricSet` under the
-// documented keys (see `mehen-tree-sitter::walker::apply_state_to`).
-// `metric_set_key_for(selector)` translates the legacy selector name
-// into the corresponding `MetricSet` key.
-fn metric_set_key_for(name: &str) -> &'static str {
-    match name {
-        "cyclomatic" => "cyclomatic.sum",
-        "cognitive" => "cognitive.sum",
-        "nom.functions" => "nom.functions",
-        "loc.lloc" => "loc.lloc",
-        "mi.original" => "mi.original",
-        "mi.sei" => "mi.sei",
-        "mi.visual_studio" => "mi.visual_studio",
-        "halstead.volume" => "halstead.volume",
-        "abc" => "abc",
-        // Fall back to the bare name; missing keys read as 0.0.
-        other => Box::leak(other.to_string().into_boxed_str()),
-    }
-}
-
-fn read_metric(root: &MetricSpace, selector: &MetricSelector) -> f64 {
-    let key = metric_set_key_for(selector.name);
-    root.metrics
-        .get(&MetricKey::new(key))
-        .map(|v| v.as_f64())
-        .unwrap_or(0.0)
 }
 
 // ── Concurrent runner glue ─────────────────────────────────────────────

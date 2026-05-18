@@ -1,12 +1,17 @@
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+
+use camino::Utf8PathBuf;
 
 use crate::ci;
-#[cfg(feature = "markdown")]
-use crate::legacy::langs::LANG;
-use crate::legacy::langs::{get_from_ext, get_function_spaces};
-use crate::legacy::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
+use crate::detection::detect_language;
+use crate::legacy::metric_selector::{
+    MetricSelector, Polarity, parse_metric_selectors, read_metric,
+};
 use crate::legacy::mk_globset;
+use crate::registry::AnalyzerRegistry;
+use mehen_core::{AnalysisConfig, Language, MetricSpace, SourceFile};
 use mehen_git::{ChangeStatus, GitError};
 #[cfg(feature = "markdown")]
 use mehen_report::github_markdown_docs::{DocDiffFile, DocRenderCtx, render_doc_section};
@@ -179,7 +184,10 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
         .then(|| GeneratedFilter::new(&repo))
         .transpose()?;
 
-    let mut filtered = Vec::new();
+    let registry = Arc::new(AnalyzerRegistry::default_set());
+    let analysis_config = AnalysisConfig::default();
+
+    let mut filtered: Vec<(mehen_git::ChangedFile, Utf8PathBuf, Language)> = Vec::new();
     #[cfg(feature = "markdown")]
     let mut markdown_files: Vec<mehen_git::ChangedFile> = Vec::new();
     for cf in changed {
@@ -197,40 +205,52 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        let ext_lang = p
-            .extension()
-            .and_then(|e| e.to_str())
-            .and_then(get_from_ext);
-        if ext_lang.is_none() {
+        // Convert the git path to UTF-8 once at the boundary; non-UTF-8
+        // paths are rare and we drop them rather than fail the diff.
+        let Ok(utf8_path) = Utf8PathBuf::try_from(p.clone()) else {
             continue;
-        }
+        };
+        let Some(language) = detect_language(&utf8_path) else {
+            continue;
+        };
 
         #[cfg(feature = "markdown")]
-        if matches!(ext_lang, Some(LANG::Markdown)) {
+        if matches!(language, Language::Markdown) {
             markdown_files.push(cf.clone());
             continue;
         }
 
-        filtered.push(cf);
+        filtered.push((cf, utf8_path, language));
     }
 
-    // 4. Compute metrics for each file
+    // 4. Compute metrics for each file via the per-language analyzer
+    //    registry. The legacy `langs::get_function_spaces` pipeline is no
+    //    longer used; we drive `LanguageAnalyzer::analyze` and read
+    //    selector values out of the root `MetricSpace`'s `MetricSet`.
     let mut diffs = Vec::new();
-    for cf in &filtered {
-        let ext = cf.path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let lang = match get_from_ext(ext) {
-            Some(l) => l,
-            None => continue,
-        };
-
+    for (cf, utf8_path, language) in &filtered {
         let is_deleted = cf.status == ChangeStatus::Deleted;
         let is_new = cf.status == ChangeStatus::Added;
 
-        let baseline_space = if is_new {
+        let analyzer = match registry.analyzer_for(*language) {
+            Some(a) => a,
+            None => continue,
+        };
+
+        let analyze = |bytes: Vec<u8>| -> Option<MetricSpace> {
+            let text = String::from_utf8(bytes).ok()?;
+            let source = SourceFile::new(utf8_path.clone(), *language, text);
+            analyzer
+                .analyze(&source, &analysis_config)
+                .ok()
+                .map(|a| a.root)
+        };
+
+        let baseline_space: Option<MetricSpace> = if is_new {
             None
         } else {
             match mehen_git::read_blob(&repo, &from_ref, &cf.path) {
-                Ok(Some(bytes)) => get_function_spaces(&lang, bytes, &cf.path, None),
+                Ok(Some(bytes)) => analyze(bytes),
                 Ok(None) => None,
                 Err(e) => {
                     log::warn!("Skipping baseline for {}: {e}", cf.path.display());
@@ -239,11 +259,11 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let current_space = if is_deleted {
+        let current_space: Option<MetricSpace> = if is_deleted {
             None
         } else {
             match mehen_git::read_blob(&repo, &to_ref, &cf.path) {
-                Ok(Some(bytes)) => get_function_spaces(&lang, bytes, &cf.path, None),
+                Ok(Some(bytes)) => analyze(bytes),
                 Ok(None) => None,
                 Err(e) => {
                     log::warn!("Skipping current for {}: {e}", cf.path.display());
@@ -257,11 +277,11 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             .map(|sel| {
                 let baseline = baseline_space
                     .as_ref()
-                    .map(|s| (sel.extract)(s))
+                    .map(|s| read_metric(s, sel))
                     .unwrap_or(0.0);
                 let current = current_space
                     .as_ref()
-                    .map(|s| (sel.extract)(s))
+                    .map(|s| read_metric(s, sel))
                     .unwrap_or(0.0);
                 MetricDiff {
                     name: sel.name,

@@ -3,6 +3,13 @@
 //! A *selector* is a known metric name (e.g. `loc.lloc`) bundled with the
 //! extraction closure that pulls the value out of a [`FuncSpace`], a display
 //! label, and a [`Polarity`] (whether higher or lower values are "better").
+//!
+//! The `extract` closure is the legacy reader (over `FuncSpace`) and is
+//! kept here for the few legacy-metric tests still in this crate. The
+//! production diff/top-offenders pipelines read the new
+//! `MetricSpace::metrics` map via [`read_metric`] instead.
+
+use mehen_core::{MetricKey, MetricSpace};
 
 use crate::legacy::spaces::FuncSpace;
 
@@ -118,6 +125,42 @@ pub(crate) fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
     }
 
     selectors
+}
+
+/// Translate a CLI selector name (e.g. `cyclomatic`, `nom.functions`,
+/// `mi.visual_studio`) to the `MetricSet` key the shared walker
+/// publishes onto the root `MetricSpace`.
+///
+/// Most names map verbatim; the rolled-up scalar metrics
+/// (`cyclomatic`, `cognitive`) live under their `*.sum` key. Any
+/// unknown selector falls back to its bare name; missing keys read as
+/// `0.0` from `read_metric`.
+pub(crate) fn metric_set_key_for(name: &str) -> &'static str {
+    match name {
+        "cyclomatic" => "cyclomatic.sum",
+        "cognitive" => "cognitive.sum",
+        "nom.functions" => "nom.functions",
+        "loc.lloc" => "loc.lloc",
+        "mi.original" => "mi.original",
+        "mi.sei" => "mi.sei",
+        "mi.visual_studio" => "mi.visual_studio",
+        "halstead.volume" => "halstead.volume",
+        "abc" => "abc",
+        other => Box::leak(other.to_string().into_boxed_str()),
+    }
+}
+
+/// Read a selector's value from the root `MetricSpace`'s `MetricSet`.
+///
+/// Returns `0.0` for any key the analyzer didn't publish — matching
+/// the legacy reader, which fell through to `Default`-initialized
+/// `FuncSpace` fields when an analyzer left a metric blank.
+pub(crate) fn read_metric(root: &MetricSpace, selector: &MetricSelector) -> f64 {
+    let key = metric_set_key_for(selector.name);
+    root.metrics
+        .get(&MetricKey::new(key))
+        .map(|v| v.as_f64())
+        .unwrap_or(0.0)
 }
 
 #[cfg(test)]
