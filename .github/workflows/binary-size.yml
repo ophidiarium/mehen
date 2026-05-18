@@ -53,7 +53,8 @@ jobs:
           git push origin "$NOTES_REF" 2>/dev/null || git push origin "$NOTES_REF" --force
 
       - name: Post size comment on PR
-        if: github.event_name == 'pull_request'
+        # Skip on fork PRs: GITHUB_TOKEN is read-only there, so commenting would fail.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
