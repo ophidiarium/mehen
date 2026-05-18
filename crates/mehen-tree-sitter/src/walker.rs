@@ -24,7 +24,7 @@ use crate::span::node_span;
 /// Per-space accumulator state. The walker pushes one of these for the
 /// `Unit` root and for every space the language rules open via
 /// [`LanguageRules::scope_for`].
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct State {
     pub loc: LocStats,
     pub cyclomatic: CyclomaticStats,
@@ -154,31 +154,49 @@ pub fn walk<R: LanguageRules>(
     walker.visit(root_node);
     let mut unit_state = walker.stack.pop().expect("walker stack underflow");
     classify_unit_loc(walker.source_text, rules, &mut unit_state.loc);
+    finalize_state(&mut unit_state);
     apply_state_to(unit_state, walker.tree.metrics_mut());
     WalkResult {
         root: walker.tree.finish(),
     }
 }
 
+/// Snapshot the per-space "current" values into rolled-up
+/// sum/min/max/avg fields. Called on every space close before the
+/// per-space MetricSet is published or merged into the parent.
+fn finalize_state(state: &mut State) {
+    state.cyclomatic.finalize_minmax();
+    state.cyclomatic.finalize_average();
+    state.loc.finalize_minmax();
+}
+
+/// Fold a finalized child state's rolled-up totals (sum/min/max/n)
+/// into the parent state. The parent's per-space "current" values are
+/// not affected — children contribute only via the bounds.
+fn merge_child_into_parent(parent: &mut State, child: &State) {
+    parent.cyclomatic.merge(&child.cyclomatic);
+    parent.cyclomatic.finalize_average();
+    parent.loc.merge(&child.loc);
+}
+
 /// Publish a finalized `State` into a `MetricSet` using the shared key
-/// names. Called by the walker on every space close.
+/// names. Called by the walker on every space close, *after*
+/// `state.cyclomatic.finalize_minmax()` has snapshotted the McCabe
+/// value into `cyclomatic_sum`/`min`/`max`/`n`.
+///
+/// Per the rewrite plan §5.1 each metric publishes the rolled-up
+/// `{ sum, min, max, average }` set under aggregator-suffixed selectors
+/// (`cyclomatic.sum`, `cyclomatic.min`, …) plus the bare per-space
+/// value at the metric's root key. The selector format defined in
+/// `mehen-core::selector` already understands those suffixes.
 pub fn apply_state_to(state: State, target: &mut MetricSet) {
-    // McCabe convention: V(G) = decisions + 1. The accumulator stores
-    // the raw decision count so the +1 is added at publish time, where
-    // the conversion to a typed `MetricValue` happens.
-    let cyclomatic = state.cyclomatic.cyclomatic.saturating_add(1);
-    target.insert(MetricKey::new(keys::CYCLOMATIC), cyclomatic as i64);
+    publish_cyclomatic(&state.cyclomatic, target);
+    publish_loc(&state.loc, target);
+
     target.insert(
         MetricKey::new(keys::COGNITIVE),
         state.cognitive.cognitive as i64,
     );
-
-    target.insert(MetricKey::new(keys::LOC_LLOC), state.loc.lloc as i64);
-    target.insert(MetricKey::new(keys::LOC_SLOC), state.loc.sloc as i64);
-    target.insert(MetricKey::new(keys::LOC_PLOC), state.loc.ploc as i64);
-    target.insert(MetricKey::new(keys::LOC_CLOC), state.loc.cloc as i64);
-    target.insert(MetricKey::new(keys::LOC_BLANK), state.loc.blank as i64);
-    target.insert(MetricKey::new(keys::LOC), state.loc.total as i64);
 
     let halstead = HalsteadStats::from_counts(state.halstead.counts());
     target.insert(MetricKey::new(keys::HALSTEAD_VOLUME), halstead.volume());
@@ -208,6 +226,98 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     target.insert(MetricKey::new(keys::NPA), state.npa.public as i64);
     target.insert(MetricKey::new(keys::NPM), state.npm.public as i64);
     target.insert(MetricKey::new(keys::WMC), state.wmc.wmc as i64);
+}
+
+fn publish_cyclomatic(stats: &mehen_metrics::CyclomaticStats, target: &mut MetricSet) {
+    // Per-space McCabe value at the bare key.
+    let mccabe = stats.cyclomatic.saturating_add(1) as i64;
+    target.insert(MetricKey::new(keys::CYCLOMATIC), mccabe);
+    target.insert(
+        MetricKey::new(format!("{}.sum", keys::CYCLOMATIC)),
+        stats.cyclomatic_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::CYCLOMATIC)),
+        stats.min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::CYCLOMATIC)),
+        stats.max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::CYCLOMATIC)),
+        stats.cyclomatic_average,
+    );
+}
+
+fn publish_loc(stats: &LocStats, target: &mut MetricSet) {
+    target.insert(MetricKey::new(keys::LOC_LLOC), stats.lloc as i64);
+    target.insert(MetricKey::new(keys::LOC_SLOC), stats.sloc as i64);
+    target.insert(MetricKey::new(keys::LOC_PLOC), stats.ploc as i64);
+    target.insert(MetricKey::new(keys::LOC_CLOC), stats.cloc as i64);
+    target.insert(MetricKey::new(keys::LOC_BLANK), stats.blank as i64);
+    target.insert(MetricKey::new(keys::LOC), stats.total as i64);
+
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::LOC_SLOC)),
+        stats.sloc_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::LOC_SLOC)),
+        stats.sloc_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::LOC_SLOC)),
+        stats.sloc_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::LOC_PLOC)),
+        stats.ploc_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::LOC_PLOC)),
+        stats.ploc_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::LOC_PLOC)),
+        stats.ploc_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::LOC_LLOC)),
+        stats.lloc_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::LOC_LLOC)),
+        stats.lloc_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::LOC_LLOC)),
+        stats.lloc_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::LOC_CLOC)),
+        stats.cloc_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::LOC_CLOC)),
+        stats.cloc_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::LOC_CLOC)),
+        stats.cloc_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::LOC_BLANK)),
+        stats.blank_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::LOC_BLANK)),
+        stats.blank_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.avg", keys::LOC_BLANK)),
+        stats.blank_average(),
+    );
 }
 
 struct Walker<'a, R: LanguageRules> {
@@ -288,10 +398,25 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         if opened_space {
             let mut state = self.stack.pop().expect("walker stack underflow on close");
             classify_span_loc(self.source_text, &node, self.rules, &mut state.loc);
-            apply_state_to(state, self.tree.metrics_mut());
+            finalize_state(&mut state);
+            apply_state_to_for_close(&state, self.tree.metrics_mut());
+            // Fold this space's rolled-up bounds into the parent so the
+            // unit's final stats reflect every nested space.
+            if let Some(parent) = self.stack.last_mut() {
+                merge_child_into_parent(parent, &state);
+            }
             self.tree.close();
         }
     }
+}
+
+/// Variant of [`apply_state_to`] that takes a borrow — used at space
+/// close where the state must also be merged into the parent. The
+/// freestanding `apply_state_to(state, target)` continues to consume
+/// its argument so external callers (the walker's unit close path)
+/// don't pay for an extra clone.
+fn apply_state_to_for_close(state: &State, target: &mut MetricSet) {
+    apply_state_to(state.clone(), target);
 }
 
 fn classify_unit_loc<R: LanguageRules>(source: &[u8], rules: &R, loc: &mut LocStats) {

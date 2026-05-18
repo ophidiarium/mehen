@@ -1742,8 +1742,10 @@ dependencies = [
 name = "mehen-powershell"
 version = "0.7.0"
 dependencies = [
+ "insta",
  "mehen-core",
  "mehen-metrics",
+ "mehen-report",
  "mehen-tree-sitter",
  "tree-sitter",
  "tree-sitter-pwsh",

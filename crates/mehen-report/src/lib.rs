@@ -12,6 +12,7 @@
 pub mod github_markdown_docs;
 mod json;
 mod markdown;
+pub mod metrics_json;
 
 pub use json::{render_diff_json, render_metrics_json};
 pub use markdown::{render_diff_github_markdown, render_metrics_markdown};

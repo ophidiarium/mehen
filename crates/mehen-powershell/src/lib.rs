@@ -34,6 +34,12 @@ struct PowerShellRules;
 impl LanguageRules for PowerShellRules {
     fn scope_for(&self, node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
         let kind = node.kind();
+        // Mirrors the pre-1.0 `Checker for PowershellCode::is_func_space`
+        // (`src/checker.rs`): `Program` (the unit, handled by the walker
+        // separately), `FunctionStatement`, `ClassStatement`,
+        // `ClassMethodDefinition`, and `ScriptBlockExpression` open a
+        // space. The bare `script_block` *does not* open a space — it's
+        // the body container for switch-clause arms etc., not a closure.
         let opened = match kind {
             "function_statement" | "function_definition" => ScopeOpen::Open {
                 kind: SpaceKind::Function,
@@ -41,7 +47,13 @@ impl LanguageRules for PowerShellRules {
                     .child_by_field_name("name")
                     .map(|n| text_of(&n, source).to_string()),
             },
-            "script_block_expression" | "script_block" => ScopeOpen::Open {
+            "class_method_definition" => ScopeOpen::Open {
+                kind: SpaceKind::Function,
+                name: node
+                    .child_by_field_name("name")
+                    .map(|n| text_of(&n, source).to_string()),
+            },
+            "script_block_expression" => ScopeOpen::Open {
                 kind: SpaceKind::Closure,
                 name: None,
             },

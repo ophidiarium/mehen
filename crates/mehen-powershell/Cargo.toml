@@ -15,3 +15,9 @@ mehen-metrics = { workspace = true }
 mehen-tree-sitter = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-pwsh = { workspace = true }
+
+[dev-dependencies]
+# Tests render the per-metric JSON family object so snapshots match the
+# documented `mehen metrics --format json` schema (plan §9.1).
+mehen-report = { workspace = true }
+insta = { workspace = true }
