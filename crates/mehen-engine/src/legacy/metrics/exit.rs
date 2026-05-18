@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -112,17 +112,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Exit for PythonCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(
-            node.kind_id().into(),
-            Python::ReturnStatement | Python::RaiseStatement
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
-
 impl Exit for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if is_inside_rust_macro_tokens(node) {
@@ -156,8 +145,8 @@ impl Exit for KotlinCode {
         // lambda-local `return@label`.
         //
         // Matches the spirit of mozilla/rust-code-analysis's exit metric for
-        // other languages (e.g. Python counts `return`/`raise`, Rust counts
-        // `return`/`?`, TypeScript counts `return`/`throw`).
+        // other languages (e.g. Rust counts `return`/`?`, TypeScript counts
+        // `return`/`throw`).
         if node.kind_id() == Kotlin::JumpExpression {
             let lead = node.child(0).map(|c| c.kind_id().into());
             if matches!(lead, Some(Kotlin::Return) | Some(Kotlin::Throw)) {
@@ -220,25 +209,8 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn python_no_exit() {
-        check_metrics::<PythonParser>("a = 42", "foo.py", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
 
     #[test]
     fn rust_no_exit() {
@@ -288,81 +260,6 @@ mod tests {
             |metric| {
                 assert_eq!(metric.nexits.exit_sum(), 2.0);
                 assert_eq!(metric.nexits.exit_max(), 1.0);
-            },
-        );
-    }
-
-    #[test]
-    fn python_simple_function() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a:
-                     return a",
-            "foo.py",
-            |metric| {
-                // 1 function
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_more_functions() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a:
-                     return a
-            def f(a, b):
-                 if b:
-                     return b",
-            "foo.py",
-            |metric| {
-                // 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_nested_functions() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 def foo(a):
-                     if a:
-                         return 1
-                 bar = lambda a: lambda b: b or True or True
-                 return bar(foo(a))(a)",
-            "foo.py",
-            |metric| {
-                // 2 functions + 2 lambdas = 4
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 0.5,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
             },
         );
     }
@@ -466,30 +363,6 @@ mod tests {
              end",
             "foo.rb",
             |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_raise_counts_as_exit() {
-        check_metrics::<PythonParser>(
-            "def f(a):
-                 if a < 0:
-                     raise ValueError('bad')
-                 return a",
-            "foo.py",
-            |metric| {
-                // 1 function, 2 exits (raise + return)
                 insta::assert_json_snapshot!(
                     metric.nexits,
                     @r###"

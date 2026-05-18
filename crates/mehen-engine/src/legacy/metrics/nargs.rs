@@ -3,9 +3,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
 #[cfg(test)]
-use crate::legacy::langs::{CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser, RustParser};
 use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
@@ -361,7 +361,7 @@ impl NArgs for CCode {
     }
 }
 
-implement_metric_trait!([NArgs], PythonCode, RustCode, RubyCode);
+implement_metric_trait!([NArgs], RustCode, RubyCode);
 
 impl NArgs for crate::legacy::langs::PhpCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
@@ -407,29 +407,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn python_no_functions_and_closures() {
-        check_metrics::<PythonParser>("a = 42", "foo.py", |metric| {
-            // 0 functions + 0 closures
-            insta::assert_json_snapshot!(
-                metric.nargs,
-                @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 0.0,
-                      "average_functions": 0.0,
-                      "average_closures": 0.0,
-                      "total": 0.0,
-                      "average": 0.0,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
     fn rust_no_functions_and_closures() {
         check_metrics::<RustParser>("let a = 42;", "foo.rs", |metric| {
             // 0 functions + 0 closures
@@ -450,35 +427,6 @@ mod tests {
                     }"###
             );
         });
-    }
-
-    #[test]
-    fn python_single_function() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a:
-                     return a",
-            "foo.py",
-            |metric| {
-                // 1 function
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 2.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.0,
-                      "average_closures": 0.0,
-                      "total": 2.0,
-                      "average": 2.0,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
     }
 
     #[test]
@@ -535,29 +483,6 @@ mod tests {
     }
 
     #[test]
-    fn python_single_lambda() {
-        check_metrics::<PythonParser>("bar = lambda a: True", "foo.py", |metric| {
-            // 1 lambda
-            insta::assert_json_snapshot!(
-                metric.nargs,
-                @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 1.0,
-                      "average_functions": 0.0,
-                      "average_closures": 1.0,
-                      "total": 1.0,
-                      "average": 1.0,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 1.0,
-                      "closures_max": 1.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
     fn rust_single_closure() {
         check_metrics::<RustParser>("let bar = |i: i32| -> i32 { i + 1 };", "foo.rs", |metric| {
             // 1 lambda
@@ -578,67 +503,6 @@ mod tests {
                     }"###
             );
         });
-    }
-
-    #[test]
-    fn python_functions() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a:
-                     return a
-            def f(a, b):
-                 if b:
-                     return b",
-            "foo.py",
-            |metric| {
-                // 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 4.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.0,
-                      "average_closures": 0.0,
-                      "total": 4.0,
-                      "average": 2.0,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a:
-                     return a
-            def f(a, b, c):
-                 if b:
-                     return b",
-            "foo.py",
-            |metric| {
-                // 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 5.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.5,
-                      "average_closures": 0.0,
-                      "total": 5.0,
-                      "average": 2.5,
-                      "functions_min": 0.0,
-                      "functions_max": 3.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
     }
 
     #[test]
@@ -704,38 +568,6 @@ mod tests {
                       "functions_max": 3.0,
                       "closures_min": 0.0,
                       "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_nested_functions() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 def foo(a):
-                     if a:
-                         return 1
-                 bar = lambda a: lambda b: b or True or True
-                 return bar(foo(a))(a)",
-            "foo.py",
-            |metric| {
-                // 2 functions + 2 lambdas = 4
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 3.0,
-                      "total_closures": 2.0,
-                      "average_functions": 1.5,
-                      "average_closures": 1.0,
-                      "total": 5.0,
-                      "average": 1.25,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 2.0
                     }"###
                 );
             },

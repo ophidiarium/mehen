@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Python, Ruby, Rust};
+use crate::legacy::languages::{Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -292,40 +292,6 @@ fn record_method(stats: &mut Stats, container: SpaceKind, is_public: bool) {
     };
 }
 
-/// Returns whether the given Python method is considered public. Python uses a
-/// leading-underscore convention: names starting with `_` are non-public
-/// (double-underscore `__name` is name-mangled and also private). Dunder
-/// methods like `__init__` are conventionally public.
-fn python_method_is_public(name: &str) -> bool {
-    if name.starts_with("__") && name.ends_with("__") {
-        return true;
-    }
-    !name.starts_with('_')
-}
-
-impl Npm for PythonCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        if node.kind_id() != Python::FunctionDefinition {
-            return;
-        }
-        // The function must be a direct member of a class body:
-        //   class_definition -> block -> function_definition
-        let inside_class = node
-            .parent()
-            .and_then(|p| p.parent())
-            .is_some_and(|grand| grand.kind_id() == Python::ClassDefinition);
-        if !inside_class {
-            return;
-        }
-        let is_public = node
-            .child_by_field_name("name")
-            .and_then(|name| std::str::from_utf8(&code[name.start_byte()..name.end_byte()]).ok())
-            .map(python_method_is_public)
-            .unwrap_or(true);
-        record_method(stats, SpaceKind::Class, is_public);
-    }
-}
-
 impl Npm for RustCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         match node.kind_id().into() {
@@ -592,7 +558,7 @@ impl Npm for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -622,37 +588,6 @@ mod tests {
                   "total": 1.0,
                   "total_methods": 3.0,
                   "average": 0.3333333333333333
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_npm_counts_public_and_private_methods() {
-        check_metrics::<PythonParser>(
-            "class C:
-                 def a(self): pass
-                 def _b(self): pass
-                 def __c(self): pass
-                 def __init__(self): pass",
-            "foo.py",
-            |metric| {
-                // public: a, __init__; non-public: _b, __c
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 0.0,
-                  "class_methods": 4.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.5,
-                  "interfaces_average": null,
-                  "total": 2.0,
-                  "total_methods": 4.0,
-                  "average": 0.5
                 }
                 "#
                 );

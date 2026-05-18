@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 
@@ -188,15 +188,7 @@ where
     }
 }
 
-implement_metric_trait!(
-    [Nom],
-    PythonCode,
-    RustCode,
-    GoCode,
-    RubyCode,
-    KotlinCode,
-    CCode
-);
+implement_metric_trait!([Nom], RustCode, GoCode, RubyCode, KotlinCode, CCode);
 
 impl Nom for crate::legacy::langs::PhpCode {}
 
@@ -206,41 +198,8 @@ impl Nom for crate::legacy::langs::MarkdownCode {}
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn python_nom() {
-        check_metrics::<PythonParser>(
-            "def a():
-                 pass
-             def b():
-                 pass
-             def c():
-                 pass
-             x = lambda a : a + 42",
-            "foo.py",
-            |metric| {
-                // Number of spaces = 4
-                insta::assert_json_snapshot!(
-                    metric.nom,
-                    @r###"
-                    {
-                      "functions": 3.0,
-                      "closures": 1.0,
-                      "functions_average": 0.75,
-                      "closures_average": 0.25,
-                      "total": 4.0,
-                      "average": 1.0,
-                      "functions_min": 0.0,
-                      "functions_max": 1.0,
-                      "closures_min": 0.0,
-                      "closures_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn rust_nom() {

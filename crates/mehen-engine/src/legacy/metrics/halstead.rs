@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -282,12 +282,6 @@ fn compute_halstead<'a, T: Getter>(
     }
 }
 
-impl Halstead for PythonCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for RustCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -334,48 +328,8 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn python_operators_and_operands() {
-        check_metrics::<PythonParser>(
-            "def foo():
-                 def bar():
-                     def toto():
-                        a = 1 + 1
-                     b = 2 + a
-                 c = 3 + 3",
-            "foo.py",
-            |metric| {
-                // unique operators: def, =, +
-                // operators: def, def, def, =, =, =, +, +, +
-                // unique operands: foo, bar, toto, a, b, c, 1, 2, 3
-                // operands: foo, bar, toto, a, b, c, 1, 1, 2, a, 3, 3
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r#"
-                {
-                  "n1": 5.0,
-                  "N1": 15.0,
-                  "n2": 9.0,
-                  "N2": 12.0,
-                  "length": 27.0,
-                  "estimated_program_length": 40.13896548741762,
-                  "purity_ratio": 1.4866283513858378,
-                  "vocabulary": 14.0,
-                  "volume": 102.79858289555531,
-                  "difficulty": 3.3333333333333335,
-                  "level": 0.3,
-                  "effort": 342.6619429851844,
-                  "time": 19.03677461028802,
-                  "bugs": 0.01632259960095138
-                }
-                "#
-                );
-            },
-        );
-    }
 
     #[test]
     fn rust_operators_and_operands() {
@@ -408,65 +362,6 @@ mod tests {
                       "time": 74.7320581068779,
                       "bugs": 0.040619232256751396
                     }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_wrong_operators() {
-        check_metrics::<PythonParser>("()[]{}", "foo.py", |metric| {
-            insta::assert_json_snapshot!(
-                metric.halstead,
-                @r#"
-            {
-              "n1": 3.0,
-              "N1": 3.0,
-              "n2": 0.0,
-              "N2": 0.0,
-              "length": 3.0,
-              "estimated_program_length": null,
-              "purity_ratio": null,
-              "vocabulary": 3.0,
-              "volume": 4.754887502163468,
-              "difficulty": null,
-              "level": null,
-              "effort": null,
-              "time": null,
-              "bugs": null
-            }
-            "#
-            );
-        });
-    }
-
-    #[test]
-    fn python_check_metrics() {
-        check_metrics::<PythonParser>(
-            "def f():
-                 pass",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r#"
-                {
-                  "n1": 4.0,
-                  "N1": 4.0,
-                  "n2": 1.0,
-                  "N2": 1.0,
-                  "length": 5.0,
-                  "estimated_program_length": 8.0,
-                  "purity_ratio": 1.6,
-                  "vocabulary": 5.0,
-                  "volume": 11.60964047443681,
-                  "difficulty": 2.0,
-                  "level": 0.5,
-                  "effort": 23.21928094887362,
-                  "time": 1.289960052715201,
-                  "bugs": 0.002712967490108627
-                }
-                "#
                 );
             },
         );

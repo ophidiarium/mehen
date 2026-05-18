@@ -48,8 +48,9 @@ walkdir = { workspace = true }
 # tree-sitter grammars used by the legacy analyzer pipeline.
 # `tree-sitter-typescript` was removed in Phase 7 — TS / TSX / JS / JSX
 # now flow through `mehen-typescript` (Oxc) per plan §8.2.
+# `tree-sitter-python` was removed in Phase 6 — Python now flows through
+# `mehen-python` (Ruff) per plan §6.2.
 tree-sitter = { workspace = true }
-tree-sitter-python = { workspace = true }
 tree-sitter-rust = { workspace = true }
 tree-sitter-go = { workspace = true }
 tree-sitter-ruby = { workspace = true }
@@ -103,7 +104,6 @@ lang-powershell = ["dep:mehen-powershell"]
 ignored = [
     "num-traits",
     "tree-sitter-go",
-    "tree-sitter-python",
     "tree-sitter-rust",
     "tree-sitter-ruby",
     "tree-sitter-kotlin",

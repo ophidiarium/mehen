@@ -4,7 +4,7 @@ use tree_sitter::Language;
 
 #[cfg(feature = "markdown")]
 use crate::legacy::languages::Markdown;
-use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Ruby, Rust};
 use crate::legacy::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -32,16 +32,6 @@ mk_langs!(
         tree_sitter_rust,
         [rs],
         ["rust"]
-    ),
-    (
-        Python,
-        "The `Python` language",
-        "python",
-        PythonCode,
-        PythonParser,
-        tree_sitter_python,
-        [py],
-        ["python"]
     ),
     (
         Go,
@@ -124,16 +114,6 @@ mk_langs!(
         tree_sitter_rust,
         [rs],
         ["rust"]
-    ),
-    (
-        Python,
-        "The `Python` language",
-        "python",
-        PythonCode,
-        PythonParser,
-        tree_sitter_python,
-        [py],
-        ["python"]
     ),
     (
         Go,

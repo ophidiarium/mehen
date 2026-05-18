@@ -1,12 +1,11 @@
 use crate::legacy::checker::Checker;
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode, RustCode};
 
 /// Marker trait for language implementations used by `Parser`.
 pub(crate) trait Alterator: Checker {}
 
-impl Alterator for PythonCode {}
 impl Alterator for GoCode {}
 impl Alterator for RustCode {}
 impl Alterator for RubyCode {}

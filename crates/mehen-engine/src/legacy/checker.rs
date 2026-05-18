@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Ruby, Rust};
 use crate::legacy::node::Node;
 
 pub(crate) trait Checker {
@@ -10,34 +10,6 @@ pub(crate) trait Checker {
     fn is_closure(_: &Node) -> bool;
     fn is_non_arg(_: &Node) -> bool;
     fn is_else_if(_: &Node) -> bool;
-}
-
-impl Checker for PythonCode {
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Python::Module | Python::FunctionDefinition | Python::ClassDefinition
-        )
-    }
-
-    fn is_func(node: &Node) -> bool {
-        node.kind_id() == Python::FunctionDefinition
-    }
-
-    fn is_closure(node: &Node) -> bool {
-        node.kind_id() == Python::Lambda
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Python::LPAREN | Python::COMMA | Python::RPAREN
-        )
-    }
-
-    fn is_else_if(_: &Node) -> bool {
-        false
-    }
 }
 
 impl Checker for RustCode {

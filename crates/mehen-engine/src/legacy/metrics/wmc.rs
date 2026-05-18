@@ -3,9 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, LANG, PhpCode, PythonCode, RubyCode, RustCode,
-};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, PhpCode, RubyCode, RustCode};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -189,7 +187,7 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(PythonCode, RustCode, RubyCode, KotlinCode, PhpCode);
+impl_wmc!(RustCode, RubyCode, KotlinCode, PhpCode);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -210,34 +208,8 @@ impl Wmc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn python_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<PythonParser>(
-            "class C:
-                 def a(self, x):
-                     if x:
-                         return 1
-                     return 0
-                 def b(self, x):
-                     return x",
-            "foo.py",
-            |metric| {
-                // class wmc = method_a cyclomatic (2) + method_b cyclomatic (1) = 3
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn rust_wmc_impl_sums_function_cyclomatics() {
@@ -259,28 +231,6 @@ mod tests {
                       "classes": 3.0,
                       "interfaces": 0.0,
                       "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_wmc_empty_class_still_emitted() {
-        // An empty class has no methods, so the sum is zero. `wmc` must
-        // still be reported at the unit because the file *is* class-oriented.
-        check_metrics::<PythonParser>(
-            "class C:
-                 pass",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 0.0,
-                      "interfaces": 0.0,
-                      "total": 0.0
                     }"###
                 );
             },

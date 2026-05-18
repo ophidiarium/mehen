@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
@@ -109,26 +109,6 @@ where
     Self: Checker,
 {
     fn compute(node: &Node, stats: &mut Stats);
-}
-
-impl Cyclomatic for PythonCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Python::*;
-
-        match node.kind_id().into() {
-            If | Elif | For | While | Except | And | Or => {
-                stats.cyclomatic += 1.;
-            }
-            Else if node.has_ancestors(
-                |node| matches!(node.kind_id().into(), ForStatement | WhileStatement),
-                |node| node.kind_id() == ElseClause,
-            ) =>
-            {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
 }
 
 impl Cyclomatic for RustCode {
@@ -285,9 +265,7 @@ impl Cyclomatic for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        GoParser, KotlinParser, PhpParser, PythonParser, RubyParser, RustParser,
-    };
+    use crate::legacy::langs::{GoParser, KotlinParser, PhpParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -314,55 +292,6 @@ mod tests {
                       "average": 3.0,
                       "min": 1.0,
                       "max": 5.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_simple_function() {
-        check_metrics::<PythonParser>(
-            "def f(a, b): # +2 (+1 unit space)
-                if a and b:  # +2 (+1 and)
-                   return 1
-                if c and d: # +2 (+1 and)
-                   return 1",
-            "foo.py",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 6.0,
-                      "average": 3.0,
-                      "min": 1.0,
-                      "max": 5.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_1_level_nesting() {
-        check_metrics::<PythonParser>(
-            "def f(a, b): # +2 (+1 unit space)
-                if a:  # +1
-                    for i in range(b):  # +1
-                        return 1",
-            "foo.py",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 2.0,
-                      "min": 1.0,
-                      "max": 3.0
                     }"###
                 );
             },

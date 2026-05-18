@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Python, Ruby, Rust};
+use crate::legacy::languages::{Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -249,66 +249,6 @@ where
     Self: Checker,
 {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats);
-}
-
-/// Whether a Python attribute name should be considered public. Dunder names
-/// (e.g. `__init__`) are public by convention; single or double leading
-/// underscore signals non-public.
-fn python_attr_is_public(name: &str) -> bool {
-    if name.starts_with("__") && name.ends_with("__") {
-        return true;
-    }
-    !name.starts_with('_')
-}
-
-impl Npa for PythonCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        if !matches!(
-            stats.space_kind,
-            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
-        ) {
-            return;
-        }
-        // Python class attributes are assignments at the top level of a class
-        // body: `name: T = value`, `name = value`.
-        let parent = match node.parent() {
-            Some(p) => p,
-            None => return,
-        };
-        // Direct child of class body: parent is the `block`, grand-parent is
-        // the class definition.
-        let grand = match parent.parent() {
-            Some(g) => g,
-            None => return,
-        };
-        if grand.kind_id() != Python::ClassDefinition {
-            return;
-        }
-        // The attribute is an `expression_statement` wrapping an `assignment`
-        // whose left side is a bare identifier.
-        if node.kind_id() != Python::ExpressionStatement {
-            return;
-        }
-        let inner = match node.child(0) {
-            Some(c) => c,
-            None => return,
-        };
-        if inner.kind_id() != Python::Assignment {
-            return;
-        }
-        let left = match inner.child_by_field_name("left") {
-            Some(l) => l,
-            None => return,
-        };
-        if left.kind_id() != Python::Identifier {
-            return;
-        }
-        let text = match std::str::from_utf8(&code[left.start_byte()..left.end_byte()]) {
-            Ok(t) => t,
-            Err(_) => return,
-        };
-        stats.record_attribute(SpaceKind::Class, python_attr_is_public(text));
-    }
 }
 
 impl Npa for RustCode {
@@ -592,7 +532,7 @@ impl Npa for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
+    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -696,69 +636,6 @@ mod tests {
                   "average": 1.0
                 }
                 "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_npa_counts_class_body_assignments() {
-        check_metrics::<PythonParser>(
-            "class C:
-                 a = 1
-                 _b = 2
-                 __c = 3",
-            "foo.py",
-            |metric| {
-                // public: a. non-public: _b, __c.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 1.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 3.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.3333333333333333,
-                      "interfaces_average": null,
-                      "total": 1.0,
-                      "total_attributes": 3.0,
-                      "average": 0.3333333333333333
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_npa_counts_annotated_class_attributes() {
-        // PEP-526 class annotations (`x: T = val`, `x: T`) parse as
-        // expression_statement > assignment, so the existing detector should
-        // already cover them. Lock that in: both annotated-with-default and
-        // annotated-only class attributes count as attributes.
-        check_metrics::<PythonParser>(
-            "class C:
-                 a: int = 1
-                 b: int
-                 _c: str = 'x'
-                 __d: bool",
-            "foo.py",
-            |metric| {
-                // 4 attributes total. Public: a, b. Non-public: _c, __d.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 2.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 4.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.5,
-                      "interfaces_average": null,
-                      "total": 2.0,
-                      "total_attributes": 4.0,
-                      "average": 0.5
-                    }"###
                 );
             },
         );

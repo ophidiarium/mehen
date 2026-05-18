@@ -7,7 +7,7 @@ use super::halstead;
 use super::loc;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
 use crate::legacy::macros::implement_metric_trait;
 
 /// The `Mi` metric.
@@ -118,15 +118,7 @@ where
     }
 }
 
-implement_metric_trait!(
-    [Mi],
-    PythonCode,
-    RustCode,
-    GoCode,
-    RubyCode,
-    KotlinCode,
-    CCode
-);
+implement_metric_trait!([Mi], RustCode, GoCode, RubyCode, KotlinCode, CCode);
 
 impl Mi for crate::legacy::langs::PhpCode {}
 
@@ -141,34 +133,5 @@ impl Mi for crate::legacy::langs::MarkdownCode {
         _halstead: &halstead::Stats,
         _stats: &mut Stats,
     ) {
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::PythonParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn check_mi_metrics() {
-        // This test checks that MI metric is computed correctly, so it verifies
-        // the calculations are correct, the adopted source code is irrelevant
-        check_metrics::<PythonParser>(
-            "def f():
-                 pass",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.mi,
-                    @r#"
-                {
-                  "mi_original": 146.56146936754593,
-                  "mi_sei": 135.94629276875443,
-                  "mi_visual_studio": 85.70846161844791
-                }
-                "#
-                );
-            },
-        );
     }
 }

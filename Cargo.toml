@@ -72,7 +72,6 @@ walkdir = "^2.3"
 gix = { version = "^0.83", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
 
 tree-sitter = "=0.26.8"
-tree-sitter-python = "=0.25.0"
 
 # Oxc — replaces tree-sitter-typescript for the JS/TS/JSX/TSX analyzer
 # (`crates/mehen-typescript`). Pinned to the same patch revision so all
@@ -83,6 +82,17 @@ oxc_ast_visit = "=0.131.0"
 oxc_parser = "=0.131.0"
 oxc_span = "=0.131.0"
 oxc_syntax = "=0.131.0"
+
+# Ruff — replaces tree-sitter-python for the Python analyzer
+# (`crates/mehen-python`). Per the rewrite plan §6.2, Ruff's parser /
+# AST / text-size crates are unpublished upstream (`publish = false` in
+# their Cargo.toml), so we pin a tagged git revision. All Ruff crates
+# must stay in lockstep so derive macros and AST types align across the
+# workspace; bump them as a group through `cargo xtask update-ruff`
+# once that helper lands.
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
+ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
 
 tree-sitter-rust = "=0.24.2"
 tree-sitter-go = "=0.25.0"

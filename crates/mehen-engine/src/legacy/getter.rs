@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Kotlin, Php, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Php, Ruby, Rust};
 use crate::legacy::metrics::halstead::HalsteadType;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
@@ -23,44 +23,6 @@ pub(crate) trait Getter {
 
     fn get_op_type(_node: &Node) -> HalsteadType {
         HalsteadType::Unknown
-    }
-}
-
-impl Getter for PythonCode {
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        match node.kind_id().into() {
-            Python::FunctionDefinition => SpaceKind::Function,
-            Python::ClassDefinition => SpaceKind::Class,
-            Python::Module => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use Python::*;
-
-        match node.kind_id().into() {
-            Import | DOT | From | COMMA | As | STAR | GTGT | Assert | COLONEQ | Return | Def
-            | Del | Raise | Pass | Break | Continue | If | Elif | Else | Async | For | In
-            | While | Try | Except | Finally | With | DASHGT | EQ | Global | Exec | AT | Not
-            | And | Or | PLUS | DASH | SLASH | PERCENT | SLASHSLASH | STARSTAR | PIPE | AMP
-            | CARET | LTLT | TILDE | LT | LTEQ | EQEQ | BANGEQ | GTEQ | GT | LTGT | Is | PLUSEQ
-            | DASHEQ | STAREQ | SLASHEQ | ATEQ | SLASHSLASHEQ | PERCENTEQ | STARSTAREQ | GTGTEQ
-            | LTLTEQ | AMPEQ | CARETEQ | PIPEEQ | Yield | Await | Await2 | Print | LPAREN
-            | LBRACK | LBRACE | COLON | SEMI => HalsteadType::Operator,
-            Identifier | Integer | Float | True | False | None => HalsteadType::Operand,
-            String => {
-                let mut operator = HalsteadType::Unknown;
-                // check if we've a documentation string or a multiline comment
-                if let Some(parent) = node.parent()
-                    && (parent.kind_id() != ExpressionStatement || parent.child_count() != 1)
-                {
-                    operator = HalsteadType::Operand;
-                };
-                operator
-            }
-            _ => HalsteadType::Unknown,
-        }
     }
 }
 

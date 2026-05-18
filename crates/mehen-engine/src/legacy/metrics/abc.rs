@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{
     is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
@@ -267,39 +267,6 @@ impl Abc for RustCode {
     }
 }
 
-impl Abc for PythonCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Python::*;
-
-        match node.kind_id().into() {
-            // A: assignment and augmented assignment (`x = ...`, `x += ...`).
-            Assignment | AugmentedAssignment => {
-                stats.assignments += 1.;
-            }
-            // B: function/method calls.
-            Call => {
-                stats.branches += 1.;
-            }
-            // C: conditional constructs, comparison and boolean operators.
-            IfStatement
-            | ElifClause
-            | ElseClause
-            | ConditionalExpression
-            | MatchStatement
-            | CaseClause
-            | ForStatement
-            | WhileStatement
-            | TryStatement
-            | ExceptClause
-            | ComparisonOperator
-            | BooleanOperator => {
-                stats.conditions += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
 #[inline(always)]
 fn go_expression_list_len(node: &Node) -> f64 {
     node.children()
@@ -435,7 +402,7 @@ impl Abc for CCode {
             // C: structural conditionals, switch cases, comparison and
             // short-circuit boolean operators. `else_clause` also contributes
             // per Fitzpatrick's original ABC specification, matching how
-            // Python / TypeScript / Tsx treat `ElseClause` in this crate.
+            // TypeScript / Tsx treat `ElseClause` in this crate.
             IfStatement
             | ElseClause
             | CaseStatement
@@ -540,9 +507,7 @@ impl Abc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser,
-    };
+    use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -797,42 +762,6 @@ mod tests {
     }
 
     #[test]
-    fn python_abc_basic() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-    x = a          # +1 A
-    x += b         # +1 A
-    log(x)         # +1 B
-    if x > b:      # +1 C (if) + +1 C (>)
-        return x
-    return b
-",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.abc,
-                    @r###"
-                    {
-                      "assignments": 2.0,
-                      "branches": 1.0,
-                      "conditions": 2.0,
-                      "magnitude": 3.0,
-                      "assignments_average": 1.0,
-                      "branches_average": 0.5,
-                      "conditions_average": 1.0,
-                      "assignments_min": 0.0,
-                      "assignments_max": 2.0,
-                      "branches_min": 0.0,
-                      "branches_max": 1.0,
-                      "conditions_min": 0.0,
-                      "conditions_max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn ruby_abc_basic() {
         check_metrics::<RubyParser>(
             "def f(a, b)
@@ -889,7 +818,7 @@ mod tests {
         // to the `C` (Conditions) component. tree-sitter-c exposes it as a
         // dedicated `else_clause` named node, so an `if (x > 0) {...} else
         // {...}` should yield: +1 if + 1 `>` comparison + 1 else = 3
-        // conditions. Matches how Python / TypeScript / Tsx treat
+        // conditions. Matches how TypeScript / Tsx treat
         // `ElseClause` in this file.
         check_metrics::<CParser>(
             "int f(int x) {

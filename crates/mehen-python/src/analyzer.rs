@@ -1,30 +1,19 @@
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
-    Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
+    Result, SourceFile, SourceSpan, byte_offset_clamped,
 };
-use mehen_tree_sitter::{
-    LanguageRules, LocFact, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, walk,
-};
-use tree_sitter::Node;
+use mehen_metrics::MetricTreeBuilder;
+use ruff_python_parser::parse_module;
 
-struct PythonRules;
+use crate::walker::walk_module;
 
-impl LanguageRules for PythonRules {
-    fn scope_for(&self, node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
-        python_scope(node, source)
-    }
-
-    fn classify(&self, node: &Node<'_>) -> NodeFacts {
-        python_facts(node)
-    }
-}
-
-/// Tree-sitter-backed Python analyzer.
+/// Ruff-backed Python analyzer (Phase 6, see `docs/python-ruff-spec.md`).
 ///
-/// Phase 3 implementation: drives the shared walker from
-/// `mehen-tree-sitter` against tree-sitter-python with Python-specific
-/// decision/operator/operand/exit/scope rules. Phase 6 replaces the
-/// tree-sitter backend with Ruff while keeping the same outer interface.
+/// Replaces the tree-sitter-python analyzer with `ruff_python_parser` +
+/// `ruff_python_ast`. The Ruff AST is richer than the tree-sitter CST in
+/// ways that change a small number of metrics — every drift is justified
+/// from the metric definition rather than from a desire to mirror the
+/// legacy walker. See the spec doc for the full ledger.
 pub struct PythonAnalyzer;
 
 impl PythonAnalyzer {
@@ -45,161 +34,54 @@ impl LanguageAnalyzer for PythonAnalyzer {
     }
 
     fn backend(&self) -> AnalysisBackend {
-        AnalysisBackend::TreeSitter
+        AnalysisBackend::PythonRuff
     }
 
     fn analyze(&self, source: &SourceFile, _config: &AnalysisConfig) -> Result<LanguageAnalysis> {
-        let parser = match TreeSitterParser::new(
-            tree_sitter_python::LANGUAGE.into(),
-            source.text.clone().into_bytes(),
-        ) {
+        let parsed = match parse_module(source.text.as_str()) {
             Ok(p) => p,
-            Err(e) => {
+            Err(err) => {
                 let span = SourceSpan {
                     start_byte: 0,
                     end_byte: byte_offset_clamped(source.text.len()),
                     start_line: 1,
                     end_line: source.line_index.line_count(),
                 };
+                let mut tree = MetricTreeBuilder::new(span);
+                let _ = tree.metrics_mut();
                 return Ok(LanguageAnalysis {
                     language: Language::Python,
-                    backend: AnalysisBackend::TreeSitter,
+                    backend: AnalysisBackend::PythonRuff,
                     diagnostics: vec![ParseDiagnostic::fatal(
                         "python.parse_error",
-                        format!("tree-sitter-python failed: {e}"),
+                        format!("ruff_python_parser failed: {err}"),
                     )],
-                    root: empty_space(span),
+                    root: tree.finish(),
                     contributions: Vec::new(),
                 });
             }
         };
 
-        let result = walk(
-            parser.root(),
-            parser.source(),
-            &source.line_index,
-            &PythonRules,
-        );
+        let root = walk_module(&parsed, &source.text, &source.line_index);
+        let diagnostics = parsed
+            .errors()
+            .iter()
+            .map(|e| ParseDiagnostic::warning("python.syntax_error", format!("{}", e)))
+            .collect();
         Ok(LanguageAnalysis {
             language: Language::Python,
-            backend: AnalysisBackend::TreeSitter,
-            diagnostics: Vec::new(),
-            root: result.root,
+            backend: AnalysisBackend::PythonRuff,
+            diagnostics,
+            root,
             contributions: Vec::new(),
         })
-    }
-}
-
-/// Whether `node` opens a Python space and what kind.
-pub(crate) fn python_scope(node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
-    let kind = node.kind();
-    let opened = match kind {
-        "function_definition" => ScopeOpen::Open {
-            kind: SpaceKind::Function,
-            name: node
-                .child_by_field_name("name")
-                .map(|n| mehen_tree_sitter::text_of(&n, source).to_string()),
-        },
-        "class_definition" => ScopeOpen::Open {
-            kind: SpaceKind::Class,
-            name: node
-                .child_by_field_name("name")
-                .map(|n| mehen_tree_sitter::text_of(&n, source).to_string()),
-        },
-        "lambda" => ScopeOpen::Open {
-            kind: SpaceKind::Closure,
-            name: None,
-        },
-        _ => return None,
-    };
-    Some(opened)
-}
-
-/// Python rules: which AST nodes count toward which metrics.
-///
-/// Mirrors the pre-1.0 `Cyclomatic for PythonCode`
-/// (`src/metrics/cyclomatic.rs:117-135`). Phase 3+ adds richer cognitive
-/// rules (nesting penalties, binary-sequence handling) when the pre-1.0
-/// `Cognitive for PythonCode` is fully ported.
-pub(crate) fn python_facts(node: &Node<'_>) -> NodeFacts {
-    let kind = node.kind();
-    let cyclomatic_decision = matches!(
-        kind,
-        "if_statement"
-            | "elif_clause"
-            | "for_statement"
-            | "while_statement"
-            | "except_clause"
-            | "and"
-            | "or"
-            | "boolean_operator"
-            | "conditional_expression"
-    );
-    let nexit = matches!(kind, "return_statement" | "raise_statement");
-    let halstead_operator = matches!(
-        kind,
-        "+" | "-"
-            | "*"
-            | "/"
-            | "%"
-            | "**"
-            | "//"
-            | "="
-            | "+="
-            | "-="
-            | "*="
-            | "/="
-            | "%="
-            | "=="
-            | "!="
-            | "<"
-            | ">"
-            | "<="
-            | ">="
-            | "and"
-            | "or"
-            | "not"
-            | "if"
-            | "elif"
-            | "else"
-            | "for"
-            | "while"
-            | "return"
-            | "in"
-            | "is"
-            | "lambda"
-    );
-    let halstead_operand = matches!(
-        kind,
-        "identifier" | "integer" | "float" | "string" | "true" | "false" | "none"
-    );
-    let abc_assignment = matches!(kind, "assignment" | "augmented_assignment");
-    let abc_branch = matches!(kind, "call");
-    let abc_condition = matches!(
-        kind,
-        "comparison_operator" | "boolean_operator" | "not_operator"
-    );
-    NodeFacts {
-        cyclomatic_decision,
-        cognitive: if cyclomatic_decision {
-            mehen_tree_sitter::CognitiveFact::IncreaseNesting
-        } else {
-            mehen_tree_sitter::CognitiveFact::None
-        },
-        halstead_operator,
-        halstead_operand,
-        nexit,
-        abc_branch,
-        abc_condition,
-        abc_assignment,
-        loc: LocFact::Code,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile};
+    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile, SpaceKind};
     use mehen_metrics::keys;
 
     fn analyze(source: &str) -> LanguageAnalysis {
@@ -235,7 +117,7 @@ mod tests {
 
     #[test]
     fn cyclomatic_counts_decision_points() {
-        // 1 (base) + if + elif + or = 4
+        // Function: 1 (base) + if + or + elif = 4
         let a =
             analyze("def f(x):\n    if x or x:\n        return 1\n    elif x:\n        return 2\n");
         let func = &a.root.spaces[0];

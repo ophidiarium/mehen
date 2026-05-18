@@ -64,7 +64,9 @@ fn metrics_emits_json_for_python_file() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("metrics output must be valid JSON");
     assert_eq!(parsed["language"].as_str(), Some("python"));
-    assert_eq!(parsed["analysis_backend"].as_str(), Some("tree-sitter"));
+    // Phase 6 (Ruff migration): Python now reports the `python-ruff`
+    // backend label. See `docs/python-ruff-spec.md`.
+    assert_eq!(parsed["analysis_backend"].as_str(), Some("python-ruff"));
     let spaces = parsed["root"]["spaces"]
         .as_array()
         .expect("root must have spaces array");

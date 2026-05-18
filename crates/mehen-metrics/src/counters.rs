@@ -8,6 +8,13 @@ use serde::Serialize;
 /// totals across closed spaces; `*_min` / `*_max` are bounds. Averages
 /// divide by the function / closure counts (NOM totals), set via
 /// `finalize_average`.
+///
+/// `is_function` / `is_closure` mark whether this space *is itself* a
+/// function or closure. Only such spaces fold their own per-space
+/// `fn_nargs` / `closure_nargs` into the rolled-up min/max during
+/// `finalize_minmax`. Without this discriminator, the unit space's
+/// always-zero `fn_nargs` would dilute any merged child's `_min` to
+/// 0 — see `closures_min` in the legacy `python_single_lambda` test.
 #[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct NargsStats {
     pub fn_nargs: u32,
@@ -21,6 +28,19 @@ pub struct NargsStats {
     pub fn_nargs_average: f64,
     pub closure_nargs_average: f64,
     pub minmax_seen: bool,
+    /// `true` when this space *is* a function (its own
+    /// `fn_nargs` should fold into the rolled-up min/max).
+    pub is_function: bool,
+    /// `true` when this space *is* a closure (its own
+    /// `closure_nargs` should fold into the rolled-up min/max).
+    pub is_closure: bool,
+    /// `true` when any descendant has contributed function nargs to
+    /// this space's rolled-up sum/min/max. Used by `merge` to decide
+    /// whether to seed parent's fn_min from a fresh child or fold it
+    /// into existing parent state.
+    pub merged_function: bool,
+    /// As `merged_function`, for closure nargs.
+    pub merged_closure: bool,
 }
 
 impl NargsStats {
@@ -28,29 +48,46 @@ impl NargsStats {
     /// `Function` space opens.
     pub fn record_function_args(&mut self, count: u32) {
         self.fn_nargs = count;
+        self.is_function = true;
     }
 
     /// Set the closure arg count for this space. Called once when a
     /// `Closure` space opens.
     pub fn record_closure_args(&mut self, count: u32) {
         self.closure_nargs = count;
+        self.is_closure = true;
     }
 
     /// Snapshot the per-space `fn_nargs` / `closure_nargs` into `*_sum`,
-    /// `*_min`, `*_max`. Mirrors the pre-1.0 `compute_minmax`.
+    /// `*_min`, `*_max`. Mirrors the pre-1.0 `compute_minmax` but folds
+    /// only into the dimension matching this space's kind: functions
+    /// fold into `fn_nargs_*`, closures fold into `closure_nargs_*`,
+    /// and the unit / class / enclosing scopes fold into neither
+    /// (their per-space counters are always zero and would only dilute
+    /// merged child bounds).
     pub fn finalize_minmax(&mut self) {
         self.fn_nargs_sum = self.fn_nargs_sum.saturating_add(self.fn_nargs);
         self.closure_nargs_sum = self.closure_nargs_sum.saturating_add(self.closure_nargs);
-        if self.minmax_seen {
-            self.fn_nargs_min = self.fn_nargs_min.min(self.fn_nargs);
-            self.closure_nargs_min = self.closure_nargs_min.min(self.closure_nargs);
-        } else {
-            self.fn_nargs_min = self.fn_nargs;
-            self.closure_nargs_min = self.closure_nargs;
+        if self.is_function {
+            if self.merged_function {
+                self.fn_nargs_min = self.fn_nargs_min.min(self.fn_nargs);
+            } else {
+                self.fn_nargs_min = self.fn_nargs;
+                self.merged_function = true;
+            }
+            self.fn_nargs_max = self.fn_nargs_max.max(self.fn_nargs);
             self.minmax_seen = true;
         }
-        self.fn_nargs_max = self.fn_nargs_max.max(self.fn_nargs);
-        self.closure_nargs_max = self.closure_nargs_max.max(self.closure_nargs);
+        if self.is_closure {
+            if self.merged_closure {
+                self.closure_nargs_min = self.closure_nargs_min.min(self.closure_nargs);
+            } else {
+                self.closure_nargs_min = self.closure_nargs;
+                self.merged_closure = true;
+            }
+            self.closure_nargs_max = self.closure_nargs_max.max(self.closure_nargs);
+            self.minmax_seen = true;
+        }
     }
 
     /// Compute averages once `*_sum` has been merged across all spaces.
@@ -69,19 +106,36 @@ impl NargsStats {
         self.closure_nargs_sum = self
             .closure_nargs_sum
             .saturating_add(other.closure_nargs_sum);
-        if !other.minmax_seen {
-            return;
-        }
-        if self.minmax_seen {
-            self.fn_nargs_min = self.fn_nargs_min.min(other.fn_nargs_min);
-            self.closure_nargs_min = self.closure_nargs_min.min(other.closure_nargs_min);
-        } else {
-            self.fn_nargs_min = other.fn_nargs_min;
-            self.closure_nargs_min = other.closure_nargs_min;
+        // Each dimension is only folded when the other side actually
+        // contributed to it. `merged_function` / `merged_closure`
+        // track whether the parent has already absorbed a value in
+        // that dimension — if so, we fold; otherwise we seed with the
+        // child's value. `is_function` / `is_closure` alone aren't
+        // enough as a gate here: the parent's own per-space
+        // `fn_nargs` / `closure_nargs` is folded later in
+        // `finalize_minmax`, not during merge.
+        let other_has_fn = other.is_function || other.merged_function;
+        let other_has_closure = other.is_closure || other.merged_closure;
+        if other_has_fn {
+            if self.merged_function {
+                self.fn_nargs_min = self.fn_nargs_min.min(other.fn_nargs_min);
+            } else {
+                self.fn_nargs_min = other.fn_nargs_min;
+            }
+            self.fn_nargs_max = self.fn_nargs_max.max(other.fn_nargs_max);
+            self.merged_function = true;
             self.minmax_seen = true;
         }
-        self.fn_nargs_max = self.fn_nargs_max.max(other.fn_nargs_max);
-        self.closure_nargs_max = self.closure_nargs_max.max(other.closure_nargs_max);
+        if other_has_closure {
+            if self.merged_closure {
+                self.closure_nargs_min = self.closure_nargs_min.min(other.closure_nargs_min);
+            } else {
+                self.closure_nargs_min = other.closure_nargs_min;
+            }
+            self.closure_nargs_max = self.closure_nargs_max.max(other.closure_nargs_max);
+            self.merged_closure = true;
+            self.minmax_seen = true;
+        }
     }
 
     pub fn total(&self) -> u32 {

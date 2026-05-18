@@ -5,8 +5,8 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_rust_tail_expression;
 
@@ -565,58 +565,6 @@ fn check_comment_ends_on_code_line(stats: &mut Stats, start_code_line: usize) {
     }
 }
 
-impl Loc for PythonCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Python::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        match node.kind_id().into() {
-            StringStart | StringEnd | StringContent | Block | Module => {}
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-            String => {
-                let parent = node.parent().unwrap();
-                if parent.kind_id() == ExpressionStatement {
-                    add_cloc_lines(stats, start, end);
-                } else if parent.start_row() != start {
-                    check_comment_ends_on_code_line(stats, start);
-                    stats.ploc.lines.insert(start);
-                }
-            }
-            Statement
-            | SimpleStatements
-            | ImportStatement
-            | FutureImportStatement
-            | ImportFromStatement
-            | PrintStatement
-            | AssertStatement
-            | ReturnStatement
-            | DeleteStatement
-            | RaiseStatement
-            | PassStatement
-            | BreakStatement
-            | ContinueStatement
-            | IfStatement
-            | ForStatement
-            | WhileStatement
-            | TryStatement
-            | WithStatement
-            | GlobalStatement
-            | NonlocalStatement
-            | ExecStatement
-            | ExpressionStatement => {
-                stats.lloc.logical_lines += 1;
-            }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
 impl Loc for RustCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use Rust::*;
@@ -920,93 +868,8 @@ impl Loc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser,
-    };
+    use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn python_sloc() {
-        check_metrics::<PythonParser>(
-            "
-
-            a = 42
-
-            ",
-            "foo.py",
-            |metric| {
-                // Spaces: 1
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 1.0,
-                      "ploc": 1.0,
-                      "lloc": 1.0,
-                      "cloc": 0.0,
-                      "blank": 0.0,
-                      "sloc_average": 1.0,
-                      "ploc_average": 1.0,
-                      "lloc_average": 1.0,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 1.0,
-                      "sloc_max": 1.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 1.0,
-                      "ploc_max": 1.0,
-                      "lloc_min": 1.0,
-                      "lloc_max": 1.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_blank() {
-        check_metrics::<PythonParser>(
-            "
-            a = 42
-
-            b = 43
-
-            ",
-            "foo.py",
-            |metric| {
-                // Spaces: 1
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 3.0,
-                      "ploc": 2.0,
-                      "lloc": 2.0,
-                      "cloc": 0.0,
-                      "blank": 1.0,
-                      "sloc_average": 3.0,
-                      "ploc_average": 2.0,
-                      "lloc_average": 2.0,
-                      "cloc_average": 0.0,
-                      "blank_average": 1.0,
-                      "sloc_min": 3.0,
-                      "sloc_max": 3.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 2.0,
-                      "ploc_max": 2.0,
-                      "lloc_min": 2.0,
-                      "lloc_max": 2.0,
-                      "blank_min": 1.0,
-                      "blank_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn rust_blank() {
@@ -1082,149 +945,6 @@ mod tests {
     }
 
     #[test]
-    fn python_no_zero_blank() {
-        // Checks that the blank metric is not equal to 0 when there are some
-        // comments next to code lines.
-        check_metrics::<PythonParser>(
-            "def ConnectToUpdateServer():
-                 pool = 4
-
-                 updateServer = -42
-                 isConnected = False
-                 currTry = 0
-                 numRetries = 10 # Number of IPC connection retries before
-                                 # giving up.
-                 numTries = 20 # Number of IPC connection tries before
-                               # giving up.",
-            "foo.py",
-            |metric| {
-                // Spaces: 2
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 10.0,
-                      "ploc": 7.0,
-                      "lloc": 6.0,
-                      "cloc": 4.0,
-                      "blank": 1.0,
-                      "sloc_average": 5.0,
-                      "ploc_average": 3.5,
-                      "lloc_average": 3.0,
-                      "cloc_average": 2.0,
-                      "blank_average": 0.5,
-                      "sloc_min": 10.0,
-                      "sloc_max": 10.0,
-                      "cloc_min": 4.0,
-                      "cloc_max": 4.0,
-                      "ploc_min": 7.0,
-                      "ploc_max": 7.0,
-                      "lloc_min": 6.0,
-                      "lloc_max": 6.0,
-                      "blank_min": 1.0,
-                      "blank_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_no_blank() {
-        // Checks that the blank metric is equal to 0 when there are no blank
-        // lines and there are comments next to code lines.
-        check_metrics::<PythonParser>(
-            "def ConnectToUpdateServer():
-                 pool = 4
-                 updateServer = -42
-                 isConnected = False
-                 currTry = 0
-                 numRetries = 10 # Number of IPC connection retries before
-                                 # giving up.
-                 numTries = 20 # Number of IPC connection tries before
-                               # giving up.",
-            "foo.py",
-            |metric| {
-                // Spaces: 2
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 9.0,
-                      "ploc": 7.0,
-                      "lloc": 6.0,
-                      "cloc": 4.0,
-                      "blank": 0.0,
-                      "sloc_average": 4.5,
-                      "ploc_average": 3.5,
-                      "lloc_average": 3.0,
-                      "cloc_average": 2.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 9.0,
-                      "sloc_max": 9.0,
-                      "cloc_min": 4.0,
-                      "cloc_max": 4.0,
-                      "ploc_min": 7.0,
-                      "ploc_max": 7.0,
-                      "lloc_min": 6.0,
-                      "lloc_max": 6.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_no_zero_blank_more_comments() {
-        // Checks that the blank metric is not equal to 0 when there are more
-        // comments next to code lines compared to the previous tests.
-        check_metrics::<PythonParser>(
-            "def ConnectToUpdateServer():
-                 pool = 4
-
-                 updateServer = -42
-                 isConnected = False
-                 currTry = 0 # Set this variable to 0
-                 numRetries = 10 # Number of IPC connection retries before
-                                 # giving up.
-                 numTries = 20 # Number of IPC connection tries before
-                               # giving up.",
-            "foo.py",
-            |metric| {
-                // Spaces: 2
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 10.0,
-                      "ploc": 7.0,
-                      "lloc": 6.0,
-                      "cloc": 5.0,
-                      "blank": 1.0,
-                      "sloc_average": 5.0,
-                      "ploc_average": 3.5,
-                      "lloc_average": 3.0,
-                      "cloc_average": 2.5,
-                      "blank_average": 0.5,
-                      "sloc_min": 10.0,
-                      "sloc_max": 10.0,
-                      "cloc_min": 5.0,
-                      "cloc_max": 5.0,
-                      "ploc_min": 7.0,
-                      "ploc_max": 7.0,
-                      "lloc_min": 6.0,
-                      "lloc_max": 6.0,
-                      "blank_min": 1.0,
-                      "blank_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn rust_no_zero_blank() {
         // Checks that the blank metric is not equal to 0 when there are some
         // comments next to code lines.
@@ -1274,47 +994,6 @@ mod tests {
     }
 
     #[test]
-    fn python_cloc() {
-        check_metrics::<PythonParser>(
-            "\"\"\"Block comment
-            Block comment
-            \"\"\"
-            # Line Comment
-            a = 42 # Line Comment",
-            "foo.py",
-            |metric| {
-                // Spaces: 1
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 5.0,
-                      "ploc": 1.0,
-                      "lloc": 2.0,
-                      "cloc": 5.0,
-                      "blank": 0.0,
-                      "sloc_average": 5.0,
-                      "ploc_average": 1.0,
-                      "lloc_average": 2.0,
-                      "cloc_average": 5.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 5.0,
-                      "sloc_max": 5.0,
-                      "cloc_min": 5.0,
-                      "cloc_max": 5.0,
-                      "ploc_min": 1.0,
-                      "ploc_max": 1.0,
-                      "lloc_min": 2.0,
-                      "lloc_max": 2.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn rust_cloc() {
         check_metrics::<RustParser>(
             "/*Block comment
@@ -1346,45 +1025,6 @@ mod tests {
                       "ploc_max": 1.0,
                       "lloc_min": 1.0,
                       "lloc_max": 1.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_lloc() {
-        check_metrics::<PythonParser>(
-            "for x in range(0,42):
-                if x % 2 == 0:
-                    print(x)",
-            "foo.py",
-            |metric| {
-                // Spaces: 1
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 3.0,
-                      "ploc": 3.0,
-                      "lloc": 3.0,
-                      "cloc": 0.0,
-                      "blank": 0.0,
-                      "sloc_average": 3.0,
-                      "ploc_average": 3.0,
-                      "lloc_average": 3.0,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 3.0,
-                      "sloc_max": 3.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 3.0,
-                      "ploc_max": 3.0,
-                      "lloc_min": 3.0,
-                      "lloc_max": 3.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###
@@ -1497,45 +1137,6 @@ mod tests {
             |metric| {
                 assert_eq!(metric.loc.lloc(), 6.0);
                 assert_eq!(metric.loc.lloc_max(), 2.0);
-            },
-        );
-    }
-
-    #[test]
-    fn python_string_on_new_line() {
-        // More lines of the same instruction were counted as blank lines
-        check_metrics::<PythonParser>(
-            "capabilities[\"goog:chromeOptions\"][\"androidPackage\"] = \\
-                \"org.chromium.weblayer.shell\"",
-            "foo.py",
-            |metric| {
-                // Spaces: 1
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 2.0,
-                      "ploc": 2.0,
-                      "lloc": 1.0,
-                      "cloc": 0.0,
-                      "blank": 0.0,
-                      "sloc_average": 2.0,
-                      "ploc_average": 2.0,
-                      "lloc_average": 1.0,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 2.0,
-                      "sloc_max": 2.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 2.0,
-                      "ploc_max": 2.0,
-                      "lloc_min": 1.0,
-                      "lloc_max": 1.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
             },
         );
     }
@@ -1937,100 +1538,6 @@ mod tests {
                       "ploc_max": 1.0,
                       "lloc_min": 0.0,
                       "lloc_max": 1.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_general_loc() {
-        check_metrics::<PythonParser>(
-            "def func(a,
-                      b,
-                      c):
-                 print(a)
-                 print(b)
-                 print(c)",
-            "foo.py",
-            |metric| {
-                // Spaces: 2
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 6.0,
-                      "ploc": 6.0,
-                      "lloc": 3.0,
-                      "cloc": 0.0,
-                      "blank": 0.0,
-                      "sloc_average": 3.0,
-                      "ploc_average": 3.0,
-                      "lloc_average": 1.5,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 6.0,
-                      "sloc_max": 6.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 6.0,
-                      "ploc_max": 6.0,
-                      "lloc_min": 3.0,
-                      "lloc_max": 3.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_real_loc() {
-        check_metrics::<PythonParser>(
-            "def web_socket_transfer_data(request):
-                while True:
-                    line = request.ws_stream.receive_message()
-                    if line is None:
-                        return
-                    code, reason = line.split(' ', 1)
-                    if code is None or reason is None:
-                        return
-                    request.ws_stream.close_connection(int(code), reason)
-                    # close_connection() initiates closing handshake. It validates code
-                    # and reason. If you want to send a broken close frame for a test,
-                    # following code will be useful.
-                    # > data = struct.pack('!H', int(code)) + reason.encode('UTF-8')
-                    # > request.connection.write(stream.create_close_frame(data))
-                    # > # Suppress to re-respond client responding close frame.
-                    # > raise Exception(\"customized server initiated closing handshake\")",
-            "foo.py",
-            |metric| {
-                // Spaces: 2
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 16.0,
-                      "ploc": 9.0,
-                      "lloc": 8.0,
-                      "cloc": 7.0,
-                      "blank": 0.0,
-                      "sloc_average": 8.0,
-                      "ploc_average": 4.5,
-                      "lloc_average": 4.0,
-                      "cloc_average": 3.5,
-                      "blank_average": 0.0,
-                      "sloc_min": 16.0,
-                      "sloc_max": 16.0,
-                      "cloc_min": 7.0,
-                      "cloc_max": 7.0,
-                      "ploc_min": 9.0,
-                      "ploc_max": 9.0,
-                      "lloc_min": 8.0,
-                      "lloc_max": 8.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###

@@ -5,10 +5,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode,
-};
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -237,77 +235,6 @@ fn increase_nesting(stats: &mut Stats, nesting: &mut usize, depth: usize, lambda
     increment(stats);
     *nesting += 1;
     stats.boolean_seq.reset();
-}
-
-impl Cognitive for PythonCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use Python::*;
-
-        // Get nesting of the parent
-        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        match node.kind_id().into() {
-            IfStatement
-            | ForStatement
-            | WhileStatement
-            | TryStatement
-            | ExceptClause
-            | ConditionalExpression => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            ElifClause => {
-                // No nesting increment for them because their cost has already
-                // been paid by the if construct
-                increment_by_one(stats);
-                // Reset the boolean sequence
-                stats.boolean_seq.reset();
-            }
-            ElseClause | FinallyClause => {
-                // No nesting increment for them because their cost has already
-                // been paid by the if construct
-                increment_by_one(stats);
-            }
-            ExpressionList | ExpressionStatement | Tuple => {
-                stats.boolean_seq.reset();
-            }
-            NotOperator => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            BooleanOperator => {
-                if node.count_specific_ancestors::<PythonParser>(
-                    |node| node.kind_id() == BooleanOperator,
-                    |node| node.kind_id() == Lambda,
-                ) == 0
-                {
-                    stats.structural += node.count_specific_ancestors::<PythonParser>(
-                        |node| node.kind_id() == Lambda,
-                        |node| {
-                            matches!(
-                                node.kind_id().into(),
-                                ExpressionList | IfStatement | ForStatement | WhileStatement
-                            )
-                        },
-                    );
-                }
-                compute_booleans::<Python>(node, stats, &And, &Or);
-            }
-            Lambda => {
-                // Increase lambda nesting
-                lambda += 1;
-            }
-            FunctionDefinition => {
-                // Increase depth function nesting if needed
-                increment_function_depth::<Python>(&mut depth, node, &FunctionDefinition);
-            }
-            _ => {}
-        }
-        // Add node to nesting map
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
 }
 
 impl Cognitive for RustCode {
@@ -710,7 +637,7 @@ impl Cognitive for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PhpParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PhpParser, RubyParser, RustParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -759,22 +686,6 @@ mod tests {
     }
 
     #[test]
-    fn python_no_cognitive() {
-        check_metrics::<PythonParser>("a = 42", "foo.py", |metric| {
-            insta::assert_json_snapshot!(
-                metric.cognitive,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
     fn rust_no_cognitive() {
         check_metrics::<RustParser>("let a = 42;", "foo.rs", |metric| {
             insta::assert_json_snapshot!(
@@ -788,159 +699,6 @@ mod tests {
                     }"###
             );
         });
-    }
-
-    #[test]
-    fn python_simple_function() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a and b:  # +2 (+1 and)
-                   return 1
-                if c and d: # +2 (+1 and)
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_expression_statement() {
-        // Boolean expressions containing `And` and `Or` operators were not
-        // considered in assignments
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                c = True and True",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 1.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_tuple() {
-        // Boolean expressions containing `And` and `Or` operators were not
-        // considered inside tuples
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                return \"%s%s\" % (a and \"Get\" or \"Set\", b)",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_nested_if_in_else_is_not_else_if() {
-        // Python has no `else if`; `elif` is a dedicated grammar node. A plain
-        // `if` inside an `else:` block must therefore be counted as a nested
-        // `if`, not skipped as else-if. This verifies that `is_else_if = false`
-        // for Python is correct.
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a:          # +1
-                    pass
-                else:          # +1 else
-                    if b:      # +2 (+1 if, +1 nesting)
-                        pass",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_elif_function() {
-        // Boolean expressions containing `And` and `Or` operators were not
-        // considered in `elif` statements
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a and b:  # +2 (+1 and)
-                   return 1
-                elif c and d: # +2 (+1 and)
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_more_elifs_function() {
-        // Boolean expressions containing `And` and `Or` operators were not
-        // considered when there were more `elif` statements
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a and b:  # +2 (+1 and)
-                   return 1
-                elif c and d: # +2 (+1 and)
-                   return 1
-                elif e and f: # +2 (+1 and)
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 6.0,
-                      "average": 6.0,
-                      "min": 0.0,
-                      "max": 6.0
-                    }"###
-                );
-            },
-        );
     }
 
     #[test]
@@ -964,28 +722,6 @@ mod tests {
                       "average": 4.0,
                       "min": 0.0,
                       "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_sequence_same_booleans() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a and b and True:  # +2 (+1 sequence of and)
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
                     }"###
                 );
             },
@@ -1104,28 +840,6 @@ mod tests {
     }
 
     #[test]
-    fn python_sequence_different_booleans() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a and b or True:  # +3 (+1 and, +1 or)
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn rust_sequence_different_booleans() {
         check_metrics::<RustParser>(
             "fn f() {
@@ -1174,54 +888,6 @@ mod tests {
             "foo.rs",
             |metric| {
                 assert_eq!(metric.cognitive.cognitive_sum(), 0.0);
-            },
-        );
-    }
-
-    #[test]
-    fn python_formatted_sequence_different_booleans() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if (  # +1
-                    a and b and  # +1
-                    (c or d)  # +1
-                ):
-                   return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_1_level_nesting() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a:  # +1
-                    for i in range(b):  # +2
-                        return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
             },
         );
     }
@@ -1285,30 +951,6 @@ mod tests {
     }
 
     #[test]
-    fn python_2_level_nesting() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                if a:  # +1
-                    for i in range(b):  # +2
-                        if b:  # +3
-                            return 1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 6.0,
-                      "average": 6.0,
-                      "min": 0.0,
-                      "max": 6.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn rust_2_level_nesting() {
         check_metrics::<RustParser>(
             "fn f() {
@@ -1331,32 +973,6 @@ mod tests {
                       "average": 6.0,
                       "min": 0.0,
                       "max": 6.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_try_construct() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                try:                 # +1
-                    for foo in bar:  # +2 (nesting = 1)
-                        return a
-                except Exception:    # +2 (nesting = 1)
-                    if a < 0:        # +3 (nesting = 2)
-                        return a",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 8.0,
-                      "average": 8.0,
-                      "min": 0.0,
-                      "max": 8.0
                     }"###
                 );
             },
@@ -1392,89 +1008,6 @@ mod tests {
                       "average": 11.0,
                       "min": 0.0,
                       "max": 11.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_ternary_operator() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 if a % 2:  # +1
-                     return 'c' if a else 'd'  # +2
-                 return 'a' if a else 'b'  # +1",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_nested_functions_lambdas() {
-        check_metrics::<PythonParser>(
-            "def f(a, b):
-                 def foo(a):
-                     if a:  # +2 (+1 nesting)
-                         return 1
-                 # +3 (+1 for boolean sequence +2 for lambda nesting)
-                 bar = lambda a: lambda b: b or True or True
-                 return bar(foo(a))(a)",
-            "foo.py",
-            |metric| {
-                // 2 functions + 2 lambdas = 4
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 5.0,
-                      "average": 1.25,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn python_real_function() {
-        check_metrics::<PythonParser>(
-            "def process_raw_constant(constant, min_word_length):
-                 processed_words = []
-                 raw_camelcase_words = []
-                 for raw_word in re.findall(r'[a-z]+', constant):  # +1
-                     word = raw_word.strip()
-                         if (  # +2 (+1 if and +1 nesting)
-                             len(word) >= min_word_length
-                             and not (word.startswith('-') or word.endswith('-')) # +2 operators
-                         ):
-                             if is_camel_case_word(word):  # +3 (+1 if and +2 nesting)
-                                 raw_camelcase_words.append(word)
-                             else: # +1 else
-                                 processed_words.append(word.lower())
-                 return processed_words, raw_camelcase_words",
-            "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 9.0,
-                      "average": 9.0,
-                      "min": 0.0,
-                      "max": 9.0
                     }"###
                 );
             },

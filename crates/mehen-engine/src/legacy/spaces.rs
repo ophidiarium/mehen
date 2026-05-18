@@ -369,7 +369,7 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, PythonParser};
+    use crate::legacy::langs::GoParser;
     use crate::legacy::tools::check_func_space;
 
     fn collect_metric_keys(json: &serde_json::Value, out: &mut std::collections::BTreeSet<String>) {
@@ -396,20 +396,6 @@ mod tests {
                     !keys.contains(forbidden),
                     "Go output should not include `{forbidden}`, got keys: {keys:?}"
                 );
-            }
-        });
-    }
-
-    #[test]
-    fn python_function_omits_class_metrics() {
-        // `wmc`/`npa`/`npm` are also gated by space kind, so a plain function
-        // space should still omit them even in a class-capable language.
-        check_func_space::<PythonParser, _>("def f():\n    pass\n", "foo.py", |space| {
-            let json = serde_json::to_value(&space).unwrap();
-            let mut keys = std::collections::BTreeSet::new();
-            collect_metric_keys(&json, &mut keys);
-            for forbidden in ["wmc", "npm", "npa"] {
-                assert!(!keys.contains(forbidden));
             }
         });
     }
