@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -326,75 +326,6 @@ impl Npm for PythonCode {
     }
 }
 
-impl Npm for TypescriptCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        let kind_id = node.kind_id();
-        let container = if kind_id == Typescript::MethodDefinition {
-            SpaceKind::Class
-        } else if kind_id == Typescript::MethodSignature {
-            SpaceKind::Interface
-        } else {
-            return;
-        };
-        let is_public = ts_method_is_public(node, code, |id| match id.into() {
-            Typescript::AccessibilityModifier => TsAccessKind::Modifier,
-            Typescript::PrivatePropertyIdentifier => TsAccessKind::PrivateName,
-            _ => TsAccessKind::Other,
-        });
-        record_method(stats, container, is_public);
-    }
-}
-
-impl Npm for TsxCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        let kind_id = node.kind_id();
-        let container = if kind_id == Tsx::MethodDefinition {
-            SpaceKind::Class
-        } else if kind_id == Tsx::MethodSignature {
-            SpaceKind::Interface
-        } else {
-            return;
-        };
-        let is_public = ts_method_is_public(node, code, |id| match id.into() {
-            Tsx::AccessibilityModifier => TsAccessKind::Modifier,
-            Tsx::PrivatePropertyIdentifier => TsAccessKind::PrivateName,
-            _ => TsAccessKind::Other,
-        });
-        record_method(stats, container, is_public);
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TsAccessKind {
-    Modifier,
-    /// A `#name` method identifier (ECMAScript private class methods).
-    PrivateName,
-    Other,
-}
-
-/// Walks a TS / TSX method definition's children to decide if the method is
-/// public. A method is non-public when either:
-///
-///   - its identifier is a `private_property_identifier` (`#name`), or
-///   - an `accessibility_modifier` spells `private` / `protected`.
-///
-/// Otherwise the method is public (the default / explicit `public`).
-fn ts_method_is_public(node: &Node, code: &[u8], classify: impl Fn(u16) -> TsAccessKind) -> bool {
-    for child in node.children() {
-        match classify(child.kind_id()) {
-            TsAccessKind::Modifier => {
-                let text = &code[child.start_byte()..child.end_byte()];
-                if text == b"private" || text == b"protected" {
-                    return false;
-                }
-            }
-            TsAccessKind::PrivateName => return false,
-            TsAccessKind::Other => {}
-        }
-    }
-    true
-}
-
 impl Npm for RustCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         match node.kind_id().into() {
@@ -661,9 +592,7 @@ impl Npm for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        KotlinParser, PhpParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
-    };
+    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -723,105 +652,6 @@ mod tests {
                   "interfaces_average": null,
                   "total": 2.0,
                   "total_methods": 4.0,
-                  "average": 0.5
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_npm_counts_modifiers() {
-        check_metrics::<TypescriptParser>(
-            "class C {
-                 a() {}
-                 public b() {}
-                 private c() {}
-                 protected d() {}
-             }",
-            "foo.ts",
-            |metric| {
-                // public: a, b. non-public: c, d.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 0.0,
-                  "class_methods": 4.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.5,
-                  "interfaces_average": null,
-                  "total": 2.0,
-                  "total_methods": 4.0,
-                  "average": 0.5
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_npm_counts_ecmascript_private_methods() {
-        // ECMAScript `#name` private methods parse as `method_definition`
-        // nodes whose name child is `private_property_identifier`; they must
-        // be counted as non-public.
-        check_metrics::<TypescriptParser>(
-            "class C {
-                 a() {}
-                 #b() {}
-                 #c() {}
-             }",
-            "foo.ts",
-            |metric| {
-                // 3 methods: public = a only; #b, #c are private.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 1.0,
-                  "interfaces": 0.0,
-                  "class_methods": 3.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.3333333333333333,
-                  "interfaces_average": null,
-                  "total": 1.0,
-                  "total_methods": 3.0,
-                  "average": 0.3333333333333333
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn tsx_npm_counts_ecmascript_private_methods() {
-        // TSX shares the grammar; lock in the same `#name` -> non-public
-        // classification so a regression doesn't sneak in through the TSX
-        // parser alone.
-        check_metrics::<TsxParser>(
-            "class C {
-                 a() {}
-                 #b() {}
-             }",
-            "foo.tsx",
-            |metric| {
-                // 2 methods: public = a only; #b is private.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 1.0,
-                  "interfaces": 0.0,
-                  "class_methods": 2.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.5,
-                  "interfaces_average": null,
-                  "total": 1.0,
-                  "total_methods": 2.0,
                   "average": 0.5
                 }
                 "#

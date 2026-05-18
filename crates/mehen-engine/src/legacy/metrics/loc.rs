@@ -5,10 +5,8 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_rust_tail_expression;
 
@@ -609,58 +607,6 @@ impl Loc for PythonCode {
             | NonlocalStatement
             | ExecStatement
             | ExpressionStatement => {
-                stats.lloc.logical_lines += 1;
-            }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
-impl Loc for TypescriptCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Typescript::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        match node.kind_id().into() {
-            String | DQUOTE | Program => {}
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-            ExpressionStatement | ExportStatement | ImportStatement | StatementBlock
-            | IfStatement | SwitchStatement | ForStatement | ForInStatement | WhileStatement
-            | DoStatement | TryStatement | WithStatement | BreakStatement | ContinueStatement
-            | DebuggerStatement | ReturnStatement | ThrowStatement | EmptyStatement
-            | StatementIdentifier => {
-                stats.lloc.logical_lines += 1;
-            }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
-impl Loc for TsxCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Tsx::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        match node.kind_id().into() {
-            String | DQUOTE | Program => {}
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-            ExpressionStatement | ExportStatement | ImportStatement | StatementBlock
-            | IfStatement | SwitchStatement | ForStatement | ForInStatement | WhileStatement
-            | DoStatement | TryStatement | WithStatement | BreakStatement | ContinueStatement
-            | DebuggerStatement | ReturnStatement | ThrowStatement | EmptyStatement
-            | StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {

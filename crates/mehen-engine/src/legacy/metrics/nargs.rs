@@ -3,9 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
 #[cfg(test)]
 use crate::legacy::langs::{CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
 use crate::legacy::languages::{C, Go, Kotlin};
@@ -363,14 +361,7 @@ impl NArgs for CCode {
     }
 }
 
-implement_metric_trait!(
-    [NArgs],
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    RubyCode
-);
+implement_metric_trait!([NArgs], PythonCode, RustCode, RubyCode);
 
 impl NArgs for crate::legacy::langs::PhpCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {

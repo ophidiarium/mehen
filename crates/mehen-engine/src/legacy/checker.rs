@@ -1,10 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyCode, RustCode, TsxCode, TsxParser,
-    TypescriptCode, TypescriptParser,
-};
-use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 
 macro_rules! check_if_func {
@@ -136,105 +133,6 @@ impl Checker for PythonCode {
     }
 
     fn is_else_if(_: &Node) -> bool {
-        false
-    }
-}
-
-impl Checker for TypescriptCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Typescript::Comment
-    }
-
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Typescript::Program
-                | Typescript::FunctionExpression
-                | Typescript::Class
-                | Typescript::GeneratorFunction
-                | Typescript::FunctionDeclaration
-                | Typescript::MethodDefinition
-                | Typescript::GeneratorFunctionDeclaration
-                | Typescript::ClassDeclaration
-                | Typescript::InterfaceDeclaration
-                | Typescript::ArrowFunction
-        )
-    }
-
-    is_js_func_and_closure_checker!(TypescriptParser, Typescript);
-
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Typescript::CallExpression
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Typescript::LPAREN | Typescript::COMMA | Typescript::RPAREN
-        )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        node.kind_id() == Typescript::String || node.kind_id() == Typescript::TemplateString
-    }
-
-    #[inline(always)]
-    fn is_else_if(node: &Node) -> bool {
-        if node.kind_id() != Typescript::IfStatement {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return parent.kind_id() == Typescript::ElseClause;
-        }
-        false
-    }
-}
-
-impl Checker for TsxCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Tsx::Comment
-    }
-
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Tsx::Program
-                | Tsx::FunctionExpression
-                | Tsx::Class
-                | Tsx::GeneratorFunction
-                | Tsx::FunctionDeclaration
-                | Tsx::MethodDefinition
-                | Tsx::GeneratorFunctionDeclaration
-                | Tsx::ClassDeclaration
-                | Tsx::InterfaceDeclaration
-                | Tsx::ArrowFunction
-        )
-    }
-
-    is_js_func_and_closure_checker!(TsxParser, Tsx);
-
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Tsx::CallExpression
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Tsx::LPAREN | Tsx::COMMA | Tsx::RPAREN
-        )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        node.kind_id() == Tsx::String || node.kind_id() == Tsx::TemplateString
-    }
-
-    fn is_else_if(node: &Node) -> bool {
-        if node.kind_id() != Tsx::IfStatement {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return node.kind_id() == Tsx::IfStatement && parent.kind_id() == Tsx::IfStatement;
-        }
         false
     }
 }

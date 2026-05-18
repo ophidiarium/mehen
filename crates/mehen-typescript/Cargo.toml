@@ -12,6 +12,14 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
-mehen-tree-sitter = { workspace = true }
-tree-sitter = { workspace = true }
-tree-sitter-typescript = { workspace = true }
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+oxc_ast_visit = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
+oxc_syntax = { workspace = true }
+smol_str = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+mehen-report = { workspace = true }

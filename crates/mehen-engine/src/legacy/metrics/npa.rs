@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -311,68 +311,6 @@ impl Npa for PythonCode {
     }
 }
 
-impl Npa for TypescriptCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        let kind_id = node.kind_id();
-        let container = if kind_id == Typescript::PublicFieldDefinition {
-            SpaceKind::Class
-        } else if kind_id == Typescript::PropertySignature {
-            SpaceKind::Interface
-        } else {
-            return;
-        };
-        let is_public = ts_field_is_public(node, code, |id| match id.into() {
-            Typescript::AccessibilityModifier => TsFieldKind::Modifier,
-            Typescript::PrivatePropertyIdentifier => TsFieldKind::PrivateName,
-            _ => TsFieldKind::Other,
-        });
-        stats.record_attribute(container, is_public);
-    }
-}
-
-impl Npa for TsxCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        let kind_id = node.kind_id();
-        let container = if kind_id == Tsx::PublicFieldDefinition {
-            SpaceKind::Class
-        } else if kind_id == Tsx::PropertySignature {
-            SpaceKind::Interface
-        } else {
-            return;
-        };
-        let is_public = ts_field_is_public(node, code, |id| match id.into() {
-            Tsx::AccessibilityModifier => TsFieldKind::Modifier,
-            Tsx::PrivatePropertyIdentifier => TsFieldKind::PrivateName,
-            _ => TsFieldKind::Other,
-        });
-        stats.record_attribute(container, is_public);
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TsFieldKind {
-    Modifier,
-    /// A `#name` field identifier (ECMAScript private class fields).
-    PrivateName,
-    Other,
-}
-
-fn ts_field_is_public(node: &Node, code: &[u8], classify: impl Fn(u16) -> TsFieldKind) -> bool {
-    for child in node.children() {
-        match classify(child.kind_id()) {
-            TsFieldKind::Modifier => {
-                let text = &code[child.start_byte()..child.end_byte()];
-                if text == b"private" || text == b"protected" {
-                    return false;
-                }
-            }
-            TsFieldKind::PrivateName => return false,
-            TsFieldKind::Other => {}
-        }
-    }
-    true
-}
-
 impl Npa for RustCode {
     fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
         // Rust struct fields live in `struct_item`, which is *not* pushed as
@@ -654,9 +592,7 @@ impl Npa for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        KotlinParser, PhpParser, PythonParser, RubyParser, RustParser, TypescriptParser,
-    };
+    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -822,70 +758,6 @@ mod tests {
                       "total": 2.0,
                       "total_attributes": 4.0,
                       "average": 0.5
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_npa_counts_public_fields() {
-        check_metrics::<TypescriptParser>(
-            "class C {
-                 a: number = 1;
-                 public b: number = 2;
-                 private c: number = 3;
-                 protected d: number = 4;
-             }",
-            "foo.ts",
-            |metric| {
-                // public: a, b. non-public: c, d.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 2.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 4.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.5,
-                      "interfaces_average": null,
-                      "total": 2.0,
-                      "total_attributes": 4.0,
-                      "average": 0.5
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_npa_counts_ecmascript_private_fields() {
-        // ECMAScript `#name` private fields parse as `public_field_definition`
-        // nodes whose name child is `private_property_identifier`; they must
-        // be counted as non-public.
-        check_metrics::<TypescriptParser>(
-            "class C {
-                 a: number = 1;
-                 #b: number = 2;
-                 #c: number = 3;
-             }",
-            "foo.ts",
-            |metric| {
-                // 3 fields: public = a only; #b, #c are private.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 1.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 3.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.3333333333333333,
-                      "interfaces_average": null,
-                      "total": 1.0,
-                      "total_attributes": 3.0,
-                      "average": 0.3333333333333333
                     }"###
                 );
             },

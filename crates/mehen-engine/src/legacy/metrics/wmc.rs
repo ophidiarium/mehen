@@ -4,8 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, LANG, PhpCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, LANG, PhpCode, PythonCode, RubyCode, RustCode,
 };
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
@@ -190,15 +189,7 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(
-    PythonCode,
-    TypescriptCode,
-    TsxCode,
-    RustCode,
-    RubyCode,
-    KotlinCode,
-    PhpCode
-);
+impl_wmc!(PythonCode, RustCode, RubyCode, KotlinCode, PhpCode);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -219,9 +210,7 @@ impl Wmc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        KotlinParser, PhpParser, PythonParser, RubyParser, RustParser, TypescriptParser,
-    };
+    use crate::legacy::langs::{KotlinParser, PhpParser, PythonParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -237,32 +226,6 @@ mod tests {
             "foo.py",
             |metric| {
                 // class wmc = method_a cyclomatic (2) + method_b cyclomatic (1) = 3
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<TypescriptParser>(
-            "class C {
-                 a(x: number) {
-                     if (x) { return 1; }
-                     return 0;
-                 }
-                 b() { return 1; }
-             }",
-            "foo.ts",
-            |metric| {
-                // class C: method a (cyc 2) + method b (cyc 1) = 3
                 insta::assert_json_snapshot!(
                     metric.wmc,
                     @r###"

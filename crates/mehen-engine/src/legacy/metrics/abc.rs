@@ -3,10 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
-use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{
     is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
@@ -302,150 +300,6 @@ impl Abc for PythonCode {
     }
 }
 
-impl Abc for TypescriptCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        ts_abc_compute::<Typescript>(node, stats);
-    }
-}
-
-impl Abc for TsxCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        ts_abc_compute::<Tsx>(node, stats);
-    }
-}
-
-trait TsAbcKinds {
-    const ASSIGNMENT_EXPRESSION: u16;
-    const AUGMENTED_ASSIGNMENT_EXPRESSION: u16;
-    const UPDATE_EXPRESSION: u16;
-    const VARIABLE_DECLARATOR: u16;
-    const CALL_EXPRESSION: u16;
-    const CALL_EXPRESSION_2: u16;
-    const NEW_EXPRESSION: u16;
-    const IF_STATEMENT: u16;
-    const ELSE_CLAUSE: u16;
-    const TERNARY_EXPRESSION: u16;
-    const SWITCH_CASE: u16;
-    const SWITCH_DEFAULT: u16;
-    const FOR_STATEMENT: u16;
-    const FOR_IN_STATEMENT: u16;
-    const WHILE_STATEMENT: u16;
-    const DO_STATEMENT: u16;
-    const CATCH_CLAUSE: u16;
-    const EQEQ: u16;
-    const EQEQEQ: u16;
-    const BANGEQ: u16;
-    const BANGEQEQ: u16;
-    const LT: u16;
-    const LTEQ: u16;
-    const GT: u16;
-    const GTEQ: u16;
-    const AMPAMP: u16;
-    const PIPEPIPE: u16;
-    const EQ: u16;
-}
-
-impl TsAbcKinds for Typescript {
-    const ASSIGNMENT_EXPRESSION: u16 = Typescript::AssignmentExpression as u16;
-    const AUGMENTED_ASSIGNMENT_EXPRESSION: u16 = Typescript::AugmentedAssignmentExpression as u16;
-    const UPDATE_EXPRESSION: u16 = Typescript::UpdateExpression as u16;
-    const VARIABLE_DECLARATOR: u16 = Typescript::VariableDeclarator as u16;
-    const CALL_EXPRESSION: u16 = Typescript::CallExpression as u16;
-    const CALL_EXPRESSION_2: u16 = Typescript::CallExpression2 as u16;
-    const NEW_EXPRESSION: u16 = Typescript::NewExpression as u16;
-    const IF_STATEMENT: u16 = Typescript::IfStatement as u16;
-    const ELSE_CLAUSE: u16 = Typescript::ElseClause as u16;
-    const TERNARY_EXPRESSION: u16 = Typescript::TernaryExpression as u16;
-    const SWITCH_CASE: u16 = Typescript::SwitchCase as u16;
-    const SWITCH_DEFAULT: u16 = Typescript::SwitchDefault as u16;
-    const FOR_STATEMENT: u16 = Typescript::ForStatement as u16;
-    const FOR_IN_STATEMENT: u16 = Typescript::ForInStatement as u16;
-    const WHILE_STATEMENT: u16 = Typescript::WhileStatement as u16;
-    const DO_STATEMENT: u16 = Typescript::DoStatement as u16;
-    const CATCH_CLAUSE: u16 = Typescript::CatchClause as u16;
-    const EQEQ: u16 = Typescript::EQEQ as u16;
-    const EQEQEQ: u16 = Typescript::EQEQEQ as u16;
-    const BANGEQ: u16 = Typescript::BANGEQ as u16;
-    const BANGEQEQ: u16 = Typescript::BANGEQEQ as u16;
-    const LT: u16 = Typescript::LT as u16;
-    const LTEQ: u16 = Typescript::LTEQ as u16;
-    const GT: u16 = Typescript::GT as u16;
-    const GTEQ: u16 = Typescript::GTEQ as u16;
-    const AMPAMP: u16 = Typescript::AMPAMP as u16;
-    const PIPEPIPE: u16 = Typescript::PIPEPIPE as u16;
-    const EQ: u16 = Typescript::EQ as u16;
-}
-
-impl TsAbcKinds for Tsx {
-    const ASSIGNMENT_EXPRESSION: u16 = Tsx::AssignmentExpression as u16;
-    const AUGMENTED_ASSIGNMENT_EXPRESSION: u16 = Tsx::AugmentedAssignmentExpression as u16;
-    const UPDATE_EXPRESSION: u16 = Tsx::UpdateExpression as u16;
-    const VARIABLE_DECLARATOR: u16 = Tsx::VariableDeclarator as u16;
-    const CALL_EXPRESSION: u16 = Tsx::CallExpression as u16;
-    const CALL_EXPRESSION_2: u16 = Tsx::CallExpression2 as u16;
-    const NEW_EXPRESSION: u16 = Tsx::NewExpression as u16;
-    const IF_STATEMENT: u16 = Tsx::IfStatement as u16;
-    const ELSE_CLAUSE: u16 = Tsx::ElseClause as u16;
-    const TERNARY_EXPRESSION: u16 = Tsx::TernaryExpression as u16;
-    const SWITCH_CASE: u16 = Tsx::SwitchCase as u16;
-    const SWITCH_DEFAULT: u16 = Tsx::SwitchDefault as u16;
-    const FOR_STATEMENT: u16 = Tsx::ForStatement as u16;
-    const FOR_IN_STATEMENT: u16 = Tsx::ForInStatement as u16;
-    const WHILE_STATEMENT: u16 = Tsx::WhileStatement as u16;
-    const DO_STATEMENT: u16 = Tsx::DoStatement as u16;
-    const CATCH_CLAUSE: u16 = Tsx::CatchClause as u16;
-    const EQEQ: u16 = Tsx::EQEQ as u16;
-    const EQEQEQ: u16 = Tsx::EQEQEQ as u16;
-    const BANGEQ: u16 = Tsx::BANGEQ as u16;
-    const BANGEQEQ: u16 = Tsx::BANGEQEQ as u16;
-    const LT: u16 = Tsx::LT as u16;
-    const LTEQ: u16 = Tsx::LTEQ as u16;
-    const GT: u16 = Tsx::GT as u16;
-    const GTEQ: u16 = Tsx::GTEQ as u16;
-    const AMPAMP: u16 = Tsx::AMPAMP as u16;
-    const PIPEPIPE: u16 = Tsx::PIPEPIPE as u16;
-    const EQ: u16 = Tsx::EQ as u16;
-}
-
-fn ts_abc_compute<K: TsAbcKinds>(node: &Node, stats: &mut Stats) {
-    let kind = node.kind_id();
-
-    if kind == K::ASSIGNMENT_EXPRESSION
-        || kind == K::AUGMENTED_ASSIGNMENT_EXPRESSION
-        || kind == K::UPDATE_EXPRESSION
-        || (kind == K::VARIABLE_DECLARATOR && node.is_child(K::EQ))
-    {
-        stats.assignments += 1.;
-    } else if kind == K::CALL_EXPRESSION
-        || kind == K::CALL_EXPRESSION_2
-        || kind == K::NEW_EXPRESSION
-    {
-        stats.branches += 1.;
-    } else if kind == K::IF_STATEMENT
-        || kind == K::ELSE_CLAUSE
-        || kind == K::TERNARY_EXPRESSION
-        || kind == K::SWITCH_CASE
-        || kind == K::SWITCH_DEFAULT
-        || kind == K::FOR_STATEMENT
-        || kind == K::FOR_IN_STATEMENT
-        || kind == K::WHILE_STATEMENT
-        || kind == K::DO_STATEMENT
-        || kind == K::CATCH_CLAUSE
-        || kind == K::EQEQ
-        || kind == K::EQEQEQ
-        || kind == K::BANGEQ
-        || kind == K::BANGEQEQ
-        || kind == K::LT
-        || kind == K::LTEQ
-        || kind == K::GT
-        || kind == K::GTEQ
-        || kind == K::AMPAMP
-        || kind == K::PIPEPIPE
-    {
-        stats.conditions += 1.;
-    }
-}
-
 #[inline(always)]
 fn go_expression_list_len(node: &Node) -> f64 {
     node.children()
@@ -687,7 +541,7 @@ impl Abc for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -954,43 +808,6 @@ mod tests {
     return b
 ",
             "foo.py",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.abc,
-                    @r###"
-                    {
-                      "assignments": 2.0,
-                      "branches": 1.0,
-                      "conditions": 2.0,
-                      "magnitude": 3.0,
-                      "assignments_average": 1.0,
-                      "branches_average": 0.5,
-                      "conditions_average": 1.0,
-                      "assignments_min": 0.0,
-                      "assignments_max": 2.0,
-                      "branches_min": 0.0,
-                      "branches_max": 1.0,
-                      "conditions_min": 0.0,
-                      "conditions_max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_abc_basic() {
-        check_metrics::<TypescriptParser>(
-            "function f(a: number, b: number): number {
-                 let x = a;          // +1 A (declarator with `=`)
-                 x += b;             // +1 A
-                 log(x);             // +1 B
-                 if (x > b) {        // +1 C (if) + +1 C (>)
-                     return x;
-                 }
-                 return b;
-             }",
-            "foo.ts",
             |metric| {
                 insta::assert_json_snapshot!(
                     metric.abc,

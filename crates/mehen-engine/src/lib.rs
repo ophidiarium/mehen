@@ -58,7 +58,13 @@ pub fn init_markdown() {
 
     fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
         match lang {
-            FenceLanguage::Powershell => dispatch_via_registry(lang, body),
+            // PowerShell (plan §8.2 Phase 3) and TypeScript / TSX
+            // (Phase 7 Oxc migration) flow through the new registry.
+            // The remaining languages still use legacy until each
+            // per-language crate reaches parity.
+            FenceLanguage::Powershell | FenceLanguage::Typescript | FenceLanguage::Tsx => {
+                dispatch_via_registry(lang, body)
+            }
             _ => dispatch_via_legacy(lang, body),
         }
     }
@@ -120,24 +126,25 @@ pub fn init_markdown() {
         std::path::PathBuf::from(name)
     }
 
-    /// Map every fence language *except* PowerShell to its legacy
-    /// `LANG` variant. PowerShell is intentionally absent — it routes
-    /// through `dispatch_via_registry` per plan §8.3, which lets the
-    /// legacy `PowershellCode` analyzer be deleted.
+    /// Map a fence language to its legacy `LANG` variant. Languages
+    /// that have completed their Oxc / Ruff / Mago migration (currently
+    /// PowerShell + TypeScript / TSX) return `None` — they route
+    /// through `dispatch_via_registry`, which lets each migrated
+    /// per-language crate's analyzer drive the embedded fence metrics.
     fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
         use crate::legacy::langs::LANG;
         Some(match lang {
             FenceLanguage::Rust => LANG::Rust,
             FenceLanguage::Python => LANG::Python,
-            FenceLanguage::Typescript => LANG::Typescript,
-            FenceLanguage::Tsx => LANG::Tsx,
             FenceLanguage::Go => LANG::Go,
             FenceLanguage::Ruby => LANG::Ruby,
             FenceLanguage::Kotlin => LANG::Kotlin,
             FenceLanguage::C => LANG::C,
             FenceLanguage::Php => LANG::Php,
-            // PowerShell is dispatched via the new registry — no legacy fallback.
-            FenceLanguage::Powershell => return None,
+            // Migrated to per-language crate analyzers; no legacy fallback.
+            FenceLanguage::Powershell | FenceLanguage::Typescript | FenceLanguage::Tsx => {
+                return None;
+            }
         })
     }
 

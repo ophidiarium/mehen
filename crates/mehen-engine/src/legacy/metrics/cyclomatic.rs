@@ -3,10 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
@@ -126,32 +124,6 @@ impl Cyclomatic for PythonCode {
                 |node| node.kind_id() == ElseClause,
             ) =>
             {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Cyclomatic for TypescriptCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Typescript::*;
-
-        match node.kind_id().into() {
-            If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE => {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Cyclomatic for TsxCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Tsx::*;
-
-        match node.kind_id().into() {
-            If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE => {
                 stats.cyclomatic += 1.;
             }
             _ => {}
@@ -314,7 +286,7 @@ impl Cyclomatic for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        GoParser, KotlinParser, PhpParser, PythonParser, RubyParser, RustParser, TypescriptParser,
+        GoParser, KotlinParser, PhpParser, PythonParser, RubyParser, RustParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -342,56 +314,6 @@ mod tests {
                       "average": 3.0,
                       "min": 1.0,
                       "max": 5.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_for_variants_count_once() {
-        // `for`, `for…in`, `for…of` each should contribute +1 via the
-        // `For` anonymous keyword token.
-        check_metrics::<TypescriptParser>(
-            "function f(arr) { // +2 (+1 unit space)
-                 for (let i = 0; i < 3; i++) {}  // +1
-                 for (const k in arr) {}          // +1
-                 for (const v of arr) {}          // +1
-             }",
-            "foo.ts",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 5.0,
-                      "average": 2.5,
-                      "min": 1.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_do_while() {
-        check_metrics::<TypescriptParser>(
-            "function f() { // +2 (+1 unit space)
-                 do {
-                     x++;
-                 } while (x < 10); // +1 loop
-             }",
-            "foo.ts",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 1.5,
-                      "min": 1.0,
-                      "max": 2.0
                     }"###
                 );
             },

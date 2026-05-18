@@ -1,147 +1,82 @@
+//! Oxc-backed analyzer entry points for TypeScript / JavaScript / TSX / JSX.
+//!
+//! The four `LanguageAnalyzer` impls all funnel into a single
+//! [`crate::walker::analyze`] call with a different [`SourceType`] —
+//! every other piece of behavior (scope detection, decision points,
+//! LOC, Halstead) is shared.
+
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
-    Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
+    Result, SourceFile, SourceSpan, byte_offset_clamped,
 };
-use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, text_of, walk,
-};
-use tree_sitter::Node;
+use mehen_metrics::MetricTreeBuilder;
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_parser::config::TokensParserConfig;
+use oxc_span::SourceType;
 
-/// Shared LanguageRules for the JS/TS/JSX/TSX family.
+use crate::walker;
+
+/// Run the parser and walker, returning a populated `LanguageAnalysis`.
 ///
-/// All four flavors share the same decision set per pre-1.0
-/// `Cyclomatic for TypescriptCode` / `for TsxCode`. The grammar entry
-/// point differs (TypeScript vs TSX) but the node-kind names overlap on
-/// the constructs we examine.
-struct TsLikeRules;
+/// This is the single dispatch point shared by every flavor of the
+/// analyzer. The Oxc parser is constructed with `TokensParserConfig` so
+/// the lexer captures every punctuation, keyword, identifier, and
+/// literal token — the walker uses the token stream for Halstead
+/// operator/operand classification while it walks the AST for everything
+/// else (scopes, decision points, ABC, NPA/NPM/WMC, NOM, LOC).
+fn analyze_with_source_type(
+    language: Language,
+    source: &SourceFile,
+    source_type: SourceType,
+) -> LanguageAnalysis {
+    let allocator = Allocator::default();
+    let parser_return = Parser::new(&allocator, source.text.as_str(), source_type)
+        .with_config(TokensParserConfig)
+        .parse();
 
-impl LanguageRules for TsLikeRules {
-    fn scope_for(&self, node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
-        let kind = node.kind();
-        let opened = match kind {
-            "function_declaration"
-            | "function_expression"
-            | "method_definition"
-            | "generator_function"
-            | "generator_function_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Function,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            "arrow_function" => ScopeOpen::Open {
-                kind: SpaceKind::Closure,
-                name: None,
-            },
-            // `class` (without `_declaration`) is the keyword token, not
-            // the declaration, so it must not open a scope.
-            "class_declaration" | "class_expression" => ScopeOpen::Open {
-                kind: SpaceKind::Class,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            "interface_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Interface,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            _ => return None,
+    if parser_return.panicked {
+        let span = SourceSpan {
+            start_byte: 0,
+            end_byte: byte_offset_clamped(source.text.len()),
+            start_line: 1,
+            end_line: source.line_index.line_count(),
         };
-        Some(opened)
+        let builder = MetricTreeBuilder::new(span);
+        let diagnostics = vec![ParseDiagnostic::fatal(
+            "typescript.parse_error",
+            format!(
+                "oxc_parser panicked with {} error(s)",
+                parser_return.errors.len()
+            ),
+        )];
+        return LanguageAnalysis {
+            language,
+            backend: AnalysisBackend::Oxc,
+            diagnostics,
+            root: builder.finish(),
+            contributions: Vec::new(),
+        };
     }
 
-    fn classify(&self, node: &Node<'_>) -> NodeFacts {
-        let kind = node.kind();
-        // Mirrors src/metrics/cyclomatic.rs:137-148 (Typescript) and
-        // 150-161 (Tsx). Both cover JS/TS/JSX/TSX in one set.
-        let cyclomatic_decision = matches!(
-            kind,
-            "if_statement"
-                | "for_statement"
-                | "for_in_statement"
-                | "for_of_statement"
-                | "while_statement"
-                | "do_statement"
-                | "switch_case"
-                | "catch_clause"
-                | "ternary_expression"
-                | "&&"
-                | "||"
-        );
-        let nexit = matches!(
-            kind,
-            "return_statement" | "throw_statement" | "break_statement" | "continue_statement"
-        );
-        let halstead_operator = matches!(
-            kind,
-            "+" | "-"
-                | "*"
-                | "/"
-                | "%"
-                | "**"
-                | "="
-                | "+="
-                | "-="
-                | "*="
-                | "/="
-                | "%="
-                | "=="
-                | "==="
-                | "!="
-                | "!=="
-                | "<"
-                | ">"
-                | "<="
-                | ">="
-                | "&&"
-                | "||"
-                | "??"
-                | "?"
-                | "!"
-                | "..."
-        );
-        let halstead_operand = matches!(
-            kind,
-            "identifier"
-                | "property_identifier"
-                | "type_identifier"
-                | "number"
-                | "string"
-                | "true"
-                | "false"
-                | "null"
-                | "undefined"
-                | "this"
-                | "super"
-        );
-        let abc_assignment = matches!(
-            kind,
-            "assignment_expression" | "augmented_assignment_expression"
-        );
-        let abc_branch = matches!(kind, "call_expression" | "new_expression");
-        let abc_condition = matches!(kind, "binary_expression" | "unary_expression");
-        NodeFacts {
-            cyclomatic_decision,
-            cognitive: if cyclomatic_decision {
-                mehen_tree_sitter::CognitiveFact::IncreaseNesting
-            } else {
-                mehen_tree_sitter::CognitiveFact::None
-            },
-            halstead_operator,
-            halstead_operand,
-            nexit,
-            abc_branch,
-            abc_condition,
-            abc_assignment,
-            loc: mehen_tree_sitter::LocFact::Code,
-        }
+    let root = walker::walk_program(
+        &parser_return.program,
+        &parser_return.tokens,
+        source.text.as_str(),
+        &source.line_index,
+    );
+
+    LanguageAnalysis {
+        language,
+        backend: AnalysisBackend::Oxc,
+        diagnostics: Vec::new(),
+        root,
+        contributions: Vec::new(),
     }
 }
 
 macro_rules! ts_analyzer {
-    ($name:ident, $lang:expr, $grammar:expr) => {
+    ($name:ident, $lang:expr, $source_type:expr) => {
         pub struct $name;
 
         impl $name {
@@ -162,7 +97,7 @@ macro_rules! ts_analyzer {
             }
 
             fn backend(&self) -> AnalysisBackend {
-                AnalysisBackend::TreeSitter
+                AnalysisBackend::Oxc
             }
 
             fn analyze(
@@ -170,77 +105,26 @@ macro_rules! ts_analyzer {
                 source: &SourceFile,
                 _config: &AnalysisConfig,
             ) -> Result<LanguageAnalysis> {
-                let parser = match TreeSitterParser::new($grammar, source.text.clone().into_bytes())
-                {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let span = SourceSpan {
-                            start_byte: 0,
-                            end_byte: byte_offset_clamped(source.text.len()),
-                            start_line: 1,
-                            end_line: source.line_index.line_count(),
-                        };
-                        return Ok(LanguageAnalysis {
-                            language: $lang,
-                            backend: AnalysisBackend::TreeSitter,
-                            diagnostics: vec![ParseDiagnostic::fatal(
-                                concat!(stringify!($name), "_parse_error"),
-                                format!("tree-sitter failed: {e}"),
-                            )],
-                            root: empty_space(span),
-                            contributions: Vec::new(),
-                        });
-                    }
-                };
-
-                let result = walk(
-                    parser.root(),
-                    parser.source(),
-                    &source.line_index,
-                    &TsLikeRules,
-                );
-                Ok(LanguageAnalysis {
-                    language: $lang,
-                    backend: AnalysisBackend::TreeSitter,
-                    diagnostics: Vec::new(),
-                    root: result.root,
-                    contributions: Vec::new(),
-                })
+                Ok(analyze_with_source_type($lang, source, $source_type))
             }
         }
     };
 }
 
-ts_analyzer!(
-    TypeScriptAnalyzer,
-    Language::TypeScript,
-    tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-);
-ts_analyzer!(
-    JavaScriptAnalyzer,
-    Language::JavaScript,
-    tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-);
-ts_analyzer!(
-    TsxAnalyzer,
-    Language::Tsx,
-    tree_sitter_typescript::LANGUAGE_TSX.into()
-);
-ts_analyzer!(
-    JsxAnalyzer,
-    Language::Jsx,
-    tree_sitter_typescript::LANGUAGE_TSX.into()
-);
+ts_analyzer!(TypeScriptAnalyzer, Language::TypeScript, SourceType::ts());
+ts_analyzer!(TsxAnalyzer, Language::Tsx, SourceType::tsx());
+ts_analyzer!(JavaScriptAnalyzer, Language::JavaScript, SourceType::mjs());
+ts_analyzer!(JsxAnalyzer, Language::Jsx, SourceType::jsx());
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile};
+    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile, SpaceKind};
     use mehen_metrics::keys;
 
-    fn analyze_ts(source: &str) -> LanguageAnalysis {
+    fn analyze_ts(src: &str) -> LanguageAnalysis {
         let analyzer = TypeScriptAnalyzer::new();
-        let file = SourceFile::new("a.ts".into(), Language::TypeScript, source.to_string());
+        let file = SourceFile::new("a.ts".into(), Language::TypeScript, src.to_string());
         analyzer.analyze(&file, &AnalysisConfig::default()).unwrap()
     }
 

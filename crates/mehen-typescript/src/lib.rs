@@ -1,13 +1,17 @@
 //! `mehen-typescript` — TypeScript, JavaScript, TSX, and JSX analyzer.
 //!
-//! Phase 1 scope: skeleton with the tree-sitter backend wired through
-//! `LanguageAnalyzer`. The crate exposes one analyzer per `Language` it
-//! handles (`TypeScript`, `JavaScript`, `Tsx`, `Jsx`) so the engine
-//! registry can dispatch by `Language` without selecting grammars at the
-//! call site. Phase 7 replaces the tree-sitter backend with Oxc.
+//! Phase 7 implementation: Oxc-backed analyzer (`oxc_parser` +
+//! `oxc_ast` + `oxc_ast_visit`). The crate exposes one analyzer per
+//! `Language` it handles (`TypeScript`, `JavaScript`, `Tsx`, `Jsx`)
+//! so the engine registry can dispatch by `Language` without selecting
+//! grammars at the call site.
+//!
+//! tree-sitter-typescript is no longer a dependency; per-language
+//! parser ownership lives entirely inside this crate.
 
 #![forbid(unsafe_code)]
 
 mod analyzer;
+mod walker;
 
 pub use analyzer::{JavaScriptAnalyzer, JsxAnalyzer, TsxAnalyzer, TypeScriptAnalyzer};

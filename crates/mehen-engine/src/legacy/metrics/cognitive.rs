@@ -6,10 +6,9 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode,
 };
-use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -388,58 +387,6 @@ impl Cognitive for RustCode {
     }
 }
 
-macro_rules! js_cognitive {
-    ($lang:ident) => {
-        fn compute(node: &Node, stats: &mut Stats, nesting_map: &mut HashMap<usize, (usize, usize, usize)>) {
-            use $lang::*;
-            let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-            match node.kind_id().into() {
-                IfStatement if !Self::is_else_if(&node) => {
-                    increase_nesting(stats, &mut nesting, depth, lambda);
-                }
-                IfStatement => {}
-                ForStatement | ForInStatement | WhileStatement | DoStatement | SwitchStatement | TryStatement | CatchClause | TernaryExpression => {
-                    increase_nesting(stats,&mut nesting, depth, lambda);
-                }
-                Else /* else-if also */ => {
-                    increment_by_one(stats);
-                }
-                ExpressionStatement => {
-                    // Reset the boolean sequence
-                    stats.boolean_seq.reset();
-                }
-                UnaryExpression => {
-                    stats.boolean_seq.not_operator(node.kind_id());
-                }
-                BinaryExpression => {
-                    compute_booleans::<$lang>(node, stats, &AMPAMP, &PIPEPIPE);
-                }
-                FunctionDeclaration => {
-                    // Reset lambda nesting at function for JS
-                    nesting = 0;
-                    lambda = 0;
-                    // Increase depth function nesting if needed
-                    increment_function_depth::<$lang>(&mut depth, node, &FunctionDeclaration);
-                }
-                ArrowFunction => {
-                    lambda += 1;
-                }
-                _ => {}
-            }
-            nesting_map.insert(node.id(), (nesting, depth, lambda));
-        }
-    };
-}
-
-impl Cognitive for TypescriptCode {
-    js_cognitive!(Typescript);
-}
-
-impl Cognitive for TsxCode {
-    js_cognitive!(Tsx);
-}
-
 impl Cognitive for GoCode {
     fn compute(
         node: &Node,
@@ -780,7 +727,6 @@ impl Cognitive for crate::legacy::langs::MarkdownCode {
 mod tests {
     use crate::legacy::langs::{
         CParser, GoParser, KotlinParser, PhpParser, PythonParser, RubyParser, RustParser,
-        TypescriptParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -1574,67 +1520,6 @@ mod tests {
                       "average": 3.0,
                       "min": 0.0,
                       "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_if_else_if_else() {
-        check_metrics::<TypescriptParser>(
-            "function foo() {
-                 if (this._closed) return Promise.resolve(); // +1
-                 if (this._tempDirectory) { // +1
-                     this.kill();
-                 } else if (this.connection) { // +1
-                     this.kill();
-                 } else { // +1
-                     throw new Error(`Error`);
-                }
-                helper.removeEventListeners(this._listeners);
-                return this._processClosing;
-            }",
-            "foo.ts",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_try_catch_nesting() {
-        check_metrics::<TypescriptParser>(
-            "function f() {
-                 try {                  // +1
-                     if (a) {           // +2 (nesting = 1)
-                         return 1;
-                     }
-                 } catch (e) {          // +2 (nesting = 1)
-                     if (b) {           // +3 (nesting = 2)
-                         throw e;
-                     }
-                 }
-             }",
-            "foo.ts",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 8.0,
-                      "average": 8.0,
-                      "min": 0.0,
-                      "max": 8.0
                     }"###
                 );
             },

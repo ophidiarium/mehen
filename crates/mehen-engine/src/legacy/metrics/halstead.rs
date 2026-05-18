@@ -6,9 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -290,18 +288,6 @@ impl Halstead for PythonCode {
     }
 }
 
-impl Halstead for TypescriptCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
-impl Halstead for TsxCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for RustCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -348,9 +334,7 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
-    };
+    use crate::legacy::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -423,80 +407,6 @@ mod tests {
                       "effort": 1345.177045923802,
                       "time": 74.7320581068779,
                       "bugs": 0.040619232256751396
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_operators_and_operands() {
-        check_metrics::<TypescriptParser>(
-            "function main() {
-              var a, b, c, avg;
-              a = 5; b = 5; c = 5;
-              avg = (a + b + c) / 3;
-              console.log(\"{}\", avg);
-            }",
-            "foo.ts",
-            |metric| {
-                // unique operators: function, (), {}, var, =, +, /, ,, ., ;
-                // unique operands: main, a, b, c, avg, 3, 5, console.log, console, log, "{}"
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r###"
-                    {
-                      "n1": 10.0,
-                      "N1": 24.0,
-                      "n2": 11.0,
-                      "N2": 21.0,
-                      "length": 45.0,
-                      "estimated_program_length": 71.27302875388389,
-                      "purity_ratio": 1.583845083419642,
-                      "vocabulary": 21.0,
-                      "volume": 197.65428402504423,
-                      "difficulty": 9.545454545454545,
-                      "level": 0.10476190476190476,
-                      "effort": 1886.699983875422,
-                      "time": 104.81666577085679,
-                      "bugs": 0.05089564733125986
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn tsx_operators_and_operands() {
-        check_metrics::<TsxParser>(
-            "function main() {
-              var a, b, c, avg;
-              a = 5; b = 5; c = 5;
-              avg = (a + b + c) / 3;
-              console.log(\"{}\", avg);
-            }",
-            "foo.ts",
-            |metric| {
-                // unique operators: function, (), {}, var, =, +, /, ,, ., ;
-                // unique operands: main, a, b, c, avg, 3, 5, console.log, console, log, "{}"
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r###"
-                    {
-                      "n1": 10.0,
-                      "N1": 24.0,
-                      "n2": 11.0,
-                      "N2": 21.0,
-                      "length": 45.0,
-                      "estimated_program_length": 71.27302875388389,
-                      "purity_ratio": 1.583845083419642,
-                      "vocabulary": 21.0,
-                      "volume": 197.65428402504423,
-                      "difficulty": 9.545454545454545,
-                      "level": 0.10476190476190476,
-                      "effort": 1886.699983875422,
-                      "time": 104.81666577085679,
-                      "bugs": 0.05089564733125986
                     }"###
                 );
             },

@@ -3,9 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 
@@ -206,8 +204,6 @@ where
 implement_metric_trait!(
     [Nom],
     PythonCode,
-    TypescriptCode,
-    TsxCode,
     RustCode,
     GoCode,
     RubyCode,

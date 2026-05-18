@@ -3,10 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
-};
-use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode};
+use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -129,28 +127,6 @@ impl Exit for PythonCode {
     }
 }
 
-impl Exit for TypescriptCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(
-            node.kind_id().into(),
-            Typescript::ReturnStatement | Typescript::ThrowStatement
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
-
-impl Exit for TsxCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(
-            node.kind_id().into(),
-            Tsx::ReturnStatement | Tsx::ThrowStatement
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
-
 impl Exit for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if is_inside_rust_macro_tokens(node) {
@@ -248,9 +224,7 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{
-        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
-    };
+    use crate::legacy::langs::{GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -520,32 +494,6 @@ mod tests {
             "foo.py",
             |metric| {
                 // 1 function, 2 exits (raise + return)
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn typescript_throw_counts_as_exit() {
-        check_metrics::<TypescriptParser>(
-            "function f(a: number): number {
-                 if (a < 0) {
-                     throw new Error('bad');
-                 }
-                 return a;
-             }",
-            "foo.ts",
-            |metric| {
-                // 1 function, 2 exits (throw + return)
                 insta::assert_json_snapshot!(
                     metric.nexits,
                     @r###"

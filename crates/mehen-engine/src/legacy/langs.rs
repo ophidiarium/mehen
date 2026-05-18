@@ -4,7 +4,7 @@ use tree_sitter::Language;
 
 #[cfg(feature = "markdown")]
 use crate::legacy::languages::Markdown;
-use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust};
 use crate::legacy::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -42,26 +42,6 @@ mk_langs!(
         tree_sitter_python,
         [py],
         ["python"]
-    ),
-    (
-        Tsx,
-        "The `Tsx` language incorporates the `JSX` syntax inside `TypeScript`. Also used for `JSX` files since `TypeScript` is a superset of `JavaScript`.",
-        "typescript",
-        TsxCode,
-        TsxParser,
-        tree_sitter_tsx,
-        [tsx, jsx],
-        []
-    ),
-    (
-        Typescript,
-        "The `TypeScript` language. Also used for `JavaScript` files since `TypeScript` is a superset of `JavaScript`.",
-        "typescript",
-        TypescriptCode,
-        TypescriptParser,
-        tree_sitter_typescript,
-        [ts, mts, cts, js, mjs, cjs],
-        ["typescript", "javascript", "js"]
     ),
     (
         Go,
@@ -154,26 +134,6 @@ mk_langs!(
         tree_sitter_python,
         [py],
         ["python"]
-    ),
-    (
-        Tsx,
-        "The `Tsx` language incorporates the `JSX` syntax inside `TypeScript`. Also used for `JSX` files since `TypeScript` is a superset of `JavaScript`.",
-        "typescript",
-        TsxCode,
-        TsxParser,
-        tree_sitter_tsx,
-        [tsx, jsx],
-        []
-    ),
-    (
-        Typescript,
-        "The `TypeScript` language. Also used for `JavaScript` files since `TypeScript` is a superset of `JavaScript`.",
-        "typescript",
-        TypescriptCode,
-        TypescriptParser,
-        tree_sitter_typescript,
-        [ts, mts, cts, js, mjs, cjs],
-        ["typescript", "javascript", "js"]
     ),
     (
         Go,
