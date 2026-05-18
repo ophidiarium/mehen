@@ -495,71 +495,6 @@ impl Cognitive for CCode {
     }
 }
 
-impl Cognitive for crate::legacy::langs::PhpCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use crate::legacy::languages::Php::*;
-
-        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        match node.kind_id().into() {
-            IfStatement if !Self::is_else_if(node) => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            IfStatement => {}
-            ForStatement
-            | ForeachStatement
-            | WhileStatement
-            | DoStatement
-            | SwitchStatement
-            | MatchExpression
-            | TryStatement
-            | CatchClause
-            | ConditionalExpression => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            ElseIfClause | ElseIfClause2 => {
-                increment_by_one(stats);
-                stats.boolean_seq.reset();
-            }
-            ElseClause | ElseClause2 => {
-                increment_by_one(stats);
-                // Reset boolean-operator sequence tracking so `&&` / `||` /
-                // `and` / `or` chains in the `else` body do not extend the
-                // sequence from the preceding branch. Mirrors the reset in
-                // `ElseIfClause` above.
-                stats.boolean_seq.reset();
-            }
-            ExpressionStatement | ReturnStatement | EchoStatement => {
-                stats.boolean_seq.reset();
-            }
-            UnaryOpExpression | UnaryOpExpression2 => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            BinaryExpression => {
-                compute_booleans::<crate::legacy::languages::Php>(node, stats, &AMPAMP, &PIPEPIPE);
-                compute_booleans::<crate::legacy::languages::Php>(node, stats, &And, &Or);
-            }
-            AnonymousFunction | ArrowFunction => {
-                lambda += 1;
-            }
-            FunctionDefinition | MethodDeclaration => {
-                nesting = 0;
-                increment_function_depth_any::<crate::legacy::languages::Php>(
-                    &mut depth,
-                    node,
-                    &[FunctionDefinition, MethodDeclaration],
-                );
-            }
-            _ => {}
-        }
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
-}
-
 // Markdown is a documentation language; Cognitive is a code metric. The
 // dedicated Markdown pipeline computes its own MCC analogue (Phase B).
 #[cfg(feature = "markdown")]
@@ -574,52 +509,8 @@ impl Cognitive for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, GoParser, KotlinParser, PhpParser, RubyParser};
+    use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn php_else_branch_resets_boolean_sequence() {
-        // The boolean-operator sequence must reset when entering the
-        // `else` branch so that operators inside the else body start a
-        // fresh sequence rather than continuing the sequence from the
-        // `if` condition. Without the reset, two same-operator runs
-        // separated only by an `else` collapse — undercounting cognitive
-        // complexity.
-        //
-        // The bodies are intentionally empty: a non-empty body's
-        // `expression_statement` would itself reset `boolean_seq` and
-        // mask the bug.
-        //
-        // Breakdown WITH reset (correct):
-        //   - outer `if`: +1 nesting -> structural=1
-        //   - outer `&&`: fresh sequence, +1 -> 2
-        //   - `else` clause: +1 (no nesting), reset -> 3
-        //   - inner `else if`: parses as nested `if_statement` whose
-        //     `is_else_if` is true; counted as elseif (no extra nesting)
-        //   - inner `&&`: with the reset, fresh sequence again, +1 -> 4
-        //
-        // WITHOUT the reset, the inner `&&` collapses with the outer
-        // (same operator) and contributes 0, yielding 3.
-        check_metrics::<PhpParser>(
-            "<?php
-             function f($a, $b, $c, $d) {
-                 if ($a && $b) {} else if ($c && $d) {}
-             }",
-            "foo.php",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn go_no_cognitive() {

@@ -190,8 +190,6 @@ where
 
 implement_metric_trait!([Nom], GoCode, RubyCode, KotlinCode, CCode);
 
-impl Nom for crate::legacy::langs::PhpCode {}
-
 // Markdown documents have no functions or closures.
 #[cfg(feature = "markdown")]
 impl Nom for crate::legacy::langs::MarkdownCode {}

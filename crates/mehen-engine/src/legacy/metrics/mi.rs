@@ -120,8 +120,6 @@ where
 
 implement_metric_trait!([Mi], GoCode, RubyCode, KotlinCode, CCode);
 
-impl Mi for crate::legacy::langs::PhpCode {}
-
 // Markdown is a documentation language; Maintainability Index depends on
 // source-code LOC / cyclomatic / Halstead counts which are not applicable.
 // A dedicated DMI analogue lands in Phase B.

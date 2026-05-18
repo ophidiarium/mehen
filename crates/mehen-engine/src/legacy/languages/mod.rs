@@ -12,9 +12,6 @@ pub(crate) use language_kotlin::*;
 pub(crate) mod language_c;
 pub(crate) use language_c::*;
 
-pub(crate) mod language_php;
-pub(crate) use language_php::*;
-
 #[cfg(feature = "markdown")]
 pub(crate) mod language_markdown;
 #[cfg(feature = "markdown")]

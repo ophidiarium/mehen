@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, RubyCode};
-use crate::legacy::languages::{C, Go, Kotlin, Php, Ruby};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::languages::{C, Go, Kotlin, Ruby};
 use crate::legacy::node::Node;
 
 pub(crate) trait Checker {
@@ -214,62 +214,6 @@ impl Checker for CCode {
         }
         if let Some(parent) = node.parent() {
             return parent.kind_id() == C::ElseClause;
-        }
-        false
-    }
-}
-
-impl Checker for PhpCode {
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::Program
-                | Php::FunctionDefinition
-                | Php::MethodDeclaration
-                | Php::AnonymousFunction
-                | Php::ArrowFunction
-                | Php::ClassDeclaration
-                | Php::AnonymousClass
-                | Php::InterfaceDeclaration
-                | Php::TraitDeclaration
-                | Php::EnumDeclaration
-        )
-    }
-
-    fn is_func(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::FunctionDefinition | Php::MethodDeclaration
-        )
-    }
-
-    fn is_closure(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::AnonymousFunction | Php::ArrowFunction
-        )
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::LPAREN | Php::LPAREN2 | Php::RPAREN | Php::RPAREN2 | Php::COMMA
-        )
-    }
-
-    #[inline(always)]
-    fn is_else_if(node: &Node) -> bool {
-        // PHP has a dedicated `else_if_clause` named node for the `elseif`
-        // keyword. The `else if` (with a space) form parses as a nested
-        // `if_statement` whose direct parent is an `else_clause`. We
-        // flatten this case so the cognitive-complexity score matches
-        // `elseif`: the inner `if`'s structural cost has already been paid
-        // by the outer `else_clause`'s `+1`.
-        if node.kind_id() != Php::IfStatement {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return matches!(parent.kind_id().into(), Php::ElseClause | Php::ElseClause2);
         }
         false
     }

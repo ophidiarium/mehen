@@ -5,9 +5,6 @@ macro_rules! get_language {
     (tree_sitter_markdown_text) => {
         tree_sitter_markdown_text::LANGUAGE.into()
     };
-    (tree_sitter_php) => {
-        tree_sitter_php::LANGUAGE_PHP.into()
-    };
     ($name:ident) => {
         $name::LANGUAGE.into()
     };

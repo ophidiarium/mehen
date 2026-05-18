@@ -32,7 +32,7 @@ unreachable_pub = "warn"
 version = "0.7.0"
 authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
-rust-version = "1.93.1"
+rust-version = "1.95.0"
 repository = "https://github.com/ophidiarium/mehen"
 license = "MPL-2.0"
 
@@ -109,12 +109,29 @@ ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
 # auto-publishes weekly and breaking changes at the AST level are not
 # semver-tracked. Bump deliberately.
 ra_ap_syntax = "=0.0.333"
+
+# Mago — replaces tree-sitter-php for the PHP analyzer
+# (`crates/mehen-php`). Per the rewrite plan §6.4 we move from a
+# concrete-syntax tree to Mago's typed PHP AST so attributes,
+# promoted properties, enum cases, hooked properties, match
+# expressions, and PHP keyword case-insensitivity are first-class.
+# Mago is published on crates.io and stays in lockstep across the
+# `mago-syntax` / `mago-database` / `mago-span` / `mago-php-version`
+# crates; bump them as a group.
+mago-syntax = "=1.27.1"
+mago-syntax-core = "=1.27.1"
+mago-database = "=1.27.1"
+mago-span = "=1.27.1"
+mago-php-version = "=1.27.1"
+bumpalo = "^3.16"
+
 tree-sitter-go = "=0.25.0"
 tree-sitter-ruby = "=0.23.1"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
 tree-sitter-c = "=0.24.2"
-tree-sitter-php = "=0.24.2"
+# `tree-sitter-php` was removed in Phase 8 — PHP now flows through
+# `mehen-php` (mago-syntax) per plan §6.4.
 tree-sitter-markdown-text = "=0.2.1"
 unicode-script = "^0.5"
 unicode-segmentation = "^1.12"

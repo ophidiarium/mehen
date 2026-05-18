@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, PhpCode, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, RubyCode};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -187,7 +187,7 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(RubyCode, KotlinCode, PhpCode);
+impl_wmc!(RubyCode, KotlinCode);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -208,7 +208,7 @@ impl Wmc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, PhpParser, RubyParser};
+    use crate::legacy::langs::{KotlinParser, RubyParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -250,35 +250,6 @@ mod tests {
              end",
             "foo.rb",
             |metric| {
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn php_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<PhpParser>(
-            "<?php
-             class C {
-                 public function a(int $x): int {
-                     if ($x > 0) {
-                         return 1;
-                     }
-                     return 0;
-                 }
-                 public function b(): int { return 1; }
-             }",
-            "foo.php",
-            |metric| {
-                // class C: a cyc=2 (if), b cyc=1 -> classes = 3
                 insta::assert_json_snapshot!(
                     metric.wmc,
                     @r###"

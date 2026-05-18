@@ -363,39 +363,6 @@ impl NArgs for CCode {
 
 implement_metric_trait!([NArgs], RubyCode);
 
-impl NArgs for crate::legacy::langs::PhpCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        use crate::legacy::languages::Php::*;
-
-        // PHP function / anonymous-function / arrow-function / method
-        // declarations expose their parameters via the `parameters` field
-        // (a `formal_parameters` node). Use a positive filter on the three
-        // parameter kinds — `simple_parameter`, `variadic_parameter`, and
-        // `property_promotion_parameter` — instead of negating `is_non_arg`,
-        // because `formal_parameters` may also contain `attribute_group`
-        // and other non-parameter children that a negative filter would
-        // miscount.
-        let is_func = Self::is_func(node);
-        let is_closure = Self::is_closure(node);
-        if (is_func || is_closure)
-            && let Some(params) = node.child_by_field_name("parameters")
-        {
-            params.act_on_child(&mut |n| {
-                if matches!(
-                    n.kind_id().into(),
-                    SimpleParameter | VariadicParameter | PropertyPromotionParameter
-                ) {
-                    if is_func {
-                        stats.fn_nargs += 1;
-                    } else {
-                        stats.closure_nargs += 1;
-                    }
-                }
-            });
-        }
-    }
-}
-
 // Markdown documents have no function parameters.
 #[cfg(feature = "markdown")]
 impl NArgs for crate::legacy::langs::MarkdownCode {}

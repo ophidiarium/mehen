@@ -52,12 +52,13 @@ walkdir = { workspace = true }
 # `mehen-python` (Ruff) per plan §6.2.
 # `tree-sitter-rust` was removed in Phase 9 — Rust now flows through
 # `mehen-rust` (ra_ap_syntax) per plan §6.1.
+# `tree-sitter-php` was removed in Phase 8 — PHP now flows through
+# `mehen-php` (Mago) per plan §6.4.
 tree-sitter = { workspace = true }
 tree-sitter-go = { workspace = true }
 tree-sitter-ruby = { workspace = true }
 tree-sitter-kotlin = { workspace = true }
 tree-sitter-c = { workspace = true }
-tree-sitter-php = { workspace = true }
 tree-sitter-markdown-text = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -108,7 +109,6 @@ ignored = [
     "tree-sitter-ruby",
     "tree-sitter-kotlin",
     "tree-sitter-c",
-    "tree-sitter-php",
     "tree-sitter-markdown-text",
 ]
 

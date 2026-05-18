@@ -132,7 +132,7 @@ pub fn init_markdown() {
     /// Map a fence language to its legacy `LANG` variant. Languages
     /// that have completed their Oxc / Ruff / Mago / ra_ap_syntax
     /// migration (currently PowerShell + TypeScript / TSX + Python +
-    /// Rust) return `None` — they route through
+    /// Rust + PHP) return `None` — they route through
     /// `dispatch_via_registry`, which lets each migrated per-language
     /// crate's analyzer drive the embedded fence metrics.
     fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
@@ -142,13 +142,13 @@ pub fn init_markdown() {
             FenceLanguage::Ruby => LANG::Ruby,
             FenceLanguage::Kotlin => LANG::Kotlin,
             FenceLanguage::C => LANG::C,
-            FenceLanguage::Php => LANG::Php,
             // Migrated to per-language crate analyzers; no legacy fallback.
             FenceLanguage::Powershell
             | FenceLanguage::Typescript
             | FenceLanguage::Tsx
             | FenceLanguage::Python
-            | FenceLanguage::Rust => return None,
+            | FenceLanguage::Rust
+            | FenceLanguage::Php => return None,
         })
     }
 
