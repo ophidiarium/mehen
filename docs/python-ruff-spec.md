@@ -197,13 +197,28 @@ text against the leading-underscore rule.
 
 ## 5. Walker structure
 
-The walker in `crates/mehen-python/src/walker.rs` follows the same
-per-space `State` accumulator pattern used by `mehen-typescript`:
+The walker in `crates/mehen-python/src/walker.rs` drives recursion
+through Ruff's
+[`SourceOrderVisitor`](https://github.com/astral-sh/ruff/blob/main/crates/ruff_python_ast/src/visitor/source_order.rs)
+trait — the upstream traversal helper that visits every AST node in
+source order. We override only the hooks where a metric side effect
+or a lifecycle boundary lives; default `walk_*` helpers handle the
+rest. This mirrors `mehen-php`'s use of `mago_syntax::walker::Walker`
+— in both crates, recursion is the parser's responsibility and we
+own only the per-shape callbacks.
+
+It follows the same per-space `State` accumulator pattern used by
+`mehen-typescript`:
 
 - One `State` (in `mehen-metrics::state`) for the unit, plus one for
   every opened function / closure / class space.
 - Cyclomatic / cognitive / ABC / nexit / LOC / NPA / NPM are driven
-  per-statement via `visit_stmt` and per-expression via `visit_expr`.
+  per-shape via overrides on `visit_stmt`, `visit_expr`,
+  `visit_match_case`, `visit_except_handler`,
+  `visit_elif_else_clause`, and `visit_comprehension`. Statements
+  that need only a side effect plus default descent (`Assign`,
+  `AugAssign`, `AnnAssign`, `Return`, `Raise`, `TypeAlias`,
+  `Expr`-statement, leaf statements) call `walk_stmt(self, stmt)`.
 - Halstead is driven by a post-AST token sweep over the parsed
   module's `parsed.tokens()`. Each token maps to one of
   `Operator(kind)`, `Operand(kind)`, or `Skip`. Tokens whose span

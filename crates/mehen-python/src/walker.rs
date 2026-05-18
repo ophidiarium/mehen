@@ -1,12 +1,13 @@
 //! Ruff AST + token-stream walker that produces a populated `MetricSpace`.
 //!
-//! The walker follows the same per-space `State` accumulator pattern used
-//! by `mehen-typescript` (see `crates/mehen-typescript/src/walker.rs`):
-//! one `State` for the unit, one for every opened function / closure /
-//! class space, finalize on close, fold child stats into parent. The
-//! publishing helpers (`apply_state_to`, `finalize_state`,
-//! `merge_child_into_parent`) live in `mehen-metrics::state` per the
-//! rewrite plan §4.3.
+//! Recursion is driven by ruff's
+//! [`SourceOrderVisitor`](ruff_python_ast::visitor::source_order::SourceOrderVisitor):
+//! we override the per-shape hooks where a metric side effect or a
+//! lifecycle boundary (open/close space, push/pop cognitive context) is
+//! required, and let the default `walk_*` helpers handle the rest of the
+//! descent. The walker follows the same per-space `State` accumulator
+//! pattern used by `mehen-typescript` and `mehen-php`: one `State` per
+//! opened space, finalize on close, fold child stats into parent.
 //!
 //! Python-specific design decisions are documented in
 //! `docs/python-ruff-spec.md`. The short version:
@@ -41,8 +42,9 @@ use mehen_metrics::{
     finalize_state, merge_child_into_parent,
 };
 use ruff_python_ast::token::TokenKind;
+use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, walk_expr, walk_stmt};
 use ruff_python_ast::{
-    self as ast, BoolOp, ElifElseClause, ExceptHandler, Expr, MatchCase, ModModule, Parameters,
+    self as ast, BoolOp, Comprehension, ElifElseClause, ExceptHandler, Expr, MatchCase, ModModule,
     Stmt, UnaryOp,
 };
 use ruff_python_parser::Parsed;
@@ -67,9 +69,7 @@ pub(crate) fn walk_module(
 
     let mut visitor = Visitor::new(source, line_index, unit_span);
     visitor.record_module_docstring(&module.body);
-    for stmt in &module.body {
-        visitor.visit_stmt(stmt);
-    }
+    visitor.visit_body(&module.body);
 
     visitor.emit_halstead_from_tokens(parsed.tokens());
 
@@ -210,26 +210,23 @@ impl<'a> Visitor<'a> {
         self.tree.close();
     }
 
-    fn enter_function(
-        &mut self,
-        name: &str,
-        parameters: &Parameters,
-        decorator_list: &[ast::Decorator],
-        body: &[Stmt],
-        range: TextRange,
-    ) {
+    fn enter_function(&mut self, func: &'a ast::StmtFunctionDef) {
         // Python decorators: each `@decorator` is in itself an extra
         // expression that runs at definition time. The legacy walker
         // records them as part of the enclosing space's metric stream
         // (decorators land in the *enclosing* class/unit). We follow
         // that by visiting decorators *before* opening the function
         // space.
-        for decorator in decorator_list {
+        for decorator in &func.decorator_list {
             self.visit_expr(&decorator.expression);
         }
 
-        self.open_space(SpaceKind::Function, range, Some(name.to_string()));
-        let argc = parameters.len() as u32;
+        self.open_space(
+            SpaceKind::Function,
+            func.range,
+            Some(func.name.id.as_str().to_string()),
+        );
+        let argc = func.parameters.len() as u32;
         self.current().nargs.record_function_args(argc);
 
         // Cognitive — function entry resets nesting/lambda and bumps
@@ -249,51 +246,47 @@ impl<'a> Visitor<'a> {
         let saved = self.cognitive;
         self.cognitive = ctx;
 
-        // Walk the parameter defaults / annotations first so they
-        // contribute Halstead/ABC/etc. against the function's own state
-        // (Python evaluates these at definition time, but they belong
-        // to the function's signature — keep them in the func space).
-        self.visit_parameters(parameters);
+        // Walk parameters (defaults / annotations contribute Halstead /
+        // ABC against the function's own state — Python evaluates these
+        // at definition time but they belong to the function's
+        // signature). The default `visit_parameters` walks defaults +
+        // annotations through `visit_expr` — exactly what we want.
+        self.visit_parameters(&func.parameters);
 
         // Capture the leading docstring so it does not contribute to
         // Halstead via the token sweep.
-        if let Some(span) = leading_docstring_range(body) {
+        if let Some(span) = leading_docstring_range(&func.body) {
             self.docstring_ranges.push(span);
         }
 
-        for stmt in body {
-            self.visit_stmt(stmt);
-        }
+        self.visit_body(&func.body);
 
         self.cognitive = saved;
         self.close_space();
     }
 
-    fn enter_class(
-        &mut self,
-        name: &str,
-        decorator_list: &[ast::Decorator],
-        arguments: Option<&ast::Arguments>,
-        body: &[Stmt],
-        range: TextRange,
-    ) {
-        for decorator in decorator_list {
+    fn enter_class(&mut self, class: &'a ast::StmtClassDef) {
+        for decorator in &class.decorator_list {
             self.visit_expr(&decorator.expression);
         }
         // Class arguments (base classes, metaclass=...) live in the
         // enclosing scope, not in the class body — they execute at
         // definition time.
-        if let Some(args) = arguments {
+        if let Some(args) = class.arguments.as_deref() {
             self.visit_arguments(args);
         }
 
-        self.open_space(SpaceKind::Class, range, Some(name.to_string()));
+        self.open_space(
+            SpaceKind::Class,
+            class.range,
+            Some(class.name.id.as_str().to_string()),
+        );
 
-        if let Some(span) = leading_docstring_range(body) {
+        if let Some(span) = leading_docstring_range(&class.body) {
             self.docstring_ranges.push(span);
         }
 
-        for stmt in body {
+        for stmt in &class.body {
             // Class-body assignments — `name: T = value` (StmtAnnAssign)
             // and `name = value` (StmtAssign with bare-identifier
             // target) — count as class attributes (NPA). Method-style
@@ -344,7 +337,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    fn enter_lambda(&mut self, lam: &ast::ExprLambda) {
+    fn enter_lambda(&mut self, lam: &'a ast::ExprLambda) {
         self.open_space(SpaceKind::Closure, lam.range, None);
         let argc = lam
             .parameters
@@ -365,610 +358,6 @@ impl<'a> Visitor<'a> {
 
         self.cognitive = saved;
         self.close_space();
-    }
-
-    fn visit_stmt(&mut self, stmt: &Stmt) {
-        // LOC accounting — every statement bumps lloc, and its starting
-        // line is a code line.
-        self.observe_loc_for_stmt(stmt);
-
-        match stmt {
-            Stmt::FunctionDef(ast::StmtFunctionDef {
-                name,
-                parameters,
-                decorator_list,
-                body,
-                range,
-                ..
-            }) => {
-                self.enter_function(name.id.as_str(), parameters, decorator_list, body, *range);
-            }
-            Stmt::ClassDef(ast::StmtClassDef {
-                name,
-                decorator_list,
-                arguments,
-                body,
-                range,
-                ..
-            }) => {
-                self.enter_class(
-                    name.id.as_str(),
-                    decorator_list,
-                    arguments.as_deref(),
-                    body,
-                    *range,
-                );
-            }
-            Stmt::If(ast::StmtIf {
-                test,
-                body,
-                elif_else_clauses,
-                ..
-            }) => {
-                self.current().cyclomatic.record_decision();
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (mehen-engine cognitive.rs:239):
-                // a new control-flow scope resets the boolean sequence so two
-                // sibling `if a and b: ...` blocks each contribute +1 for their
-                // own `and`, instead of collapsing into a single same-op run.
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                self.visit_expr(test);
-                for s in body {
-                    self.visit_stmt(s);
-                }
-                // Elif/else clauses inherit the nesting bump from their
-                // owning `if` (legacy walks them as children of `if_statement`,
-                // so they see the parent's nesting via the nesting map).
-                // Keep `cognitive.nesting` raised while walking them.
-                for clause in elif_else_clauses {
-                    self.visit_elif_else_clause(clause);
-                }
-                self.cognitive.nesting -= 1;
-            }
-            Stmt::For(ast::StmtFor {
-                target,
-                iter,
-                body,
-                orelse,
-                ..
-            }) => {
-                self.current().cyclomatic.record_decision();
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                self.visit_expr(target);
-                self.visit_expr(iter);
-                for s in body {
-                    self.visit_stmt(s);
-                }
-                self.cognitive.nesting -= 1;
-                if !orelse.is_empty() {
-                    // `for ... else` — the else-branch runs only if
-                    // the loop completed without `break`. Legacy treats
-                    // the else-clause as +1 cyclomatic (a real branch
-                    // that depends on `break` not firing).
-                    self.current().cyclomatic.record_decision();
-                    self.current().cognitive.increment_by_one();
-                    self.current().abc.record_condition();
-                    for s in orelse {
-                        self.visit_stmt(s);
-                    }
-                }
-            }
-            Stmt::While(ast::StmtWhile {
-                test, body, orelse, ..
-            }) => {
-                self.current().cyclomatic.record_decision();
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                self.visit_expr(test);
-                for s in body {
-                    self.visit_stmt(s);
-                }
-                self.cognitive.nesting -= 1;
-                if !orelse.is_empty() {
-                    self.current().cyclomatic.record_decision();
-                    self.current().cognitive.increment_by_one();
-                    self.current().abc.record_condition();
-                    for s in orelse {
-                        self.visit_stmt(s);
-                    }
-                }
-            }
-            Stmt::Try(ast::StmtTry {
-                body,
-                handlers,
-                orelse,
-                finalbody,
-                ..
-            }) => {
-                // `try` itself is a +1 nesting bump (cognitive only —
-                // legacy does not count the bare `try` for cyclomatic
-                // because the decision is in the handler). The `try`
-                // raises the nesting level for its body AND its
-                // except / else / finally branches (siblings in the
-                // Ruff AST, but children of the `try_statement` in
-                // tree-sitter — both should see the same nesting).
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                for s in body {
-                    self.visit_stmt(s);
-                }
-                for handler in handlers {
-                    self.visit_except_handler(handler);
-                }
-                if !orelse.is_empty() {
-                    self.current().cognitive.increment_by_one();
-                    for s in orelse {
-                        self.visit_stmt(s);
-                    }
-                }
-                if !finalbody.is_empty() {
-                    self.current().cognitive.increment_by_one();
-                    for s in finalbody {
-                        self.visit_stmt(s);
-                    }
-                }
-                self.cognitive.nesting -= 1;
-            }
-            Stmt::Match(ast::StmtMatch { subject, cases, .. }) => {
-                // `match` itself does not increment cyclomatic — each
-                // `case` does. ABC records `match` as a condition once
-                // (the match itself is a structural branch).
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                self.visit_expr(subject);
-                for case in cases {
-                    self.visit_match_case(case);
-                }
-                self.cognitive.nesting -= 1;
-            }
-            Stmt::With(ast::StmtWith { items, body, .. }) => {
-                // `with` is not a cyclomatic decision (no branching),
-                // but it does add cognitive nesting (a structural
-                // scope) and one ABC condition equivalent.
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                for item in items {
-                    self.visit_expr(&item.context_expr);
-                    if let Some(opt_vars) = &item.optional_vars {
-                        self.visit_expr(opt_vars);
-                    }
-                }
-                for s in body {
-                    self.visit_stmt(s);
-                }
-                self.cognitive.nesting -= 1;
-            }
-            Stmt::Return(ast::StmtReturn { value, .. }) => {
-                self.current().nexit.record_exit();
-                if let Some(v) = value {
-                    self.visit_expr(v);
-                }
-            }
-            Stmt::Raise(ast::StmtRaise { exc, cause, .. }) => {
-                self.current().nexit.record_exit();
-                if let Some(e) = exc {
-                    self.visit_expr(e);
-                }
-                if let Some(c) = cause {
-                    self.visit_expr(c);
-                }
-            }
-            Stmt::Assign(ast::StmtAssign { targets, value, .. }) => {
-                self.current().abc.record_assignment();
-                for t in targets {
-                    self.visit_expr(t);
-                }
-                self.visit_expr(value);
-            }
-            Stmt::AugAssign(ast::StmtAugAssign { target, value, .. }) => {
-                self.current().abc.record_assignment();
-                self.visit_expr(target);
-                self.visit_expr(value);
-            }
-            Stmt::AnnAssign(ast::StmtAnnAssign {
-                target,
-                annotation,
-                value,
-                ..
-            }) => {
-                if value.is_some() {
-                    self.current().abc.record_assignment();
-                }
-                self.visit_expr(target);
-                self.visit_expr(annotation);
-                if let Some(v) = value {
-                    self.visit_expr(v);
-                }
-            }
-            Stmt::Expr(ast::StmtExpr { value, .. }) => {
-                // ExpressionStatement resets the boolean sequence (for
-                // cognitive complexity boolean-chain folding).
-                self.current().cognitive.boolean_seq.reset();
-                self.visit_expr(value);
-            }
-            // Statements that don't recurse into expressions or have
-            // no metric implications beyond the LOC bump above.
-            Stmt::Break(_)
-            | Stmt::Continue(_)
-            | Stmt::Pass(_)
-            | Stmt::Global(_)
-            | Stmt::Nonlocal(_)
-            | Stmt::Import(_)
-            | Stmt::ImportFrom(_) => {}
-            Stmt::Delete(ast::StmtDelete { targets, .. }) => {
-                for t in targets {
-                    self.visit_expr(t);
-                }
-            }
-            Stmt::Assert(ast::StmtAssert { test, msg, .. }) => {
-                self.visit_expr(test);
-                if let Some(m) = msg {
-                    self.visit_expr(m);
-                }
-            }
-            Stmt::TypeAlias(ast::StmtTypeAlias { name, value, .. }) => {
-                // `type X = Y` (PEP 695 type alias). The target is an
-                // assignment — count it once.
-                self.current().abc.record_assignment();
-                self.visit_expr(name);
-                self.visit_expr(value);
-            }
-            Stmt::IpyEscapeCommand(_) => {
-                // Notebook-only IPython escape commands are not
-                // reachable for `.py` source. Skip silently.
-            }
-        }
-    }
-
-    fn visit_elif_else_clause(&mut self, clause: &ElifElseClause) {
-        // Elif: +1 cyclomatic (the chained condition is a real branch),
-        // +1 cognitive (no nesting bump — its cost is paid by the outer
-        // `if`), reset the boolean sequence.
-        // Else: +1 cognitive only — no cyclomatic increment because the
-        // else branch isn't a separate decision (the if already picked
-        // a branch).
-        if clause.test.is_some() {
-            self.current().cyclomatic.record_decision();
-            self.current().cognitive.increment_by_one();
-            self.current().cognitive.boolean_seq.reset();
-            self.current().abc.record_condition();
-        } else {
-            self.current().cognitive.increment_by_one();
-            self.current().abc.record_condition();
-        }
-        if let Some(test) = &clause.test {
-            self.visit_expr(test);
-        }
-        for s in &clause.body {
-            self.visit_stmt(s);
-        }
-    }
-
-    fn visit_except_handler(&mut self, handler: &ExceptHandler) {
-        let ExceptHandler::ExceptHandler(ast::ExceptHandlerExceptHandler { type_, body, .. }) =
-            handler;
-        self.current().cyclomatic.record_decision();
-        self.current().abc.record_condition();
-        let effective = self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-        self.current().cognitive.increase_nesting(effective);
-        // Match legacy `increase_nesting` (cognitive.rs:239).
-        self.current().cognitive.boolean_seq.reset();
-        self.cognitive.nesting += 1;
-        if let Some(t) = type_ {
-            self.visit_expr(t);
-        }
-        for s in body {
-            self.visit_stmt(s);
-        }
-        self.cognitive.nesting -= 1;
-    }
-
-    fn visit_match_case(&mut self, case: &MatchCase) {
-        self.current().cyclomatic.record_decision();
-        self.current().abc.record_condition();
-        let effective = self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-        self.current().cognitive.increase_nesting(effective);
-        // Match legacy `increase_nesting` (cognitive.rs:239).
-        self.current().cognitive.boolean_seq.reset();
-        self.cognitive.nesting += 1;
-        if let Some(g) = &case.guard {
-            self.visit_expr(g);
-        }
-        for s in &case.body {
-            self.visit_stmt(s);
-        }
-        self.cognitive.nesting -= 1;
-    }
-
-    fn visit_parameters(&mut self, params: &Parameters) {
-        // Parameter defaults and annotations are runtime-evaluated
-        // expressions in Python — visit them so they participate in
-        // ABC / cyclomatic / Halstead.
-        for p in params.iter_non_variadic_params() {
-            if let Some(annotation) = &p.parameter.annotation {
-                self.visit_expr(annotation);
-            }
-            if let Some(default) = &p.default {
-                self.visit_expr(default);
-            }
-        }
-        if let Some(va) = &params.vararg
-            && let Some(annotation) = &va.annotation
-        {
-            self.visit_expr(annotation);
-        }
-        if let Some(kw) = &params.kwarg
-            && let Some(annotation) = &kw.annotation
-        {
-            self.visit_expr(annotation);
-        }
-    }
-
-    fn visit_arguments(&mut self, args: &ast::Arguments) {
-        for arg in &args.args {
-            self.visit_expr(arg);
-        }
-        for kw in &args.keywords {
-            self.visit_expr(&kw.value);
-        }
-    }
-
-    fn visit_expr(&mut self, expr: &Expr) {
-        match expr {
-            Expr::BoolOp(ast::ExprBoolOp { op, values, .. }) => {
-                // Boolean `and` / `or` — each operand beyond the first
-                // is one decision point per legacy.
-                for _ in 1..values.len() {
-                    self.current().cyclomatic.record_decision();
-                    self.current().abc.record_condition();
-                }
-                // Lambda-ancestor bonus (legacy cognitive.rs:281): the
-                // *outermost* BoolOp inside a statement adds one structural
-                // unit per enclosing lambda. Inside `bar = lambda a:
-                // lambda b: b or True or True`, the `or` sequence sits
-                // inside two lambdas — legacy adds +2 to the per-space
-                // structural before the boolean-sequence collapser.
-                let lambda_bonus = if self.cognitive.bool_op_depth == 0 {
-                    self.cognitive.lambda
-                } else {
-                    0
-                };
-                if lambda_bonus > 0 {
-                    self.current().cognitive.record_increment(lambda_bonus);
-                }
-                let label = match op {
-                    BoolOp::And => "and",
-                    BoolOp::Or => "or",
-                };
-                self.current().cognitive.observe_boolean(label);
-                self.cognitive.bool_op_depth = self.cognitive.bool_op_depth.saturating_add(1);
-                for v in values {
-                    self.visit_expr(v);
-                }
-                self.cognitive.bool_op_depth = self.cognitive.bool_op_depth.saturating_sub(1);
-            }
-            Expr::Named(ast::ExprNamed { target, value, .. }) => {
-                self.current().abc.record_assignment();
-                self.visit_expr(target);
-                self.visit_expr(value);
-            }
-            Expr::BinOp(ast::ExprBinOp { left, right, .. }) => {
-                self.visit_expr(left);
-                self.visit_expr(right);
-            }
-            Expr::UnaryOp(ast::ExprUnaryOp { op, operand, .. }) => {
-                if matches!(op, UnaryOp::Not) {
-                    self.current().cognitive.boolean_seq.not_operator("not");
-                }
-                self.visit_expr(operand);
-            }
-            Expr::Lambda(lam) => {
-                self.enter_lambda(lam);
-            }
-            Expr::If(ast::ExprIf {
-                test, body, orelse, ..
-            }) => {
-                // Conditional expression `a if b else c` — one decision.
-                self.current().cyclomatic.record_decision();
-                self.current().abc.record_condition();
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                // Match legacy `increase_nesting` (cognitive.rs:239).
-                self.current().cognitive.boolean_seq.reset();
-                self.cognitive.nesting += 1;
-                self.visit_expr(test);
-                self.visit_expr(body);
-                self.visit_expr(orelse);
-                self.cognitive.nesting -= 1;
-            }
-            Expr::Compare(ast::ExprCompare {
-                left,
-                ops: _,
-                comparators,
-                ..
-            }) => {
-                // Comparison ops (`==`, `<`, ...) — each pair counts as
-                // one ABC condition.
-                for _ in comparators.iter() {
-                    self.current().abc.record_condition();
-                }
-                self.visit_expr(left);
-                for c in comparators {
-                    self.visit_expr(c);
-                }
-            }
-            Expr::Call(ast::ExprCall {
-                func, arguments, ..
-            }) => {
-                self.current().abc.record_branch();
-                self.visit_expr(func);
-                for a in &arguments.args {
-                    self.visit_expr(a);
-                }
-                for kw in &arguments.keywords {
-                    self.visit_expr(&kw.value);
-                }
-            }
-            Expr::Attribute(attr) => {
-                // Halstead-wise, `a.b` is two operand tokens
-                // (`a` and `b`) plus one operator (`.`) — exactly what
-                // the lexer emits. We do NOT emit an extra "attribute"
-                // operand for the joined chain text; doing so would
-                // triple-count the same syntactic structure (legacy
-                // Python tree-sitter walker also did not emit such an
-                // entry, see `crates/mehen-engine/src/legacy/getter.rs`
-                // — `Attribute` is not in the operand match arms).
-                self.visit_expr(&attr.value);
-            }
-            Expr::Subscript(ast::ExprSubscript { value, slice, .. }) => {
-                self.visit_expr(value);
-                self.visit_expr(slice);
-            }
-            Expr::Starred(ast::ExprStarred { value, .. }) => {
-                self.visit_expr(value);
-            }
-            Expr::Tuple(ast::ExprTuple { elts, .. }) | Expr::List(ast::ExprList { elts, .. }) => {
-                for e in elts {
-                    self.visit_expr(e);
-                }
-            }
-            Expr::Set(ast::ExprSet { elts, .. }) => {
-                for e in elts {
-                    self.visit_expr(e);
-                }
-            }
-            Expr::Slice(ast::ExprSlice {
-                lower, upper, step, ..
-            }) => {
-                if let Some(l) = lower {
-                    self.visit_expr(l);
-                }
-                if let Some(u) = upper {
-                    self.visit_expr(u);
-                }
-                if let Some(s) = step {
-                    self.visit_expr(s);
-                }
-            }
-            Expr::Dict(ast::ExprDict { items, .. }) => {
-                for item in items {
-                    if let Some(k) = &item.key {
-                        self.visit_expr(k);
-                    }
-                    self.visit_expr(&item.value);
-                }
-            }
-            Expr::ListComp(ast::ExprListComp {
-                elt, generators, ..
-            })
-            | Expr::SetComp(ast::ExprSetComp {
-                elt, generators, ..
-            })
-            | Expr::Generator(ast::ExprGenerator {
-                elt, generators, ..
-            }) => {
-                self.visit_expr(elt);
-                for comp in generators {
-                    self.visit_comprehension(comp);
-                }
-            }
-            Expr::DictComp(ast::ExprDictComp {
-                key,
-                value,
-                generators,
-                ..
-            }) => {
-                self.visit_expr(key);
-                self.visit_expr(value);
-                for comp in generators {
-                    self.visit_comprehension(comp);
-                }
-            }
-            Expr::Await(ast::ExprAwait { value, .. })
-            | Expr::Yield(ast::ExprYield {
-                value: Some(value), ..
-            })
-            | Expr::YieldFrom(ast::ExprYieldFrom { value, .. }) => {
-                self.visit_expr(value);
-            }
-            Expr::Yield(ast::ExprYield { value: None, .. }) => {}
-            Expr::FString(ast::ExprFString { value, .. }) => {
-                for part in value.iter() {
-                    if let ast::FStringPart::FString(fs) = part {
-                        for elem in fs.elements.iter() {
-                            if let ast::InterpolatedStringElement::Interpolation(interp) = elem {
-                                self.visit_expr(&interp.expression);
-                            }
-                        }
-                    }
-                }
-            }
-            Expr::TString(ast::ExprTString { value, .. }) => {
-                for part in value.iter() {
-                    for elem in part.elements.iter() {
-                        if let ast::InterpolatedStringElement::Interpolation(interp) = elem {
-                            self.visit_expr(&interp.expression);
-                        }
-                    }
-                }
-            }
-            // Atomic expressions — no metric impact via the AST walk;
-            // their tokens are picked up by the Halstead token sweep.
-            Expr::Name(_)
-            | Expr::StringLiteral(_)
-            | Expr::BytesLiteral(_)
-            | Expr::NumberLiteral(_)
-            | Expr::BooleanLiteral(_)
-            | Expr::NoneLiteral(_)
-            | Expr::EllipsisLiteral(_)
-            | Expr::IpyEscapeCommand(_) => {}
-        }
-    }
-
-    fn visit_comprehension(&mut self, comp: &ast::Comprehension) {
-        // A comprehension's first generator is +1 cyclomatic (the
-        // implicit `for`); each `if` filter is also +1.
-        self.current().cyclomatic.record_decision();
-        self.current().abc.record_condition();
-        for _ in &comp.ifs {
-            self.current().cyclomatic.record_decision();
-            self.current().abc.record_condition();
-        }
-        self.visit_expr(&comp.target);
-        self.visit_expr(&comp.iter);
-        for f in &comp.ifs {
-            self.visit_expr(f);
-        }
     }
 
     fn observe_loc_for_stmt(&mut self, stmt: &Stmt) {
@@ -1077,6 +466,388 @@ impl<'a> Visitor<'a> {
         self.docstring_ranges
             .iter()
             .any(|r| span.start() >= r.start() && span.end() <= r.end())
+    }
+}
+
+impl<'a> SourceOrderVisitor<'a> for Visitor<'a> {
+    fn visit_stmt(&mut self, stmt: &'a Stmt) {
+        // LOC accounting — every statement bumps lloc, and its starting
+        // line is a code line.
+        self.observe_loc_for_stmt(stmt);
+
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                self.enter_function(func);
+            }
+            Stmt::ClassDef(class) => {
+                self.enter_class(class);
+            }
+            Stmt::If(ast::StmtIf {
+                test,
+                body,
+                elif_else_clauses,
+                ..
+            }) => {
+                self.current().cyclomatic.record_decision();
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                // Match legacy `increase_nesting` (mehen-engine cognitive.rs:239):
+                // a new control-flow scope resets the boolean sequence so two
+                // sibling `if a and b: ...` blocks each contribute +1 for their
+                // own `and`, instead of collapsing into a single same-op run.
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_expr(test);
+                self.visit_body(body);
+                // Elif/else clauses inherit the nesting bump from their
+                // owning `if` (legacy walks them as children of `if_statement`,
+                // so they see the parent's nesting via the nesting map).
+                // Keep `cognitive.nesting` raised while walking them.
+                for clause in elif_else_clauses {
+                    self.visit_elif_else_clause(clause);
+                }
+                self.cognitive.nesting -= 1;
+            }
+            Stmt::For(ast::StmtFor {
+                target,
+                iter,
+                body,
+                orelse,
+                ..
+            }) => {
+                self.current().cyclomatic.record_decision();
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_expr(target);
+                self.visit_expr(iter);
+                self.visit_body(body);
+                self.cognitive.nesting -= 1;
+                if !orelse.is_empty() {
+                    // `for ... else` — the else-branch runs only if
+                    // the loop completed without `break`. Legacy treats
+                    // the else-clause as +1 cyclomatic (a real branch
+                    // that depends on `break` not firing).
+                    self.current().cyclomatic.record_decision();
+                    self.current().cognitive.increment_by_one();
+                    self.current().abc.record_condition();
+                    self.visit_body(orelse);
+                }
+            }
+            Stmt::While(ast::StmtWhile {
+                test, body, orelse, ..
+            }) => {
+                self.current().cyclomatic.record_decision();
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_expr(test);
+                self.visit_body(body);
+                self.cognitive.nesting -= 1;
+                if !orelse.is_empty() {
+                    self.current().cyclomatic.record_decision();
+                    self.current().cognitive.increment_by_one();
+                    self.current().abc.record_condition();
+                    self.visit_body(orelse);
+                }
+            }
+            Stmt::Try(ast::StmtTry {
+                body,
+                handlers,
+                orelse,
+                finalbody,
+                ..
+            }) => {
+                // `try` itself is a +1 nesting bump (cognitive only —
+                // legacy does not count the bare `try` for cyclomatic
+                // because the decision is in the handler). The `try`
+                // raises the nesting level for its body AND its
+                // except / else / finally branches (siblings in the
+                // Ruff AST, but children of the `try_statement` in
+                // tree-sitter — both should see the same nesting).
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_body(body);
+                for handler in handlers {
+                    self.visit_except_handler(handler);
+                }
+                if !orelse.is_empty() {
+                    self.current().cognitive.increment_by_one();
+                    self.visit_body(orelse);
+                }
+                if !finalbody.is_empty() {
+                    self.current().cognitive.increment_by_one();
+                    self.visit_body(finalbody);
+                }
+                self.cognitive.nesting -= 1;
+            }
+            Stmt::Match(ast::StmtMatch { subject, cases, .. }) => {
+                // `match` itself does not increment cyclomatic — each
+                // `case` does. ABC records `match` as a condition once
+                // (the match itself is a structural branch).
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_expr(subject);
+                for case in cases {
+                    self.visit_match_case(case);
+                }
+                self.cognitive.nesting -= 1;
+            }
+            Stmt::With(ast::StmtWith { items, body, .. }) => {
+                // `with` is not a cyclomatic decision (no branching),
+                // but it does add cognitive nesting (a structural
+                // scope) and one ABC condition equivalent.
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                for item in items {
+                    self.visit_expr(&item.context_expr);
+                    if let Some(opt_vars) = &item.optional_vars {
+                        self.visit_expr(opt_vars);
+                    }
+                }
+                self.visit_body(body);
+                self.cognitive.nesting -= 1;
+            }
+            Stmt::Return(ast::StmtReturn { value, .. }) => {
+                self.current().nexit.record_exit();
+                if let Some(v) = value {
+                    self.visit_expr(v);
+                }
+            }
+            Stmt::Raise(ast::StmtRaise { exc, cause, .. }) => {
+                self.current().nexit.record_exit();
+                if let Some(e) = exc {
+                    self.visit_expr(e);
+                }
+                if let Some(c) = cause {
+                    self.visit_expr(c);
+                }
+            }
+            Stmt::Assign(_) | Stmt::AugAssign(_) => {
+                self.current().abc.record_assignment();
+                walk_stmt(self, stmt);
+            }
+            Stmt::AnnAssign(ast::StmtAnnAssign { value, .. }) => {
+                if value.is_some() {
+                    self.current().abc.record_assignment();
+                }
+                walk_stmt(self, stmt);
+            }
+            Stmt::Expr(_) => {
+                // ExpressionStatement resets the boolean sequence (for
+                // cognitive complexity boolean-chain folding).
+                self.current().cognitive.boolean_seq.reset();
+                walk_stmt(self, stmt);
+            }
+            Stmt::TypeAlias(_) => {
+                // `type X = Y` (PEP 695 type alias). The target is an
+                // assignment — count it once.
+                self.current().abc.record_assignment();
+                walk_stmt(self, stmt);
+            }
+            // Plain descent — defaults handle the children we'd visit
+            // anyway. Statements with no decision/assignment side
+            // effect: bare keywords (`pass`/`break`/`continue`),
+            // imports, name declarations (`global`/`nonlocal`), `del`,
+            // `assert`, IPython escape commands.
+            Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Pass(_)
+            | Stmt::Global(_)
+            | Stmt::Nonlocal(_)
+            | Stmt::Import(_)
+            | Stmt::ImportFrom(_)
+            | Stmt::Delete(_)
+            | Stmt::Assert(_)
+            | Stmt::IpyEscapeCommand(_) => {
+                walk_stmt(self, stmt);
+            }
+        }
+    }
+
+    fn visit_expr(&mut self, expr: &'a Expr) {
+        match expr {
+            Expr::BoolOp(ast::ExprBoolOp { op, values, .. }) => {
+                // Boolean `and` / `or` — each operand beyond the first
+                // is one decision point per legacy.
+                for _ in 1..values.len() {
+                    self.current().cyclomatic.record_decision();
+                    self.current().abc.record_condition();
+                }
+                // Lambda-ancestor bonus (legacy cognitive.rs:281): the
+                // *outermost* BoolOp inside a statement adds one structural
+                // unit per enclosing lambda. Inside `bar = lambda a:
+                // lambda b: b or True or True`, the `or` sequence sits
+                // inside two lambdas — legacy adds +2 to the per-space
+                // structural before the boolean-sequence collapser.
+                let lambda_bonus = if self.cognitive.bool_op_depth == 0 {
+                    self.cognitive.lambda
+                } else {
+                    0
+                };
+                if lambda_bonus > 0 {
+                    self.current().cognitive.record_increment(lambda_bonus);
+                }
+                let label = match op {
+                    BoolOp::And => "and",
+                    BoolOp::Or => "or",
+                };
+                self.current().cognitive.observe_boolean(label);
+                self.cognitive.bool_op_depth = self.cognitive.bool_op_depth.saturating_add(1);
+                for v in values {
+                    self.visit_expr(v);
+                }
+                self.cognitive.bool_op_depth = self.cognitive.bool_op_depth.saturating_sub(1);
+            }
+            Expr::Named(_) => {
+                self.current().abc.record_assignment();
+                walk_expr(self, expr);
+            }
+            Expr::UnaryOp(ast::ExprUnaryOp { op, .. }) => {
+                if matches!(op, UnaryOp::Not) {
+                    self.current().cognitive.boolean_seq.not_operator("not");
+                }
+                walk_expr(self, expr);
+            }
+            Expr::Lambda(lam) => {
+                self.enter_lambda(lam);
+            }
+            Expr::If(ast::ExprIf {
+                test, body, orelse, ..
+            }) => {
+                // Conditional expression `a if b else c` — one decision.
+                self.current().cyclomatic.record_decision();
+                self.current().abc.record_condition();
+                let effective =
+                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+                self.current().cognitive.increase_nesting(effective);
+                self.current().cognitive.boolean_seq.reset();
+                self.cognitive.nesting += 1;
+                self.visit_expr(test);
+                self.visit_expr(body);
+                self.visit_expr(orelse);
+                self.cognitive.nesting -= 1;
+            }
+            Expr::Compare(ast::ExprCompare { comparators, .. }) => {
+                // Comparison ops (`==`, `<`, ...) — each pair counts as
+                // one ABC condition.
+                for _ in comparators.iter() {
+                    self.current().abc.record_condition();
+                }
+                walk_expr(self, expr);
+            }
+            Expr::Call(_) => {
+                self.current().abc.record_branch();
+                walk_expr(self, expr);
+            }
+            // Halstead-wise, `a.b` is two operand tokens (`a` and `b`)
+            // plus one operator (`.`) — exactly what the lexer emits.
+            // We do NOT emit an extra "attribute" operand for the
+            // joined chain text; doing so would triple-count the same
+            // syntactic structure (legacy Python tree-sitter walker
+            // also did not emit such an entry, see
+            // `crates/mehen-engine/src/legacy/getter.rs` — `Attribute`
+            // is not in the operand match arms). The default
+            // `walk_expr` descends into `value` and visits the `attr`
+            // identifier as a no-op, which is exactly what we want.
+            //
+            // Everything else (BinOp, Subscript/Starred, Tuple/List/
+            // Set/Slice/Dict, comprehensions, Await/Yield, FString/
+            // TString, atomic literals, Name) is structural-only —
+            // defaults give us the same recursion we used to do
+            // manually.
+            _ => walk_expr(self, expr),
+        }
+    }
+
+    fn visit_elif_else_clause(&mut self, clause: &'a ElifElseClause) {
+        // Elif: +1 cyclomatic (the chained condition is a real branch),
+        // +1 cognitive (no nesting bump — its cost is paid by the outer
+        // `if`), reset the boolean sequence.
+        // Else: +1 cognitive only — no cyclomatic increment because the
+        // else branch isn't a separate decision (the if already picked
+        // a branch).
+        if clause.test.is_some() {
+            self.current().cyclomatic.record_decision();
+            self.current().cognitive.increment_by_one();
+            self.current().cognitive.boolean_seq.reset();
+            self.current().abc.record_condition();
+        } else {
+            self.current().cognitive.increment_by_one();
+            self.current().abc.record_condition();
+        }
+        if let Some(test) = &clause.test {
+            self.visit_expr(test);
+        }
+        self.visit_body(&clause.body);
+    }
+
+    fn visit_except_handler(&mut self, handler: &'a ExceptHandler) {
+        let ExceptHandler::ExceptHandler(ast::ExceptHandlerExceptHandler { type_, body, .. }) =
+            handler;
+        self.current().cyclomatic.record_decision();
+        self.current().abc.record_condition();
+        let effective = self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+        self.current().cognitive.increase_nesting(effective);
+        self.current().cognitive.boolean_seq.reset();
+        self.cognitive.nesting += 1;
+        if let Some(t) = type_ {
+            self.visit_expr(t);
+        }
+        self.visit_body(body);
+        self.cognitive.nesting -= 1;
+    }
+
+    fn visit_match_case(&mut self, case: &'a MatchCase) {
+        self.current().cyclomatic.record_decision();
+        self.current().abc.record_condition();
+        let effective = self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
+        self.current().cognitive.increase_nesting(effective);
+        self.current().cognitive.boolean_seq.reset();
+        self.cognitive.nesting += 1;
+        // We deliberately do NOT call `self.visit_pattern(&case.pattern)` —
+        // pattern bindings have no metric impact (legacy didn't count them
+        // either). Guards and bodies do.
+        if let Some(g) = &case.guard {
+            self.visit_expr(g);
+        }
+        self.visit_body(&case.body);
+        self.cognitive.nesting -= 1;
+    }
+
+    fn visit_comprehension(&mut self, comp: &'a Comprehension) {
+        // A comprehension's first generator is +1 cyclomatic (the
+        // implicit `for`); each `if` filter is also +1.
+        self.current().cyclomatic.record_decision();
+        self.current().abc.record_condition();
+        for _ in &comp.ifs {
+            self.current().cyclomatic.record_decision();
+            self.current().abc.record_condition();
+        }
+        self.visit_expr(&comp.target);
+        self.visit_expr(&comp.iter);
+        for f in &comp.ifs {
+            self.visit_expr(f);
+        }
     }
 }
 
