@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/ophidiarium/mehen/compare/v0.6.1...v0.7.0) (2026-05-18)
+
+
+### Features
+
+* **php:** add PHP language support ([4b42b9e](https://github.com/ophidiarium/mehen/commit/4b42b9ef39a9255d932737a0bc597139da8b603f))
+
+
+### Bug Fixes
+
+* address PR review comment ([d29c594](https://github.com/ophidiarium/mehen/commit/d29c594f6520a05713b18ead105ccc3d692a15c9))
+* address PR review comment ([6f04185](https://github.com/ophidiarium/mehen/commit/6f0418513cb5dcdf753e40cdf903f05c77a098c9))
+* address PR review comment ([580d09b](https://github.com/ophidiarium/mehen/commit/580d09b143d8b26076aea1bd83ed3612213ac13d))
+* address PR review comment ([64cec1e](https://github.com/ophidiarium/mehen/commit/64cec1e761afcf849a88ea6f4e20623c2e82db2c))
+* address PR review comment ([b8d773a](https://github.com/ophidiarium/mehen/commit/b8d773a914187e8c64436e1f00bd479fd28ceae6))
+* address PR review comment ([2f84abf](https://github.com/ophidiarium/mehen/commit/2f84abf5c50b0dfe01b0958e5515398d9f84a841))
+* address PR review comment ([08435b5](https://github.com/ophidiarium/mehen/commit/08435b5ab050eab4c89a9207031150f1f4af9fd1))
+* address PR review comment ([06d79f5](https://github.com/ophidiarium/mehen/commit/06d79f57b61f0e0a4faa736644978082dc3bd0f8))
+* address PR review comments ([5d0559d](https://github.com/ophidiarium/mehen/commit/5d0559d5d453dd21fd11bc8ce2a33c9eba8b5e95))
+* address PR review comments ([56028e7](https://github.com/ophidiarium/mehen/commit/56028e7dede525b661db88dd8ab16a0c6a65330f))
+
 ## [0.6.1](https://github.com/ophidiarium/mehen/compare/v0.6.0...v0.6.1) (2026-05-15)
 
 
