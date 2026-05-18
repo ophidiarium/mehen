@@ -181,7 +181,11 @@ pub(crate) fn python_facts(node: &Node<'_>) -> NodeFacts {
     );
     NodeFacts {
         cyclomatic_decision,
-        cognitive_increment: u32::from(cyclomatic_decision),
+        cognitive: if cyclomatic_decision {
+            mehen_tree_sitter::CognitiveFact::IncreaseNesting
+        } else {
+            mehen_tree_sitter::CognitiveFact::None
+        },
         halstead_operator,
         halstead_operand,
         nexit,

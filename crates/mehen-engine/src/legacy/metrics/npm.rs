@@ -700,8 +700,7 @@ impl Npm for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        KotlinParser, PhpParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
-        TypescriptParser,
+        KotlinParser, PhpParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
     };
     use crate::legacy::tools::check_metrics;
 

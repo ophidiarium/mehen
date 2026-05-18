@@ -13,6 +13,7 @@ publish = false
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
 mehen-tree-sitter = { workspace = true }
+smol_str = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-pwsh = { workspace = true }
 

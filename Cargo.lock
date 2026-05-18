@@ -1747,6 +1747,7 @@ dependencies = [
  "mehen-metrics",
  "mehen-report",
  "mehen-tree-sitter",
+ "smol_str",
  "tree-sitter",
  "tree-sitter-pwsh",
 ]
@@ -1802,6 +1803,7 @@ version = "0.7.0"
 dependencies = [
  "mehen-core",
  "mehen-metrics",
+ "smol_str",
  "tree-sitter",
 ]
 

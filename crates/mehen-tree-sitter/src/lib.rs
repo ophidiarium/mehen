@@ -27,6 +27,6 @@ mod walker;
 pub use parser::{TreeSitterError, TreeSitterParser};
 pub use span::{node_span, text_of};
 pub use walker::{
-    LanguageRules, LocFact, MemberClassification, NodeFacts, ScopeOpen, State, WalkResult,
-    apply_state_to, empty_space, walk,
+    CognitiveFact, LanguageRules, LocFact, MemberClassification, NodeFacts, ScopeOpen, State,
+    WalkResult, apply_state_to, empty_space, walk,
 };

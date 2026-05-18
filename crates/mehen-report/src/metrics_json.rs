@@ -70,6 +70,24 @@ pub struct Nexits {
     pub max: f64,
 }
 
+/// Render the `cognitive` family object: `{ sum, average, min, max }`.
+pub fn cognitive(metrics: &MetricSet) -> Cognitive {
+    Cognitive {
+        sum: as_f64(metrics, "cognitive.sum"),
+        average: as_f64(metrics, "cognitive.average"),
+        min: as_f64(metrics, "cognitive.min"),
+        max: as_f64(metrics, "cognitive.max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Cognitive {
+    pub sum: f64,
+    pub average: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
 /// Render the `npa` family object: 9 fields tracking class /
 /// interface public-attribute counts, totals, per-class CDA averages,
 /// and the rolled-up total CDA.

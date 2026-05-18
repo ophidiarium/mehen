@@ -50,14 +50,13 @@ impl State {
 /// This is the "language interpretation" surface from the rewrite plan
 /// §5.2: each language crate decides which constructs are decisions,
 /// operators, operands, exits, etc. The shared walker accumulates them.
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct NodeFacts {
     /// Counts toward cyclomatic complexity (`if`, `for`, `&&`, …).
     pub cyclomatic_decision: bool,
-    /// Counts toward cognitive complexity. Phase 1 demo: same set as
-    /// cyclomatic; full nesting/binary-sequence rules are language-owned
-    /// and land per language.
-    pub cognitive_increment: u32,
+    /// Cognitive-complexity contribution for this node, per Sonar's
+    /// whitepaper. See [`CognitiveFact`] for the variants.
+    pub cognitive: CognitiveFact,
     /// Halstead operator with the node kind as its key.
     pub halstead_operator: bool,
     /// Halstead operand with the node text as its dedup key.
@@ -72,6 +71,53 @@ pub struct NodeFacts {
     pub abc_assignment: bool,
     /// LOC classification of this node. See [`LocFact`].
     pub loc: LocFact,
+}
+
+/// Cognitive-complexity classification of an AST node, mirroring the
+/// pre-1.0 per-language `Cognitive::compute` arms.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+pub enum CognitiveFact {
+    /// No cognitive contribution.
+    #[default]
+    None,
+    /// Nesting-increasing construct: adds `nesting + 1` to the
+    /// structural count and bumps the nesting depth for the descendant
+    /// nodes (e.g. `if`, `for`, `while`, `switch`, `catch`, ternary).
+    IncreaseNesting,
+    /// Same-level conditional clause: adds `1` without bumping nesting
+    /// (e.g. `else`, `elseif`, `finally`, `trap`). Also resets the
+    /// boolean-sequence tracker.
+    NonNestingPlusOne,
+    /// Boolean operator leaf — feed the BoolSequence collapser. The
+    /// payload is a stable identifier (e.g. `"-and"`, `"-or"`,
+    /// `"&&"`).
+    BooleanOperator(smol_str::SmolStr),
+    /// Unary negation operator — set the BoolSequence's last_op
+    /// without bumping structural so a leading `!`/`-not` doesn't
+    /// trick the collapser.
+    NotOperator(smol_str::SmolStr),
+    /// Statement boundary — reset the BoolSequence so chained
+    /// operators don't bleed across statements.
+    StatementBoundary,
+    /// Statement boundary that also feeds a list of boolean operators
+    /// found among the node's direct children (e.g. PowerShell's
+    /// `pipeline` may carry `pipeline_chain_tail` children with
+    /// `&&` / `||`). Each operator runs through the BoolSequence
+    /// collapser in order.
+    StatementBoundaryWithBooleans(Vec<smol_str::SmolStr>),
+    /// Container that feeds a list of boolean operators to the
+    /// BoolSequence collapser (e.g. PowerShell's `logical_expression`
+    /// holding `-and` / `-or` / `-xor` leaves). Does NOT reset the
+    /// sequence first — the wrapper node itself is not a statement
+    /// boundary.
+    BooleanContainer(Vec<smol_str::SmolStr>),
+    /// Function-depth marker — reset the structural-nesting context
+    /// (the function's own body restarts at nesting=0). Used by
+    /// `function_statement` / `class_method_definition` etc.
+    FunctionEntry,
+    /// Closure / lambda marker — bump the lambda counter (which feeds
+    /// `nesting` for descendants).
+    LambdaEntry,
 }
 
 /// LOC family classification: how this node contributes to the LOC
@@ -218,6 +264,8 @@ fn finalize_state(state: &mut State) {
     state.abc.finalize_minmax();
     state.npa.finalize_minmax();
     state.npm.finalize_minmax();
+    state.cognitive.finalize_minmax();
+    state.cognitive.finalize(state.nom.total());
 }
 
 /// Fold a finalized child state's rolled-up totals (sum/min/max/n)
@@ -239,6 +287,8 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
     parent.npa.merge(&child.npa);
     parent.npm.merge(&child.npm);
     parent.wmc.merge(&child.wmc);
+    parent.cognitive.merge(&child.cognitive);
+    parent.cognitive.finalize(parent.nom.total());
 }
 
 /// Publish a finalized `State` into a `MetricSet` using the shared key
@@ -258,10 +308,7 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     publish_nargs(&state.nargs, &state.nom, target);
     publish_nexit(&state.nexit, target);
 
-    target.insert(
-        MetricKey::new(keys::COGNITIVE),
-        state.cognitive.cognitive as i64,
-    );
+    publish_cognitive(&state.cognitive, target);
 
     let halstead = HalsteadStats::from_counts(state.halstead.counts());
     publish_halstead(&halstead, target);
@@ -368,6 +415,27 @@ fn publish_wmc(stats: &mehen_metrics::WmcStats, target: &mut MetricSet) {
     target.insert(
         MetricKey::new(format!("{}.interfaces", keys::WMC)),
         stats.interface_wmc_sum as i64,
+    );
+}
+
+fn publish_cognitive(stats: &mehen_metrics::CognitiveStats, target: &mut MetricSet) {
+    // Legacy `metric.cognitive` JSON: { sum, average, min, max }.
+    target.insert(MetricKey::new(keys::COGNITIVE), stats.cognitive_sum as i64);
+    target.insert(
+        MetricKey::new(format!("{}.sum", keys::COGNITIVE)),
+        stats.cognitive_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::COGNITIVE)),
+        stats.cognitive_average,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::COGNITIVE)),
+        stats.min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::COGNITIVE)),
+        stats.max as i64,
     );
 }
 
@@ -707,12 +775,27 @@ struct Walker<'a, R: LanguageRules> {
     rules: &'a R,
 }
 
+/// Per-node cognitive-complexity context threaded through the walker
+/// recursion. Mirrors the pre-1.0 `(nesting, depth, lambda)` triple
+/// stored in `nesting_map[NodeId]`. `nesting + depth + lambda` is the
+/// effective nesting level when an `IncreaseNesting` node is observed.
+#[derive(Clone, Copy, Debug, Default)]
+struct CognitiveContext {
+    nesting: u32,
+    depth: u32,
+    lambda: u32,
+}
+
 impl<'a, R: LanguageRules> Walker<'a, R> {
     fn current(&mut self) -> &mut State {
         self.stack.last_mut().expect("walker stack empty")
     }
 
     fn visit(&mut self, node: Node<'_>) {
+        self.visit_with_ctx(node, CognitiveContext::default());
+    }
+
+    fn visit_with_ctx(&mut self, node: Node<'_>, mut ctx: CognitiveContext) {
         let opened_kind = match self.rules.scope_for(&node, self.source_text) {
             Some(ScopeOpen::Open { kind, name }) => {
                 let span = node_span(&node, self.line_index);
@@ -768,10 +851,64 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         if facts.cyclomatic_decision {
             self.current().cyclomatic.record_decision();
         }
-        if facts.cognitive_increment > 0 {
-            self.current()
-                .cognitive
-                .record_increment(facts.cognitive_increment);
+        // Cognitive — drive the per-node state machine. The walker
+        // tracks `(nesting, depth, lambda)` via `ctx`, threaded through
+        // the recursion. See [`CognitiveFact`] for variant semantics.
+        match &facts.cognitive {
+            CognitiveFact::None => {}
+            CognitiveFact::IncreaseNesting => {
+                let effective_nesting = ctx.nesting + ctx.depth + ctx.lambda;
+                self.current().cognitive.increase_nesting(effective_nesting);
+                ctx.nesting += 1;
+            }
+            CognitiveFact::NonNestingPlusOne => {
+                self.current().cognitive.increment_by_one();
+                self.current().cognitive.boolean_seq.reset();
+            }
+            CognitiveFact::BooleanOperator(op) => {
+                self.current().cognitive.observe_boolean(op.as_str());
+            }
+            CognitiveFact::NotOperator(op) => {
+                self.current()
+                    .cognitive
+                    .boolean_seq
+                    .not_operator(op.as_str());
+            }
+            CognitiveFact::StatementBoundary => {
+                self.current().cognitive.boolean_seq.reset();
+            }
+            CognitiveFact::StatementBoundaryWithBooleans(ops) => {
+                self.current().cognitive.boolean_seq.reset();
+                for op in ops {
+                    self.current().cognitive.observe_boolean(op.as_str());
+                }
+            }
+            CognitiveFact::BooleanContainer(ops) => {
+                for op in ops {
+                    self.current().cognitive.observe_boolean(op.as_str());
+                }
+            }
+            CognitiveFact::FunctionEntry => {
+                // Mirrors the pre-1.0 `increment_function_depth_any`:
+                // depth bumps only when the entered function is nested
+                // inside *another* function/method. Detect this by
+                // counting the enclosing `Function` spaces in `kinds`
+                // (excluding the just-pushed self).
+                let nested_inside_function = self
+                    .kinds
+                    .iter()
+                    .rev()
+                    .skip(1) // skip the just-opened self
+                    .any(|k| matches!(k, SpaceKind::Function));
+                ctx.nesting = 0;
+                ctx.lambda = 0;
+                if nested_inside_function {
+                    ctx.depth = ctx.depth.saturating_add(1);
+                }
+            }
+            CognitiveFact::LambdaEntry => {
+                ctx.lambda = ctx.lambda.saturating_add(1);
+            }
         }
         if facts.halstead_operator {
             let kind = node.kind();
@@ -868,7 +1005,7 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         let mut cursor = node.walk();
         if cursor.goto_first_child() {
             loop {
-                self.visit(cursor.node());
+                self.visit_with_ctx(cursor.node(), ctx);
                 if !cursor.goto_next_sibling() {
                     break;
                 }

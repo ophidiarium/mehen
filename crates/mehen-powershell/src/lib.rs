@@ -11,7 +11,8 @@ use mehen_core::{
     Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
 };
 use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, text_of, walk,
+    CognitiveFact, LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, text_of,
+    walk,
 };
 use tree_sitter::Node;
 
@@ -146,7 +147,7 @@ impl LanguageRules for PowerShellRules {
         );
         NodeFacts {
             cyclomatic_decision,
-            cognitive_increment: u32::from(cyclomatic_decision),
+            cognitive: powershell_cognitive_fact(node),
             halstead_operator,
             halstead_operand,
             nexit,
@@ -340,6 +341,87 @@ fn is_powershell_operand(kind: &str) -> bool {
         | "function_name" | "command_name" | "path_command_name_token"
         | "command_parameter"
     )
+}
+
+/// PowerShell cognitive-complexity classification per pre-1.0
+/// `Cognitive for PowershellCode` (`src/metrics/cognitive.rs:640-770`).
+///
+/// Returns one [`CognitiveFact`] describing how this node contributes
+/// to the cognitive state machine; the walker drives the `(nesting,
+/// depth, lambda)` context and the `BoolSequence` collapser based on
+/// the variant.
+fn powershell_cognitive_fact(node: &Node<'_>) -> CognitiveFact {
+    use smol_str::SmolStr;
+    let kind = node.kind();
+    match kind {
+        // Nesting-increasing constructs: `if` / loops / `switch` /
+        // `catch` / ternary / null-coalesce. Each adds `nesting + 1`
+        // and bumps the descendant nesting depth.
+        "if_statement"
+        | "for_statement"
+        | "foreach_statement"
+        | "while_statement"
+        | "do_statement"
+        | "switch_statement"
+        | "catch_clause"
+        | "ternary_expression"
+        | "ternary_argument_expression"
+        | "null_coalesce_expression"
+        | "null_coalesce_argument_expression" => CognitiveFact::IncreaseNesting,
+        // Same-level conditional clauses: +1 without bumping nesting,
+        // and reset the boolean-sequence tracker.
+        "elseif_clause" | "else_clause" | "finally_clause" | "trap_statement" => {
+            CognitiveFact::NonNestingPlusOne
+        }
+        // Pipeline statements: statement-boundary reset + collect
+        // `&&` / `||` from `pipeline_chain_tail` children for the
+        // boolean-sequence collapser.
+        "pipeline" => {
+            let mut ops: Vec<SmolStr> = Vec::new();
+            let mut cur = node.walk();
+            for child in node.children(&mut cur) {
+                if child.kind() != "pipeline_chain_tail" {
+                    continue;
+                }
+                if let Some(op) = child.child(0) {
+                    let op_kind = op.kind();
+                    if matches!(op_kind, "&&" | "||") {
+                        ops.push(SmolStr::new(op_kind));
+                    }
+                }
+            }
+            CognitiveFact::StatementBoundaryWithBooleans(ops)
+        }
+        // Assignment is also a statement boundary for the bool-sequence.
+        "assignment_expression" => CognitiveFact::StatementBoundary,
+        // Negation operators — track in the bool-sequence collapser
+        // without bumping structural so a leading `!` / `-not` doesn't
+        // mistake the next real boolean for a transition.
+        "-not" | "!" | "-bnot" => CognitiveFact::NotOperator(SmolStr::new(kind)),
+        // Logical wrappers carry one or more `-and` / `-or` / `-xor`
+        // leaf tokens. Feed each leaf into the BoolSequence collapser.
+        // The wrapper itself is not a statement boundary, so this is a
+        // `BooleanContainer` (no reset).
+        "logical_expression" | "logical_argument_expression" => {
+            let mut ops: Vec<SmolStr> = Vec::new();
+            let mut cur = node.walk();
+            for child in node.children(&mut cur) {
+                let k = child.kind();
+                if matches!(k, "-and" | "-or" | "-xor") {
+                    ops.push(SmolStr::new(k));
+                }
+            }
+            CognitiveFact::BooleanContainer(ops)
+        }
+        // Function-like spaces reset structural nesting and bump the
+        // `depth` so children of nested functions count their own
+        // nesting from zero.
+        "function_statement" | "class_method_definition" => CognitiveFact::FunctionEntry,
+        // Closures (script-block expressions) bump `lambda` so their
+        // descendants pay the lambda penalty.
+        "script_block_expression" => CognitiveFact::LambdaEntry,
+        _ => CognitiveFact::None,
+    }
 }
 
 /// PowerShell LOC classification per pre-1.0
