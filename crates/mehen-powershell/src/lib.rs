@@ -160,6 +160,48 @@ impl LanguageRules for PowerShellRules {
     fn count_args(&self, node: &Node<'_>, _source: &[u8]) -> u32 {
         powershell_count_args(node)
     }
+
+    fn classify_attribute(
+        &self,
+        node: &Node<'_>,
+        _source: &[u8],
+    ) -> Option<mehen_tree_sitter::MemberClassification> {
+        // PowerShell properties are `class_property_definition` direct
+        // children of a `class_statement`. PowerShell has no
+        // access-modifier equivalent to `private` / `protected`; the
+        // `hidden` keyword only suppresses default Get-Member output —
+        // members remain publicly accessible. Per `about_Hidden`:
+        // "hidden members are still public".
+        if node.kind() != "class_property_definition" {
+            return None;
+        }
+        let in_class = node.parent().is_some_and(|p| p.kind() == "class_statement");
+        if !in_class {
+            return None;
+        }
+        Some(mehen_tree_sitter::MemberClassification {
+            container: mehen_metrics::ContainerKind::Class,
+            is_public: true,
+        })
+    }
+
+    fn classify_method(
+        &self,
+        node: &Node<'_>,
+        _source: &[u8],
+    ) -> Option<mehen_tree_sitter::MemberClassification> {
+        if node.kind() != "class_method_definition" {
+            return None;
+        }
+        let in_class = node.parent().is_some_and(|p| p.kind() == "class_statement");
+        if !in_class {
+            return None;
+        }
+        Some(mehen_tree_sitter::MemberClassification {
+            container: mehen_metrics::ContainerKind::Class,
+            is_public: true,
+        })
+    }
 }
 
 /// Count the function/closure parameters declared by the

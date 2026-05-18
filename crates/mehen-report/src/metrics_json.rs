@@ -70,6 +70,100 @@ pub struct Nexits {
     pub max: f64,
 }
 
+/// Render the `npa` family object: 9 fields tracking class /
+/// interface public-attribute counts, totals, per-class CDA averages,
+/// and the rolled-up total CDA.
+pub fn npa(metrics: &MetricSet) -> Npa {
+    Npa {
+        classes: as_f64(metrics, "npa.classes"),
+        interfaces: as_f64(metrics, "npa.interfaces"),
+        class_attributes: as_f64(metrics, "npa.class_attributes"),
+        interface_attributes: as_f64(metrics, "npa.interface_attributes"),
+        classes_average: as_f64(metrics, "npa.classes_average"),
+        interfaces_average: as_f64(metrics, "npa.interfaces_average"),
+        total: as_f64(metrics, "npa"),
+        total_attributes: as_f64(metrics, "npa.total_attributes"),
+        average: as_f64(metrics, "npa.average"),
+    }
+}
+
+/// `f64::NAN` serializes as JSON `null` via the `nan_as_null` helper,
+/// matching the pre-1.0 `interfaces_average: null` output for empty
+/// interface buckets.
+fn serialize_nan_as_null<S: serde::Serializer>(value: &f64, ser: S) -> Result<S::Ok, S::Error> {
+    if value.is_nan() {
+        ser.serialize_none()
+    } else {
+        ser.serialize_f64(*value)
+    }
+}
+
+#[derive(Serialize)]
+pub struct Npa {
+    pub classes: f64,
+    pub interfaces: f64,
+    pub class_attributes: f64,
+    pub interface_attributes: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub classes_average: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub interfaces_average: f64,
+    pub total: f64,
+    pub total_attributes: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub average: f64,
+}
+
+/// Render the `npm` family object: 9 fields tracking class /
+/// interface public-method counts, totals, per-class averages, and
+/// the rolled-up total average.
+pub fn npm(metrics: &MetricSet) -> Npm {
+    Npm {
+        classes: as_f64(metrics, "npm.classes"),
+        interfaces: as_f64(metrics, "npm.interfaces"),
+        class_methods: as_f64(metrics, "npm.class_methods"),
+        interface_methods: as_f64(metrics, "npm.interface_methods"),
+        classes_average: as_f64(metrics, "npm.classes_average"),
+        interfaces_average: as_f64(metrics, "npm.interfaces_average"),
+        total: as_f64(metrics, "npm"),
+        total_methods: as_f64(metrics, "npm.total_methods"),
+        average: as_f64(metrics, "npm.average"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Npm {
+    pub classes: f64,
+    pub interfaces: f64,
+    pub class_methods: f64,
+    pub interface_methods: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub classes_average: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub interfaces_average: f64,
+    pub total: f64,
+    pub total_methods: f64,
+    #[serde(serialize_with = "serialize_nan_as_null")]
+    pub average: f64,
+}
+
+/// Render the `wmc` family object: 3 fields totalling
+/// per-class-or-interface weighted method counts.
+pub fn wmc(metrics: &MetricSet) -> Wmc {
+    Wmc {
+        classes: as_f64(metrics, "wmc.classes"),
+        interfaces: as_f64(metrics, "wmc.interfaces"),
+        total: as_f64(metrics, "wmc"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Wmc {
+    pub classes: f64,
+    pub interfaces: f64,
+    pub total: f64,
+}
+
 /// Render the `halstead` family object: 14 fields covering n1/N1/n2/N2,
 /// length, estimated_program_length, purity_ratio, vocabulary, volume,
 /// difficulty, level, effort, time, and bugs. Field ordering matches

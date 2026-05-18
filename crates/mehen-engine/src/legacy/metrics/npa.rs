@@ -1094,41 +1094,4 @@ mod tests {
             },
         );
     }
-
-    #[test]
-    fn powershell_npa_counts_all_properties_as_public_including_hidden() {
-        // PowerShell has no access-modifier equivalent to `private` /
-        // `protected`. The `hidden` keyword only suppresses a property
-        // from default `Get-Member` / IntelliSense output; the property
-        // is still publicly accessible. Per about_Hidden: "hidden
-        // members are still public". NPA therefore counts every property
-        // as public.
-        check_metrics::<PowershellParser>(
-            "class C {
-                 [int]$a = 1
-                 hidden [int]$b = 2
-                 [int]$c = 3
-                 hidden [int]$d = 4
-             }",
-            "foo.ps1",
-            |metric| {
-                // 4 attributes, all public (a, b, c, d).
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 4.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 4.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 1.0,
-                      "interfaces_average": null,
-                      "total": 4.0,
-                      "total_attributes": 4.0,
-                      "average": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 }

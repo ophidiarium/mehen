@@ -1109,40 +1109,4 @@ mod tests {
             },
         );
     }
-
-    #[test]
-    fn powershell_npm_counts_all_methods_as_public_including_hidden() {
-        // PowerShell has no access-modifier equivalent to `private` /
-        // `protected`. The `hidden` keyword only suppresses a member from
-        // default `Get-Member` / IntelliSense output; the member is still
-        // publicly callable. Per about_Hidden: "hidden members are still
-        // public". NPM therefore counts every method as public.
-        check_metrics::<PowershellParser>(
-            "class C {
-                 [void] A() { }
-                 hidden [void] B() { }
-                 [void] Cm() { }
-                 hidden [void] D() { }
-             }",
-            "foo.ps1",
-            |metric| {
-                // 4 methods, all public (A, B, Cm, D).
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r###"
-                    {
-                      "classes": 4.0,
-                      "interfaces": 0.0,
-                      "class_methods": 4.0,
-                      "interface_methods": 0.0,
-                      "classes_average": 1.0,
-                      "interfaces_average": null,
-                      "total": 4.0,
-                      "total_methods": 4.0,
-                      "average": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 }

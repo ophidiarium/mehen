@@ -30,7 +30,7 @@ mod tree_builder;
 
 pub use abc::AbcStats;
 pub use cognitive::CognitiveStats;
-pub use counters::{NargsStats, NexitStats, NomStats, NpaStats, NpmStats, WmcStats};
+pub use counters::{ContainerKind, NargsStats, NexitStats, NomStats, NpaStats, NpmStats, WmcStats};
 pub use cyclomatic::CyclomaticStats;
 pub use halstead::HalsteadStats;
 pub use halstead_builder::{HalsteadBuilder, HalsteadCounts, HalsteadOperand, HalsteadOperator};

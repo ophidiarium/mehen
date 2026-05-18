@@ -128,6 +128,27 @@ pub trait LanguageRules {
     fn count_args(&self, _node: &Node<'_>, _source: &[u8]) -> u32 {
         0
     }
+
+    /// Classify a node as a class attribute (NPA) inside a class-like
+    /// container, and decide its visibility. Default: not an attribute.
+    /// Languages override to recognize their property/field syntax.
+    fn classify_attribute(&self, _node: &Node<'_>, _source: &[u8]) -> Option<MemberClassification> {
+        None
+    }
+
+    /// Classify a node as a class method (NPM) inside a class-like
+    /// container, and decide its visibility. Default: not a method.
+    /// Languages override to recognize their method declaration syntax.
+    fn classify_method(&self, _node: &Node<'_>, _source: &[u8]) -> Option<MemberClassification> {
+        None
+    }
+}
+
+/// Classification of a class-or-interface member.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemberClassification {
+    pub container: mehen_metrics::ContainerKind,
+    pub is_public: bool,
 }
 
 /// The result of running [`walk`] on a tree.
@@ -162,6 +183,7 @@ pub fn walk<R: LanguageRules>(
         source_text,
         line_index,
         stack: vec![State::new()],
+        kinds: vec![SpaceKind::Unit],
         rules,
     };
     // The unit space's LOC span covers the full source.
@@ -194,6 +216,8 @@ fn finalize_state(state: &mut State) {
         .nargs
         .finalize_average(state.nom.functions_sum, state.nom.closures_sum);
     state.abc.finalize_minmax();
+    state.npa.finalize_minmax();
+    state.npm.finalize_minmax();
 }
 
 /// Fold a finalized child state's rolled-up totals (sum/min/max/n)
@@ -212,6 +236,9 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
         .finalize_average(parent.nom.functions_sum, parent.nom.closures_sum);
     parent.abc.merge(&child.abc);
     parent.halstead.merge(&child.halstead);
+    parent.npa.merge(&child.npa);
+    parent.npm.merge(&child.npm);
+    parent.wmc.merge(&child.wmc);
 }
 
 /// Publish a finalized `State` into a `MetricSet` using the shared key
@@ -245,9 +272,103 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     target.insert(MetricKey::new(keys::MI_SEI), mi.mi_sei);
 
     publish_abc(&state.abc, target);
-    target.insert(MetricKey::new(keys::NPA), state.npa.public as i64);
-    target.insert(MetricKey::new(keys::NPM), state.npm.public as i64);
-    target.insert(MetricKey::new(keys::WMC), state.wmc.wmc as i64);
+    publish_npa(&state.npa, target);
+    publish_npm(&state.npm, target);
+    publish_wmc(&state.wmc, target);
+}
+
+fn publish_npa(stats: &mehen_metrics::NpaStats, target: &mut MetricSet) {
+    if stats.is_disabled() {
+        return;
+    }
+    // Legacy `metric.npa` JSON: 9 fields.
+    target.insert(MetricKey::new(keys::NPA), stats.total_npa() as i64);
+    target.insert(
+        MetricKey::new(format!("{}.classes", keys::NPA)),
+        stats.class_npa_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interfaces", keys::NPA)),
+        stats.interface_npa_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.class_attributes", keys::NPA)),
+        stats.class_na_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interface_attributes", keys::NPA)),
+        stats.interface_na_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.classes_average", keys::NPA)),
+        stats.class_cda(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interfaces_average", keys::NPA)),
+        stats.interface_cda(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.total_attributes", keys::NPA)),
+        stats.total_na() as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::NPA)),
+        stats.total_cda(),
+    );
+}
+
+fn publish_npm(stats: &mehen_metrics::NpmStats, target: &mut MetricSet) {
+    if stats.is_disabled() {
+        return;
+    }
+    target.insert(MetricKey::new(keys::NPM), stats.total_npm() as i64);
+    target.insert(
+        MetricKey::new(format!("{}.classes", keys::NPM)),
+        stats.class_npm_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interfaces", keys::NPM)),
+        stats.interface_npm_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.class_methods", keys::NPM)),
+        stats.class_nm_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interface_methods", keys::NPM)),
+        stats.interface_nm_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.classes_average", keys::NPM)),
+        stats.class_avg(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interfaces_average", keys::NPM)),
+        stats.interface_avg(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.total_methods", keys::NPM)),
+        stats.total_nm() as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::NPM)),
+        stats.total_avg(),
+    );
+}
+
+fn publish_wmc(stats: &mehen_metrics::WmcStats, target: &mut MetricSet) {
+    if stats.is_disabled() {
+        return;
+    }
+    target.insert(MetricKey::new(keys::WMC), stats.total() as i64);
+    target.insert(
+        MetricKey::new(format!("{}.classes", keys::WMC)),
+        stats.class_wmc_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.interfaces", keys::WMC)),
+        stats.interface_wmc_sum as i64,
+    );
 }
 
 fn publish_halstead(stats: &HalsteadStats, target: &mut MetricSet) {
@@ -579,6 +700,10 @@ struct Walker<'a, R: LanguageRules> {
     source_text: &'a [u8],
     line_index: &'a LineIndex,
     stack: Vec<State>,
+    /// Per-stack-frame `SpaceKind` so child code can ask "what's my
+    /// enclosing container?" without re-walking the parser tree. Same
+    /// length as `stack`; index 0 is the unit.
+    kinds: Vec<SpaceKind>,
     rules: &'a R,
 }
 
@@ -588,7 +713,7 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
     }
 
     fn visit(&mut self, node: Node<'_>) {
-        let opened_space = match self.rules.scope_for(&node, self.source_text) {
+        let opened_kind = match self.rules.scope_for(&node, self.source_text) {
             Some(ScopeOpen::Open { kind, name }) => {
                 let span = node_span(&node, self.line_index);
                 let mut child_state = State::new();
@@ -616,14 +741,28 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
                         let count = self.rules.count_args(&node, self.source_text);
                         child_state.nargs.record_closure_args(count);
                     }
+                    SpaceKind::Class | SpaceKind::Impl => {
+                        // Mark NPA / NPM / WMC as having seen a class-like
+                        // space so they're emitted (vs. omitted) at the
+                        // unit level.
+                        child_state.npa.record_class_like();
+                        child_state.npm.record_class_like();
+                        child_state.wmc.record_class_like();
+                    }
+                    SpaceKind::Interface | SpaceKind::Trait => {
+                        child_state.npa.record_class_like();
+                        child_state.npm.record_class_like();
+                    }
                     _ => {}
                 }
-                self.tree.open(kind, span, name);
+                self.tree.open(kind.clone(), span, name);
                 self.stack.push(child_state);
-                true
+                self.kinds.push(kind.clone());
+                Some(kind)
             }
-            None => false,
+            None => None,
         };
+        let opened_space = opened_kind.is_some();
 
         let facts = self.rules.classify(&node);
         if facts.cyclomatic_decision {
@@ -665,6 +804,49 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         if facts.abc_assignment {
             self.current().abc.record_assignment();
         }
+        // NPA / NPM — language-classified attribute / method
+        // declarations. The enclosing class-like state owns the
+        // increment; recorded *after* a possible scope-open above
+        // pushed a new (method) space, so we walk back to the parent's
+        // kind to decide whether we're inside a class.
+        let enclosing_class_kind = if opened_space {
+            // The current space is the just-opened one (e.g. a method);
+            // its parent is the previous frame.
+            self.kinds
+                .iter()
+                .rev()
+                .nth(1)
+                .cloned()
+                .unwrap_or(SpaceKind::Unit)
+        } else {
+            self.kinds.last().cloned().unwrap_or(SpaceKind::Unit)
+        };
+        let in_class_like = matches!(
+            enclosing_class_kind,
+            SpaceKind::Class | SpaceKind::Impl | SpaceKind::Interface | SpaceKind::Trait
+        );
+        if in_class_like {
+            if let Some(cls) = self.rules.classify_attribute(&node, self.source_text) {
+                let parent_idx = if opened_space {
+                    self.stack.len().saturating_sub(2)
+                } else {
+                    self.stack.len().saturating_sub(1)
+                };
+                if let Some(parent) = self.stack.get_mut(parent_idx) {
+                    parent.npa.record_attribute(cls.container, cls.is_public);
+                }
+            }
+            if let Some(cls) = self.rules.classify_method(&node, self.source_text) {
+                let parent_idx = if opened_space {
+                    self.stack.len().saturating_sub(2)
+                } else {
+                    self.stack.len().saturating_sub(1)
+                };
+                if let Some(parent) = self.stack.get_mut(parent_idx) {
+                    parent.npm.record_method(cls.container, cls.is_public);
+                }
+            }
+        }
         // LOC: each AST node contributes per-language to PLOC / LLOC /
         // CLOC. The walker stays language-agnostic — it forwards the
         // language's `LocFact` decision into the per-space accumulator.
@@ -694,13 +876,35 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         }
 
         if opened_space {
+            let closed_kind = self.kinds.pop().expect("kinds underflow on close");
             let mut state = self.stack.pop().expect("walker stack underflow on close");
+            // Per pre-1.0 `Wmc::compute`: a function/method space
+            // contributes its cyclomatic value into the enclosing
+            // class-like's WMC sum. The walker snapshots the cyclomatic
+            // value here from the closing function space.
+            if matches!(closed_kind, SpaceKind::Function) {
+                state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
+            }
             finalize_state(&mut state);
             apply_state_to_for_close(&state, self.tree.metrics_mut());
             // Fold this space's rolled-up bounds into the parent so the
-            // unit's final stats reflect every nested space.
+            // unit's final stats reflect every nested space. WMC also
+            // folds the closing method's per-space `wmc` into the
+            // parent's class/interface bucket when the parent is the
+            // class-like container.
             if let Some(parent) = self.stack.last_mut() {
+                let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
                 merge_child_into_parent(parent, &state);
+                if matches!(closed_kind, SpaceKind::Function) {
+                    let container = match parent_kind {
+                        SpaceKind::Class | SpaceKind::Impl => mehen_metrics::ContainerKind::Class,
+                        SpaceKind::Interface | SpaceKind::Trait => {
+                            mehen_metrics::ContainerKind::Interface
+                        }
+                        _ => mehen_metrics::ContainerKind::Other,
+                    };
+                    state.wmc.finalize_method_into(container, &mut parent.wmc);
+                }
             }
             self.tree.close();
         }

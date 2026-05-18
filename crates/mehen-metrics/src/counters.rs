@@ -262,64 +262,282 @@ impl NexitStats {
 }
 
 /// Number of public attributes accumulator (NPA).
+///
+/// Mirrors the pre-1.0 `npa::Stats`. Tracks per-class and per-interface
+/// public-attribute counts plus the totals; the rolled-up CDA (Class
+/// Data Accessibility) is `class_npa_sum / class_na_sum` and similarly
+/// for interfaces. `class_*` increment when the enclosing space is
+/// `Class` / `Impl`; `interface_*` increment when the enclosing space
+/// is `Interface` / `Trait`. Languages without class-like constructs
+/// flip `not_applicable` so the metric is omitted from output.
 #[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct NpaStats {
-    pub public: u32,
-    pub total: u32,
+    pub class_npa: u32,
+    pub interface_npa: u32,
+    pub class_na: u32,
+    pub interface_na: u32,
+    pub class_npa_sum: u32,
+    pub interface_npa_sum: u32,
+    pub class_na_sum: u32,
+    pub interface_na_sum: u32,
+    pub not_applicable: bool,
+    pub has_class_like: bool,
 }
 
 impl NpaStats {
-    pub fn record_attribute(&mut self, public: bool) {
-        self.total = self.total.saturating_add(1);
-        if public {
-            self.public = self.public.saturating_add(1);
+    /// Record one attribute observation. `container` is the kind of
+    /// the enclosing class-like or interface-like space; pass other
+    /// kinds to skip recording.
+    pub fn record_attribute(&mut self, container: ContainerKind, is_public: bool) {
+        match container {
+            ContainerKind::Class => {
+                self.class_na = self.class_na.saturating_add(1);
+                if is_public {
+                    self.class_npa = self.class_npa.saturating_add(1);
+                }
+            }
+            ContainerKind::Interface => {
+                self.interface_na = self.interface_na.saturating_add(1);
+                if is_public {
+                    self.interface_npa = self.interface_npa.saturating_add(1);
+                }
+            }
+            ContainerKind::Other => {}
         }
     }
 
+    pub fn record_class_like(&mut self) {
+        self.has_class_like = true;
+    }
+
+    pub fn finalize_minmax(&mut self) {
+        self.class_npa_sum = self.class_npa_sum.saturating_add(self.class_npa);
+        self.interface_npa_sum = self.interface_npa_sum.saturating_add(self.interface_npa);
+        self.class_na_sum = self.class_na_sum.saturating_add(self.class_na);
+        self.interface_na_sum = self.interface_na_sum.saturating_add(self.interface_na);
+    }
+
     pub fn merge(&mut self, other: &NpaStats) {
-        self.public = self.public.saturating_add(other.public);
-        self.total = self.total.saturating_add(other.total);
+        self.class_npa_sum = self.class_npa_sum.saturating_add(other.class_npa_sum);
+        self.interface_npa_sum = self
+            .interface_npa_sum
+            .saturating_add(other.interface_npa_sum);
+        self.class_na_sum = self.class_na_sum.saturating_add(other.class_na_sum);
+        self.interface_na_sum = self.interface_na_sum.saturating_add(other.interface_na_sum);
+        self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
+    }
+
+    pub fn class_cda(&self) -> f64 {
+        if self.class_na_sum == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.class_npa_sum) / f64::from(self.class_na_sum)
+        }
+    }
+
+    pub fn interface_cda(&self) -> f64 {
+        if self.interface_npa_sum == self.interface_na_sum && self.interface_npa_sum != 0 {
+            1.0
+        } else if self.interface_na_sum == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.interface_npa_sum) / f64::from(self.interface_na_sum)
+        }
+    }
+
+    pub fn total_npa(&self) -> u32 {
+        self.class_npa_sum.saturating_add(self.interface_npa_sum)
+    }
+
+    pub fn total_na(&self) -> u32 {
+        self.class_na_sum.saturating_add(self.interface_na_sum)
+    }
+
+    pub fn total_cda(&self) -> f64 {
+        let na = self.total_na();
+        if na == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.total_npa()) / f64::from(na)
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.not_applicable || !self.has_class_like
     }
 }
 
 /// Number of public methods accumulator (NPM).
+///
+/// Same shape as [`NpaStats`] but counts methods rather than
+/// attributes.
 #[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct NpmStats {
-    pub public: u32,
-    pub total: u32,
+    pub class_npm: u32,
+    pub interface_npm: u32,
+    pub class_nm: u32,
+    pub interface_nm: u32,
+    pub class_npm_sum: u32,
+    pub interface_npm_sum: u32,
+    pub class_nm_sum: u32,
+    pub interface_nm_sum: u32,
+    pub not_applicable: bool,
+    pub has_class_like: bool,
 }
 
 impl NpmStats {
-    pub fn record_method(&mut self, public: bool) {
-        self.total = self.total.saturating_add(1);
-        if public {
-            self.public = self.public.saturating_add(1);
+    pub fn record_method(&mut self, container: ContainerKind, is_public: bool) {
+        match container {
+            ContainerKind::Class => {
+                self.class_nm = self.class_nm.saturating_add(1);
+                if is_public {
+                    self.class_npm = self.class_npm.saturating_add(1);
+                }
+            }
+            ContainerKind::Interface => {
+                self.interface_nm = self.interface_nm.saturating_add(1);
+                if is_public {
+                    self.interface_npm = self.interface_npm.saturating_add(1);
+                }
+            }
+            ContainerKind::Other => {}
         }
     }
 
-    pub fn merge(&mut self, other: &NpmStats) {
-        self.public = self.public.saturating_add(other.public);
-        self.total = self.total.saturating_add(other.total);
+    pub fn record_class_like(&mut self) {
+        self.has_class_like = true;
     }
+
+    pub fn finalize_minmax(&mut self) {
+        self.class_npm_sum = self.class_npm_sum.saturating_add(self.class_npm);
+        self.interface_npm_sum = self.interface_npm_sum.saturating_add(self.interface_npm);
+        self.class_nm_sum = self.class_nm_sum.saturating_add(self.class_nm);
+        self.interface_nm_sum = self.interface_nm_sum.saturating_add(self.interface_nm);
+    }
+
+    pub fn merge(&mut self, other: &NpmStats) {
+        self.class_npm_sum = self.class_npm_sum.saturating_add(other.class_npm_sum);
+        self.interface_npm_sum = self
+            .interface_npm_sum
+            .saturating_add(other.interface_npm_sum);
+        self.class_nm_sum = self.class_nm_sum.saturating_add(other.class_nm_sum);
+        self.interface_nm_sum = self.interface_nm_sum.saturating_add(other.interface_nm_sum);
+        self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
+    }
+
+    pub fn class_avg(&self) -> f64 {
+        if self.class_nm_sum == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.class_npm_sum) / f64::from(self.class_nm_sum)
+        }
+    }
+
+    pub fn interface_avg(&self) -> f64 {
+        if self.interface_npm_sum == self.interface_nm_sum && self.interface_npm_sum != 0 {
+            1.0
+        } else if self.interface_nm_sum == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.interface_npm_sum) / f64::from(self.interface_nm_sum)
+        }
+    }
+
+    pub fn total_npm(&self) -> u32 {
+        self.class_npm_sum.saturating_add(self.interface_npm_sum)
+    }
+
+    pub fn total_nm(&self) -> u32 {
+        self.class_nm_sum.saturating_add(self.interface_nm_sum)
+    }
+
+    pub fn total_avg(&self) -> f64 {
+        let nm = self.total_nm();
+        if nm == 0 {
+            f64::NAN
+        } else {
+            f64::from(self.total_npm()) / f64::from(nm)
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.not_applicable || !self.has_class_like
+    }
+}
+
+/// Container kind for NPA / NPM accounting. Class-like (`Class` /
+/// `Impl`) and interface-like (`Interface` / `Trait`) are tracked in
+/// separate buckets per the pre-1.0 distinction; everything else is
+/// ignored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContainerKind {
+    Class,
+    Interface,
+    Other,
 }
 
 /// Weighted methods per class accumulator (WMC).
 ///
-/// WMC sums the cyclomatic complexity of every method on a class. Stored
-/// as a u32 so language crates can fold per-method cyclomatic into one
-/// per-class counter without re-walking the tree.
+/// WMC sums the cyclomatic complexity of every method on a class.
+/// Per-space `*_sum` are the rolled-up totals; the unit publishes the
+/// total. `not_applicable` lets languages without class-like constructs
+/// (Go, C, Markdown) opt out so the metric is omitted from output.
 #[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct WmcStats {
+    /// Per-space cyclomatic value (snapshotted from the function/method
+    /// space's cyclomatic at finalize time).
     pub wmc: u32,
+    pub class_wmc_sum: u32,
+    pub interface_wmc_sum: u32,
+    pub not_applicable: bool,
+    pub has_class_like: bool,
 }
 
 impl WmcStats {
-    pub fn record_method_cyclomatic(&mut self, cyclomatic: u32) {
-        self.wmc = self.wmc.saturating_add(cyclomatic);
+    /// Set the per-space cyclomatic value. Called by the walker at
+    /// space close on function/method spaces — pass the finalized
+    /// `cyclomatic` count for that space.
+    pub fn set_cyclomatic(&mut self, cyclomatic: u32) {
+        self.wmc = cyclomatic;
+    }
+
+    pub fn record_class_like(&mut self) {
+        self.has_class_like = true;
+    }
+
+    /// Snapshot this method-space's cyclomatic into the parent's
+    /// `class_wmc_sum` / `interface_wmc_sum`. The walker calls this
+    /// when merging a function/method space into its enclosing class
+    /// or interface.
+    pub fn finalize_method_into(&self, container: ContainerKind, parent: &mut WmcStats) {
+        match container {
+            ContainerKind::Class => {
+                parent.class_wmc_sum = parent.class_wmc_sum.saturating_add(self.wmc);
+            }
+            ContainerKind::Interface => {
+                parent.interface_wmc_sum = parent.interface_wmc_sum.saturating_add(self.wmc);
+            }
+            ContainerKind::Other => {}
+        }
     }
 
     pub fn merge(&mut self, other: &WmcStats) {
-        self.wmc = self.wmc.saturating_add(other.wmc);
+        self.class_wmc_sum = self.class_wmc_sum.saturating_add(other.class_wmc_sum);
+        self.interface_wmc_sum = self
+            .interface_wmc_sum
+            .saturating_add(other.interface_wmc_sum);
+        self.not_applicable |= other.not_applicable;
+        self.has_class_like |= other.has_class_like;
+    }
+
+    pub fn total(&self) -> u32 {
+        self.class_wmc_sum.saturating_add(self.interface_wmc_sum)
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.not_applicable || !self.has_class_like
     }
 }
 

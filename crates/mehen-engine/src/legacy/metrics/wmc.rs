@@ -428,32 +428,4 @@ mod tests {
             },
         );
     }
-
-    #[test]
-    fn powershell_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<PowershellParser>(
-            "class C {
-                 [int] A([int]$x) {
-                     if ($x -gt 0) {
-                         return 1
-                     }
-                     return 0
-                 }
-                 [int] B() { return 1 }
-             }",
-            "foo.ps1",
-            |metric| {
-                // class C: A cyc = 2 (if), B cyc = 1 -> classes = 3.
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
 }
