@@ -356,8 +356,7 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser, TsxParser,
-        TypescriptParser,
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TsxParser, TypescriptParser,
     };
     use crate::legacy::tools::check_metrics;
 
