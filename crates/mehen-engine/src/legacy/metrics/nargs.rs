@@ -4,12 +4,11 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
 #[cfg(test)]
 use crate::legacy::langs::{CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser};
-use crate::legacy::languages::{C, Go, Kotlin, Powershell};
+use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 use crate::legacy::traits::Search;
@@ -285,87 +284,6 @@ impl NArgs for KotlinCode {
 
         if Self::is_closure(node) {
             compute_kotlin_args(node, &mut stats.closure_nargs);
-        }
-    }
-}
-
-#[inline(always)]
-fn compute_powershell_args(node: &Node, nargs: &mut usize) {
-    use Powershell::*;
-
-    // PowerShell parameter declarations can appear in three shapes:
-    //   1. `function_statement` > `function_parameter_declaration` >
-    //      `parameter_list` > `script_parameter` (each `script_parameter`
-    //      is one named `$var`).
-    //   2. For script-block closures: `script_block_expression` >
-    //      `param_block` > `parameter_list` > `script_parameter`.
-    //   3. For class methods: `class_method_definition` >
-    //      `class_method_parameter_list` > `class_method_parameter`.
-    //
-    // The walker recurses *only* through the immediate structural
-    // wrappers that sit between the entry node and the parameter list
-    // (`function_parameter_declaration` for functions, `param_block` for
-    // closures). It deliberately does NOT recurse into the body
-    // `script_block` / `script_block_body` / `statement_list`: each
-    // nested function or closure inside a body is its own FuncSpace and
-    // its own call to `NArgs::compute`, so descending into the body
-    // would double-count nested params against the enclosing
-    // function / closure. Regression test:
-    // `powershell_nested_closure_params_do_not_count_toward_outer_fn`.
-    enum Kind {
-        Script,
-        Method,
-    }
-
-    fn walk(node: &Node, nargs: &mut usize, kind: &Kind) {
-        for child in node.children() {
-            match child.kind_id().into() {
-                Powershell::ParameterList => {
-                    if matches!(kind, Kind::Script) {
-                        for p in child.children() {
-                            if p.kind_id() == Powershell::ScriptParameter {
-                                *nargs += 1;
-                            }
-                        }
-                    }
-                }
-                Powershell::ClassMethodParameterList => {
-                    if matches!(kind, Kind::Method) {
-                        for p in child.children() {
-                            if p.kind_id() == Powershell::ClassMethodParameter {
-                                *nargs += 1;
-                            }
-                        }
-                    }
-                }
-                // Recurse only into the thin structural wrappers that
-                // directly enclose the parameter list. See the comment
-                // above for why the body `script_block` is intentionally
-                // excluded.
-                Powershell::FunctionParameterDeclaration | Powershell::ParamBlock => {
-                    walk(&child, nargs, kind)
-                }
-                _ => {}
-            }
-        }
-    }
-
-    match node.kind_id().into() {
-        FunctionStatement | ScriptBlockExpression => walk(node, nargs, &Kind::Script),
-        ClassMethodDefinition => walk(node, nargs, &Kind::Method),
-        _ => {}
-    }
-}
-
-impl NArgs for PowershellCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        if Self::is_func(node) {
-            compute_powershell_args(node, &mut stats.fn_nargs);
-            return;
-        }
-
-        if Self::is_closure(node) {
-            compute_powershell_args(node, &mut stats.closure_nargs);
         }
     }
 }

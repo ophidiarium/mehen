@@ -7,8 +7,7 @@ use std::fmt;
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
 use crate::legacy::node::Node;
 
@@ -322,12 +321,6 @@ impl Halstead for RubyCode {
 }
 
 impl Halstead for KotlinCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
-impl Halstead for PowershellCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
     }

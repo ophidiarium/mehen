@@ -4,10 +4,9 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
-use crate::legacy::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{is_inside_rust_macro_tokens, is_rust_logical_operator};
 
@@ -246,64 +245,6 @@ impl Cyclomatic for KotlinCode {
 
 // No languages require empty Cyclomatic implementations
 // implement_metric_trait!(Cyclomatic);
-
-impl Cyclomatic for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Powershell::*;
-
-        // Decision-point set aligned with Sonar's language-agnostic
-        // cyclomatic definition: every `if`, `elseif`, loop, `switch`
-        // clause, `catch`, `trap`, real ternary / null-coalesce, and each
-        // short-circuit (`&&` / `||`) or logical (`-and` / `-or`) operator
-        // adds one. Matches the standard Sonar rule and the community
-        // `Get-CyclomaticComplexity` helper that counts `If`, `ElseIf`,
-        // `Catch`, `While`, `For`, `Switch` tokens, extended with
-        // `foreach` / `do` loops and v7's `?` / `??`.
-        //
-        // `-xor` is intentionally NOT counted. Sonar's cyclomatic rule
-        // counts only *short-circuit* boolean operators across every
-        // language it analyzes (JS/TS/PHP/C#/Java/Dart list `&&`/`||`
-        // explicitly; VB.NET lists `AndAlso`/`OrElse`, not `And`/`Or`).
-        // PowerShell's `-xor` always evaluates both operands — by
-        // definition it cannot introduce a new control-flow path — so
-        // it doesn't meet the cyclomatic criterion. It IS counted in ABC
-        // conditions and cognitive boolean-sequence scoring, where the
-        // relevant axis is "boolean operator occurrence" rather than
-        // "new linearly independent path".
-        //
-        // tree-sitter-pwsh v0.37+ only emits the operator-level expression
-        // kinds (`ternary_expression`, `null_coalesce_expression`, ...)
-        // when the operator is actually present, so matching on the kind
-        // is sufficient — no operator-token guard is needed. See
-        // wharflab/tree-sitter-powershell#56. The grammar also emits a
-        // parallel family of `*_argument_expression` kinds for the same
-        // operators when they appear inside a method-invocation
-        // `argument_list` (e.g. `[Foo]::Bar($cond ? 1 : 2)`), so we match
-        // both families.
-        match node.kind_id().into() {
-            IfStatement
-            | ElseifClause
-            | ForStatement
-            | ForeachStatement
-            | WhileStatement
-            | DoStatement
-            | SwitchClause
-            | CatchClause
-            | TrapStatement
-            | TernaryExpression
-            | TernaryArgumentExpression
-            | NullCoalesceExpression
-            | NullCoalesceArgumentExpression
-            | AMPAMP
-            | PIPEPIPE
-            | DASHand
-            | DASHor => {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
-}
 
 impl Cyclomatic for CCode {
     fn compute(node: &Node, stats: &mut Stats) {

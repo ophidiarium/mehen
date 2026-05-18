@@ -8,9 +8,6 @@ macro_rules! get_language {
     (tree_sitter_tsx) => {
         tree_sitter_typescript::LANGUAGE_TSX.into()
     };
-    (tree_sitter_pwsh) => {
-        tree_sitter_pwsh::LANGUAGE.into()
-    };
     (tree_sitter_markdown_text) => {
         tree_sitter_markdown_text::LANGUAGE.into()
     };

@@ -4,9 +4,7 @@ use tree_sitter::Language;
 
 #[cfg(feature = "markdown")]
 use crate::legacy::languages::Markdown;
-use crate::legacy::languages::{
-    C, Go, Kotlin, Php, Powershell, Python, Ruby, Rust, Tsx, Typescript,
-};
+use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -94,16 +92,6 @@ mk_langs!(
         tree_sitter_kotlin,
         [kt, kts],
         ["kotlin"]
-    ),
-    (
-        Powershell,
-        "The `PowerShell` language",
-        "powershell",
-        PowershellCode,
-        PowershellParser,
-        tree_sitter_pwsh,
-        [ps1, psm1, psd1],
-        ["powershell"]
     ),
     (
         C,
@@ -216,16 +204,6 @@ mk_langs!(
         tree_sitter_kotlin,
         [kt, kts],
         ["kotlin"]
-    ),
-    (
-        Powershell,
-        "The `PowerShell` language",
-        "powershell",
-        PowershellCode,
-        PowershellParser,
-        tree_sitter_pwsh,
-        [ps1, psm1, psd1],
-        ["powershell"]
     ),
     (
         C,

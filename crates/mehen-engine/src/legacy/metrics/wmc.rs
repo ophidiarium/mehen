@@ -4,8 +4,8 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, LANG, PhpCode, PowershellCode, PythonCode, RubyCode, RustCode,
-    TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, LANG, PhpCode, PythonCode, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
@@ -197,7 +197,6 @@ impl_wmc!(
     RustCode,
     RubyCode,
     KotlinCode,
-    PowershellCode,
     PhpCode
 );
 

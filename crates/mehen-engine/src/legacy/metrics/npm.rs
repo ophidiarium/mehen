@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -486,26 +486,6 @@ impl Npm for CCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
-/// Whether a PowerShell class member (method or property) is considered
-/// public. PowerShell has no true access modifier: the `hidden` keyword
-/// only suppresses a member from default `Get-Member` / IntelliSense /
-/// tab-completion output and has *no effect on accessibility* — hidden
-/// members remain publicly callable from any scope. Per the Microsoft
-/// docs on `about_Hidden`:
-///
-/// > Like all language keywords in PowerShell, `hidden` is not
-/// > case-sensitive, and hidden members are still public. The `hidden`
-/// > keyword has no effect on how you can view or make changes to
-/// > members of a class.
-///
-/// <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_hidden>
-///
-/// Therefore every PowerShell class method and property counts as
-/// public for the purposes of NPM / NPA.
-pub(crate) fn powershell_member_is_public(_node: &Node, _code: &[u8]) -> bool {
-    true
-}
-
 /// Explicit Kotlin visibility on a declaration-like node.
 pub(crate) fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
     for child in node.children() {
@@ -614,24 +594,6 @@ impl Npm for KotlinCode {
             kotlin_member_is_public(node, code)
         };
         record_method(stats, container, public);
-    }
-}
-
-impl Npm for PowershellCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        if node.kind_id() != Powershell::ClassMethodDefinition {
-            return;
-        }
-        // A class_method_definition is a direct child of its enclosing
-        // class_statement in the tree-sitter-pwsh grammar.
-        let in_class = node
-            .parent()
-            .is_some_and(|p| p.kind_id() == Powershell::ClassStatement);
-        if !in_class {
-            return;
-        }
-        let public = powershell_member_is_public(node, code);
-        record_method(stats, SpaceKind::Class, public);
     }
 }
 

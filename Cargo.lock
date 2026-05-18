@@ -1659,7 +1659,6 @@ dependencies = [
  "tree-sitter-kotlin-sg",
  "tree-sitter-markdown-text",
  "tree-sitter-php",
- "tree-sitter-pwsh",
  "tree-sitter-python",
  "tree-sitter-ruby",
  "tree-sitter-rust",

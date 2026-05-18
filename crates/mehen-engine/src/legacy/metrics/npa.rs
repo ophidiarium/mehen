@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -535,22 +535,6 @@ impl Npa for KotlinCode {
             }
             _ => {}
         }
-    }
-}
-
-impl Npa for PowershellCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        // Only record attributes when we're already inside a class-like
-        // space. PowerShell doesn't have interfaces, so we only route to
-        // `SpaceKind::Class`.
-        if !matches!(stats.space_kind, SpaceKind::Class) {
-            return;
-        }
-        if node.kind_id() != Powershell::ClassPropertyDefinition {
-            return;
-        }
-        let public = crate::legacy::metrics::npm::powershell_member_is_public(node, code);
-        stats.record_attribute(SpaceKind::Class, public);
     }
 }
 

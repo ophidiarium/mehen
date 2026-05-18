@@ -4,10 +4,9 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
-use crate::legacy::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::{
     is_inside_rust_macro_tokens, is_rust_comparison_operator, is_rust_logical_operator,
@@ -552,78 +551,6 @@ impl Abc for RubyCode {
             If | Unless | IfModifier | UnlessModifier | When | InClause | Conditional | Rescue
             | RescueModifier | RescueModifier2 | RescueModifier3 | EQEQ | BANGEQ | LT | GT
             | LTEQ | GTEQ | LTEQGT | EQEQEQ | EQTILDE | BANGTILDE => {
-                stats.conditions += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Abc for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Powershell::*;
-
-        // tree-sitter-pwsh v0.37+ only emits operator-level expression kinds
-        // (`ternary_expression`, `null_coalesce_expression`,
-        // `comparison_expression`) when an actual operator is present, so
-        // matching on the kind directly is sufficient. See
-        // wharflab/tree-sitter-powershell#56.
-        match node.kind_id().into() {
-            // A: every assignment expression. The grammar wraps augmented
-            // assignments (`+=`, `-=`, ...) inside `assignment_expression`
-            // as well. `++` / `--` mutate state and also count.
-            AssignmentExpression
-            | PreIncrementExpression
-            | PreDecrementExpression
-            | PostIncrementExpression
-            | PostDecrementExpression => {
-                stats.assignments += 1.;
-            }
-            // B: every command invocation (cmdlet/function call) and every
-            // method-style invocation (`$obj.Method(...)`).
-            Command | InvocationExpression => {
-                stats.branches += 1.;
-            }
-            // C: every structural conditional construct, every comparison,
-            // and every short-circuit / logical / ternary / null-coalesce
-            // operator. tree-sitter-pwsh emits a parallel family of
-            // `*_argument_expression` kinds for expressions that appear
-            // inside a method-invocation `argument_list` (e.g.
-            // `[Foo]::Bar($a -eq $b)`). Those argument-form variants carry
-            // the same decision-point semantics as the regular forms, so
-            // we match both families here.
-            //
-            // Note: `LogicalExpression` and `LogicalArgumentExpression`
-            // (and `PipelineChain` for `&&` / `||`) are intentionally
-            // *not* matched as node kinds here. Unlike the comparison /
-            // ternary / null-coalesce pairs — which each wrap a single
-            // operator — a single `logical_expression` node can contain
-            // *multiple* `-and` / `-or` / `-xor` leaf tokens (e.g.
-            // `$a -and $b -and $c` is one wrapper with two `-and` leaves).
-            // We want each operator occurrence to contribute +1, so we
-            // match the leaf tokens (`DASHand` / `DASHor` / `DASHxor` /
-            // `AMPAMP` / `PIPEPIPE`) directly. Adding the wrapper kinds
-            // would double-count every logical operator.
-            IfStatement
-            | ElseifClause
-            | ForStatement
-            | ForeachStatement
-            | WhileStatement
-            | DoStatement
-            | SwitchClause
-            | CatchClause
-            | TrapStatement
-            | TernaryExpression
-            | TernaryArgumentExpression
-            | NullCoalesceExpression
-            | NullCoalesceArgumentExpression
-            | ComparisonExpression
-            | ComparisonArgumentExpression
-            | AMPAMP
-            | PIPEPIPE
-            | DASHand
-            | DASHor
-            | DASHxor => {
                 stats.conditions += 1.;
             }
             _ => {}

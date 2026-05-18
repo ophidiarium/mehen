@@ -6,10 +6,9 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
-use crate::legacy::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_rust_tail_expression;
 
@@ -898,61 +897,6 @@ impl Loc for CCode {
             | PreprocElifdef3 | PreprocElifdef4 => {
                 stats.lloc.logical_lines += 1;
             }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
-impl Loc for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Powershell::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        match node.kind_id().into() {
-            // Containers that must not be counted as a physical line.
-            Program | ScriptBlock | ScriptBlockBody | StatementList | StatementBlock
-            | NamedBlockList | NamedBlock | ParamBlock | ElseifClauses | CatchClauses
-            | SwitchBody | SwitchClauses => {}
-
-            // The only comment kind in tree-sitter-pwsh is `comment` (which
-            // also covers `<# ... #>` block comments as they are lexed by
-            // the same rule).
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-
-            // LLOC: each statement-shaped node bumps LLOC once. In
-            // tree-sitter-pwsh v0.37+ the assignment RHS is a dedicated
-            // `assignment_value` node (not a nested `pipeline`), so
-            // counting every visible `pipeline` once is safe — each is the
-            // statement-forming pipeline for its enclosing statement list.
-            // See wharflab/tree-sitter-powershell#56.
-            //
-            // Control-flow statements, function / class declarations, and
-            // flow-control jumps are counted directly.
-            Pipeline
-            | IfStatement
-            | ForStatement
-            | ForeachStatement
-            | WhileStatement
-            | DoStatement
-            | SwitchStatement
-            | TryStatement
-            | TrapStatement
-            | FunctionStatement
-            | ClassStatement
-            | EnumStatement
-            | DataStatement
-            | FlowControlStatement
-            | ClassMethodDefinition
-            | ClassPropertyDefinition => {
-                stats.lloc.logical_lines += 1;
-            }
-
             _ => {
                 check_comment_ends_on_code_line(stats, start);
                 stats.ploc.lines.insert(start);

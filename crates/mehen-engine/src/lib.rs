@@ -44,14 +44,53 @@ pub use legacy::top_offenders::{TopOffendersOpts, run_top_offenders};
 /// snippets into Markdown metrics. Idempotent — backed by a
 /// `OnceLock` inside `mehen-markdown`, so repeat calls are silent
 /// no-ops.
+///
+/// PowerShell fences route through the new [`AnalyzerRegistry`]
+/// (the `mehen-powershell` analyzer is at parity per plan §8.2);
+/// the remaining languages still flow through
+/// `legacy::langs::get_function_spaces` until their per-language
+/// crates reach parity. Each fence-language switch lives in
+/// `dispatch_per_language` so the migration tracks one match arm
+/// at a time.
 #[cfg(feature = "markdown")]
 pub fn init_markdown() {
     use mehen_markdown::{EmbeddedFenceMetrics, FenceLanguage};
 
-    fn legacy_dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+    fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+        match lang {
+            FenceLanguage::Powershell => dispatch_via_registry(lang, body),
+            _ => dispatch_via_legacy(lang, body),
+        }
+    }
+
+    fn dispatch_via_registry(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+        use mehen_core::{AnalysisConfig, MetricKey, SourceFile, keys};
+
+        let language = language_for(lang);
+        let registry = AnalyzerRegistry::default_set();
+        let analyzer = registry.analyzer_for(language)?;
+        let path = camino::Utf8PathBuf::try_from(synthetic_path(lang)).ok()?;
+        let source = SourceFile::new(path, language, body);
+        let analysis = analyzer.analyze(&source, &AnalysisConfig::default()).ok()?;
+        let read = |key: &str| {
+            analysis
+                .root
+                .metrics
+                .get(&MetricKey::new(key))
+                .map(|v| v.as_f64())
+                .unwrap_or(0.0)
+        };
+        Some(EmbeddedFenceMetrics {
+            volume: read(keys::HALSTEAD_VOLUME),
+            cognitive_sum: read("cognitive.sum"),
+            sloc: read(keys::LOC_SLOC),
+        })
+    }
+
+    fn dispatch_via_legacy(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
         let bytes = body.into_bytes();
         let path = synthetic_path(lang);
-        let legacy_lang = legacy_lang_for(lang);
+        let legacy_lang = legacy_lang_for(lang)?;
         let space = crate::legacy::langs::get_function_spaces(
             &legacy_lang,
             bytes,
@@ -81,9 +120,13 @@ pub fn init_markdown() {
         std::path::PathBuf::from(name)
     }
 
-    fn legacy_lang_for(lang: FenceLanguage) -> crate::legacy::langs::LANG {
+    /// Map every fence language *except* PowerShell to its legacy
+    /// `LANG` variant. PowerShell is intentionally absent — it routes
+    /// through `dispatch_via_registry` per plan §8.3, which lets the
+    /// legacy `PowershellCode` analyzer be deleted.
+    fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
         use crate::legacy::langs::LANG;
-        match lang {
+        Some(match lang {
             FenceLanguage::Rust => LANG::Rust,
             FenceLanguage::Python => LANG::Python,
             FenceLanguage::Typescript => LANG::Typescript,
@@ -91,13 +134,30 @@ pub fn init_markdown() {
             FenceLanguage::Go => LANG::Go,
             FenceLanguage::Ruby => LANG::Ruby,
             FenceLanguage::Kotlin => LANG::Kotlin,
-            FenceLanguage::Powershell => LANG::Powershell,
             FenceLanguage::C => LANG::C,
             FenceLanguage::Php => LANG::Php,
+            // PowerShell is dispatched via the new registry — no legacy fallback.
+            FenceLanguage::Powershell => return None,
+        })
+    }
+
+    fn language_for(lang: FenceLanguage) -> mehen_core::Language {
+        use mehen_core::Language;
+        match lang {
+            FenceLanguage::Rust => Language::Rust,
+            FenceLanguage::Python => Language::Python,
+            FenceLanguage::Typescript => Language::TypeScript,
+            FenceLanguage::Tsx => Language::Tsx,
+            FenceLanguage::Go => Language::Go,
+            FenceLanguage::Ruby => Language::Ruby,
+            FenceLanguage::Kotlin => Language::Kotlin,
+            FenceLanguage::Powershell => Language::PowerShell,
+            FenceLanguage::C => Language::C,
+            FenceLanguage::Php => Language::Php,
         }
     }
 
-    mehen_markdown::set_legacy_dispatch(legacy_dispatch);
+    mehen_markdown::set_legacy_dispatch(dispatch);
 }
 
 pub use detection::detect_language;

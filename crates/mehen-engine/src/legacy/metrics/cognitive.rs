@@ -6,10 +6,10 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, PythonParser, RubyCode, RustCode,
-    TsxCode, TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, PythonParser, RubyCode, RustCode, TsxCode,
+    TypescriptCode,
 };
-use crate::legacy::languages::{C, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -636,139 +636,6 @@ impl Cognitive for KotlinCode {
 
 // No languages require empty Cognitive implementations
 // implement_metric_trait!(Cognitive);
-
-impl Cognitive for PowershellCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use Powershell::*;
-
-        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        // Cognitive complexity scoring aligned with the Sonar white paper:
-        //   - Nesting-increasing: `if` / loops / `switch` / `catch` /
-        //     `ternary` / null-coalesce — each adds `nesting + 1`.
-        //   - Non-nesting +1: `elseif`, `else`, `finally`, `trap`, plus
-        //     same-type boolean sequences (collapsed via the existing
-        //     `BoolSequence` helper).
-        //   - Function-depth: `function_statement` / `class_method_definition`
-        //     reset structural nesting and bump `depth`. `script_block_expression`
-        //     (closure-like script blocks) bump `lambda`.
-        //
-        // tree-sitter-pwsh v0.37+ only emits operator-level expression
-        // kinds (`ternary_expression`, `null_coalesce_expression`,
-        // `logical_expression`) when an actual operator is present, so
-        // matching on the kind directly is sufficient. See
-        // wharflab/tree-sitter-powershell#56. `pipeline_chain` still needs
-        // a guard because every statement wraps its expression in one,
-        // whether or not `&&` / `||` are present.
-        match node.kind_id().into() {
-            IfStatement
-            | ForStatement
-            | ForeachStatement
-            | WhileStatement
-            | DoStatement
-            | SwitchStatement
-            | CatchClause
-            | TernaryExpression
-            | TernaryArgumentExpression
-            | NullCoalesceExpression
-            | NullCoalesceArgumentExpression => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            ElseifClause => {
-                increment_by_one(stats);
-                stats.boolean_seq.reset();
-            }
-            ElseClause | FinallyClause | TrapStatement => {
-                increment_by_one(stats);
-                // Reset the boolean-sequence tracker to mirror
-                // `ElseifClause`'s behavior. In practice the
-                // `Pipeline | AssignmentExpression` arm also resets at
-                // statement boundaries, so this is currently
-                // load-bearing only as defense-in-depth: it keeps the
-                // invariant local to the clause itself rather than
-                // relying on a descendant pipeline to restore it.
-                stats.boolean_seq.reset();
-            }
-            // Statement-boundary reset for the boolean-sequence tracker
-            // so `-and` / `-or` sequences don't bleed across statements.
-            // After the reset, scan the pipeline's `pipeline_chain_tail`
-            // children (if any) for `&&` / `||` operators so mixed or
-            // same-operator short-circuit chains score correctly. In
-            // tree-sitter-pwsh, `cmd1 && cmd2 || cmd3` parses as one
-            // `pipeline` containing alternating `pipeline_chain` /
-            // `pipeline_chain_tail` children, where each
-            // `pipeline_chain_tail` wraps a single `&&` or `||` token.
-            Pipeline => {
-                stats.boolean_seq.reset();
-                // Each `pipeline_chain_tail` is a direct child of
-                // `pipeline` and its single child is the `&&` or `||`
-                // token. Feed the tracker one `eval_based_on_prev` call
-                // per operator so same-op runs collapse to +1 and mixed
-                // chains add +1 per transition (matching the Sonar
-                // whitepaper).
-                for child in node.children() {
-                    if child.kind_id() != PipelineChainTail {
-                        continue;
-                    }
-                    if let Some(op) = child.child(0)
-                        && matches!(op.kind_id().into(), AMPAMP | PIPEPIPE)
-                    {
-                        stats.structural = stats
-                            .boolean_seq
-                            .eval_based_on_prev(op.kind_id(), stats.structural);
-                    }
-                }
-            }
-            AssignmentExpression => {
-                stats.boolean_seq.reset();
-            }
-            // `-not` / `!` / `-bnot` — track in the boolean-sequence
-            // collapsing logic so that a leading negation doesn't trick
-            // the tracker into counting the first real boolean operator
-            // as a transition. The grammar wraps every unary form in
-            // `expression_with_unary_operator` (including `+$x`, `-$x`,
-            // `[int]$x`, `,$x`, `++$x`, `-split $x`, ...), so matching the
-            // wrapper kind would feed `BoolSequence` a non-boolean token
-            // and any subsequent `-and` / `-or` comparison would miss.
-            // Only the actual negation tokens belong here.
-            DASHnot | BANG | DASHbnot => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            // Collapse same-operator sequences. `logical_expression` and its
-            // argument-form twin `logical_argument_expression` both always
-            // carry at least one `-and` / `-or` / `-xor` operator when
-            // emitted — all three participate in sequence collapsing so
-            // mixed chains score +1 per transition.
-            //
-            // Short-circuit `&&` / `||` operators are handled by the
-            // `Pipeline` arm above because they live inside
-            // `pipeline_chain_tail` children of `pipeline`, not under
-            // `pipeline_chain` itself.
-            LogicalExpression | LogicalArgumentExpression => {
-                compute_booleans_in::<Powershell>(node, stats, &[DASHand, DASHor, DASHxor]);
-            }
-            // Function-like spaces reset structural nesting and bump depth.
-            FunctionStatement | ClassMethodDefinition => {
-                nesting = 0;
-                lambda = 0;
-                increment_function_depth_any::<Powershell>(
-                    &mut depth,
-                    node,
-                    &[FunctionStatement, ClassMethodDefinition],
-                );
-            }
-            ScriptBlockExpression => {
-                lambda += 1;
-            }
-            _ => {}
-        }
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
-}
 
 impl Cognitive for CCode {
     fn compute(

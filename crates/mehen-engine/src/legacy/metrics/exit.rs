@@ -4,10 +4,9 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{
-    CCode, GoCode, KotlinCode, PowershellCode, PythonCode, RubyCode, RustCode, TsxCode,
-    TypescriptCode,
+    CCode, GoCode, KotlinCode, PythonCode, RubyCode, RustCode, TsxCode, TypescriptCode,
 };
-use crate::legacy::languages::{C, Go, Kotlin, Powershell, Python, Ruby, Rust, Tsx, Typescript};
+use crate::legacy::languages::{C, Go, Kotlin, Python, Ruby, Rust, Tsx, Typescript};
 use crate::legacy::node::Node;
 use crate::legacy::rust_metric_helpers::is_inside_rust_macro_tokens;
 
@@ -213,26 +212,6 @@ impl Exit for RubyCode {
 
 // No languages require empty Exit implementations
 // implement_metric_trait!(Exit);
-
-impl Exit for PowershellCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        // In the tree-sitter-pwsh grammar, `return`, `throw`, and `exit` all
-        // become a `flow_control_statement` whose first keyword child is the
-        // specific jump. `break` / `continue` are local loop-flow controls,
-        // not function exits, so they are intentionally excluded — mirroring
-        // how mehen classifies Ruby's `break` / `next` vs. `return`.
-        if node.kind_id() != Powershell::FlowControlStatement {
-            return;
-        }
-        let lead = node.child(0).map(|c| c.kind_id().into());
-        if matches!(
-            lead,
-            Some(Powershell::Return) | Some(Powershell::Throw) | Some(Powershell::Exit)
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
 
 impl Exit for CCode {
     fn compute(node: &Node, stats: &mut Stats) {
