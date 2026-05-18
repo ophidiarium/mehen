@@ -1,19 +1,11 @@
 //! `mehen top-offenders` — rank files by one or more metrics.
 //!
-//! Usage:
-//! ```text
-//! mehen top-offenders \
-//!     --metric loc.lloc --metric cognitive \
-//!     --max-results 5 --output-format json \
-//!     src/module/rocket
-//! ```
-//!
-//! `--metric` is repeatable; order matters — the final list is sorted
-//! lexicographically by the tuple of metric values (first metric is the
-//! primary key, second breaks ties, etc). Each metric's sort direction comes
-//! from its [`Polarity`]: `LowerIsBetter` metrics sort descending (highest
-//! first — those are the worst offenders), `HigherIsBetter` metrics sort
-//! ascending (lowest first).
+//! Runs each candidate file through the per-language analyzer crate
+//! registered with [`AnalyzerRegistry`] (mehen-engine §4.6) and ranks
+//! by the user-specified metric selectors. The legacy
+//! `langs::get_function_spaces` pipeline is no longer used; the
+//! per-file extraction reads directly from the new `MetricSpace`'s
+//! `MetricSet` keys.
 
 use std::cmp::Ordering;
 use std::io::Write;
@@ -22,11 +14,14 @@ use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread::available_parallelism;
 
+use camino::Utf8PathBuf;
+use mehen_core::{AnalysisConfig, Language, MetricKey, MetricSpace, SourceFile};
+
+use crate::detection::detect_language;
 use crate::legacy::concurrent_files::{ConcurrentRunner, FilesData};
-use crate::legacy::langs::{LANG, get_from_ext, get_function_spaces};
 use crate::legacy::metric_selector::{MetricSelector, Polarity, parse_metric_selectors};
 use crate::legacy::mk_globset;
-use crate::legacy::tools::{guess_language, read_file_with_eol};
+use crate::registry::AnalyzerRegistry;
 
 // ── CLI args ───────────────────────────────────────────────────────────
 
@@ -99,31 +94,75 @@ struct FileOffender {
     metrics: Vec<MetricValue>,
 }
 
+// ── Selector → MetricSet key mapping ───────────────────────────────────
+//
+// The legacy `MetricSelector::extract` was a closure over `FuncSpace`.
+// In the new architecture each metric family publishes its rolled-up
+// values into the root `MetricSpace`'s `MetricSet` under the
+// documented keys (see `mehen-tree-sitter::walker::apply_state_to`).
+// `metric_set_key_for(selector)` translates the legacy selector name
+// into the corresponding `MetricSet` key.
+fn metric_set_key_for(name: &str) -> &'static str {
+    match name {
+        "cyclomatic" => "cyclomatic.sum",
+        "cognitive" => "cognitive.sum",
+        "nom.functions" => "nom.functions",
+        "loc.lloc" => "loc.lloc",
+        "mi.original" => "mi.original",
+        "mi.sei" => "mi.sei",
+        "mi.visual_studio" => "mi.visual_studio",
+        "halstead.volume" => "halstead.volume",
+        "abc" => "abc",
+        // Fall back to the bare name; missing keys read as 0.0.
+        other => Box::leak(other.to_string().into_boxed_str()),
+    }
+}
+
+fn read_metric(root: &MetricSpace, selector: &MetricSelector) -> f64 {
+    let key = metric_set_key_for(selector.name);
+    root.metrics
+        .get(&MetricKey::new(key))
+        .map(|v| v.as_f64())
+        .unwrap_or(0.0)
+}
+
 // ── Concurrent runner glue ─────────────────────────────────────────────
 
 struct TopOffendersCfg {
     selectors: Vec<MetricSelector>,
-    language: Option<LANG>,
+    language_override: Option<Language>,
+    registry: Arc<AnalyzerRegistry>,
     results: Arc<Mutex<Vec<FileOffender>>>,
 }
 
 fn act_on_file(path: PathBuf, cfg: &TopOffendersCfg) -> std::io::Result<()> {
-    let source = match read_file_with_eol(&path)? {
-        Some(s) => s,
+    let utf8_path = match Utf8PathBuf::try_from(path.clone()) {
+        Ok(p) => p,
+        Err(_) => return Ok(()),
+    };
+
+    let language = match cfg.language_override {
+        Some(l) => l,
+        None => match detect_language(&utf8_path) {
+            Some(l) => l,
+            None => return Ok(()),
+        },
+    };
+
+    let analyzer = match cfg.registry.analyzer_for(language) {
+        Some(a) => a,
         None => return Ok(()),
     };
 
-    let language = if let Some(language) = cfg.language {
-        language
-    } else if let Some(language) = guess_language(&source, &path).0 {
-        language
-    } else {
-        return Ok(());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
     };
 
-    let space = match get_function_spaces(&language, source, &path, None) {
-        Some(space) => space,
-        None => return Ok(()),
+    let source = SourceFile::new(utf8_path, language, text);
+    let analysis = match analyzer.analyze(&source, &AnalysisConfig::default()) {
+        Ok(a) => a,
+        Err(_) => return Ok(()),
     };
 
     let metrics: Vec<MetricValue> = cfg
@@ -132,7 +171,7 @@ fn act_on_file(path: PathBuf, cfg: &TopOffendersCfg) -> std::io::Result<()> {
         .map(|sel| MetricValue {
             name: sel.name,
             label: sel.label,
-            value: (sel.extract)(&space),
+            value: read_metric(&analysis.root, sel),
         })
         .collect();
 
@@ -146,30 +185,19 @@ fn act_on_file(path: PathBuf, cfg: &TopOffendersCfg) -> std::io::Result<()> {
 
 // ── Sorting ─────────────────────────────────────────────────────────────
 
-/// Compare two offenders by the tuple of metric values, respecting polarity
-/// on each axis.
-///
-/// For `LowerIsBetter` metrics, the *larger* value is "worse" and should sort
-/// to the top, so we reverse the natural ordering. For `HigherIsBetter`, the
-/// *smaller* value is worse — keep the natural ordering. Ties on the first
-/// metric fall through to the next.
 fn cmp_offenders(a: &FileOffender, b: &FileOffender, selectors: &[MetricSelector]) -> Ordering {
     for (i, sel) in selectors.iter().enumerate() {
-        // Lengths are guaranteed equal: `act_on_file` builds `metrics` by
-        // iterating `selectors` 1:1. Defensive `get` avoids a panic on any
-        // accidental skew and treats missing as 0.0.
         let av = a.metrics.get(i).map(|m| m.value).unwrap_or(0.0);
         let bv = b.metrics.get(i).map(|m| m.value).unwrap_or(0.0);
         let base = av.total_cmp(&bv);
         let ord = match sel.polarity {
-            Polarity::LowerIsBetter => base.reverse(), // worst (biggest) first
-            Polarity::HigherIsBetter => base,          // worst (smallest) first
+            Polarity::LowerIsBetter => base.reverse(),
+            Polarity::HigherIsBetter => base,
         };
         if ord != Ordering::Equal {
             return ord;
         }
     }
-    // Final tie-breaker: stable by path so output is deterministic.
     a.path.cmp(&b.path)
 }
 
@@ -190,7 +218,6 @@ fn print_markdown(offenders: &[FileOffender], selectors: &[MetricSelector]) {
         return;
     }
 
-    // Title lists the ranking metrics in order.
     let metric_list = selectors
         .iter()
         .map(|s| s.name)
@@ -198,21 +225,18 @@ fn print_markdown(offenders: &[FileOffender], selectors: &[MetricSelector]) {
         .join(", ");
     out.push_str(&format!("## Top Offenders (by {metric_list})\n\n"));
 
-    // Header
     out.push_str("| File |");
     for sel in selectors {
         out.push_str(&format!(" {} |", sel.label));
     }
     out.push('\n');
 
-    // Separator: left-align path, right-align numeric columns.
     out.push_str("|---|");
     for _ in selectors {
         out.push_str("---:|");
     }
     out.push('\n');
 
-    // Rows
     for o in offenders {
         out.push_str(&format!("| {} |", o.path.display()));
         for mv in &o.metrics {
@@ -238,19 +262,24 @@ fn resolve_num_jobs(requested: Option<usize>, available: Option<usize>) -> usize
     requested.unwrap_or_else(|| available.unwrap_or(2))
 }
 
+/// Resolve a `--language` CLI override (e.g. `ps1`, `python`) to the
+/// new `Language` enum. The legacy spelling is accepted via the
+/// `language_aliases()` table in `mehen-core`.
+fn parse_language_override(raw: &str) -> Option<Language> {
+    raw.parse::<Language>().ok()
+}
+
 // ── Orchestration ──────────────────────────────────────────────────────
 
 pub fn run_top_offenders(opts: TopOffendersOpts) {
     let selectors = parse_metric_selectors(&opts.metrics);
     if selectors.is_empty() {
-        // `parse_metric_selectors` logs each unknown name via `log::warn!`;
-        // if nothing resolved, the whole command has nothing to rank.
         log::error!("No valid metrics selected. See `mehen top-offenders --help`.");
         process::exit(1);
     }
 
-    let language = match opts.language_type.as_deref().filter(|s| !s.is_empty()) {
-        Some(raw) => match get_from_ext(raw) {
+    let language_override = match opts.language_type.as_deref().filter(|s| !s.is_empty()) {
+        Some(raw) => match parse_language_override(raw) {
             Some(language) => Some(language),
             None => {
                 log::error!("Unknown language type '{raw}'.");
@@ -269,10 +298,12 @@ pub fn run_top_offenders(opts: TopOffendersOpts) {
     let exclude = mk_globset(opts.exclude);
 
     let results: Arc<Mutex<Vec<FileOffender>>> = Arc::new(Mutex::new(Vec::new()));
+    let registry = Arc::new(AnalyzerRegistry::default_set());
 
     let cfg = TopOffendersCfg {
         selectors: selectors.clone(),
-        language,
+        language_override,
+        registry,
         results: results.clone(),
     };
 
@@ -347,7 +378,6 @@ mod tests {
 
     #[test]
     fn higher_is_better_puts_smallest_value_first() {
-        // e.g. maintainability index: the worst maintainability is the lowest MI.
         let selectors = [selector("mi.visual_studio", Polarity::HigherIsBetter)];
         let mut xs = [
             offender("good.rs", &[("mi", 120.0)]),
@@ -362,7 +392,6 @@ mod tests {
 
     #[test]
     fn ties_on_primary_metric_fall_through_to_secondary() {
-        // Two files tie on loc.lloc; the secondary key (cognitive) decides.
         let selectors = [
             selector("loc.lloc", Polarity::LowerIsBetter),
             selector("cognitive", Polarity::LowerIsBetter),
@@ -373,8 +402,6 @@ mod tests {
             offender("c.rs", &[("loc.lloc", 50.0), ("cognitive", 999.0)]),
         ];
         xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
-        // Both 100-loc files come before 50-loc file; between them, cognitive
-        // 30 (worse) beats cognitive 5.
         assert_eq!(xs[0].path, PathBuf::from("b.rs"));
         assert_eq!(xs[1].path, PathBuf::from("a.rs"));
         assert_eq!(xs[2].path, PathBuf::from("c.rs"));
@@ -396,8 +423,6 @@ mod tests {
 
     #[test]
     fn mixed_polarities_sort_each_axis_independently() {
-        // Primary: lower-is-better (loc); secondary: higher-is-better (mi).
-        // On a loc tie, the file with lower mi is the worse offender.
         let selectors = [
             selector("loc.lloc", Polarity::LowerIsBetter),
             selector("mi.visual_studio", Polarity::HigherIsBetter),
