@@ -31,18 +31,8 @@ impl Tree {
 pub(crate) struct Node<'a>(pub OtherNode<'a>);
 
 impl<'a> Node<'a> {
-    /// Checks if a node represents a syntax error or contains any syntax errors
-    /// anywhere within it.
-    pub(crate) fn has_error(&self) -> bool {
-        self.0.has_error()
-    }
-
     pub(crate) fn id(&self) -> usize {
         self.0.id()
-    }
-
-    pub(crate) fn kind(&self) -> &'static str {
-        self.0.kind()
     }
 
     pub(crate) fn kind_id(&self) -> u16 {
@@ -57,16 +47,6 @@ impl<'a> Node<'a> {
         self.0.end_byte()
     }
 
-    pub(crate) fn start_position(&self) -> (usize, usize) {
-        let temp = self.0.start_position();
-        (temp.row, temp.column)
-    }
-
-    pub(crate) fn end_position(&self) -> (usize, usize) {
-        let temp = self.0.end_position();
-        (temp.row, temp.column)
-    }
-
     pub(crate) fn start_row(&self) -> usize {
         self.0.start_position().row
     }
@@ -77,15 +57,6 @@ impl<'a> Node<'a> {
 
     pub(crate) fn parent(&self) -> Option<Node<'a>> {
         self.0.parent().map(Node)
-    }
-
-    #[inline(always)]
-    pub(crate) fn has_sibling(&self, id: u16) -> bool {
-        self.0.parent().is_some_and(|parent| {
-            self.0
-                .children(&mut parent.walk())
-                .any(|child| child.kind_id() == id)
-        })
     }
 
     #[inline(always)]
@@ -180,6 +151,7 @@ impl<'a> Cursor<'a> {
 }
 
 impl<'a> Search<'a> for Node<'a> {
+    #[cfg(test)]
     fn act_on_node(&self, action: &mut dyn FnMut(&Node<'a>)) {
         let mut cursor = self.cursor();
         let mut stack = Vec::new();

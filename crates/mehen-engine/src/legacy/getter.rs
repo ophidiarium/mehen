@@ -7,10 +7,6 @@ use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
 pub(crate) trait Getter {
-    fn get_func_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        Self::get_func_space_name(node, code)
-    }
-
     fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
         // we're in a function or in a class
         if let Some(name) = node.child_by_field_name("name") {

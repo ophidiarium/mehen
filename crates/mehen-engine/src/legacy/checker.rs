@@ -4,104 +4,15 @@ use crate::legacy::langs::{CCode, GoCode, KotlinCode, PhpCode, PythonCode, RubyC
 use crate::legacy::languages::{C, Go, Kotlin, Php, Python, Ruby, Rust};
 use crate::legacy::node::Node;
 
-macro_rules! check_if_func {
-    ($parser: ident, $node: ident) => {
-        $node.count_specific_ancestors::<$parser>(
-            |node| {
-                matches!(
-                    node.kind_id().into(),
-                    VariableDeclarator | AssignmentExpression | LabeledStatement | Pair
-                )
-            },
-            |node| {
-                matches!(
-                    node.kind_id().into(),
-                    StatementBlock | ReturnStatement | NewExpression | Arguments
-                )
-            },
-        ) > 0
-            || $node.is_child(Identifier as u16)
-    };
-}
-
-macro_rules! check_if_arrow_func {
-    ($parser: ident, $node: ident) => {
-        $node.count_specific_ancestors::<$parser>(
-            |node| {
-                matches!(
-                    node.kind_id().into(),
-                    VariableDeclarator | AssignmentExpression | LabeledStatement
-                )
-            },
-            |node| {
-                matches!(
-                    node.kind_id().into(),
-                    StatementBlock | ReturnStatement | NewExpression | CallExpression
-                )
-            },
-        ) > 0
-            || $node.has_sibling(PropertyIdentifier as u16)
-    };
-}
-
-macro_rules! is_js_func {
-    ($parser: ident, $node: ident) => {
-        match $node.kind_id().into() {
-            FunctionDeclaration | MethodDefinition => true,
-            FunctionExpression => check_if_func!($parser, $node),
-            ArrowFunction => check_if_arrow_func!($parser, $node),
-            _ => false,
-        }
-    };
-}
-
-macro_rules! is_js_closure {
-    ($parser: ident, $node: ident) => {
-        match $node.kind_id().into() {
-            GeneratorFunction | GeneratorFunctionDeclaration => true,
-            FunctionExpression => !check_if_func!($parser, $node),
-            ArrowFunction => !check_if_arrow_func!($parser, $node),
-            _ => false,
-        }
-    };
-}
-
-macro_rules! is_js_func_and_closure_checker {
-    ($parser: ident, $language: ident) => {
-        #[inline(always)]
-        fn is_func(node: &Node) -> bool {
-            use $language::*;
-            is_js_func!($parser, node)
-        }
-
-        #[inline(always)]
-        fn is_closure(node: &Node) -> bool {
-            use $language::*;
-            is_js_closure!($parser, node)
-        }
-    };
-}
-
 pub(crate) trait Checker {
-    fn is_comment(_: &Node) -> bool;
     fn is_func_space(_: &Node) -> bool;
     fn is_func(_: &Node) -> bool;
     fn is_closure(_: &Node) -> bool;
-    fn is_call(_: &Node) -> bool;
     fn is_non_arg(_: &Node) -> bool;
-    fn is_string(_: &Node) -> bool;
     fn is_else_if(_: &Node) -> bool;
-
-    fn is_error(node: &Node) -> bool {
-        node.has_error()
-    }
 }
 
 impl Checker for PythonCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Python::Comment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -117,19 +28,11 @@ impl Checker for PythonCode {
         node.kind_id() == Python::Lambda
     }
 
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Python::Call
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             Python::LPAREN | Python::COMMA | Python::RPAREN
         )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        node.kind_id() == Python::String || node.kind_id() == Python::ConcatenatedString
     }
 
     fn is_else_if(_: &Node) -> bool {
@@ -138,10 +41,6 @@ impl Checker for PythonCode {
 }
 
 impl Checker for RustCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Rust::LineComment || node.kind_id() == Rust::BlockComment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -161,19 +60,11 @@ impl Checker for RustCode {
         node.kind_id() == Rust::ClosureExpression
     }
 
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Rust::CallExpression
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             Rust::LPAREN | Rust::COMMA | Rust::RPAREN | Rust::PIPE | Rust::AttributeItem
         )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        node.kind_id() == Rust::StringLiteral || node.kind_id() == Rust::RawStringLiteral
     }
 
     #[inline(always)]
@@ -189,10 +80,6 @@ impl Checker for RustCode {
 }
 
 impl Checker for GoCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Go::Comment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -211,19 +98,8 @@ impl Checker for GoCode {
         node.kind_id() == Go::FuncLiteral
     }
 
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Go::CallExpression
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(node.kind_id().into(), Go::LPAREN | Go::COMMA | Go::RPAREN)
-    }
-
-    fn is_string(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Go::RawStringLiteral | Go::InterpretedStringLiteral
-        )
     }
 
     fn is_else_if(node: &Node) -> bool {
@@ -238,13 +114,6 @@ impl Checker for GoCode {
 }
 
 impl Checker for KotlinCode {
-    fn is_comment(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Kotlin::LineComment | Kotlin::MultilineComment
-        )
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -276,19 +145,11 @@ impl Checker for KotlinCode {
         node.kind_id() == Kotlin::LambdaLiteral
     }
 
-    fn is_call(node: &Node) -> bool {
-        node.kind_id() == Kotlin::CallExpression
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             Kotlin::LPAREN | Kotlin::RPAREN | Kotlin::COMMA
         )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        node.kind_id() == Kotlin::StringLiteral
     }
 
     #[inline(always)]
@@ -327,10 +188,6 @@ impl Checker for KotlinCode {
 }
 
 impl Checker for RubyCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Ruby::Comment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         match node.kind_id().into() {
             Ruby::Program
@@ -365,27 +222,10 @@ impl Checker for RubyCode {
         }
     }
 
-    fn is_call(node: &Node) -> bool {
-        // The Ruby grammar aliases several production rules to `call`;
-        // the enum generator deduplicates them into Call/Call2/Call3/Call4.
-        // Call5 is the internal `_call` supertype and is not emitted as a node kind.
-        matches!(
-            node.kind_id().into(),
-            Ruby::Call | Ruby::Call2 | Ruby::Call3 | Ruby::Call4
-        )
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             Ruby::LPAREN | Ruby::RPAREN | Ruby::COMMA | Ruby::PIPE
-        )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Ruby::String | Ruby::ChainedString | Ruby::HeredocBeginning
         )
     }
 
@@ -405,10 +245,6 @@ impl Checker for RubyCode {
 }
 
 impl Checker for CCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == C::Comment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -428,24 +264,10 @@ impl Checker for CCode {
         false
     }
 
-    fn is_call(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            C::CallExpression | C::CallExpression2
-        )
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             C::LPAREN | C::LPAREN2 | C::COMMA | C::RPAREN
-        )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            C::StringLiteral | C::ConcatenatedString | C::CharLiteral
         )
     }
 
@@ -465,10 +287,6 @@ impl Checker for CCode {
 }
 
 impl Checker for PhpCode {
-    fn is_comment(node: &Node) -> bool {
-        node.kind_id() == Php::Comment
-    }
-
     fn is_func_space(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
@@ -499,28 +317,10 @@ impl Checker for PhpCode {
         )
     }
 
-    fn is_call(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::FunctionCallExpression
-                | Php::MemberCallExpression
-                | Php::ScopedCallExpression
-                | Php::NullsafeMemberCallExpression
-                | Php::ObjectCreationExpression
-        )
-    }
-
     fn is_non_arg(node: &Node) -> bool {
         matches!(
             node.kind_id().into(),
             Php::LPAREN | Php::LPAREN2 | Php::RPAREN | Php::RPAREN2 | Php::COMMA
-        )
-    }
-
-    fn is_string(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Php::String | Php::EncapsedString | Php::Heredoc | Php::Nowdoc
         )
     }
 
@@ -547,10 +347,6 @@ impl Checker for MarkdownCode {
     // Markdown is a documentation language; its AST has no code-shaped nodes,
     // so the source-code `Checker` predicates all return `false`. The dedicated
     // Markdown analyzer (see `src/markdown/`) bypasses this trait entirely.
-    fn is_comment(_: &Node) -> bool {
-        false
-    }
-
     fn is_func_space(_: &Node) -> bool {
         false
     }
@@ -563,15 +359,7 @@ impl Checker for MarkdownCode {
         false
     }
 
-    fn is_call(_: &Node) -> bool {
-        false
-    }
-
     fn is_non_arg(_: &Node) -> bool {
-        false
-    }
-
-    fn is_string(_: &Node) -> bool {
         false
     }
 

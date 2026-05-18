@@ -1,13 +1,9 @@
 //! Shared metric selection primitives used by `diff` and `top-offenders`.
 //!
-//! A *selector* is a known metric name (e.g. `loc.lloc`) bundled with the
-//! extraction closure that pulls the value out of a [`FuncSpace`], a display
-//! label, and a [`Polarity`] (whether higher or lower values are "better").
-//!
-//! The `extract` closure is the legacy reader (over `FuncSpace`) and is
-//! kept here for the few legacy-metric tests still in this crate. The
-//! production diff/top-offenders pipelines read the new
-//! `MetricSpace::metrics` map via [`read_metric`] instead.
+//! A *selector* is a known metric name (e.g. `loc.lloc`) bundled with a
+//! display label and a [`Polarity`] (whether higher or lower values are
+//! "better"). Production diff/top-offenders pipelines read the
+//! `MetricSpace::metrics` map via [`read_metric`].
 
 use mehen_core::{MetricKey, MetricSpace};
 
@@ -24,14 +20,12 @@ pub(crate) enum Polarity {
     HigherIsBetter,
 }
 
-/// A selector for a single metric column: name, display label, polarity,
-/// and a function that extracts the value from a [`FuncSpace`].
+/// A selector for a single metric column: name, display label, polarity.
 #[derive(Debug, Clone)]
 pub(crate) struct MetricSelector {
     pub name: &'static str,
     pub label: &'static str,
     pub polarity: Polarity,
-    pub extract: fn(&FuncSpace) -> f64,
 }
 
 type MetricDef = (&'static str, &'static str, Polarity, fn(&FuncSpace) -> f64);
@@ -110,14 +104,13 @@ pub(crate) fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
             (None, spec)
         };
 
-        if let Some(&(n, label, default_polarity, extract)) =
+        if let Some(&(n, label, default_polarity, _extract)) =
             KNOWN_METRICS.iter().find(|(n, ..)| *n == name)
         {
             selectors.push(MetricSelector {
                 name: n,
                 label,
                 polarity: polarity_override.unwrap_or(default_polarity),
-                extract,
             });
         } else {
             log::warn!("Unknown metric '{name}', skipping.");

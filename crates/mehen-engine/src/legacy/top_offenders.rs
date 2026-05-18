@@ -313,8 +313,6 @@ mod tests {
             name,
             label: name,
             polarity,
-            // Unused in cmp tests — comparison reads pre-computed values.
-            extract: |_| 0.0,
         }
     }
 

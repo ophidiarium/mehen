@@ -188,6 +188,7 @@ mk_langs!(
 );
 
 pub(crate) mod fake {
+    #[allow(dead_code)]
     pub(crate) fn get_true<'a>(_ext: &str, _mode: &str) -> Option<&'a str> {
         None
     }

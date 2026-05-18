@@ -22,7 +22,6 @@ pub(crate) mod alterator;
 pub(crate) mod checker;
 pub(crate) mod concurrent_files;
 pub(crate) mod diff;
-pub(crate) mod formats;
 pub(crate) mod getter;
 pub(crate) mod langs;
 pub(crate) mod languages;

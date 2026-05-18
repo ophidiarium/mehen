@@ -97,19 +97,6 @@ impl Stats {
         self.space_count += other.space_count;
     }
 
-    /// Counts the number of function definitions in a scope
-    #[inline(always)]
-    pub(crate) fn functions(&self) -> f64 {
-        // Only function definitions are considered, not general declarations
-        self.functions as f64
-    }
-
-    /// Counts the number of closures in a scope
-    #[inline(always)]
-    pub(crate) fn closures(&self) -> f64 {
-        self.closures as f64
-    }
-
     /// Return the sum metric for functions
     #[inline(always)]
     pub(crate) fn functions_sum(&self) -> f64 {

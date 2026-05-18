@@ -83,6 +83,7 @@ macro_rules! mk_lang {
             ///
             /// println!("{}", LANG::Rust.get_name());
             /// ```
+            #[allow(dead_code)]
             pub fn get_name(&self) -> &'static str {
                 match self {
                     $(
@@ -134,6 +135,7 @@ macro_rules! mk_action {
         ///
         /// [`Callback`]: trait.Callback.html
         #[inline(always)]
+        #[allow(dead_code)]
         pub fn action<T: Callback>(lang: &LANG, source: Vec<u8>, path: &Path, pr: Option<Arc<PreprocResults>>, cfg: T::Cfg) -> T::Res {
             match lang {
                 $(
@@ -190,6 +192,7 @@ macro_rules! mk_extensions {
         ///
         /// get_from_ext(ext).unwrap();
         /// ```
+        #[allow(dead_code)]
         pub fn get_from_ext(ext: &str) -> Option<LANG>{
             match ext {
                 $(
@@ -219,6 +222,7 @@ macro_rules! mk_emacs_mode {
         ///
         /// get_from_emacs_mode(emacs_mode).unwrap();
         /// ```
+        #[allow(dead_code)]
         pub fn get_from_emacs_mode(mode: &str) -> Option<LANG>{
             match mode {
                 $(

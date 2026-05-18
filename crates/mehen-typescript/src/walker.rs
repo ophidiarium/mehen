@@ -77,48 +77,25 @@ fn span_to_source_span(span: Span, line_index: &LineIndex) -> SourceSpan {
     }
 }
 
-/// Per-frame tracking of the open-space's source span so we can route
-/// tokens to the right space during the post-walk Halstead pass.
-#[derive(Clone)]
-struct SpaceFrame {
-    kind: SpaceKind,
-    /// Byte range covered by this space.
-    span: Span,
-}
-
 struct Visitor<'a> {
     source: &'a str,
     line_index: &'a LineIndex,
     tree: MetricTreeBuilder,
     /// Per-space accumulator stack — index 0 is the unit.
     stack: Vec<State>,
-    /// Per-space source-span tracking, parallel to `stack`. The unit
-    /// frame covers the full program span.
-    frames: Vec<SpaceFrame>,
+    /// Parallel to `stack`: the SpaceKind of each open frame so the
+    /// walker can answer "what's my enclosing class-like" without
+    /// re-walking the AST. Index 0 is the unit.
+    kinds: Vec<SpaceKind>,
     /// Cognitive context inherited down the recursion. The walker
     /// reuses the legacy `(nesting, depth, lambda)` triple.
     cognitive: CognitiveContext,
-    /// Halstead emission pass needs the spans of every space ever
-    /// opened, in source order, so the token sweep can map each token
-    /// to the *innermost* covering space. Recorded on space-open with
-    /// the position in the spaces tree; the index is used to look up
-    /// the right `State`.
-    space_log: Vec<SpaceLogEntry>,
     /// Byte ranges of TypeScript-only AST nodes (type annotations,
     /// `implements` clauses, interface bodies, class names, …). The
     /// post-walk token sweep skips tokens whose span falls inside one
-    /// of these ranges so the TS-specific identifiers don't inflate
-    /// `n2 / N2` relative to the legacy tree-sitter-typescript
-    /// classification (which exposes `type_identifier` as a separate
-    /// kind that is not in `Getter::get_op_type`'s operand list).
+    /// of these ranges so TS-only identifiers don't inflate `n2 / N2`.
+    /// See `docs/typescript-halstead-spec.md`.
     type_only_ranges: Vec<Span>,
-}
-
-#[derive(Clone, Copy)]
-struct SpaceLogEntry {
-    span: Span,
-    /// Index into `space_states` — set when the space closes.
-    state_idx: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -136,37 +113,19 @@ impl<'a> Visitor<'a> {
             unit_span.end_line.saturating_sub(1),
             true,
         );
-        let unit_byte_span = Span::new(unit_span.start_byte, unit_span.end_byte);
         Self {
             source,
             line_index,
             tree: MetricTreeBuilder::new(unit_span),
             stack: vec![state],
-            frames: vec![SpaceFrame {
-                kind: SpaceKind::Unit,
-                span: unit_byte_span,
-            }],
+            kinds: vec![SpaceKind::Unit],
             cognitive: CognitiveContext::default(),
-            space_log: vec![SpaceLogEntry {
-                span: unit_byte_span,
-                state_idx: None,
-            }],
             type_only_ranges: Vec::new(),
         }
     }
 
     fn current(&mut self) -> &mut State {
         self.stack.last_mut().expect("walker stack empty")
-    }
-
-    fn parent_kind(&self) -> SpaceKind {
-        // Caller's enclosing space — the frame *below* the top.
-        self.frames
-            .iter()
-            .rev()
-            .nth(1)
-            .map(|f| f.kind.clone())
-            .unwrap_or(SpaceKind::Unit)
     }
 
     fn finish(mut self) -> MetricSpace {
@@ -207,34 +166,23 @@ impl<'a> Visitor<'a> {
         let source_span = span_to_source_span(span, self.line_index);
         self.tree.open(kind.clone(), source_span, name);
         self.stack.push(child);
-        self.frames.push(SpaceFrame {
-            kind: kind.clone(),
-            span,
-        });
-        self.space_log.push(SpaceLogEntry {
-            span,
-            state_idx: None,
-        });
+        self.kinds.push(kind);
     }
 
     /// Pop the open space, finalize it, and merge into parent.
     fn close_space(&mut self) {
-        let frame = self.frames.pop().expect("frames underflow");
+        let closed_kind = self.kinds.pop().expect("kinds underflow");
         let mut state = self.stack.pop().expect("stack underflow");
         // WMC: a function/method records its own cyclomatic into wmc.
-        if matches!(frame.kind, SpaceKind::Function) {
+        if matches!(closed_kind, SpaceKind::Function) {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
-            let parent_kind = self
-                .frames
-                .last()
-                .map(|f| f.kind.clone())
-                .unwrap_or(SpaceKind::Unit);
+            let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
             merge_child_into_parent(parent, &state);
-            if matches!(frame.kind, SpaceKind::Function) {
+            if matches!(closed_kind, SpaceKind::Function) {
                 let container = match parent_kind {
                     SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
                     SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
@@ -512,11 +460,11 @@ impl<'a> Visit<'a> for Visitor<'a> {
         match kind {
             SpaceKind::Function => {
                 let nested = self
-                    .frames
+                    .kinds
                     .iter()
                     .rev()
                     .skip(1) // skip self
-                    .any(|f| matches!(f.kind, SpaceKind::Function));
+                    .any(|k| matches!(k, SpaceKind::Function));
                 ctx.nesting = 0;
                 ctx.lambda = 0;
                 if nested {
@@ -594,11 +542,11 @@ impl<'a> Visit<'a> for Visitor<'a> {
 
         let mut ctx = self.cognitive;
         let nested = self
-            .frames
+            .kinds
             .iter()
             .rev()
             .skip(1)
-            .any(|f| matches!(f.kind, SpaceKind::Function));
+            .any(|k| matches!(k, SpaceKind::Function));
         ctx.nesting = 0;
         ctx.lambda = 0;
         if nested {
@@ -743,12 +691,13 @@ impl<'a> Visit<'a> for Visitor<'a> {
         // skips `else if` (which already counts as a separate
         // IfStatement decision).
         if let AstKind::IfStatement(if_stmt) = kind
-            && let Some(alt) = &if_stmt.alternate {
-                use oxc_ast::ast::Statement;
-                if !matches!(alt, Statement::IfStatement(_)) {
-                    self.current().abc.record_condition();
-                }
+            && let Some(alt) = &if_stmt.alternate
+        {
+            use oxc_ast::ast::Statement;
+            if !matches!(alt, Statement::IfStatement(_)) {
+                self.current().abc.record_condition();
             }
+        }
 
         // LOC — every node's start line is a potential PLOC line.
         // Legacy: `crates/mehen-engine/src/legacy/metrics/loc.rs:622-645`.
@@ -1013,14 +962,11 @@ impl<'a> Visit<'a> for Visitor<'a> {
 }
 
 impl<'a> Visitor<'a> {
-    /// The *current* enclosing space kind — i.e. the top of the frames
+    /// The *current* enclosing space kind — i.e. the top of the kinds
     /// stack (the just-opened space is the top; this returns the
     /// parent of any node about to be visited next).
     fn parent_kind_top(&self) -> SpaceKind {
-        self.frames
-            .last()
-            .map(|f| f.kind.clone())
-            .unwrap_or(SpaceKind::Unit)
+        self.kinds.last().cloned().unwrap_or(SpaceKind::Unit)
     }
 }
 

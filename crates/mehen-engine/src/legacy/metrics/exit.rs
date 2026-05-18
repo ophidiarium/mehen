@@ -68,10 +68,6 @@ impl Stats {
         self.exit_sum += other.exit_sum;
     }
 
-    /// Returns the `NExit` metric value
-    pub(crate) fn exit(&self) -> f64 {
-        self.exit as f64
-    }
     /// Returns the `NExit` metric sum value
     pub(crate) fn exit_sum(&self) -> f64 {
         self.exit_sum as f64

@@ -151,22 +151,6 @@ fn compute_booleans<T: PartialEq + From<u16>>(
     }
 }
 
-/// Same-operator sequence collapser for nodes that may expose more than two
-/// boolean operators (e.g. PowerShell's `logical_expression` carrying
-/// `-and` / `-or` / `-xor`). Each direct child whose kind matches any
-/// element of `typs` feeds the `BoolSequence` tracker, so mixed sequences
-/// still get +1 per transition and same-operator runs collapse to +1.
-fn compute_booleans_in<T: PartialEq + From<u16>>(node: &Node, stats: &mut Stats, typs: &[T]) {
-    for child in node.children() {
-        let child_kind: T = child.kind_id().into();
-        if typs.contains(&child_kind) {
-            stats.structural = stats
-                .boolean_seq
-                .eval_based_on_prev(child.kind_id(), stats.structural);
-        }
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 struct BoolSequence {
     boolean_op: Option<u16>,

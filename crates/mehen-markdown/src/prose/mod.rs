@@ -69,7 +69,7 @@ pub struct ProseMeta {
 
 /// Analyzes prose layers over the Markdown parse tree. `source` is the raw
 /// file bytes so we can slice text without re-walking the tree repeatedly.
-pub fn analyze_prose(root: &Node<'_>, source: &[u8]) -> ProseReport {
+pub(crate) fn analyze_prose(root: &Node<'_>, source: &[u8]) -> ProseReport {
     // 1. Enumerate prose-eligible blocks with per-block text spans.
     let blocks = lang_detect::collect_prose_blocks(root, source);
 

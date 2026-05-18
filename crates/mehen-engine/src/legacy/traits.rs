@@ -18,13 +18,9 @@ use crate::legacy::metrics::npa::Npa;
 use crate::legacy::metrics::npm::Npm;
 use crate::legacy::metrics::wmc::Wmc;
 use crate::legacy::node::Node;
-use crate::legacy::parser::Filter;
 use crate::legacy::preproc::PreprocResults;
 
-/// A trait for callback functions.
-///
-/// Allows to call a private library function, getting as result
-/// its output value.
+/// A trait for callback functions used by the `mk_action!` macro.
 pub(crate) trait Callback {
     /// The output type returned by the callee
     type Res;
@@ -62,10 +58,13 @@ pub(crate) trait ParserTrait {
     fn get_root(&self) -> Node<'_>;
     fn get_code(&self) -> &[u8];
     fn get_lang() -> LANG;
-    fn get_filters(&self, filters: &[String]) -> Filter;
 }
 
 pub(crate) trait Search<'a> {
+    /// Walk every node under `self`, depth-first, and invoke `pred` on
+    /// each. Only consumed by per-language tests in `getter.rs` — clippy
+    /// flags it as dead in non-test builds, hence the `cfg(test)` gate.
+    #[cfg(test)]
     fn act_on_node(&self, pred: &mut dyn FnMut(&Node<'a>));
     fn act_on_child(&self, action: &mut dyn FnMut(&Node<'a>));
 }

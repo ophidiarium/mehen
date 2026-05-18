@@ -47,31 +47,6 @@ pub(crate) struct Parser<
     phantom: PhantomData<T>,
 }
 
-type FilterFn = dyn Fn(&Node) -> bool;
-
-pub(crate) struct Filter {
-    filters: Vec<Box<FilterFn>>,
-}
-
-impl std::fmt::Debug for Filter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Filter")
-            .field("count", &self.filters.len())
-            .finish()
-    }
-}
-
-impl Filter {
-    pub(crate) fn any(&self, node: &Node) -> bool {
-        for f in &self.filters {
-            if f(node) {
-                return true;
-            }
-        }
-        false
-    }
-}
-
 #[inline(always)]
 fn get_fake_code(_code: &[u8], _path: &Path, _pr: Option<Arc<PreprocResults>>) -> Option<Vec<u8>> {
     None
@@ -142,35 +117,5 @@ impl<
     #[inline(always)]
     fn get_lang() -> crate::legacy::langs::LANG {
         T::get_lang()
-    }
-
-    fn get_filters(&self, filters: &[String]) -> Filter {
-        let mut res: Vec<Box<FilterFn>> = Vec::new();
-        for f in filters {
-            let f = f.as_str();
-            match f {
-                "all" => res.push(Box::new(|_: &Node| -> bool { true })),
-                "call" => res.push(Box::new(T::is_call)),
-                "comment" => res.push(Box::new(T::is_comment)),
-                "error" => res.push(Box::new(T::is_error)),
-                "string" => res.push(Box::new(T::is_string)),
-                "function" => res.push(Box::new(T::is_func)),
-                _ => {
-                    if let Ok(n) = f.parse::<u16>() {
-                        res.push(Box::new(move |node: &Node| -> bool { node.kind_id() == n }));
-                    } else {
-                        let f = f.to_owned();
-                        res.push(Box::new(move |node: &Node| -> bool {
-                            node.kind().contains(&f)
-                        }));
-                    }
-                }
-            }
-        }
-        if res.is_empty() {
-            res.push(Box::new(|_: &Node| -> bool { true }));
-        }
-
-        Filter { filters: res }
     }
 }

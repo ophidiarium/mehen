@@ -69,8 +69,8 @@ impl Language {
 
 /// One prose-eligible block extracted from the tree.
 #[derive(Debug, Clone)]
-pub struct ProseBlock<'a> {
-    pub kind: Markdown,
+pub(crate) struct ProseBlock<'a> {
+    pub(crate) kind: Markdown,
     pub start_line: u64,
     pub end_line: u64,
     /// Stripped prose text: inline code / URLs / alt-text destination already
@@ -82,8 +82,8 @@ pub struct ProseBlock<'a> {
 /// Like [`ProseBlock`] but carries a resolved language tag for downstream
 /// metric dispatch.
 #[derive(Debug, Clone)]
-pub struct DetectedBlock {
-    pub kind: Markdown,
+pub(crate) struct DetectedBlock {
+    pub(crate) kind: Markdown,
     pub start_line: u64,
     pub end_line: u64,
     pub text: String,
@@ -92,7 +92,7 @@ pub struct DetectedBlock {
 
 /// Walks the parse tree and collects every prose-eligible block in document
 /// order.
-pub fn collect_prose_blocks<'a>(root: &Node<'_>, source: &'a [u8]) -> Vec<ProseBlock<'a>> {
+pub(crate) fn collect_prose_blocks<'a>(root: &Node<'_>, source: &'a [u8]) -> Vec<ProseBlock<'a>> {
     let mut blocks = Vec::new();
     walk(root, source, &mut blocks);
     blocks
@@ -223,7 +223,7 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
 ///
 /// This byte-slice approach preserves the original whitespace between
 /// tokens, which is critical for sentence- and word-segmentation.
-pub fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
+pub(crate) fn extract_prose_text(node: &Node<'_>, source: &[u8]) -> String {
     let block_start = node.start_byte();
     let block_end = node.end_byte();
     if block_end <= block_start || block_end > source.len() {
@@ -405,7 +405,7 @@ fn normalize_whitespace(s: &str) -> String {
 }
 
 /// Applies the Unicode-script block-ratio heuristic to one prose block.
-pub fn classify_block(block: &ProseBlock<'_>) -> DetectedBlock {
+pub(crate) fn classify_block(block: &ProseBlock<'_>) -> DetectedBlock {
     let language = classify_text(&block.text);
     DetectedBlock {
         kind: block.kind.clone(),
@@ -528,7 +528,7 @@ fn is_cjk_punctuation(c: char) -> bool {
 ///    inherit the preceding heading's language.
 /// 2. Headings that classified as Other inherit the nearest non-`Other`
 ///    neighboring block's language (earlier preferred; else later).
-pub fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<DetectedBlock> {
+pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<DetectedBlock> {
     let mut out = blocks;
 
     // Pass 1: non-heading short blocks inherit from preceding heading.
@@ -620,7 +620,7 @@ fn is_heading_kind(kind: &Markdown) -> bool {
 
 /// Picks the document-level dominant language by simple majority over
 /// detected blocks. Ties and mixed-bilingual documents return `Mixed`.
-pub fn dominant_language(blocks: &[DetectedBlock]) -> Language {
+pub(crate) fn dominant_language(blocks: &[DetectedBlock]) -> Language {
     let mut en_blocks = 0usize;
     let mut ja_blocks = 0usize;
     let mut other_blocks = 0usize;
@@ -654,7 +654,7 @@ pub fn dominant_language(blocks: &[DetectedBlock]) -> Language {
 /// Concatenates the text of all blocks tagged with `language` into a single
 /// string separated by `\n\n` so downstream sentence segmentation treats
 /// block boundaries as hard terminators (§31.12).
-pub fn concat_lang_text(blocks: &[DetectedBlock], language: Language) -> String {
+pub(crate) fn concat_lang_text(blocks: &[DetectedBlock], language: Language) -> String {
     let mut out = String::new();
     for b in blocks {
         if b.language == language {
