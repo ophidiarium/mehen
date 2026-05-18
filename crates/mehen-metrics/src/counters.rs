@@ -1,46 +1,96 @@
 use serde::Serialize;
 
 /// Number of arguments accumulator (NArgs).
+///
+/// Mirrors the pre-1.0 `nargs::Stats`. Per-space, `fn_nargs` /
+/// `closure_nargs` hold the arg count of that function or closure
+/// space (set once when the space opens); `*_sum` are the rolled-up
+/// totals across closed spaces; `*_min` / `*_max` are bounds. Averages
+/// divide by the function / closure counts (NOM totals), set via
+/// `finalize_average`.
 #[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct NargsStats {
-    pub functions: u32,
-    pub closures: u32,
-    pub min: u32,
-    pub max: u32,
+    pub fn_nargs: u32,
+    pub closure_nargs: u32,
+    pub fn_nargs_sum: u32,
+    pub closure_nargs_sum: u32,
+    pub fn_nargs_min: u32,
+    pub fn_nargs_max: u32,
+    pub closure_nargs_min: u32,
+    pub closure_nargs_max: u32,
+    pub fn_nargs_average: f64,
+    pub closure_nargs_average: f64,
+    pub minmax_seen: bool,
 }
 
 impl NargsStats {
+    /// Set the function arg count for this space. Called once when a
+    /// `Function` space opens.
     pub fn record_function_args(&mut self, count: u32) {
-        self.functions = self.functions.saturating_add(count);
-        self.update_bounds(count);
+        self.fn_nargs = count;
     }
 
+    /// Set the closure arg count for this space. Called once when a
+    /// `Closure` space opens.
     pub fn record_closure_args(&mut self, count: u32) {
-        self.closures = self.closures.saturating_add(count);
-        self.update_bounds(count);
+        self.closure_nargs = count;
     }
 
-    fn update_bounds(&mut self, count: u32) {
-        // `min` is sentinel-encoded with 0 because there is no way for a
-        // function to legitimately have "negative one args" — the first
-        // observation seeds the bound.
-        self.min = if self.min == 0 {
-            count
+    /// Snapshot the per-space `fn_nargs` / `closure_nargs` into `*_sum`,
+    /// `*_min`, `*_max`. Mirrors the pre-1.0 `compute_minmax`.
+    pub fn finalize_minmax(&mut self) {
+        self.fn_nargs_sum = self.fn_nargs_sum.saturating_add(self.fn_nargs);
+        self.closure_nargs_sum = self.closure_nargs_sum.saturating_add(self.closure_nargs);
+        if self.minmax_seen {
+            self.fn_nargs_min = self.fn_nargs_min.min(self.fn_nargs);
+            self.closure_nargs_min = self.closure_nargs_min.min(self.closure_nargs);
         } else {
-            self.min.min(count)
-        };
-        self.max = self.max.max(count);
+            self.fn_nargs_min = self.fn_nargs;
+            self.closure_nargs_min = self.closure_nargs;
+            self.minmax_seen = true;
+        }
+        self.fn_nargs_max = self.fn_nargs_max.max(self.fn_nargs);
+        self.closure_nargs_max = self.closure_nargs_max.max(self.closure_nargs);
+    }
+
+    /// Compute averages once `*_sum` has been merged across all spaces.
+    /// Divides by the NOM `functions_sum` and `closures_sum`
+    /// respectively; both fall back to `1` when the count is zero
+    /// (matching the pre-1.0 `total_functions.max(1)` guard).
+    pub fn finalize_average(&mut self, function_count: u32, closure_count: u32) {
+        let fn_denom = function_count.max(1);
+        let cl_denom = closure_count.max(1);
+        self.fn_nargs_average = f64::from(self.fn_nargs_sum) / f64::from(fn_denom);
+        self.closure_nargs_average = f64::from(self.closure_nargs_sum) / f64::from(cl_denom);
     }
 
     pub fn merge(&mut self, other: &NargsStats) {
-        self.functions = self.functions.saturating_add(other.functions);
-        self.closures = self.closures.saturating_add(other.closures);
-        self.min = match (self.min, other.min) {
-            (0, b) => b,
-            (a, 0) => a,
-            (a, b) => a.min(b),
-        };
-        self.max = self.max.max(other.max);
+        self.fn_nargs_sum = self.fn_nargs_sum.saturating_add(other.fn_nargs_sum);
+        self.closure_nargs_sum = self
+            .closure_nargs_sum
+            .saturating_add(other.closure_nargs_sum);
+        if !other.minmax_seen {
+            return;
+        }
+        if self.minmax_seen {
+            self.fn_nargs_min = self.fn_nargs_min.min(other.fn_nargs_min);
+            self.closure_nargs_min = self.closure_nargs_min.min(other.closure_nargs_min);
+        } else {
+            self.fn_nargs_min = other.fn_nargs_min;
+            self.closure_nargs_min = other.closure_nargs_min;
+            self.minmax_seen = true;
+        }
+        self.fn_nargs_max = self.fn_nargs_max.max(other.fn_nargs_max);
+        self.closure_nargs_max = self.closure_nargs_max.max(other.closure_nargs_max);
+    }
+
+    pub fn total(&self) -> u32 {
+        self.fn_nargs_sum.saturating_add(self.closure_nargs_sum)
+    }
+
+    pub fn nargs_average(&self, function_count: u32, closure_count: u32) -> f64 {
+        let denom = function_count.saturating_add(closure_count).max(1);
+        f64::from(self.total()) / f64::from(denom)
     }
 }
 
@@ -278,33 +328,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn nargs_record_updates_bounds() {
+    fn nargs_record_then_finalize_snapshots_per_space_value() {
         let mut s = NargsStats::default();
         s.record_function_args(3);
-        s.record_function_args(1);
-        s.record_function_args(5);
-        assert_eq!(s.min, 1);
-        assert_eq!(s.max, 5);
+        s.finalize_minmax();
+        assert_eq!(s.fn_nargs_sum, 3);
+        assert_eq!(s.fn_nargs_min, 3);
+        assert_eq!(s.fn_nargs_max, 3);
     }
 
     #[test]
     fn nargs_merge_combines_bounds() {
-        let mut a = NargsStats {
-            functions: 3,
-            closures: 0,
-            min: 1,
-            max: 3,
-        };
-        let b = NargsStats {
-            functions: 5,
-            closures: 0,
-            min: 5,
-            max: 5,
-        };
+        let mut a = NargsStats::default();
+        a.record_function_args(3);
+        a.finalize_minmax();
+        let mut b = NargsStats::default();
+        b.record_function_args(5);
+        b.finalize_minmax();
         a.merge(&b);
-        assert_eq!(a.min, 1);
-        assert_eq!(a.max, 5);
-        assert_eq!(a.functions, 8);
+        assert_eq!(a.fn_nargs_sum, 8);
+        assert_eq!(a.fn_nargs_min, 3);
+        assert_eq!(a.fn_nargs_max, 5);
     }
 
     #[test]

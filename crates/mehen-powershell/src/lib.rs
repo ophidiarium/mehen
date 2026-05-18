@@ -150,6 +150,60 @@ impl LanguageRules for PowerShellRules {
             loc: powershell_loc_fact(node),
         }
     }
+
+    fn count_args(&self, node: &Node<'_>, _source: &[u8]) -> u32 {
+        powershell_count_args(node)
+    }
+}
+
+/// Count the function/closure parameters declared by the
+/// PowerShell space rooted at `node`. Mirrors the pre-1.0
+/// `compute_powershell_args` (`src/metrics/nargs.rs:293-370`):
+/// PowerShell parameter declarations appear in three shapes —
+/// `function_statement` > `function_parameter_declaration` >
+/// `parameter_list` > `script_parameter`; `script_block_expression` >
+/// `param_block` > `parameter_list` > `script_parameter`; or
+/// `class_method_definition` > `class_method_parameter_list` >
+/// `class_method_parameter`. The walker recurses ONLY through the
+/// thin structural wrappers between the entry node and the parameter
+/// list — never into the body — so nested closures don't leak args
+/// into their enclosing function.
+fn powershell_count_args(node: &Node<'_>) -> u32 {
+    let kind = node.kind();
+    let is_method = kind == "class_method_definition";
+    let mut count: u32 = 0;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "parameter_list" if !is_method => {
+                let mut pl = child.walk();
+                for p in child.children(&mut pl) {
+                    if p.kind() == "script_parameter" {
+                        count = count.saturating_add(1);
+                    }
+                }
+            }
+            "class_method_parameter_list" if is_method => {
+                let mut pl = child.walk();
+                for p in child.children(&mut pl) {
+                    if p.kind() == "class_method_parameter" {
+                        count = count.saturating_add(1);
+                    }
+                }
+            }
+            // Recurse only into the structural wrapper that directly
+            // contains the parameter list — `function_parameter_declaration`
+            // for functions, `param_block` for closures. The body
+            // `script_block` / `script_block_body` / `statement_list` is
+            // intentionally NOT descended (that's where nested closures
+            // live).
+            "function_parameter_declaration" | "param_block" => {
+                count = count.saturating_add(powershell_count_args(&child));
+            }
+            _ => {}
+        }
+    }
+    count
 }
 
 /// PowerShell LOC classification per pre-1.0

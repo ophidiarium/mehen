@@ -119,6 +119,15 @@ pub trait LanguageRules {
 
     /// Classify a single AST node for shared metrics.
     fn classify(&self, node: &Node<'_>) -> NodeFacts;
+
+    /// Count the number of arguments declared by the function or
+    /// closure rooted at `node`. Default: zero. Each language overrides
+    /// to count its own parameter-list shape (PowerShell:
+    /// `parameter_list > script_parameter`; PHP / TS: `formal_parameters
+    /// > parameter`; Python: `parameters > identifier`; etc.).
+    fn count_args(&self, _node: &Node<'_>, _source: &[u8]) -> u32 {
+        0
+    }
 }
 
 /// The result of running [`walk`] on a tree.
@@ -178,8 +187,12 @@ fn finalize_state(state: &mut State) {
     state.cyclomatic.finalize_average();
     state.loc.finalize_minmax();
     state.nom.finalize_minmax();
+    state.nargs.finalize_minmax();
     state.nexit.finalize_minmax();
     state.nexit.finalize_average(state.nom.total());
+    state
+        .nargs
+        .finalize_average(state.nom.functions_sum, state.nom.closures_sum);
 }
 
 /// Fold a finalized child state's rolled-up totals (sum/min/max/n)
@@ -190,8 +203,12 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
     parent.cyclomatic.finalize_average();
     parent.loc.merge(&child.loc);
     parent.nom.merge(&child.nom);
+    parent.nargs.merge(&child.nargs);
     parent.nexit.merge(&child.nexit);
     parent.nexit.finalize_average(parent.nom.total());
+    parent
+        .nargs
+        .finalize_average(parent.nom.functions_sum, parent.nom.closures_sum);
 }
 
 /// Publish a finalized `State` into a `MetricSet` using the shared key
@@ -208,6 +225,7 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     publish_cyclomatic(&state.cyclomatic, target);
     publish_loc(&state.loc, target);
     publish_nom(&state.nom, target);
+    publish_nargs(&state.nargs, &state.nom, target);
     publish_nexit(&state.nexit, target);
 
     target.insert(
@@ -234,13 +252,56 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
     target.insert(MetricKey::new(keys::MI_SEI), mi.mi_sei);
 
     target.insert(MetricKey::new(keys::ABC), state.abc.magnitude());
-    target.insert(
-        MetricKey::new(keys::NARGS),
-        (state.nargs.functions + state.nargs.closures) as i64,
-    );
     target.insert(MetricKey::new(keys::NPA), state.npa.public as i64);
     target.insert(MetricKey::new(keys::NPM), state.npm.public as i64);
     target.insert(MetricKey::new(keys::WMC), state.wmc.wmc as i64);
+}
+
+fn publish_nargs(
+    stats: &mehen_metrics::NargsStats,
+    nom: &mehen_metrics::NomStats,
+    target: &mut MetricSet,
+) {
+    // Legacy `metric.nargs` JSON: { total_functions, total_closures,
+    //   average_functions, average_closures, total, average,
+    //   functions_min, functions_max, closures_min, closures_max }.
+    target.insert(MetricKey::new(keys::NARGS), stats.total() as i64);
+    target.insert(
+        MetricKey::new(format!("{}.total_functions", keys::NARGS)),
+        stats.fn_nargs_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.total_closures", keys::NARGS)),
+        stats.closure_nargs_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average_functions", keys::NARGS)),
+        stats.fn_nargs_average,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average_closures", keys::NARGS)),
+        stats.closure_nargs_average,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::NARGS)),
+        stats.nargs_average(nom.functions_sum, nom.closures_sum),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.functions_min", keys::NARGS)),
+        stats.fn_nargs_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.functions_max", keys::NARGS)),
+        stats.fn_nargs_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures_min", keys::NARGS)),
+        stats.closure_nargs_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures_max", keys::NARGS)),
+        stats.closure_nargs_max as i64,
+    );
 }
 
 fn publish_nom(stats: &mehen_metrics::NomStats, target: &mut MetricSet) {
@@ -422,17 +483,7 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
     fn visit(&mut self, node: Node<'_>) {
         let opened_space = match self.rules.scope_for(&node, self.source_text) {
             Some(ScopeOpen::Open { kind, name }) => {
-                // Bump NOM on the *parent* — this child space contributes
-                // to its parent's function/closure count. Mirrors the
-                // pre-1.0 `Nom::compute` which incremented on `is_func` /
-                // `is_closure` nodes encountered during the parent's walk.
-                match kind {
-                    SpaceKind::Function => self.current().nom.record_function(),
-                    SpaceKind::Closure => self.current().nom.record_closure(),
-                    _ => {}
-                }
                 let span = node_span(&node, self.line_index);
-                self.tree.open(kind, span, name);
                 let mut child_state = State::new();
                 // The child space's LOC span is the AST node's row range.
                 // Non-unit spaces use the `+1` convention (counts the
@@ -442,6 +493,25 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
                     node.end_position().row as u32,
                     false,
                 );
+                // Per pre-1.0 `Nom::compute`: when the walker enters a
+                // function/closure space, the *child* state owns the
+                // increment — its own `functions`/`closures` count
+                // includes itself. The unit space and class spaces
+                // intentionally do not self-count.
+                match kind {
+                    SpaceKind::Function => {
+                        child_state.nom.record_function();
+                        let count = self.rules.count_args(&node, self.source_text);
+                        child_state.nargs.record_function_args(count);
+                    }
+                    SpaceKind::Closure => {
+                        child_state.nom.record_closure();
+                        let count = self.rules.count_args(&node, self.source_text);
+                        child_state.nargs.record_closure_args(count);
+                    }
+                    _ => {}
+                }
+                self.tree.open(kind, span, name);
                 self.stack.push(child_state);
                 true
             }

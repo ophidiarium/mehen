@@ -70,6 +70,70 @@ pub struct Nexits {
     pub max: f64,
 }
 
+/// Render the `nargs` family object: 10 fields covering per-class
+/// argument totals, averages, total, and min/max bounds. Field
+/// ordering matches the pre-1.0 `nargs::Stats::serialize`.
+pub fn nargs(metrics: &MetricSet) -> Nargs {
+    Nargs {
+        total_functions: as_f64(metrics, "nargs.total_functions"),
+        total_closures: as_f64(metrics, "nargs.total_closures"),
+        average_functions: as_f64(metrics, "nargs.average_functions"),
+        average_closures: as_f64(metrics, "nargs.average_closures"),
+        total: as_f64(metrics, "nargs"),
+        average: as_f64(metrics, "nargs.average"),
+        functions_min: as_f64(metrics, "nargs.functions_min"),
+        functions_max: as_f64(metrics, "nargs.functions_max"),
+        closures_min: as_f64(metrics, "nargs.closures_min"),
+        closures_max: as_f64(metrics, "nargs.closures_max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Nargs {
+    pub total_functions: f64,
+    pub total_closures: f64,
+    pub average_functions: f64,
+    pub average_closures: f64,
+    pub total: f64,
+    pub average: f64,
+    pub functions_min: f64,
+    pub functions_max: f64,
+    pub closures_min: f64,
+    pub closures_max: f64,
+}
+
+/// Render the `nom` family object: 10 fields covering function /
+/// closure counts, per-class averages, total, and per-class min/max
+/// bounds. Field ordering matches the pre-1.0 `Nom::Stats::serialize`.
+pub fn nom(metrics: &MetricSet) -> Nom {
+    Nom {
+        functions: as_f64(metrics, "nom.functions"),
+        closures: as_f64(metrics, "nom.closures"),
+        functions_average: as_f64(metrics, "nom.functions_average"),
+        closures_average: as_f64(metrics, "nom.closures_average"),
+        total: as_f64(metrics, "nom"),
+        average: as_f64(metrics, "nom.average"),
+        functions_min: as_f64(metrics, "nom.functions_min"),
+        functions_max: as_f64(metrics, "nom.functions_max"),
+        closures_min: as_f64(metrics, "nom.closures_min"),
+        closures_max: as_f64(metrics, "nom.closures_max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Nom {
+    pub functions: f64,
+    pub closures: f64,
+    pub functions_average: f64,
+    pub closures_average: f64,
+    pub total: f64,
+    pub average: f64,
+    pub functions_min: f64,
+    pub functions_max: f64,
+    pub closures_min: f64,
+    pub closures_max: f64,
+}
+
 /// Render the `loc` family object: 20 fields covering SLOC / PLOC /
 /// LLOC / CLOC / blank with rolled-up totals, per-line-class
 /// averages, and per-line-class min/max bounds. The ordering matches
