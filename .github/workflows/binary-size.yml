@@ -10,6 +10,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize note-writing runs so concurrent main pushes don't race the
+# refs/notes/binary-size ref. PR runs get a unique group so they don't queue.
+concurrency:
+  group: binary-size-${{ github.event_name == 'push' && 'notes' || github.run_id }}
+  cancel-in-progress: false
+
 env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
@@ -50,7 +56,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git notes --ref="$NOTES_REF" add -f -m "$SIZE" "$GITHUB_SHA"
-          git push origin "$NOTES_REF" 2>/dev/null || git push origin "$NOTES_REF" --force
+          git push origin "$NOTES_REF"
 
       - name: Post size comment on PR
         # Skip on fork PRs: GITHUB_TOKEN is read-only there, so commenting would fail.
