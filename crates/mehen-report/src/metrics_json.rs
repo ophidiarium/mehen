@@ -48,6 +48,81 @@ pub struct Cyclomatic {
     pub max: f64,
 }
 
+/// Render the `nexits` family object: `{ sum, average, min, max }`.
+///
+/// `sum` is the total number of exit points across the rolled-up
+/// spaces, `average` divides by the function count (NOM total) — not
+/// the space count. `min` and `max` bound the per-space counts.
+pub fn nexits(metrics: &MetricSet) -> Nexits {
+    Nexits {
+        sum: as_f64(metrics, "nexit.sum"),
+        average: as_f64(metrics, "nexit.average"),
+        min: as_f64(metrics, "nexit.min"),
+        max: as_f64(metrics, "nexit.max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Nexits {
+    pub sum: f64,
+    pub average: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+/// Render the `loc` family object: 20 fields covering SLOC / PLOC /
+/// LLOC / CLOC / blank with rolled-up totals, per-line-class
+/// averages, and per-line-class min/max bounds. The ordering matches
+/// the pre-1.0 `Loc::Stats::serialize` field order.
+pub fn loc(metrics: &MetricSet) -> Loc {
+    Loc {
+        sloc: as_f64(metrics, "loc.sloc"),
+        ploc: as_f64(metrics, "loc.ploc"),
+        lloc: as_f64(metrics, "loc.lloc"),
+        cloc: as_f64(metrics, "loc.cloc"),
+        blank: as_f64(metrics, "loc.blank"),
+        sloc_average: as_f64(metrics, "loc.sloc.avg"),
+        ploc_average: as_f64(metrics, "loc.ploc.avg"),
+        lloc_average: as_f64(metrics, "loc.lloc.avg"),
+        cloc_average: as_f64(metrics, "loc.cloc.avg"),
+        blank_average: as_f64(metrics, "loc.blank.avg"),
+        sloc_min: as_f64(metrics, "loc.sloc.min"),
+        sloc_max: as_f64(metrics, "loc.sloc.max"),
+        cloc_min: as_f64(metrics, "loc.cloc.min"),
+        cloc_max: as_f64(metrics, "loc.cloc.max"),
+        ploc_min: as_f64(metrics, "loc.ploc.min"),
+        ploc_max: as_f64(metrics, "loc.ploc.max"),
+        lloc_min: as_f64(metrics, "loc.lloc.min"),
+        lloc_max: as_f64(metrics, "loc.lloc.max"),
+        blank_min: as_f64(metrics, "loc.blank.min"),
+        blank_max: as_f64(metrics, "loc.blank.max"),
+    }
+}
+
+#[derive(Serialize)]
+pub struct Loc {
+    pub sloc: f64,
+    pub ploc: f64,
+    pub lloc: f64,
+    pub cloc: f64,
+    pub blank: f64,
+    pub sloc_average: f64,
+    pub ploc_average: f64,
+    pub lloc_average: f64,
+    pub cloc_average: f64,
+    pub blank_average: f64,
+    pub sloc_min: f64,
+    pub sloc_max: f64,
+    pub cloc_min: f64,
+    pub cloc_max: f64,
+    pub ploc_min: f64,
+    pub ploc_max: f64,
+    pub lloc_min: f64,
+    pub lloc_max: f64,
+    pub blank_min: f64,
+    pub blank_max: f64,
+}
+
 fn as_f64(metrics: &MetricSet, key: &str) -> f64 {
     match metrics.get(&MetricKey::new(key)) {
         Some(MetricValue::Int(i)) => i as f64,

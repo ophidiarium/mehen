@@ -135,18 +135,7 @@ impl LanguageRules for RustRules {
             abc_branch,
             abc_condition,
             abc_assignment,
-        }
-    }
-
-    fn classify_line(&self, line: &str) -> mehen_metrics::LineClass {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            mehen_metrics::LineClass::Blank
-        } else if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*')
-        {
-            mehen_metrics::LineClass::Comment
-        } else {
-            mehen_metrics::LineClass::Code
+            loc: mehen_tree_sitter::LocFact::Code,
         }
     }
 }

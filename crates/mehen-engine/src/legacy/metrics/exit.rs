@@ -270,8 +270,7 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
-        TypescriptParser,
+        GoParser, KotlinParser, PythonParser, RubyParser, RustParser, TypescriptParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -652,62 +651,6 @@ mod tests {
                       "average": 1.0,
                       "min": 0.0,
                       "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_return_throw_and_exit_count_as_exits() {
-        check_metrics::<PowershellParser>(
-            "function f($a) {
-                 if ($a -lt 0) {
-                     throw 'bad'
-                 }
-                 if ($a -gt 100) {
-                     exit 1
-                 }
-                 return $a
-             }",
-            "foo.ps1",
-            |metric| {
-                // 3 exits: throw + exit + return.
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_break_and_continue_do_not_count_as_exits() {
-        // Like other languages in mehen, `break` / `continue` are loop-local
-        // control flow and must not count as function exits.
-        check_metrics::<PowershellParser>(
-            "function f {
-                 foreach ($x in 1..10) {
-                     if ($x -eq 5) { break }
-                     if ($x -eq 3) { continue }
-                 }
-             }",
-            "foo.ps1",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 0.0,
-                      "average": 0.0,
-                      "min": 0.0,
-                      "max": 0.0
                     }"###
                 );
             },

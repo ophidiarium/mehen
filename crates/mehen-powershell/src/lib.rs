@@ -92,14 +92,15 @@ impl LanguageRules for PowerShellRules {
                 | "-and"
                 | "-or"
         );
-        let nexit = matches!(
-            kind,
-            "return_statement"
-                | "throw_statement"
-                | "break_statement"
-                | "continue_statement"
-                | "exit_statement"
-        );
+        // NExit: `return`, `throw`, `exit` — but not `break` / `continue`
+        // (loop-local flow, not function exit). tree-sitter-pwsh emits all
+        // of those as `flow_control_statement` whose first child is the
+        // specific keyword token, so we match on the leading child.
+        let nexit = kind == "flow_control_statement"
+            && matches!(
+                node.child(0).map(|c| c.kind()),
+                Some("return") | Some("throw") | Some("exit")
+            );
         let halstead_operator = matches!(
             kind,
             "+" | "-"
@@ -146,18 +147,45 @@ impl LanguageRules for PowerShellRules {
             abc_branch,
             abc_condition,
             abc_assignment,
+            loc: powershell_loc_fact(node),
         }
     }
+}
 
-    fn classify_line(&self, line: &str) -> mehen_metrics::LineClass {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            mehen_metrics::LineClass::Blank
-        } else if trimmed.starts_with('#') || trimmed.starts_with("<#") {
-            mehen_metrics::LineClass::Comment
-        } else {
-            mehen_metrics::LineClass::Code
-        }
+/// PowerShell LOC classification per pre-1.0
+/// `Loc for PowershellCode` (`src/metrics/loc.rs:909-961`).
+fn powershell_loc_fact(node: &Node<'_>) -> mehen_tree_sitter::LocFact {
+    use mehen_tree_sitter::LocFact;
+    match node.kind() {
+        // Containers — must NOT contribute to PLOC.
+        "program" | "script_block" | "script_block_body" | "statement_list" | "statement_block"
+        | "named_block_list" | "named_block" | "param_block" | "elseif_clauses"
+        | "catch_clauses" | "switch_body" | "switch_clauses" => LocFact::Container,
+        // Comments cover both `#` line comments and `<# ... #>` block
+        // comments — they share the `comment` named rule in tree-sitter-pwsh.
+        "comment" => LocFact::Comment,
+        // LLOC: each statement-shaped node bumps LLOC once. The
+        // tree-sitter-pwsh v0.37+ grammar emits one `pipeline` per
+        // statement (the assignment RHS is a dedicated `assignment_value`
+        // rather than a nested `pipeline`), so counting every visible
+        // `pipeline` once is safe.
+        "pipeline"
+        | "if_statement"
+        | "for_statement"
+        | "foreach_statement"
+        | "while_statement"
+        | "do_statement"
+        | "switch_statement"
+        | "try_statement"
+        | "trap_statement"
+        | "function_statement"
+        | "class_statement"
+        | "enum_statement"
+        | "data_statement"
+        | "flow_control_statement"
+        | "class_method_definition"
+        | "class_property_definition" => LocFact::Lloc,
+        _ => LocFact::Code,
     }
 }
 

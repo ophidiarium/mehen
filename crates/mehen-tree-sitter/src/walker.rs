@@ -13,7 +13,7 @@
 
 use mehen_core::{LineIndex, MetricKey, MetricSet, MetricSpace, SourceSpan, SpaceId, SpaceKind};
 use mehen_metrics::{
-    AbcStats, CognitiveStats, CyclomaticStats, HalsteadBuilder, HalsteadStats, LineClass, LocStats,
+    AbcStats, CognitiveStats, CyclomaticStats, HalsteadBuilder, HalsteadStats, LocStats,
     MetricTreeBuilder, MiStats, NargsStats, NexitStats, NomStats, NpaStats, NpmStats, WmcStats,
     keys,
 };
@@ -70,6 +70,32 @@ pub struct NodeFacts {
     pub abc_condition: bool,
     /// Counts toward ABC's `A` (assignments).
     pub abc_assignment: bool,
+    /// LOC classification of this node. See [`LocFact`].
+    pub loc: LocFact,
+}
+
+/// LOC family classification: how this node contributes to the LOC
+/// suite (PLOC / LLOC / CLOC). Mirrors the pre-1.0 per-language
+/// `Loc::compute` match arms (`src/metrics/loc.rs`).
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocFact {
+    /// Node is a container (statement list, block, parameter list,
+    /// string interior, …) and must NOT contribute to PLOC. The walker
+    /// ignores this node for LOC purposes but still recurses into it.
+    Container,
+    /// Node is a statement-shaped construct that bumps LLOC by one.
+    /// Statement classification is per-language (e.g. `pipeline`,
+    /// `if_statement`, `function_statement` for PowerShell;
+    /// `expression_statement`, `function_definition` for PHP).
+    Lloc,
+    /// Node is a comment. The walker uses `node.start_row()` /
+    /// `node.end_row()` to update CLOC (distinguishing comment-on-code
+    /// vs. independent-line comments per the legacy algorithm).
+    Comment,
+    /// Default: any other node — its `start_row()` is added to the
+    /// PLOC line set.
+    #[default]
+    Code,
 }
 
 /// What kind of scope a node opens, if any. `None` means the node is not
@@ -93,28 +119,6 @@ pub trait LanguageRules {
 
     /// Classify a single AST node for shared metrics.
     fn classify(&self, node: &Node<'_>) -> NodeFacts;
-
-    /// Optional: classify a single physical line for LOC. The default
-    /// implementation calls [`default_line_classifier`] which treats
-    /// `#`-prefixed and `//`-prefixed lines as comments. Language crates
-    /// that need richer behaviour (`/* */` blocks, heredocs, docstrings)
-    /// override this.
-    fn classify_line(&self, line: &str) -> LineClass {
-        default_line_classifier(line)
-    }
-}
-
-/// Default LOC line classifier: blank lines, lines starting with `#` or
-/// `//` are comments, anything else is code.
-pub fn default_line_classifier(line: &str) -> LineClass {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        LineClass::Blank
-    } else if trimmed.starts_with('#') || trimmed.starts_with("//") {
-        LineClass::Comment
-    } else {
-        LineClass::Code
-    }
 }
 
 /// The result of running [`walk`] on a tree.
@@ -151,9 +155,14 @@ pub fn walk<R: LanguageRules>(
         stack: vec![State::new()],
         rules,
     };
+    // The unit space's LOC span covers the full source.
+    walker.stack[0].loc.set_span(
+        root_node.start_position().row as u32,
+        root_node.end_position().row as u32,
+        true,
+    );
     walker.visit(root_node);
     let mut unit_state = walker.stack.pop().expect("walker stack underflow");
-    classify_unit_loc(walker.source_text, rules, &mut unit_state.loc);
     finalize_state(&mut unit_state);
     apply_state_to(unit_state, walker.tree.metrics_mut());
     WalkResult {
@@ -168,6 +177,9 @@ fn finalize_state(state: &mut State) {
     state.cyclomatic.finalize_minmax();
     state.cyclomatic.finalize_average();
     state.loc.finalize_minmax();
+    state.nom.finalize_minmax();
+    state.nexit.finalize_minmax();
+    state.nexit.finalize_average(state.nom.total());
 }
 
 /// Fold a finalized child state's rolled-up totals (sum/min/max/n)
@@ -177,6 +189,9 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
     parent.cyclomatic.merge(&child.cyclomatic);
     parent.cyclomatic.finalize_average();
     parent.loc.merge(&child.loc);
+    parent.nom.merge(&child.nom);
+    parent.nexit.merge(&child.nexit);
+    parent.nexit.finalize_average(parent.nom.total());
 }
 
 /// Publish a finalized `State` into a `MetricSet` using the shared key
@@ -192,6 +207,8 @@ fn merge_child_into_parent(parent: &mut State, child: &State) {
 pub fn apply_state_to(state: State, target: &mut MetricSet) {
     publish_cyclomatic(&state.cyclomatic, target);
     publish_loc(&state.loc, target);
+    publish_nom(&state.nom, target);
+    publish_nexit(&state.nexit, target);
 
     target.insert(
         MetricKey::new(keys::COGNITIVE),
@@ -221,11 +238,76 @@ pub fn apply_state_to(state: State, target: &mut MetricSet) {
         MetricKey::new(keys::NARGS),
         (state.nargs.functions + state.nargs.closures) as i64,
     );
-    target.insert(MetricKey::new(keys::NOM), state.nom.total() as i64);
-    target.insert(MetricKey::new(keys::NEXIT), state.nexit.exits as i64);
     target.insert(MetricKey::new(keys::NPA), state.npa.public as i64);
     target.insert(MetricKey::new(keys::NPM), state.npm.public as i64);
     target.insert(MetricKey::new(keys::WMC), state.wmc.wmc as i64);
+}
+
+fn publish_nom(stats: &mehen_metrics::NomStats, target: &mut MetricSet) {
+    // Legacy `metric.nom` JSON: { functions, closures, functions_average,
+    //   closures_average, total, average,
+    //   functions_min, functions_max, closures_min, closures_max }.
+    // The flat MetricSet maps each to a dotted selector key; the per-
+    // metric renderer in `mehen-report` reassembles them into the
+    // family object.
+    target.insert(MetricKey::new(keys::NOM), stats.total() as i64);
+    target.insert(
+        MetricKey::new(format!("{}.functions", keys::NOM)),
+        stats.functions_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures", keys::NOM)),
+        stats.closures_sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.functions_average", keys::NOM)),
+        stats.functions_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures_average", keys::NOM)),
+        stats.closures_average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::NOM)),
+        stats.average(),
+    );
+    target.insert(
+        MetricKey::new(format!("{}.functions_min", keys::NOM)),
+        stats.functions_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.functions_max", keys::NOM)),
+        stats.functions_max as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures_min", keys::NOM)),
+        stats.closures_min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.closures_max", keys::NOM)),
+        stats.closures_max as i64,
+    );
+}
+
+fn publish_nexit(stats: &mehen_metrics::NexitStats, target: &mut MetricSet) {
+    // Legacy `metric.nexits` JSON: { sum, average, min, max }.
+    target.insert(MetricKey::new(keys::NEXIT), stats.exits as i64);
+    target.insert(
+        MetricKey::new(format!("{}.sum", keys::NEXIT)),
+        stats.sum as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.average", keys::NEXIT)),
+        stats.average,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.min", keys::NEXIT)),
+        stats.min as i64,
+    );
+    target.insert(
+        MetricKey::new(format!("{}.max", keys::NEXIT)),
+        stats.max as i64,
+    );
 }
 
 fn publish_cyclomatic(stats: &mehen_metrics::CyclomaticStats, target: &mut MetricSet) {
@@ -251,12 +333,16 @@ fn publish_cyclomatic(stats: &mehen_metrics::CyclomaticStats, target: &mut Metri
 }
 
 fn publish_loc(stats: &LocStats, target: &mut MetricSet) {
-    target.insert(MetricKey::new(keys::LOC_LLOC), stats.lloc as i64);
-    target.insert(MetricKey::new(keys::LOC_SLOC), stats.sloc as i64);
-    target.insert(MetricKey::new(keys::LOC_PLOC), stats.ploc as i64);
-    target.insert(MetricKey::new(keys::LOC_CLOC), stats.cloc as i64);
-    target.insert(MetricKey::new(keys::LOC_BLANK), stats.blank as i64);
-    target.insert(MetricKey::new(keys::LOC), stats.total as i64);
+    // The bare keys carry the rolled-up sums per the legacy `loc` JSON
+    // shape (`sloc`, `ploc`, … are the rolled-up totals across all
+    // folded spaces). Per-aggregator selectors (`loc.sloc.min`, etc.)
+    // hang off the same family.
+    target.insert(MetricKey::new(keys::LOC_LLOC), stats.lloc() as i64);
+    target.insert(MetricKey::new(keys::LOC_SLOC), stats.sloc() as i64);
+    target.insert(MetricKey::new(keys::LOC_PLOC), stats.ploc() as i64);
+    target.insert(MetricKey::new(keys::LOC_CLOC), stats.cloc() as i64);
+    target.insert(MetricKey::new(keys::LOC_BLANK), stats.blank() as i64);
+    target.insert(MetricKey::new(keys::LOC), stats.sloc() as i64);
 
     target.insert(
         MetricKey::new(format!("{}.min", keys::LOC_SLOC)),
@@ -336,9 +422,27 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
     fn visit(&mut self, node: Node<'_>) {
         let opened_space = match self.rules.scope_for(&node, self.source_text) {
             Some(ScopeOpen::Open { kind, name }) => {
+                // Bump NOM on the *parent* — this child space contributes
+                // to its parent's function/closure count. Mirrors the
+                // pre-1.0 `Nom::compute` which incremented on `is_func` /
+                // `is_closure` nodes encountered during the parent's walk.
+                match kind {
+                    SpaceKind::Function => self.current().nom.record_function(),
+                    SpaceKind::Closure => self.current().nom.record_closure(),
+                    _ => {}
+                }
                 let span = node_span(&node, self.line_index);
                 self.tree.open(kind, span, name);
-                self.stack.push(State::new());
+                let mut child_state = State::new();
+                // The child space's LOC span is the AST node's row range.
+                // Non-unit spaces use the `+1` convention (counts the
+                // function-signature line as part of the space).
+                child_state.loc.set_span(
+                    node.start_position().row as u32,
+                    node.end_position().row as u32,
+                    false,
+                );
+                self.stack.push(child_state);
                 true
             }
             None => false,
@@ -384,6 +488,23 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
         if facts.abc_assignment {
             self.current().abc.record_assignment();
         }
+        // LOC: each AST node contributes per-language to PLOC / LLOC /
+        // CLOC. The walker stays language-agnostic — it forwards the
+        // language's `LocFact` decision into the per-space accumulator.
+        let start_row = node.start_position().row as u32;
+        let end_row = node.end_position().row as u32;
+        match facts.loc {
+            LocFact::Container => {}
+            LocFact::Lloc => {
+                self.current().loc.observe_lloc();
+            }
+            LocFact::Comment => {
+                self.current().loc.observe_comment(start_row, end_row);
+            }
+            LocFact::Code => {
+                self.current().loc.observe_code_line(start_row);
+            }
+        }
 
         let mut cursor = node.walk();
         if cursor.goto_first_child() {
@@ -397,7 +518,6 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
 
         if opened_space {
             let mut state = self.stack.pop().expect("walker stack underflow on close");
-            classify_span_loc(self.source_text, &node, self.rules, &mut state.loc);
             finalize_state(&mut state);
             apply_state_to_for_close(&state, self.tree.metrics_mut());
             // Fold this space's rolled-up bounds into the parent so the
@@ -417,34 +537,6 @@ impl<'a, R: LanguageRules> Walker<'a, R> {
 /// don't pay for an extra clone.
 fn apply_state_to_for_close(state: &State, target: &mut MetricSet) {
     apply_state_to(state.clone(), target);
-}
-
-fn classify_unit_loc<R: LanguageRules>(source: &[u8], rules: &R, loc: &mut LocStats) {
-    let Ok(text) = core::str::from_utf8(source) else {
-        return;
-    };
-    for line in text.lines() {
-        loc.observe(rules.classify_line(line));
-    }
-}
-
-fn classify_span_loc<R: LanguageRules>(
-    source: &[u8],
-    node: &Node<'_>,
-    rules: &R,
-    loc: &mut LocStats,
-) {
-    let start = node.start_byte().min(source.len());
-    let end = node.end_byte().min(source.len());
-    if start >= end {
-        return;
-    }
-    let Ok(slice) = core::str::from_utf8(&source[start..end]) else {
-        return;
-    };
-    for line in slice.lines() {
-        loc.observe(rules.classify_line(line));
-    }
 }
 
 /// Convenience: build an "empty" space (used by analyzers when the parser

@@ -3,8 +3,7 @@ use mehen_core::{
     Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
 };
 use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, default_line_classifier, empty_space,
-    walk,
+    LanguageRules, LocFact, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, walk,
 };
 use tree_sitter::Node;
 
@@ -17,10 +16,6 @@ impl LanguageRules for PythonRules {
 
     fn classify(&self, node: &Node<'_>) -> NodeFacts {
         python_facts(node)
-    }
-
-    fn classify_line(&self, line: &str) -> mehen_metrics::LineClass {
-        classify_python_line(line)
     }
 }
 
@@ -93,14 +88,6 @@ impl LanguageAnalyzer for PythonAnalyzer {
             contributions: Vec::new(),
         })
     }
-}
-
-/// Default LOC line classifier for Python: blank lines, lines starting
-/// with `#` are comments. The pre-1.0 implementation handles docstrings
-/// (triple-quoted strings as the first statement in a function/module);
-/// Phase 1 falls back to the shared classifier for that case.
-pub(crate) fn classify_python_line(line: &str) -> mehen_metrics::LineClass {
-    default_line_classifier(line)
 }
 
 /// Whether `node` opens a Python space and what kind.
@@ -201,6 +188,7 @@ pub(crate) fn python_facts(node: &Node<'_>) -> NodeFacts {
         abc_branch,
         abc_condition,
         abc_assignment,
+        loc: LocFact::Code,
     }
 }
 

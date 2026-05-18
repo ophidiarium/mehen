@@ -21,7 +21,7 @@ impl MiStats {
     pub fn compute(loc: &LocStats, cyclomatic: &CyclomaticStats, halstead: &HalsteadStats) -> Self {
         let halstead_volume = halstead.volume();
         let cy = cyclomatic.cyclomatic_sum as f64;
-        let sloc = loc.sloc as f64;
+        let sloc = f64::from(loc.sloc());
         let comments_percentage = loc.comments_percentage();
 
         let original = if sloc > 0.0 && halstead_volume > 0.0 {

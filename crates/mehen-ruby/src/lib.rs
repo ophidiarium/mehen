@@ -142,6 +142,7 @@ impl LanguageRules for RubyRules {
             abc_branch,
             abc_condition,
             abc_assignment,
+            loc: mehen_tree_sitter::LocFact::Code,
         }
     }
 }

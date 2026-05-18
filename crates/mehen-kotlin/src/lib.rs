@@ -120,6 +120,7 @@ impl LanguageRules for KotlinRules {
             abc_branch,
             abc_condition,
             abc_assignment,
+            loc: mehen_tree_sitter::LocFact::Code,
         }
     }
 }

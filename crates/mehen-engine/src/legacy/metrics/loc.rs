@@ -1031,7 +1031,7 @@ impl Loc for crate::legacy::langs::MarkdownCode {
 #[cfg(test)]
 mod tests {
     use crate::legacy::langs::{
-        CParser, GoParser, KotlinParser, PowershellParser, PythonParser, RubyParser, RustParser,
+        CParser, GoParser, KotlinParser, PythonParser, RubyParser, RustParser,
     };
     use crate::legacy::tools::check_metrics;
 
@@ -2398,62 +2398,6 @@ mod tests {
             "foo.kt",
             |metric| {
                 assert_eq!(metric.loc.lloc(), 7.0);
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_simple_loc() {
-        // Snapshot locks in SLOC / PLOC / LLOC / CLOC for a canonical
-        // function. Intentional changes should be reviewed via `cargo insta`.
-        check_metrics::<PowershellParser>(
-            "# header
-             function Greet($name) {
-                 Write-Host \"hi, $name\"
-             }",
-            "foo.ps1",
-            |metric| {
-                insta::assert_json_snapshot!(metric.loc);
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_comment_and_block_comment_are_counted_as_cloc() {
-        // `#` line comments and `<# ... #>` block comments both surface as
-        // the named `comment` node in tree-sitter-pwsh.
-        check_metrics::<PowershellParser>(
-            "<#
-             Doc comment
-             #>
-             # inline comment
-             $x = 1 # trailing comment",
-            "foo.ps1",
-            |metric| {
-                insta::assert_json_snapshot!(metric.loc);
-            },
-        );
-    }
-
-    #[test]
-    fn powershell_assignment_counts_as_one_lloc() {
-        // Regression guard for the grammar flattening shipped in
-        // tree-sitter-pwsh v0.37 (wharflab/tree-sitter-powershell#56).
-        //
-        // Before the fix, `$x = 1` parsed as
-        // `pipeline > assignment_expression > ... > pipeline`, so every
-        // assignment produced two `pipeline` nodes and naïvely counting
-        // `Pipeline` bumped LLOC twice. If the grammar ever regresses,
-        // this test flips back to LLOC = 2 for a single assignment and
-        // fails — signaling that we need to reinstate the parent-of-
-        // StatementList gate in `Loc::compute`.
-        check_metrics::<PowershellParser>(
-            "$x = 1
-             $y = 2
-             $z = 3",
-            "foo.ps1",
-            |metric| {
-                assert_eq!(metric.loc.lloc(), 3.0);
             },
         );
     }
