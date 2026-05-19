@@ -185,6 +185,12 @@ function prepareMehen() {
 
   if (method === "cargo") {
     const actionPath = process.env.GITHUB_ACTION_PATH || process.cwd();
+    // The action checks out the repo root, which is a virtual
+    // workspace manifest (no `[package]`). `cargo install --path` of
+    // a virtual manifest fails with "found a virtual manifest …
+    // instead of a package manifest". The `mehen` binary lives in
+    // the `mehen-cli` crate, so install from that subdirectory.
+    const cliPath = path.join(actionPath, "crates", "mehen-cli");
     const root = path.join(
       process.env.RUNNER_TEMP || os.tmpdir(),
       "mehen-action-cli",
@@ -196,7 +202,7 @@ function prepareMehen() {
       fs.rmSync(root, { recursive: true, force: true });
       runCommand(
         "cargo",
-        ["install", "--path", actionPath, "--locked", "--root", root],
+        ["install", "--path", cliPath, "--locked", "--root", root],
         {
           cwd: actionPath,
           stdio: "inherit",
