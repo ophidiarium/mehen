@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 
-use mehen_core::{MetricKey, SourceFile};
+use mehen_core::{MetricKey, Polarity, SourceFile};
 use mehen_metrics::{MetricSelector, SelectorAggregator};
 
 use crate::detection::detect_language;
@@ -52,7 +52,8 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
         }
     }
 
-    entries.sort_by(|a, b| cmp_entries(a, b, input.selectors.len()));
+    let polarities: Vec<Polarity> = input.selectors.iter().map(default_polarity_for).collect();
+    entries.sort_by(|a, b| cmp_entries(a, b, &polarities));
     if entries.len() > input.max_results {
         entries.truncate(input.max_results);
     }
@@ -88,23 +89,51 @@ fn walk_paths(root: &Utf8PathBuf, _include: &[String], _exclude: &[String]) -> V
 
 /// Order entries from most concerning to least.
 ///
-/// Higher score = more concerning. Cascade through every selector so
-/// secondary keys break ties on the primary, tertiary keys break ties
-/// on the secondary, etc. Path tie-breaks last for determinism.
+/// "Most concerning" depends on the metric's polarity. For
+/// `HigherIsWorse` metrics (cyclomatic, cognitive, halstead.volume,
+/// loc.*) a larger value is worse, so they sort descending. For
+/// `HigherIsBetter` metrics (mi.original, mi.sei, mi.visual_studio)
+/// a smaller value is worse, so they sort ascending.
+///
+/// Cascade through every selector so secondary keys break ties on
+/// the primary, tertiary keys break ties on the secondary, etc.
+/// Path tie-breaks last for determinism.
 fn cmp_entries(
     a: &TopOffenderEntry,
     b: &TopOffenderEntry,
-    n_selectors: usize,
+    polarities: &[Polarity],
 ) -> std::cmp::Ordering {
-    for i in 0..n_selectors {
+    for (i, polarity) in polarities.iter().enumerate() {
         let av = a.scores.get(i).copied().unwrap_or(0.0);
         let bv = b.scores.get(i).copied().unwrap_or(0.0);
-        let ord = bv.partial_cmp(&av).unwrap_or(std::cmp::Ordering::Equal);
+        let base = av.partial_cmp(&bv).unwrap_or(std::cmp::Ordering::Equal);
+        let ord = match polarity {
+            // Worst-first: larger value is more concerning, so a > b
+            // should put `a` first → reverse the natural ordering.
+            Polarity::HigherIsWorse => base.reverse(),
+            // Worst-first: smaller value is more concerning, so a < b
+            // should put `a` first → use the natural ordering.
+            Polarity::HigherIsBetter => base,
+        };
         if ord != std::cmp::Ordering::Equal {
             return ord;
         }
     }
     a.path.cmp(&b.path)
+}
+
+/// Resolve a metric's "higher is worse / better" polarity from its
+/// key. Maintainability-index variants (`mi.*`) are higher-is-better;
+/// every other metric the engine publishes (cyclomatic, cognitive,
+/// loc.*, halstead.*, abc, nom, nargs, nexit, npa, npm, wmc) is
+/// higher-is-worse. This mirrors the legacy `KNOWN_METRICS` catalog
+/// and the rewrite plan §5.1 metric contract.
+fn default_polarity_for(selector: &MetricSelector) -> Polarity {
+    if selector.key.as_str().starts_with("mi.") || selector.key.as_str() == "mi" {
+        Polarity::HigherIsBetter
+    } else {
+        Polarity::HigherIsWorse
+    }
 }
 
 pub(crate) fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSpace) -> f64 {
@@ -153,10 +182,17 @@ mod tests {
         }
     }
 
+    const HIW2: &[Polarity] = &[Polarity::HigherIsWorse, Polarity::HigherIsWorse];
+    const HIW3: &[Polarity] = &[
+        Polarity::HigherIsWorse,
+        Polarity::HigherIsWorse,
+        Polarity::HigherIsWorse,
+    ];
+
     #[test]
     fn primary_score_ranks_first() {
         let mut xs = [entry("a.rs", &[10.0, 0.0]), entry("b.rs", &[20.0, 0.0])];
-        xs.sort_by(|a, b| cmp_entries(a, b, 2));
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
         assert_eq!(xs[0].path, "b.rs");
         assert_eq!(xs[1].path, "a.rs");
     }
@@ -172,7 +208,7 @@ mod tests {
             entry("b.rs", &[100.0, 30.0]),
             entry("c.rs", &[100.0, 12.0]),
         ];
-        xs.sort_by(|a, b| cmp_entries(a, b, 2));
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
         assert_eq!(xs[0].path, "b.rs");
         assert_eq!(xs[1].path, "c.rs");
         assert_eq!(xs[2].path, "a.rs");
@@ -185,7 +221,7 @@ mod tests {
             entry("b.rs", &[10.0, 5.0, 9.0]),
             entry("c.rs", &[10.0, 5.0, 4.0]),
         ];
-        xs.sort_by(|a, b| cmp_entries(a, b, 3));
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW3));
         assert_eq!(xs[0].path, "b.rs");
         assert_eq!(xs[1].path, "c.rs");
         assert_eq!(xs[2].path, "a.rs");
@@ -198,7 +234,7 @@ mod tests {
             entry("aaa.rs", &[42.0, 7.0]),
             entry("mmm.rs", &[42.0, 7.0]),
         ];
-        xs.sort_by(|a, b| cmp_entries(a, b, 2));
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
         assert_eq!(xs[0].path, "aaa.rs");
         assert_eq!(xs[1].path, "mmm.rs");
         assert_eq!(xs[2].path, "zzz.rs");
@@ -210,10 +246,70 @@ mod tests {
             entry("a.rs", &[f64::NAN, 5.0]),
             entry("b.rs", &[f64::NAN, 30.0]),
         ];
-        xs.sort_by(|a, b| cmp_entries(a, b, 2));
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
         // NaN primaries compare equal; secondary breaks the tie.
         assert_eq!(xs[0].path, "b.rs");
         assert_eq!(xs[1].path, "a.rs");
+    }
+
+    #[test]
+    fn higher_is_better_metric_sorts_smallest_first() {
+        // For maintainability index a low value is the worst offender,
+        // so `bad.rs` (mi = 10) must rank above `good.rs` (mi = 120).
+        let mut xs = [
+            entry("good.rs", &[120.0]),
+            entry("bad.rs", &[10.0]),
+            entry("mid.rs", &[60.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, &[Polarity::HigherIsBetter]));
+        assert_eq!(xs[0].path, "bad.rs");
+        assert_eq!(xs[1].path, "mid.rs");
+        assert_eq!(xs[2].path, "good.rs");
+    }
+
+    #[test]
+    fn mixed_polarities_sort_each_axis_independently() {
+        // Primary loc.lloc (lower-is-worse): 200 > 10, so high-LOC
+        // files rank first. Secondary mi (higher-is-worse): when LOC
+        // ties, the file with the *lower* mi should rank first.
+        let mut xs = [
+            entry("low_loc_high_mi.rs", &[10.0, 120.0]),
+            entry("high_loc_high_mi.rs", &[200.0, 120.0]),
+            entry("high_loc_low_mi.rs", &[200.0, 30.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, &[Polarity::HigherIsWorse, Polarity::HigherIsBetter]));
+        assert_eq!(xs[0].path, "high_loc_low_mi.rs");
+        assert_eq!(xs[1].path, "high_loc_high_mi.rs");
+        assert_eq!(xs[2].path, "low_loc_high_mi.rs");
+    }
+
+    #[test]
+    fn default_polarity_treats_mi_variants_as_higher_is_better() {
+        for s in ["mi.original", "mi.sei", "mi.visual_studio", "mi"] {
+            assert_eq!(
+                default_polarity_for(&sel(s)),
+                Polarity::HigherIsBetter,
+                "selector {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn default_polarity_treats_other_metrics_as_higher_is_worse() {
+        for s in [
+            "cyclomatic",
+            "cognitive",
+            "loc.lloc",
+            "halstead.volume",
+            "abc",
+            "nom.functions",
+        ] {
+            assert_eq!(
+                default_polarity_for(&sel(s)),
+                Polarity::HigherIsWorse,
+                "selector {s}",
+            );
+        }
     }
 
     fn space_with_metrics(pairs: &[(&str, f64)]) -> mehen_core::MetricSpace {
