@@ -54,9 +54,16 @@ pub use legacy::top_offenders::{TopOffendersOpts, run_top_offenders};
 /// at a time.
 #[cfg(feature = "markdown")]
 pub fn init_markdown() {
+    mehen_markdown::set_legacy_dispatch(markdown_dispatch::dispatch);
+}
+
+#[cfg(feature = "markdown")]
+mod markdown_dispatch {
     use mehen_markdown::{EmbeddedFenceMetrics, FenceLanguage};
 
-    fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+    use crate::AnalyzerRegistry;
+
+    pub(super) fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
         match lang {
             // PowerShell (plan §8.2 Phase 3), TypeScript / TSX
             // (Phase 7 Oxc migration), Python (Phase 6 Ruff migration),
@@ -78,7 +85,10 @@ pub fn init_markdown() {
         }
     }
 
-    fn dispatch_via_registry(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+    pub(super) fn dispatch_via_registry(
+        lang: FenceLanguage,
+        body: String,
+    ) -> Option<EmbeddedFenceMetrics> {
         use mehen_core::{AnalysisConfig, MetricKey, SourceFile, keys};
 
         let language = language_for(lang);
@@ -87,6 +97,14 @@ pub fn init_markdown() {
         let path = camino::Utf8PathBuf::try_from(synthetic_path(lang)).ok()?;
         let source = SourceFile::new(path, language, body);
         let analysis = analyzer.analyze(&source, &AnalysisConfig::default()).ok()?;
+        // Migrated analyzers can return `Ok(...)` with a partial tree
+        // alongside an `Error`/`Fatal` diagnostic when the fence body
+        // doesn't parse cleanly. Per §9.3 those analyses are
+        // incomplete; folding their numeric metrics back into Markdown
+        // would silently skew embedded scores.
+        if crate::diff::has_blocking_diagnostic(&analysis.diagnostics) {
+            return None;
+        }
         let read = |key: &str| {
             analysis
                 .root
@@ -174,7 +192,28 @@ pub fn init_markdown() {
         }
     }
 
-    mehen_markdown::set_legacy_dispatch(dispatch);
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// A fence body whose Python code has a hard syntax error.
+        /// Ruff returns `Ok(LanguageAnalysis)` with a partial tree
+        /// plus an `Error`-severity diagnostic, so the legacy
+        /// pre-fix dispatcher would have folded its (mostly-zero
+        /// but nonzero `loc.sloc`) numbers into the Markdown
+        /// embedded score.
+        #[test]
+        fn registry_dispatch_drops_blocking_diagnostic_python() {
+            let bad = "def f(:\n    return 1\n".to_string();
+            assert!(dispatch_via_registry(FenceLanguage::Python, bad).is_none());
+        }
+
+        #[test]
+        fn registry_dispatch_keeps_clean_python() {
+            let good = "def f():\n    return 1\n".to_string();
+            assert!(dispatch_via_registry(FenceLanguage::Python, good).is_some());
+        }
+    }
 }
 
 pub use detection::detect_language;
