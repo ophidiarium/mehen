@@ -124,5 +124,8 @@ pub struct TopOffendersReport {
 pub struct TopOffenderEntry {
     pub path: Utf8PathBuf,
     pub language: Language,
-    pub score: f64,
+    /// One score per selector in [`TopOffendersInput::selectors`], in
+    /// the same order. `scores[0]` is the primary ranking key; the rest
+    /// break ties.
+    pub scores: Vec<f64>,
 }
