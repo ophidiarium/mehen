@@ -52,7 +52,14 @@ jobs:
         shell: bash
         env:
           NEXTEST_PROFILE: ci
-        run: cargo insta test --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+        # `--workspace` is required: `default-members` in the root
+        # `Cargo.toml` restricts root-level cargo commands to the
+        # `mehen` package so `cargo build` from the repo root keeps
+        # producing `target/release/mehen` (binary-size pipeline).
+        # Without `--workspace` here, this step would silently skip
+        # every per-language analyzer, the engine, the metrics,
+        # report, git, and markdown crates' tests.
+        run: cargo insta test --workspace --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
 
       - name: Smoke test CLI
         shell: bash

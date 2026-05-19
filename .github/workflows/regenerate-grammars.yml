@@ -72,7 +72,12 @@ jobs:
       - name: Run tests
         env:
           NEXTEST_PROFILE: ci
-        run: cargo insta test --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+        # `--workspace` is required because `default-members` in the
+        # root `Cargo.toml` restricts root-level cargo commands to the
+        # `mehen` package; without it, every per-language crate's
+        # tests would be skipped and a regenerated grammar that
+        # breaks one of them would land silently.
+        run: cargo insta test --workspace --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
 
       - name: Commit and push regenerated grammars
         run: |
