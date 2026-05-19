@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 
 use mehen_core::{MetricKey, Polarity, SourceFile};
 use mehen_metrics::{MetricSelector, SelectorAggregator};
@@ -73,13 +74,17 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
     }
 }
 
-fn walk_paths(root: &Utf8PathBuf, _include: &[String], _exclude: &[String]) -> Vec<Utf8PathBuf> {
+fn walk_paths(root: &Utf8PathBuf, include: &[String], exclude: &[String]) -> Vec<Utf8PathBuf> {
     if !root.exists() {
         return Vec::new();
     }
+    let include = build_globset(include);
+    let exclude = build_globset(exclude);
     let mut out = Vec::new();
     if root.is_file() {
-        out.push(root.clone());
+        if path_matches(root.as_path(), &include, &exclude) {
+            out.push(root.clone());
+        }
         return out;
     }
     for entry in walkdir::WalkDir::new(root.as_std_path())
@@ -88,11 +93,41 @@ fn walk_paths(root: &Utf8PathBuf, _include: &[String], _exclude: &[String]) -> V
     {
         if entry.file_type().is_file()
             && let Ok(utf8) = Utf8PathBuf::try_from(entry.path().to_path_buf())
+            && path_matches(utf8.as_path(), &include, &exclude)
         {
             out.push(utf8);
         }
     }
     out
+}
+
+/// Build a `GlobSet` from CLI-style patterns. Empty entries are
+/// dropped; invalid globs are silently skipped (matches legacy
+/// `mehen-engine::legacy::mk_globset`).
+fn build_globset(patterns: &[String]) -> GlobSet {
+    if patterns.is_empty() {
+        return GlobSet::empty();
+    }
+    let mut builder = GlobSetBuilder::new();
+    for p in patterns.iter().filter(|p| !p.is_empty()) {
+        if let Ok(glob) = Glob::new(p) {
+            builder.add(glob);
+        }
+    }
+    builder.build().unwrap_or_else(|_| GlobSet::empty())
+}
+
+/// Apply the standard include/exclude semantics: when `include` is
+/// non-empty, the path must match it; when `exclude` is non-empty, the
+/// path must not match it. Empty sets are treated as no-op.
+fn path_matches(path: &camino::Utf8Path, include: &GlobSet, exclude: &GlobSet) -> bool {
+    if !include.is_empty() && !include.is_match(path) {
+        return false;
+    }
+    if !exclude.is_empty() && exclude.is_match(path) {
+        return false;
+    }
+    true
 }
 
 /// Order entries from most concerning to least.
@@ -430,6 +465,70 @@ mod tests {
         assert!(
             !paths.contains(&"broken.py"),
             "broken.py should be skipped due to blocking diagnostic, got {paths:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_applies_exclude_patterns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let kept = dir.path().join("kept.py");
+        let skipped = dir.path().join("skipped.py");
+        std::fs::write(&kept, "x = 1\n").unwrap();
+        std::fs::write(&skipped, "x = 1\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &[], &["**/skipped.py".to_string()]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"kept.py"), "expected kept.py in {names:?}");
+        assert!(
+            !names.contains(&"skipped.py"),
+            "skipped.py should be excluded, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_applies_include_patterns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let py = dir.path().join("a.py");
+        let rs = dir.path().join("a.rs");
+        std::fs::write(&py, "x = 1\n").unwrap();
+        std::fs::write(&rs, "fn main() {}\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &["**/*.py".to_string()], &[]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"a.py"), "expected a.py in {names:?}");
+        assert!(
+            !names.contains(&"a.rs"),
+            "a.rs should not be included, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_empty_filters_keep_all_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.py"), "x = 1\n").unwrap();
+        std::fs::write(dir.path().join("b.rs"), "fn main() {}\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &[], &[]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"a.py"));
+        assert!(names.contains(&"b.rs"));
+    }
+
+    #[test]
+    fn walk_paths_filters_a_single_file_root() {
+        // When `root` itself is a file, the include/exclude patterns
+        // still apply: an excluded file must not appear in the list.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("vendored.py");
+        std::fs::write(&path, "x = 1\n").unwrap();
+        let root = Utf8PathBuf::from_path_buf(path).unwrap();
+        let result = walk_paths(&root, &[], &["**/vendored.py".to_string()]);
+        assert!(
+            result.is_empty(),
+            "single-file root must respect exclude, got {result:?}"
         );
     }
 }
