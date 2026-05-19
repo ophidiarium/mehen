@@ -57,15 +57,17 @@ impl MetricTreeBuilder {
     }
 
     /// Drop the unit-level outer scope and yield the assembled tree.
+    ///
+    /// Panics if the open/close calls are unbalanced. Failing fast surfaces
+    /// analyzer-walker bugs (a missing `close()` after a scope-opening node)
+    /// instead of silently emitting a tree with collapsed spaces.
     pub fn finish(mut self) -> MetricSpace {
-        if self.stack.len() != 1 {
-            // Defensive close: a malformed analyzer should not leave open
-            // spaces. In production this should never trigger; tests rely
-            // on the panic in `close` to catch the analyzer bug earlier.
-            while self.stack.len() > 1 {
-                self.close();
-            }
-        }
+        assert_eq!(
+            self.stack.len(),
+            1,
+            "MetricTreeBuilder: unbalanced open/close calls (stack depth = {})",
+            self.stack.len()
+        );
         self.stack
             .pop()
             .expect("MetricTreeBuilder: empty after open")

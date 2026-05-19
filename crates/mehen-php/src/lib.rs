@@ -60,10 +60,14 @@ impl LanguageAnalyzer for PhpAnalyzer {
         let file_id = FileId::zero();
         let program = mago_syntax::parser::parse_file_content(&arena, file_id, &source.text);
 
+        // Recovered Mago syntax errors are surfaced as `error` (not
+        // `warning`) so the diagnostic contract (plan §9.3) treats the
+        // analysis as incomplete: `mehen metrics` exits 1 and
+        // `analyze_diff` records the file under `analysis_errors`.
         let diagnostics: Vec<ParseDiagnostic> = program
             .errors
             .iter()
-            .map(|err| ParseDiagnostic::warning("php.parse_error", format!("mago-syntax: {err}")))
+            .map(|err| ParseDiagnostic::error("php.parse_error", format!("mago-syntax: {err}")))
             .collect();
 
         let root = walker::walk_program(program, &source.text, &source.line_index);

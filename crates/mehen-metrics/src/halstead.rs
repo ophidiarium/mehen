@@ -43,9 +43,18 @@ impl HalsteadStats {
     }
 
     pub fn estimated_program_length(&self) -> f64 {
-        let n1 = self.u_operators as f64;
-        let n2 = self.u_operands as f64;
-        n1.mul_add(n1.log2(), n2 * n2.log2())
+        // `n * log2(n)` is `0 * -inf = NaN` when `n == 0`. Guard each
+        // term so an empty token stream serializes a finite `0.0`.
+        Self::n_log2_n(self.u_operators) + Self::n_log2_n(self.u_operands)
+    }
+
+    fn n_log2_n(n: u64) -> f64 {
+        if n == 0 {
+            0.0
+        } else {
+            let nf = n as f64;
+            nf * nf.log2()
+        }
     }
 
     pub fn purity_ratio(&self) -> f64 {

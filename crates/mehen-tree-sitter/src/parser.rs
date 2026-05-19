@@ -1,6 +1,7 @@
 use core::fmt;
 
-use tree_sitter::{Language, Parser, Tree};
+use mehen_core::ParseDiagnostic;
+use tree_sitter::{Language, Node, Parser, Tree};
 
 /// Errors from setting up or driving a tree-sitter parser.
 #[derive(Debug)]
@@ -50,5 +51,65 @@ impl TreeSitterParser {
 
     pub fn root(&self) -> tree_sitter::Node<'_> {
         self.tree.root_node()
+    }
+}
+
+/// Walk `root` and emit one `ParseDiagnostic::error` per recovered
+/// `ERROR` / missing node, capped at `max_diagnostics`. Tree-sitter
+/// always returns a tree (even on syntax errors), so per the diagnostic
+/// contract (plan §9.3) callers must surface these as `error` to make
+/// `mehen metrics` exit 1 and `analyze_diff` record them under
+/// `analysis_errors`. Returns an empty `Vec` for clean parses.
+///
+/// `code` is the language-namespaced diagnostic code, e.g.
+/// `"go.syntax_error"`. `max_diagnostics` bounds the noise on heavily
+/// corrupted input.
+pub fn collect_recovered_errors(
+    root: Node<'_>,
+    code: &str,
+    max_diagnostics: usize,
+) -> Vec<ParseDiagnostic> {
+    let mut out = Vec::new();
+    if !root.has_error() {
+        return out;
+    }
+    let mut cursor = root.walk();
+    walk_for_errors(&mut cursor, code, max_diagnostics, &mut out);
+    out
+}
+
+fn walk_for_errors(
+    cursor: &mut tree_sitter::TreeCursor<'_>,
+    code: &str,
+    max: usize,
+    out: &mut Vec<ParseDiagnostic>,
+) {
+    if out.len() >= max {
+        return;
+    }
+    let node = cursor.node();
+    if node.is_error() || node.is_missing() {
+        let kind = if node.is_missing() {
+            "missing"
+        } else {
+            "error"
+        };
+        let line = node.start_position().row + 1;
+        out.push(ParseDiagnostic::error(
+            code.to_string(),
+            format!("tree-sitter {kind} node at line {line}"),
+        ));
+        if out.len() >= max {
+            return;
+        }
+    }
+    if cursor.goto_first_child() {
+        loop {
+            walk_for_errors(cursor, code, max, out);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+        cursor.goto_parent();
     }
 }

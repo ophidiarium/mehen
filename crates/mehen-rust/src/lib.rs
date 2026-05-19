@@ -14,7 +14,7 @@ mod walker;
 
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, LineIndex,
-    Result, SourceFile,
+    ParseDiagnostic, Result, SourceFile,
 };
 use ra_ap_syntax::{Edition, SourceFile as RustSourceFile};
 
@@ -45,15 +45,25 @@ impl LanguageAnalyzer for RustAnalyzer {
         // ra_ap_syntax always returns a tree, even on parse errors. Errors
         // are surfaced through `parse.errors()`; we don't fail the
         // analysis on recoverable errors — the legacy tree-sitter
-        // pipeline also produced metrics from partial trees.
+        // pipeline also produced metrics from partial trees. Recovered
+        // errors are surfaced as `error` (not `warning`) so the
+        // diagnostic contract (plan §9.3) treats the analysis as
+        // incomplete: `mehen metrics` exits 1 and `analyze_diff`
+        // records the file under `analysis_errors`.
         let parse = RustSourceFile::parse(&source.text, Edition::CURRENT);
         let file = parse.tree();
         let line_index = LineIndex::new(&source.text);
         let root = walker::walk_source_file(&file, &source.text, &line_index);
+        let diagnostics: Vec<ParseDiagnostic> = parse
+            .errors()
+            .iter()
+            .take(16)
+            .map(|e| ParseDiagnostic::error("rust.syntax_error", e.to_string()))
+            .collect();
         Ok(LanguageAnalysis {
             language: Language::Rust,
             backend: AnalysisBackend::RaApSyntax,
-            diagnostics: Vec::new(),
+            diagnostics,
             root,
             contributions: Vec::new(),
         })

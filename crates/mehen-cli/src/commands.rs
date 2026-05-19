@@ -4,11 +4,11 @@ use std::io::{self, Write};
 
 use camino::Utf8PathBuf;
 
-use mehen_core::{AnalysisConfig, Language, SourceFile};
+use mehen_core::{AnalysisConfig, DiagnosticSeverity, Language, MetricsReport, SourceFile};
 use mehen_engine::{AnalyzeMetricsInput, analyze_metrics, detect_language};
 use mehen_report::render_metrics_json;
 
-use crate::args::{MetricsArgs, OutputFormat};
+use crate::args::{MetricsArgs, OutputFormat, Profile};
 use crate::exit::ExitCode;
 
 pub(crate) fn metrics(args: MetricsArgs) -> ExitCode {
@@ -51,7 +51,7 @@ pub(crate) fn metrics(args: MetricsArgs) -> ExitCode {
     let source = SourceFile::new(path, language, text);
     let input = AnalyzeMetricsInput {
         source,
-        config: AnalysisConfig::production(),
+        config: config_for_profile(args.profile),
     };
 
     let report = match analyze_metrics(input) {
@@ -62,34 +62,77 @@ pub(crate) fn metrics(args: MetricsArgs) -> ExitCode {
         }
     };
 
-    match args.format {
-        OutputFormat::Json => match render_metrics_json(&report, args.pretty) {
+    if let Some(exit) = render_report(&report, args.format, args.pretty)
+        && !matches!(exit, ExitCode::Success)
+    {
+        return exit;
+    }
+    exit_code_from_report(&report)
+}
+
+/// Map the `--profile` flag to an [`AnalysisConfig`]. Until plan §3.6
+/// designs threshold/polarity profiles, the only knob `AnalysisConfig`
+/// exposes is `emit_contributions`; `default` follows the production
+/// preset, `ci`/`strict` skip contribution evidence to keep CI runs
+/// lean.
+fn config_for_profile(profile: Profile) -> AnalysisConfig {
+    match profile {
+        Profile::Default => AnalysisConfig::production(),
+        // `ci` and `strict` are still placeholders for thresholding, but
+        // they should not silently inherit `production`'s defaults — the
+        // CLI flag must observably differ from the default. Both presets
+        // skip contribution evidence (cheap; emits the same metric
+        // numbers) so `--profile` is no longer a no-op.
+        Profile::Ci | Profile::Strict => AnalysisConfig::benchmark(),
+    }
+}
+
+/// Map a `MetricsReport`'s diagnostic severities to a CLI exit code per
+/// the diagnostic contract (rewrite plan §9.3): `Warning` is exit 0,
+/// `Error`/`Fatal` are exit 1. Threshold violations (exit 2) are not
+/// emitted by `mehen metrics`.
+fn exit_code_from_report(report: &MetricsReport) -> ExitCode {
+    let has_error_or_fatal = report.diagnostics.iter().any(|d| {
+        matches!(
+            d.severity,
+            DiagnosticSeverity::Error | DiagnosticSeverity::Fatal
+        )
+    });
+    if has_error_or_fatal {
+        ExitCode::SetupError
+    } else {
+        ExitCode::Success
+    }
+}
+
+fn render_report(report: &MetricsReport, format: OutputFormat, pretty: bool) -> Option<ExitCode> {
+    match format {
+        OutputFormat::Json => match render_metrics_json(report, pretty) {
             Ok(rendered) => {
                 let mut stdout = io::stdout().lock();
                 if writeln!(stdout, "{rendered}").is_err() {
-                    return ExitCode::SerializationError;
+                    return Some(ExitCode::SerializationError);
                 }
-                ExitCode::Success
+                None
             }
             Err(e) => {
                 log::error!("failed to render JSON: {e}");
-                ExitCode::SerializationError
+                Some(ExitCode::SerializationError)
             }
         },
         OutputFormat::Markdown => {
-            let rendered = mehen_report::render_metrics_markdown(&report);
+            let rendered = mehen_report::render_metrics_markdown(report);
             let mut stdout = io::stdout().lock();
             if writeln!(stdout, "{rendered}").is_err() {
-                return ExitCode::SerializationError;
+                return Some(ExitCode::SerializationError);
             }
-            ExitCode::Success
+            None
         }
         OutputFormat::Yaml | OutputFormat::Toml => {
             log::error!(
-                "the {:?} format is reserved for a future phase; use --format json or markdown.",
-                args.format
+                "the {format:?} format is reserved for a future phase; use --format json or markdown."
             );
-            ExitCode::SetupError
+            Some(ExitCode::SetupError)
         }
     }
 }

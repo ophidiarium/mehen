@@ -43,9 +43,13 @@ impl LanguageAnalyzer for RubyAnalyzer {
     fn analyze(&self, source: &SourceFile, _config: &AnalysisConfig) -> Result<LanguageAnalysis> {
         let parse = ruby_prism::parse(source.text.as_bytes());
         let root = walker::walk_program(&parse, &source.text, &source.line_index);
+        // Recovered Prism syntax errors are surfaced as `error` (not
+        // `warning`) so the diagnostic contract (plan §9.3) treats the
+        // analysis as incomplete: `mehen metrics` exits 1 and
+        // `analyze_diff` records the file under `analysis_errors`.
         let diagnostics: Vec<ParseDiagnostic> = parse
             .errors()
-            .map(|e| ParseDiagnostic::warning("ruby.syntax_error", e.message().to_string()))
+            .map(|e| ParseDiagnostic::error("ruby.syntax_error", e.message().to_string()))
             .collect();
         Ok(LanguageAnalysis {
             language: Language::Ruby,

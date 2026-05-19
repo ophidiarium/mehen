@@ -60,14 +60,19 @@ pub fn init_markdown() {
         match lang {
             // PowerShell (plan §8.2 Phase 3), TypeScript / TSX
             // (Phase 7 Oxc migration), Python (Phase 6 Ruff migration),
-            // and Rust (Phase 9 ra_ap_syntax migration) flow through
-            // the new registry. The remaining languages still use legacy
-            // until each per-language crate reaches parity.
+            // Rust (Phase 9 ra_ap_syntax migration), PHP (Phase 8 Mago
+            // migration), Ruby (Phase 9 Prism migration), and Go (Phase
+            // 9 walker split) flow through the new registry. C and
+            // Kotlin remain on the legacy dispatcher until their
+            // per-language crates reach parity.
             FenceLanguage::Powershell
             | FenceLanguage::Typescript
             | FenceLanguage::Tsx
             | FenceLanguage::Python
-            | FenceLanguage::Rust => dispatch_via_registry(lang, body),
+            | FenceLanguage::Rust
+            | FenceLanguage::Php
+            | FenceLanguage::Ruby
+            | FenceLanguage::Go => dispatch_via_registry(lang, body),
             _ => dispatch_via_legacy(lang, body),
         }
     }

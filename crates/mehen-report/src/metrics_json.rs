@@ -388,3 +388,40 @@ fn as_f64(metrics: &MetricSet, key: &str) -> f64 {
         None => 0.0,
     }
 }
+
+/// All metric families pivoted into the documented per-family shape.
+/// This is what the CLI emits as the `metrics` field of `mehen metrics
+/// --format json`, replacing the flat `metric_key → value` map of the
+/// raw `MetricSpace`.
+#[derive(Serialize)]
+pub struct MetricsFamilies {
+    pub cyclomatic: Cyclomatic,
+    pub cognitive: Cognitive,
+    pub nexits: Nexits,
+    pub nom: Nom,
+    pub nargs: Nargs,
+    pub npa: Npa,
+    pub npm: Npm,
+    pub wmc: Wmc,
+    pub abc: Abc,
+    pub halstead: Halstead,
+    pub loc: Loc,
+}
+
+impl MetricsFamilies {
+    pub fn from_metrics(metrics: &MetricSet) -> Self {
+        Self {
+            cyclomatic: cyclomatic(metrics),
+            cognitive: cognitive(metrics),
+            nexits: nexits(metrics),
+            nom: nom(metrics),
+            nargs: nargs(metrics),
+            npa: npa(metrics),
+            npm: npm(metrics),
+            wmc: wmc(metrics),
+            abc: abc(metrics),
+            halstead: halstead(metrics),
+            loc: loc(metrics),
+        }
+    }
+}

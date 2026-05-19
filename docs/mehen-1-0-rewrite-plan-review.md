@@ -258,7 +258,7 @@ These are unanswered questions that block coding. Some duplicate §3 above; this
 2. **Does the language crate emit token-level Halstead events, or pre-classified counts?** (§3.2)
 3. **How does Markdown's embedded-code analysis call back into other language crates?** (§3.3, §4.1)
 4. **What's the concurrency model? Is the analyzer `Send + Sync`? Per-call or per-thread?** (§3.4)
-5. **Is `LanguageAnalysis` `'static` or borrows from a parser arena?** (§2.6, §3.4)
+5. **Is `LanguageAnalysis` `'static` or borrows from a parser arena?** (§2.4, §3.4)
 6. **What's the parse-error contract — fatal, warning, partial report?** (§3.5)
 7. **What does `--profile` do? What loads it?** (§3.6)
 8. **What does "parity snapshot" mean numerically? Bit-identical or tolerance?** (§3.7)

@@ -13,7 +13,11 @@ use std::path::{Path, PathBuf};
 use gix::diff::tree::recorder::Change;
 use gix::objs::TreeRefIter;
 
-/// Replaces \n and \r ending characters with a single generic \n.
+/// Collapses any trailing run of `\n` / `\r` into a single `\n`.
+///
+/// When a blob has *no* trailing newline (or is empty), the buffer is
+/// left unchanged — appending a synthetic `\n` would mutate repository
+/// content and create spurious metric deltas between revisions.
 ///
 /// Inlined from the pre-1.0 `src/tools.rs` so this crate has no
 /// dependency on the legacy `mehen` library.
@@ -23,9 +27,10 @@ fn remove_blank_lines(data: &mut Vec<u8>) {
         .rev()
         .take_while(|&c| *c == b'\n' || *c == b'\r')
         .count();
-    if count_trailing > 0 {
-        data.truncate(data.len() - count_trailing);
+    if count_trailing == 0 {
+        return;
     }
+    data.truncate(data.len() - count_trailing);
     data.push(b'\n');
 }
 

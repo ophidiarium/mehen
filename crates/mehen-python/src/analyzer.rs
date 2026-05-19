@@ -63,10 +63,14 @@ impl LanguageAnalyzer for PythonAnalyzer {
         };
 
         let root = walk_module(&parsed, &source.text, &source.line_index);
+        // Recovered Ruff syntax errors are surfaced as `error` (not
+        // `warning`) so the diagnostic contract (plan §9.3) treats the
+        // analysis as incomplete: `mehen metrics` exits 1 and
+        // `analyze_diff` records the file under `analysis_errors`.
         let diagnostics = parsed
             .errors()
             .iter()
-            .map(|e| ParseDiagnostic::warning("python.syntax_error", format!("{}", e)))
+            .map(|e| ParseDiagnostic::error("python.syntax_error", format!("{}", e)))
             .collect();
         Ok(LanguageAnalysis {
             language: Language::Python,

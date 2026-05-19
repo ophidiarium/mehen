@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{Language, LineIndex};
 
@@ -7,7 +7,7 @@ use crate::{Language, LineIndex};
 ///
 /// `SourceFile` is owned. Holding it does not borrow from any parser arena
 /// or buffer the analyzer might construct internally.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourceFile {
     /// Repository-relative or filesystem path. Always forward-slash
     /// separated when serialized for snapshots and reports — see the
@@ -17,7 +17,10 @@ pub struct SourceFile {
     pub text: String,
     /// Pre-computed byte→line index. Reconstructible from `text`, but the
     /// engine builds it once and reuses it for diagnostics, span->line
-    /// translation, and line classification across all metrics.
+    /// translation, and line classification across all metrics. Skipped
+    /// when serializing — see the custom `Deserialize` impl below, which
+    /// rebuilds the index from `text` so deserialized `SourceFile`s have
+    /// a populated `line_index` rather than the empty default.
     #[serde(skip)]
     pub line_index: LineIndex,
 }
@@ -32,5 +35,19 @@ impl SourceFile {
             text,
             line_index,
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct SourceFileWire {
+    path: Utf8PathBuf,
+    language: Language,
+    text: String,
+}
+
+impl<'de> Deserialize<'de> for SourceFile {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = SourceFileWire::deserialize(deserializer)?;
+        Ok(SourceFile::new(wire.path, wire.language, wire.text))
     }
 }

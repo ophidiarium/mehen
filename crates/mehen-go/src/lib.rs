@@ -17,7 +17,7 @@ use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
     Result, SourceFile, SourceSpan, byte_offset_clamped,
 };
-use mehen_tree_sitter::{TreeSitterParser, empty_space};
+use mehen_tree_sitter::{TreeSitterParser, collect_recovered_errors, empty_space};
 
 pub struct GoAnalyzer;
 
@@ -69,10 +69,14 @@ impl LanguageAnalyzer for GoAnalyzer {
         };
 
         let root = walker::walk_program(parser.root(), parser.source(), &source.line_index);
+        // Tree-sitter recovers from syntax errors by inserting ERROR /
+        // missing nodes; surface them as `error` diagnostics so the
+        // metric output can't masquerade as clean (plan §9.3).
+        let diagnostics = collect_recovered_errors(parser.root(), "go.syntax_error", 16);
         Ok(LanguageAnalysis {
             language: Language::Go,
             backend: AnalysisBackend::TreeSitter,
-            diagnostics: Vec::new(),
+            diagnostics,
             root,
             contributions: Vec::new(),
         })

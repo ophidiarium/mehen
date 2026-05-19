@@ -66,10 +66,20 @@ fn analyze_with_source_type(
         &source.line_index,
     );
 
+    // Oxc commonly returns a non-panicking parse with `errors` populated
+    // for invalid TS/JS input; surface those as `error` diagnostics so
+    // the metric output can't masquerade as clean (plan §9.3).
+    let diagnostics: Vec<ParseDiagnostic> = parser_return
+        .errors
+        .iter()
+        .take(16)
+        .map(|err| ParseDiagnostic::error("typescript.syntax_error", err.message.to_string()))
+        .collect();
+
     LanguageAnalysis {
         language,
         backend: AnalysisBackend::Oxc,
-        diagnostics: Vec::new(),
+        diagnostics,
         root,
         contributions: Vec::new(),
     }

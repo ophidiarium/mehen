@@ -1,4 +1,4 @@
-use mehen_core::{LineIndex, SourceSpan};
+use mehen_core::{LineIndex, SourceSpan, byte_offset_clamped};
 use tree_sitter::Node;
 
 /// Convert a tree-sitter `Node` into mehen's owned `SourceSpan`.
@@ -8,8 +8,8 @@ use tree_sitter::Node;
 /// 0-based, while mehen's `SourceSpan` is 1-based for parity with the
 /// existing report shape.
 pub fn node_span(node: &Node<'_>, line_index: &LineIndex) -> SourceSpan {
-    let start_byte = node.start_byte() as u32;
-    let end_byte = node.end_byte() as u32;
+    let start_byte = byte_offset_clamped(node.start_byte());
+    let end_byte = byte_offset_clamped(node.end_byte());
     SourceSpan {
         start_byte,
         end_byte,

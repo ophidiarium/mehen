@@ -11,7 +11,8 @@ use mehen_core::{
     Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
 };
 use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, text_of, walk,
+    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, collect_recovered_errors, empty_space,
+    text_of, walk,
 };
 use tree_sitter::Node;
 
@@ -188,10 +189,14 @@ impl LanguageAnalyzer for CAnalyzer {
         };
 
         let result = walk(parser.root(), parser.source(), &source.line_index, &CRules);
+        // Tree-sitter recovers from syntax errors by inserting ERROR /
+        // missing nodes; surface them as `error` diagnostics so the
+        // metric output can't masquerade as clean (plan §9.3).
+        let diagnostics = collect_recovered_errors(parser.root(), "c.syntax_error", 16);
         Ok(LanguageAnalysis {
             language: Language::C,
             backend: AnalysisBackend::TreeSitter,
-            diagnostics: Vec::new(),
+            diagnostics,
             root: result.root,
             contributions: Vec::new(),
         })

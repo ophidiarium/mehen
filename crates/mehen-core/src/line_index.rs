@@ -5,10 +5,18 @@ use serde::{Deserialize, Serialize};
 /// This exists in `mehen-core` rather than each analyzer crate because every
 /// analyzer needs it and Comrak's planned `LineColumn` → byte translation
 /// (rewrite plan review §2.3) wants a single canonical implementation.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineIndex {
     /// Byte offsets at which each line starts. `line_starts[0]` is always 0.
     line_starts: Vec<u32>,
+}
+
+impl Default for LineIndex {
+    fn default() -> Self {
+        Self {
+            line_starts: vec![0],
+        }
+    }
 }
 
 impl LineIndex {
