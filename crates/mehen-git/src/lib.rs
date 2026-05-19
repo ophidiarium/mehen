@@ -65,7 +65,7 @@ impl fmt::Display for GitError {
 
 impl std::error::Error for GitError {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChangeStatus {
     Added,
     Modified,

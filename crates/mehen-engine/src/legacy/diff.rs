@@ -648,20 +648,16 @@ fn get_changed_files(
     to: &str,
     ci_ctx: &Option<ci::CiContext>,
 ) -> Result<Vec<mehen_git::ChangedFile>, GitError> {
-    // For push events with changed_files from payload, use those directly
+    // For push events with changed_files from payload, use those
+    // directly. The CI extractor folds per-commit `added` / `modified`
+    // / `removed` into a final per-path `ChangeStatus` so the diff
+    // downstream renders new/deleted files correctly (PR #95
+    // `pullrequestreview-4318662855`).
     if let Some(ctx) = ci_ctx
         && ctx.event_name == "push"
         && let Some(ref files) = ctx.changed_files
     {
-        return Ok(files
-            .iter()
-            .map(|p| mehen_git::ChangedFile {
-                path: p.clone(),
-                // We don't know the exact status from the payload after dedup,
-                // treat as Modified (will check both revs anyway)
-                status: ChangeStatus::Modified,
-            })
-            .collect());
+        return Ok(files.clone());
     }
 
     mehen_git::changed_files(repo, from, to)

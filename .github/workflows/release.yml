@@ -282,7 +282,12 @@ jobs:
             BINARY_NAME="mehen.exe"
           fi
 
-          cargo build --release --package mehen --target "$RUST_TARGET"
+          # The workspace package is `mehen-cli`; only the binary
+          # target inside it is named `mehen`. `cargo build --package
+          # <name>` selects by package name, so this must use the
+          # crate name, not the binary name (PR #95
+          # pullrequestreview-4318662855).
+          cargo build --release --package mehen-cli --target "$RUST_TARGET"
           BINARY_PATH="target/${RUST_TARGET}/release/${BINARY_NAME}"
 
           mkdir -p "target/npm-binaries/${RUST_TARGET}"
