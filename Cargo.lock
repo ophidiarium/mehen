@@ -2088,17 +2088,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mehen-c"
-version = "0.7.0"
-dependencies = [
- "mehen-core",
- "mehen-tree-sitter",
- "tree-sitter",
- "tree-sitter-c",
-]
-
-[[package]]
-name = "mehen-cli"
+name = "mehen"
 version = "0.7.0"
 dependencies = [
  "camino",
@@ -2111,6 +2101,16 @@ dependencies = [
  "mehen-report",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "mehen-c"
+version = "0.7.0"
+dependencies = [
+ "mehen-core",
+ "mehen-tree-sitter",
+ "tree-sitter",
+ "tree-sitter-c",
 ]
 
 [[package]]

@@ -1,17 +1,19 @@
 [package]
-name = "mehen-cli"
+name = "mehen"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
-description = "Mehen 1.0 — CLI binary (internal; published as `mehen`)."
+description = "Compute and report code metrics."
 publish = false
 
-[[bin]]
-name = "mehen"
-path = "src/main.rs"
+# `name = "mehen"` makes both the package and the (auto-generated)
+# binary share the name. `[[bin]]` is omitted on purpose so cargo
+# treats `src/main.rs` as the package's default binary target — that
+# keeps `cargo run -p mehen` and `cargo build --bin mehen` both
+# working without duplicate-target errors.
 
 [dependencies]
 mehen-core = { workspace = true }

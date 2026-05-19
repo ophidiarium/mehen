@@ -20,6 +20,10 @@ members = [
     "crates/mehen-cli",
     "xtask",
 ]
+# `cargo run` / `cargo build` (with no `-p`) target the `mehen`
+# package in `crates/mehen-cli/`. The xtask binary is reached via
+# `cargo xtask …` (per `.cargo/config.toml`).
+default-members = ["crates/mehen-cli"]
 exclude = ["enums"]
 
 [workspace.lints.rust]
