@@ -29,7 +29,7 @@ those on tree-sitter for 1.0).
 The published metric contract is unchanged — Halstead, Cyclomatic,
 Cognitive, ABC, NArgs, NOM, NExit, NPA, NPM, WMC, LOC, MI all keep
 their semantics and serialization shape. What changes is the
-*interpretation* of a handful of Ruby-specific constructs where the
+_interpretation_ of a handful of Ruby-specific constructs where the
 tree-sitter grammar exposed flat CST nodes the legacy walker had to
 disambiguate by string comparison or sibling lookup. Each divergence
 below is justified from the metric definition rather than from a
@@ -78,7 +78,7 @@ the network.
 
 ### 1.3 Build prerequisites (plan §6.5)
 
-`ruby-prism-sys` invokes `bindgen 0.72` *unconditionally* in its
+`ruby-prism-sys` invokes `bindgen 0.72` _unconditionally_ in its
 `build/main.rs` (regenerating Rust bindings against the vendored Prism
 C headers on every build), and compiles the vendored Prism sources via
 `cc 1.0` when its default `vendored` feature is on. That means every
@@ -91,16 +91,16 @@ End users who install the release `mehen` binary do NOT need either.
 The CI/release matrix does — see the workspace `Cargo.toml`'s pin
 comment for the per-platform notes (Linux glibc/musl, macOS, Windows).
 
-## 2. What is *not* different
+## 2. What is _not_ different
 
 The following metric outputs match legacy where the underlying source
 is well-formed Ruby:
 
 - `cyclomatic.{sum,min,max,avg}` for `if`/`elsif`/`unless`,
   `while`/`until`, `for`, `case`/`when`, `case`/`in`, `rescue` (block
-  + modifier), `&&`/`||`/`and`/`or`, conditional `?:`, every modifier
-  form (`x if y`, `x unless y`, `x while y`, `x until y`, `expr rescue
-  fallback`).
+  - modifier), `&&`/`||`/`and`/`or`, conditional `?:`, every modifier
+    form (`x if y`, `x unless y`, `x while y`, `x until y`, `expr rescue
+fallback`).
 - `cognitive.{sum,min,max,avg}` — nesting bumps for control-flow
   scopes, +1 (no nesting) for modifiers / `else` / `elsif`, the
   same boolean-sequence collapser, depth-on-method-nesting, and
@@ -138,12 +138,12 @@ is well-formed Ruby:
   cyclomatic.
 - `mi.{*}` — derived from the above; unchanged.
 
-## 3. What *is* different
+## 3. What _is_ different
 
 Each item below is a deliberate divergence from the legacy walker.
 They fall into two buckets:
 
-- **§3.1–3.6**: parity-preserving on the metric *definition*; the
+- **§3.1–3.6**: parity-preserving on the metric _definition_; the
   difference is only that prism's typed AST exposes the underlying
   fact more cleanly than tree-sitter's CST. Numeric output is
   byte-identical to legacy.
@@ -162,15 +162,15 @@ Prism collapses each pair into a single AST struct (`IfNode`,
 `UnlessNode`, `WhileNode`, `UntilNode`) and distinguishes block from
 modifier form via the absence of `end_keyword_loc` / `closing_loc`:
 
-| Form | `end_keyword_loc` / `closing_loc` |
-|---|---|
-| `if y; x; end` (block) | `Some(loc)` |
-| `x if y` (modifier) | `None` |
-| `a ? b : c` (ternary, only `IfNode`) | `if_keyword_loc.is_none()` |
+| Form                                 | `end_keyword_loc` / `closing_loc` |
+| ------------------------------------ | --------------------------------- |
+| `if y; x; end` (block)               | `Some(loc)`                       |
+| `x if y` (modifier)                  | `None`                            |
+| `a ? b : c` (ternary, only `IfNode`) | `if_keyword_loc.is_none()`        |
 
 Metric output is identical (we still emit +1 cyclomatic for each
 form, +1 cognitive without nesting for modifier and ternary, +1+nesting
-for block forms). The only change is *how* the walker classifies.
+for block forms). The only change is _how_ the walker classifies.
 
 ### 3.2 `RescueModifierNode` is a distinct node kind in prism
 
@@ -270,7 +270,7 @@ convention; we follow it for Ruby.
 
 **Intentional drift, shared with Phase 6 (Python) and Phase 8 (PHP).**
 
-The legacy walker's `compute_minmax` ran *unconditionally* for every
+The legacy walker's `compute_minmax` ran _unconditionally_ for every
 space — so the unit space's `fn_nargs = 0` always pulled the
 `functions_min` floor down to 0, even when every actual function in
 the file had >0 args. The 1.0 mehen-metrics `NargsStats::finalize_minmax`
@@ -291,15 +291,15 @@ expect to hold long-term:
 - `ruby_safe_navigation_does_not_crash` — `obj&.bar&.baz` parses, two
   ABC.B branches recorded.
 - `ruby_pattern_matching_each_in_branch_is_a_decision` — `case x; in
-  pat => g; …; end` adds one cyclomatic per `in` clause + one for the
+pat => g; …; end` adds one cyclomatic per `in` clause + one for the
   `if` guard.
 - `ruby_endless_method_definition` — Ruby 3.0 `def square(x) = x * x`
   counts as one method (`DefNode::end_keyword_loc().is_none()` for
   endless methods; we still record NOM=1).
 - `ruby_numbered_block_parameters_count_correctly` — `do; puts _1 +
-  _2; end` recovers arity 2 from `NumberedParametersNode::maximum`.
+_2; end` recovers arity 2 from `NumberedParametersNode::maximum`.
 - `ruby_singleton_class_body_contributes_to_class_metrics` — `class
-  << self; def …; end; end` opens a class-like space; methods inside
+<< self; def …; end; end` opens a class-like space; methods inside
   count toward NPM.
 - `ruby_modifier_if_does_not_increase_nesting` — two sibling `x if y`
   modifier statements each contribute +1 cognitive; they do NOT
@@ -337,8 +337,9 @@ The walker follows the same per-space `State` accumulator pattern
   body is not a separate closure).
 
 `ParseResult<'pr>` is `!Send + !Sync`, so the analyzer parses + walks
-+ collects metrics in one stack frame and discards the parse result
-before returning `LanguageAnalysis` (which is `Send + 'static`).
+
+- collects metrics in one stack frame and discards the parse result
+  before returning `LanguageAnalysis` (which is `Send + 'static`).
 
 ## 6. References
 

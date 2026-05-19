@@ -11,14 +11,14 @@ extend-exclude = [
     # Prose-metric dictionaries intentionally contain non-words, cliches,
     # hedges, and weasel phrases for the analyzer to flag. Excluding them
     # from typo checking keeps the analyzer lists authoritative.
-    "src/markdown/data/nonwords.txt",
-    "src/markdown/data/cliches.txt",
-    "src/markdown/data/hedges.txt",
-    "src/markdown/data/weasels.txt",
-    "src/markdown/data/wordy_phrases.txt",
-    "src/markdown/data/inclusive_flags.txt",
-    "src/markdown/data/ja_weak_phrases.txt",
-    "src/markdown/data/ja_redundant.txt",
+    "crates/mehen-markdown/src/data/nonwords.txt",
+    "crates/mehen-markdown/src/data/cliches.txt",
+    "crates/mehen-markdown/src/data/hedges.txt",
+    "crates/mehen-markdown/src/data/weasels.txt",
+    "crates/mehen-markdown/src/data/wordy_phrases.txt",
+    "crates/mehen-markdown/src/data/inclusive_flags.txt",
+    "crates/mehen-markdown/src/data/ja_weak_phrases.txt",
+    "crates/mehen-markdown/src/data/ja_redundant.txt",
 ]
 
 [default.extend-identifiers]
@@ -57,3 +57,7 @@ Ccomment = "Ccomment"
 # Suffix-pattern fragment cited in §33.6 nominalizations (-ment)
 "ment" = "ment"
 "Dereferencable" = "Dereferencable"
+"ue" = "ue"
+"mis" = "mis"
+"Hashi" = "Hashi"
+"requireds" = "requireds"
