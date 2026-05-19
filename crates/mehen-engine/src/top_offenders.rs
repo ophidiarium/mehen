@@ -37,6 +37,14 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
             let Ok(analysis) = analyzer.analyze(&source, &input.config) else {
                 continue;
             };
+            // Migrated analyzers can return `Ok(...)` with a partial
+            // tree alongside an `Error`/`Fatal` diagnostic when the
+            // file doesn't parse cleanly. Per §9.3 those analyses are
+            // incomplete; surfacing them in the offender list as if
+            // they were measured would mislead CI/policy callers.
+            if crate::diff::has_blocking_diagnostic(&analysis.diagnostics) {
+                continue;
+            }
 
             let scores: Vec<f64> = input
                 .selectors
@@ -382,5 +390,46 @@ mod tests {
         // whole rank pass.
         let space = space_with_metrics(&[("loc.lloc", 100.0)]);
         assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 0.0);
+    }
+
+    #[test]
+    fn rank_top_offenders_skips_files_with_blocking_diagnostics() {
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Valid Python file: should appear in the offender list.
+        std::fs::write(
+            dir.path().join("ok.py"),
+            "def f():\n    if True:\n        return 1\n",
+        )
+        .unwrap();
+        // Syntax error: ruff returns Ok(LanguageAnalysis) with an
+        // Error-severity diagnostic and a partial tree. Pre-fix this
+        // file would be ranked alongside ok.py with bogus partial
+        // metrics; post-fix it must be skipped.
+        std::fs::write(dir.path().join("broken.py"), "def f(:\n    return 1\n").unwrap();
+
+        let input = TopOffendersInput {
+            paths: vec![Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec![sel("loc.lloc")],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        let paths: Vec<&str> = report
+            .entries
+            .iter()
+            .map(|e| e.path.file_name().unwrap_or(""))
+            .collect();
+        assert!(
+            paths.contains(&"ok.py"),
+            "expected ok.py in entries, got {paths:?}"
+        );
+        assert!(
+            !paths.contains(&"broken.py"),
+            "broken.py should be skipped due to blocking diagnostic, got {paths:?}"
+        );
     }
 }
