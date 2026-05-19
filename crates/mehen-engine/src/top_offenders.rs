@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 
-use mehen_core::SourceFile;
+use mehen_core::{MetricKey, SourceFile};
 use mehen_metrics::{MetricSelector, SelectorAggregator};
 
 use crate::detection::detect_language;
@@ -108,22 +108,36 @@ fn cmp_entries(
 }
 
 fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSpace) -> f64 {
+    let lookup = |key: &MetricKey| root.metrics.get(key).map(|v| v.as_f64());
     match selector.aggregator {
-        SelectorAggregator::Root => root
-            .metrics
-            .get(&selector.key)
-            .map(|v| v.as_f64())
-            .unwrap_or(0.0),
-        // Phase 5 demo: only Root aggregation is wired up. Min/Max/Avg/Sum
-        // require walking the space tree; the math layer in
-        // `mehen-metrics` ships the helpers but tying them to the
-        // selector here is follow-up work.
-        _ => root
-            .metrics
-            .get(&selector.key)
-            .map(|v| v.as_f64())
-            .unwrap_or(0.0),
+        SelectorAggregator::Root => lookup(&selector.key).unwrap_or(0.0),
+        SelectorAggregator::Sum => suffixed_lookup(&selector.key, &["sum"], &lookup),
+        SelectorAggregator::Min => suffixed_lookup(&selector.key, &["min"], &lookup),
+        SelectorAggregator::Max => suffixed_lookup(&selector.key, &["max"], &lookup),
+        // Per `mehen-metrics::state`, average is published as either
+        // `<key>.avg` (cyclomatic, loc.*) or `<key>.average`
+        // (cognitive, nom, nargs, nexit, npa, npm). Try the short form
+        // first to match the selector spelling, then fall back.
+        SelectorAggregator::Avg => suffixed_lookup(&selector.key, &["avg", "average"], &lookup),
     }
+}
+
+/// Look the selector key up under each suffix in order (e.g.
+/// `["avg", "average"]` for the avg aggregator), returning the first
+/// hit. `0.0` if none match — keeps the behavior of a missing metric
+/// the same as a missing root-level key.
+fn suffixed_lookup(
+    base: &MetricKey,
+    suffixes: &[&str],
+    lookup: &dyn Fn(&MetricKey) -> Option<f64>,
+) -> f64 {
+    for suffix in suffixes {
+        let key = MetricKey::new(format!("{base}.{suffix}"));
+        if let Some(v) = lookup(&key) {
+            return v;
+        }
+    }
+    0.0
 }
 
 #[cfg(test)]
@@ -200,5 +214,77 @@ mod tests {
         // NaN primaries compare equal; secondary breaks the tie.
         assert_eq!(xs[0].path, "b.rs");
         assert_eq!(xs[1].path, "a.rs");
+    }
+
+    fn space_with_metrics(pairs: &[(&str, f64)]) -> mehen_core::MetricSpace {
+        use mehen_core::{MetricSpace, SourceSpan, SpaceId, SpaceKind};
+        let mut space = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        for (k, v) in pairs {
+            space.metrics.insert(MetricKey::new(*k), *v);
+        }
+        space
+    }
+
+    fn sel(s: &str) -> MetricSelector {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn root_aggregator_reads_bare_key() {
+        let space = space_with_metrics(&[("loc.lloc", 42.0), ("loc.lloc.max", 999.0)]);
+        assert_eq!(read_metric(&sel("loc.lloc"), &space), 42.0);
+    }
+
+    #[test]
+    fn sum_aggregator_reads_sum_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("cyclomatic", 1.0),
+            ("cyclomatic.sum", 17.0),
+            ("cyclomatic.max", 9.0),
+        ]);
+        assert_eq!(read_metric(&sel("cyclomatic.sum"), &space), 17.0);
+    }
+
+    #[test]
+    fn min_aggregator_reads_min_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("loc.lloc", 100.0),
+            ("loc.lloc.min", 3.0),
+            ("loc.lloc.max", 50.0),
+        ]);
+        assert_eq!(read_metric(&sel("loc.lloc.min"), &space), 3.0);
+    }
+
+    #[test]
+    fn max_aggregator_reads_max_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("loc.lloc", 100.0),
+            ("loc.lloc.min", 3.0),
+            ("loc.lloc.max", 50.0),
+        ]);
+        assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 50.0);
+    }
+
+    #[test]
+    fn avg_aggregator_prefers_avg_then_average() {
+        // `cyclomatic` publishes `.avg`; `cognitive` publishes
+        // `.average`. The aggregator must locate either spelling so
+        // selectors written `cognitive.avg` still resolve to the
+        // analyzer's `cognitive.average` value.
+        let cyclomatic = space_with_metrics(&[("cyclomatic.avg", 2.5)]);
+        assert_eq!(read_metric(&sel("cyclomatic.avg"), &cyclomatic), 2.5);
+
+        let cognitive = space_with_metrics(&[("cognitive.average", 3.5)]);
+        assert_eq!(read_metric(&sel("cognitive.avg"), &cognitive), 3.5);
+    }
+
+    #[test]
+    fn missing_aggregated_key_falls_back_to_zero() {
+        // When the analyzer didn't publish the requested aggregation,
+        // matches the existing root-key contract: 0.0 instead of
+        // panicking, so a single missing metric doesn't break the
+        // whole rank pass.
+        let space = space_with_metrics(&[("loc.lloc", 100.0)]);
+        assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 0.0);
     }
 }
