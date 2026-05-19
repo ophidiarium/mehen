@@ -11,12 +11,15 @@ use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 
-use mehen_core::{LanguageAnalysis, ParseDiagnostic, SourceFile};
+use mehen_core::{LanguageAnalysis, ParseDiagnostic, SourceFile, Threshold, ThresholdEvaluation};
 use mehen_git::{ChangeStatus, GitError};
 
 use crate::detection::detect_language;
 use crate::registry::AnalyzerRegistry;
-use mehen_core::{AnalysisErrorRecord, DiffFile, DiffInput, DiffReport, DiffSide};
+use crate::top_offenders::read_metric;
+use mehen_core::{
+    AnalysisErrorRecord, DiffFile, DiffInput, DiffReport, DiffSide, ThresholdViolation,
+};
 
 /// Run `mehen diff` against the workspace and produce a report.
 ///
@@ -79,6 +82,7 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
             continue;
         };
 
+        let mut head_analysis: Option<LanguageAnalysis> = None;
         for (text, side) in [
             (base_text.as_deref(), DiffSide::Base),
             (head_text.as_deref(), DiffSide::Head),
@@ -86,7 +90,12 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
             let Some(text) = text else { continue };
             let source = SourceFile::new(utf8_path.clone(), language, text.to_string());
             match analyzer.analyze(&source, &input.config) {
-                Ok(analysis) => collect_diagnostics(&mut report, &utf8_path, side, &analysis),
+                Ok(analysis) => {
+                    collect_diagnostics(&mut report, &utf8_path, side, &analysis);
+                    if matches!(side, DiffSide::Head) {
+                        head_analysis = Some(analysis);
+                    }
+                }
                 Err(err) => {
                     report.analysis_errors.push(AnalysisErrorRecord {
                         path: utf8_path.clone(),
@@ -100,6 +109,18 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
             }
         }
 
+        // Threshold evaluation runs against the head analysis (the
+        // post-change state) so policy gates like "head cyclomatic must
+        // not exceed 30" mean what callers expect. Files with a
+        // blocking diagnostic on the head side are skipped — the
+        // analysis is incomplete and folding a partial number into a
+        // policy decision would be a false positive.
+        if let Some(analysis) = head_analysis.as_ref()
+            && !has_blocking_diagnostic(&analysis.diagnostics)
+        {
+            evaluate_thresholds(&mut report, &utf8_path, &input.thresholds, analysis);
+        }
+
         if matches!(language, mehen_core::Language::Markdown) {
             report.markdown_files.push(DiffFile { path: utf8_path });
         } else {
@@ -108,6 +129,33 @@ pub fn analyze_diff(input: DiffInput) -> Result<DiffReport, DiffError> {
     }
 
     Ok(report)
+}
+
+/// Apply each `Threshold` to the head analysis's metrics and append a
+/// `ThresholdViolation` to the report for every rule that fails. Done
+/// per-file so the violation entry carries the originating path.
+fn evaluate_thresholds(
+    report: &mut DiffReport,
+    path: &Utf8PathBuf,
+    thresholds: &[Threshold],
+    analysis: &LanguageAnalysis,
+) {
+    for threshold in thresholds {
+        let actual = read_metric(&threshold.selector, &analysis.root);
+        let violated = threshold.violated_by(actual);
+        if violated {
+            report.threshold_violations.push(ThresholdViolation {
+                path: path.to_string(),
+                evaluation: ThresholdEvaluation {
+                    selector: threshold.selector.clone(),
+                    actual,
+                    limit: threshold.value,
+                    polarity: threshold.polarity,
+                    violated: true,
+                },
+            });
+        }
+    }
 }
 
 fn path_is_selected(path: &Utf8PathBuf, paths: &[Utf8PathBuf]) -> bool {
@@ -222,5 +270,144 @@ mod tests {
             ParseDiagnostic::error("python.syntax_error", "invalid syntax"),
         ];
         assert!(has_blocking_diagnostic(&diags));
+    }
+
+    use mehen_core::{
+        AnalysisBackend, Language, MetricKey, MetricSpace, Polarity, SourceSpan, SpaceId, SpaceKind,
+    };
+
+    fn analysis_with_metric(key: &str, value: f64) -> LanguageAnalysis {
+        let mut root = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        root.metrics.insert(MetricKey::new(key), value);
+        LanguageAnalysis {
+            language: Language::Rust,
+            backend: AnalysisBackend::TreeSitter,
+            diagnostics: Vec::new(),
+            root,
+            contributions: Vec::new(),
+        }
+    }
+
+    fn empty_report() -> DiffReport {
+        DiffReport {
+            schema_version: "1.0".to_string(),
+            base: "HEAD~1".to_string(),
+            head: "HEAD".to_string(),
+            files: Vec::new(),
+            markdown_files: Vec::new(),
+            analysis_errors: Vec::new(),
+            threshold_violations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn higher_is_worse_threshold_above_limit_violates() {
+        let analysis = analysis_with_metric("cognitive.sum", 42.0);
+        let thresholds = vec![Threshold::new(
+            "cognitive.sum".parse().unwrap(),
+            30.0,
+            Polarity::HigherIsWorse,
+        )];
+        let mut report = empty_report();
+        evaluate_thresholds(
+            &mut report,
+            &Utf8PathBuf::from("src/main.rs"),
+            &thresholds,
+            &analysis,
+        );
+        assert_eq!(report.threshold_violations.len(), 1);
+        let v = &report.threshold_violations[0];
+        assert_eq!(v.path, "src/main.rs");
+        assert_eq!(v.evaluation.actual, 42.0);
+        assert_eq!(v.evaluation.limit, 30.0);
+        assert!(v.evaluation.violated);
+    }
+
+    #[test]
+    fn higher_is_worse_threshold_at_or_below_limit_does_not_violate() {
+        let analysis = analysis_with_metric("cognitive.sum", 30.0);
+        let thresholds = vec![Threshold::new(
+            "cognitive.sum".parse().unwrap(),
+            30.0,
+            Polarity::HigherIsWorse,
+        )];
+        let mut report = empty_report();
+        evaluate_thresholds(
+            &mut report,
+            &Utf8PathBuf::from("src/main.rs"),
+            &thresholds,
+            &analysis,
+        );
+        assert!(report.threshold_violations.is_empty());
+    }
+
+    #[test]
+    fn higher_is_better_threshold_below_limit_violates() {
+        let analysis = analysis_with_metric("mi.visual_studio", 49.0);
+        let thresholds = vec![Threshold::new(
+            "mi.visual_studio".parse().unwrap(),
+            50.0,
+            Polarity::HigherIsBetter,
+        )];
+        let mut report = empty_report();
+        evaluate_thresholds(
+            &mut report,
+            &Utf8PathBuf::from("src/main.rs"),
+            &thresholds,
+            &analysis,
+        );
+        assert_eq!(report.threshold_violations.len(), 1);
+        assert!(report.threshold_violations[0].evaluation.violated);
+    }
+
+    #[test]
+    fn multiple_thresholds_each_evaluated_independently() {
+        let mut analysis = analysis_with_metric("cyclomatic.sum", 50.0);
+        analysis
+            .root
+            .metrics
+            .insert(MetricKey::new("cognitive.sum"), 5.0);
+        let thresholds = vec![
+            Threshold::new(
+                "cyclomatic.sum".parse().unwrap(),
+                10.0,
+                Polarity::HigherIsWorse,
+            ),
+            Threshold::new(
+                "cognitive.sum".parse().unwrap(),
+                30.0,
+                Polarity::HigherIsWorse,
+            ),
+        ];
+        let mut report = empty_report();
+        evaluate_thresholds(
+            &mut report,
+            &Utf8PathBuf::from("src/main.rs"),
+            &thresholds,
+            &analysis,
+        );
+        // Only cyclomatic.sum exceeds its limit; cognitive.sum is fine.
+        assert_eq!(report.threshold_violations.len(), 1);
+        assert_eq!(
+            report.threshold_violations[0]
+                .evaluation
+                .selector
+                .key
+                .as_str(),
+            "cyclomatic"
+        );
+    }
+
+    #[test]
+    fn empty_thresholds_produce_no_violations() {
+        let analysis = analysis_with_metric("cognitive.sum", 999.0);
+        let mut report = empty_report();
+        evaluate_thresholds(
+            &mut report,
+            &Utf8PathBuf::from("src/main.rs"),
+            &[],
+            &analysis,
+        );
+        assert!(report.threshold_violations.is_empty());
     }
 }

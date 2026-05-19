@@ -107,7 +107,7 @@ fn cmp_entries(
     a.path.cmp(&b.path)
 }
 
-fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSpace) -> f64 {
+pub(crate) fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSpace) -> f64 {
     let lookup = |key: &MetricKey| root.metrics.get(key).map(|v| v.as_f64());
     match selector.aggregator {
         SelectorAggregator::Root => lookup(&selector.key).unwrap_or(0.0),
