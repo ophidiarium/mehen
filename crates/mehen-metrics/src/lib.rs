@@ -24,6 +24,7 @@ mod counters;
 mod cyclomatic;
 mod halstead;
 mod halstead_builder;
+mod halstead_routing;
 mod loc;
 mod mi;
 mod state;
@@ -35,6 +36,7 @@ pub use counters::{ContainerKind, NargsStats, NexitStats, NomStats, NpaStats, Np
 pub use cyclomatic::CyclomaticStats;
 pub use halstead::HalsteadStats;
 pub use halstead_builder::{HalsteadBuilder, HalsteadCounts, HalsteadOperand, HalsteadOperator};
+pub use halstead_routing::SpaceRangeTracker;
 pub use loc::{LineClass, LocStats};
 pub use mi::MiStats;
 pub use state::{State, apply_state_to, finalize_state, merge_child_into_parent};

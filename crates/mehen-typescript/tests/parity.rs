@@ -426,3 +426,53 @@ fn typescript_wmc_class_sums_method_cyclomatics() {
       "total": 3.0
     }"###);
 }
+
+/// Regression: nested function spaces must carry their own Halstead
+/// counts in the per-space JSON. PR #95 discussion_r3265658502 flagged
+/// the bug on the Python walker; TS had the same `stack[0]`-only
+/// behaviour (with an explicit comment acknowledging it).
+#[test]
+fn typescript_nested_function_halstead_is_non_zero() {
+    let a = analyze_ts(
+        "function outer() {
+  function inner() {
+    const x = 1 + 2;
+    return x;
+  }
+  inner();
+}",
+        "nested.ts",
+    );
+    assert_eq!(a.root.spaces.len(), 1, "expected outer fn");
+    let outer = &a.root.spaces[0];
+    assert_eq!(outer.name.as_deref(), Some("outer"));
+    assert_eq!(outer.spaces.len(), 1, "expected nested inner fn");
+    let inner = &outer.spaces[0];
+    assert_eq!(inner.name.as_deref(), Some("inner"));
+
+    let inner_h = mehen_report::metrics_json::halstead(&inner.metrics);
+    assert!(
+        inner_h.big_n1 > 0.0,
+        "inner fn must record `const`, `=`, `+`, `return` operators, got {}",
+        serde_json::to_string(&inner_h).unwrap()
+    );
+    assert!(
+        inner_h.big_n2 > 0.0,
+        "inner fn must record `x`, `1`, `2` operands, got {}",
+        serde_json::to_string(&inner_h).unwrap()
+    );
+
+    let outer_h = mehen_report::metrics_json::halstead(&outer.metrics);
+    assert!(
+        outer_h.big_n1 >= inner_h.big_n1,
+        "outer N1 must roll up inner: outer={} inner={}",
+        serde_json::to_string(&outer_h).unwrap(),
+        serde_json::to_string(&inner_h).unwrap()
+    );
+    assert!(
+        outer_h.big_n2 >= inner_h.big_n2,
+        "outer N2 must roll up inner: outer={} inner={}",
+        serde_json::to_string(&outer_h).unwrap(),
+        serde_json::to_string(&inner_h).unwrap()
+    );
+}

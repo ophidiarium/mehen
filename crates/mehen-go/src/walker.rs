@@ -430,17 +430,22 @@ impl<'a> Visitor<'a> {
     }
 
     fn classify_halstead(&mut self, node: &Node<'_>, kind: Go) {
+        // Halstead routes to the *current* (innermost) space so nested
+        // function bodies carry their own counts; the close path's
+        // `merge_child_into_parent` rolls these up into the enclosing
+        // scope and the unit (set-union for `n1`/`n2`, sum for
+        // `N1`/`N2`).
         match halstead_op_type(kind) {
             HalsteadType::Operator => {
                 let kind_label: &'static str = kind.into();
-                self.stack[0].halstead.observe_operator(HalsteadOperator {
+                self.current().halstead.observe_operator(HalsteadOperator {
                     kind: SmolStr::new(kind_label),
                     text: None,
                 });
             }
             HalsteadType::Operand => {
                 let text = text_of(node, self.source);
-                self.stack[0].halstead.observe_operand(HalsteadOperand {
+                self.current().halstead.observe_operand(HalsteadOperand {
                     kind: SmolStr::new("Operand"),
                     text: Some(SmolStr::new(text)),
                 });

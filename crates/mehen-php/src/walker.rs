@@ -64,8 +64,8 @@ use mago_syntax_core::input::Input;
 
 use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
 use mehen_metrics::{
-    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
+    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, SpaceRangeTracker, State,
+    apply_state_to, finalize_state, merge_child_into_parent,
 };
 use smol_str::SmolStr;
 
@@ -129,6 +129,12 @@ struct Visitor<'a> {
     /// whose statement is an `If` – mago does NOT have a dedicated
     /// `ElseIf` node for the spaced form).
     suppress_next_if_nesting: bool,
+    /// Routes Halstead tokens emitted by the post-AST sweep to the
+    /// deepest enclosing function/class/closure space so per-space
+    /// JSON entries are non-zero. PR #95 discussion_r3265658502
+    /// flagged the same gap on the Python walker; the PHP walker had
+    /// the same `stack[0]`-only behaviour.
+    halstead_routing: SpaceRangeTracker,
 }
 
 impl<'a> Visitor<'a> {
@@ -148,6 +154,7 @@ impl<'a> Visitor<'a> {
             cognitive: CognitiveContext::default(),
             saved_cognitive: Vec::new(),
             suppress_next_if_nesting: false,
+            halstead_routing: SpaceRangeTracker::new(),
         }
     }
 
@@ -195,18 +202,22 @@ impl<'a> Visitor<'a> {
 
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        apply_state_to(unit_state, self.tree.metrics_mut());
-        self.tree.finish()
+        // Route post-AST Halstead tokens to nested spaces (set-union
+        // for `n1`/`n2`, sum for `N1`/`N2`); see [`SpaceRangeTracker`].
+        let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut tree = self.tree.finish();
+        self.halstead_routing
+            .finalize_into_tree(&mut tree, &mut unit_halstead);
+        unit_state.halstead = unit_halstead;
+        apply_state_to(unit_state, &mut tree.metrics);
+        tree
     }
 
     /// Re-lex the source via Mago's `Lexer` and emit Halstead
-    /// operator/operand events on the unit's state.
-    ///
-    /// Halstead is recorded only at the unit level: the legacy
-    /// pre-1.0 walker also emitted Halstead at the file scope
-    /// (the per-function rolled-up totals come from
-    /// `merge_child_into_parent`'s halstead aggregation, which
-    /// reads the unit-level builder once).
+    /// operator/operand events. Each event is routed to the deepest
+    /// enclosing scope via [`SpaceRangeTracker`] so per-space JSON
+    /// entries are non-zero; tokens that fall outside every recorded
+    /// scope go into the unit `HalsteadBuilder`.
     fn emit_halstead_from_tokens(&mut self) {
         let input = Input::new(FileId::zero(), self.source.as_bytes());
         let mut lexer = Lexer::new(input, LexerSettings::default());
@@ -218,18 +229,34 @@ impl<'a> Visitor<'a> {
                 // already attached upstream via parser errors.
                 Err(_) => continue,
             };
+            // Mago tokens carry only `start: Position` and the literal
+            // `value: &str`; the end offset is start + value's byte
+            // length (which is what `Position` arithmetic does on every
+            // other code path in mago-syntax).
+            let s = token.start.offset;
+            let e = s + token.value.len() as u32;
             match classify_token(token.kind) {
                 TokenClass::Operator(kind) => {
-                    self.stack[0].halstead.observe_operator(HalsteadOperator {
-                        kind: SmolStr::new(kind),
-                        text: None,
-                    });
+                    self.halstead_routing.observe_operator(
+                        s,
+                        e,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperator {
+                            kind: SmolStr::new(kind),
+                            text: None,
+                        },
+                    );
                 }
                 TokenClass::Operand(kind) => {
-                    self.stack[0].halstead.observe_operand(HalsteadOperand {
-                        kind: SmolStr::new(kind),
-                        text: Some(SmolStr::new(token.value)),
-                    });
+                    self.halstead_routing.observe_operand(
+                        s,
+                        e,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperand {
+                            kind: SmolStr::new(kind),
+                            text: Some(SmolStr::new(token.value)),
+                        },
+                    );
                 }
                 TokenClass::Skip => {}
             }
@@ -286,8 +313,11 @@ impl<'a> Visitor<'a> {
             }
             _ => {}
         }
-        let span = self.span_to_source(span);
-        self.tree.open(kind.clone(), span, name);
+        let source_span = self.span_to_source(span);
+        let space_id = self.tree.open(kind.clone(), source_span, name);
+        // Record byte range for the post-AST Halstead routing pass.
+        self.halstead_routing
+            .record_open(space_id, span.start.offset, span.end.offset);
         self.stack.push(child);
         self.kinds.push(kind);
     }
@@ -299,6 +329,12 @@ impl<'a> Visitor<'a> {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
+        // Stash MI inputs (LOC + cyclomatic) for the post-AST Halstead
+        // overlay before they get consumed by `apply_state_to`.
+        if let Some(space_id) = self.tree.current_id() {
+            self.halstead_routing
+                .record_close(space_id, &state.loc, &state.cyclomatic);
+        }
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
             let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);

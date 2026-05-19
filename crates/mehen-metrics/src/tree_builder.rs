@@ -56,6 +56,21 @@ impl MetricTreeBuilder {
             .metrics
     }
 
+    /// `SpaceId` of the innermost open space, or `None` when only the
+    /// unit scope is on the stack. Walkers reach for this in their
+    /// `close_space` hook to associate the about-to-close state with
+    /// the space they're publishing into (e.g. for the
+    /// [`crate::SpaceRangeTracker`] post-AST Halstead overlay).
+    pub fn current_id(&self) -> Option<SpaceId> {
+        // The unit space is at index 0 — anything above it is a real
+        // child scope.
+        if self.stack.len() <= 1 {
+            None
+        } else {
+            self.stack.last().map(|s| s.id)
+        }
+    }
+
     /// Drop the unit-level outer scope and yield the assembled tree.
     ///
     /// Panics if the open/close calls are unbalanced. Failing fast surfaces

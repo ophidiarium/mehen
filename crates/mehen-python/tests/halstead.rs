@@ -148,3 +148,60 @@ fn python_check_metrics() {
     "#
     );
 }
+
+/// Regression: nested function spaces must carry their own Halstead
+/// counts in the per-space JSON. PR #95 discussion_r3265658502
+/// flagged that the post-AST token sweep was writing every event onto
+/// the unit space, leaving inner function spaces with zero
+/// `halstead.N1` / `halstead.N2` even when they contained operators
+/// and operands.
+#[test]
+fn python_nested_function_halstead_is_non_zero() {
+    let a = analyze(
+        "def outer():
+    def inner():
+        x = 1 + 2
+    inner()
+",
+        "nested.py",
+    );
+    // Tree shape: unit -> outer -> inner.
+    assert_eq!(a.root.spaces.len(), 1, "expected one outer function");
+    let outer = &a.root.spaces[0];
+    assert_eq!(
+        outer.name.as_deref(),
+        Some("outer"),
+        "outer space should be `outer`"
+    );
+    assert_eq!(outer.spaces.len(), 1, "expected one nested function");
+    let inner = &outer.spaces[0];
+    assert_eq!(inner.name.as_deref(), Some("inner"));
+
+    let inner_h = mehen_report::metrics_json::halstead(&inner.metrics);
+    let inner_json = serde_json::to_string(&inner_h).unwrap();
+    assert!(
+        inner_h.big_n1 > 0.0,
+        "inner function must record its `=` and `+` operators in the per-space JSON, got {inner_json}"
+    );
+    assert!(
+        inner_h.big_n2 > 0.0,
+        "inner function must record its `x`, `1`, `2` operands, got {inner_json}"
+    );
+    assert!(
+        inner_h.volume > 0.0,
+        "inner function volume must be > 0, got {inner_json}"
+    );
+
+    // The outer rollup must include the inner's distinct operators
+    // and operands (set-union semantics from `HalsteadBuilder::merge`).
+    let outer_h = mehen_report::metrics_json::halstead(&outer.metrics);
+    let outer_json = serde_json::to_string(&outer_h).unwrap();
+    assert!(
+        outer_h.big_n1 >= inner_h.big_n1,
+        "outer N1 must roll up the inner: outer={outer_json} inner={inner_json}"
+    );
+    assert!(
+        outer_h.big_n2 >= inner_h.big_n2,
+        "outer N2 must roll up the inner: outer={outer_json} inner={inner_json}"
+    );
+}

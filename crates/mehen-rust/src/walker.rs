@@ -38,8 +38,8 @@
 
 use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
 use mehen_metrics::{
-    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
+    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, SpaceRangeTracker, State,
+    apply_state_to, finalize_state, merge_child_into_parent,
 };
 use ra_ap_syntax::{
     AstNode, NodeOrToken, SourceFile, SyntaxKind, SyntaxNode, SyntaxToken, TextRange, WalkEvent,
@@ -99,6 +99,12 @@ struct Visitor<'a> {
     /// Active depth count of macro-opaque scopes (>= 1 means we're
     /// currently inside a macro body during the structural walk).
     macro_opaque_depth: u32,
+    /// Routes Halstead tokens emitted by the post-AST sweep to the
+    /// deepest enclosing function/closure/impl/trait space so per-space
+    /// JSON entries are non-zero. PR #95 discussion_r3265658502
+    /// flagged the same gap on the Python walker; the Rust walker had
+    /// the same `stack[0]`-only behaviour.
+    halstead_routing: SpaceRangeTracker,
 }
 
 impl<'a> Visitor<'a> {
@@ -118,6 +124,7 @@ impl<'a> Visitor<'a> {
             cognitive: CognitiveContext::default(),
             macro_opaque_ranges: Vec::new(),
             macro_opaque_depth: 0,
+            halstead_routing: SpaceRangeTracker::new(),
         }
     }
 
@@ -128,8 +135,15 @@ impl<'a> Visitor<'a> {
     fn finish(mut self) -> MetricSpace {
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        apply_state_to(unit_state, self.tree.metrics_mut());
-        self.tree.finish()
+        // Route post-AST Halstead tokens to nested spaces (set-union
+        // for `n1`/`n2`, sum for `N1`/`N2`); see [`SpaceRangeTracker`].
+        let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut tree = self.tree.finish();
+        self.halstead_routing
+            .finalize_into_tree(&mut tree, &mut unit_halstead);
+        unit_state.halstead = unit_halstead;
+        apply_state_to(unit_state, &mut tree.metrics);
+        tree
     }
 
     fn open_space(&mut self, kind: SpaceKind, range: TextRange, name: Option<String>) {
@@ -163,7 +177,9 @@ impl<'a> Visitor<'a> {
             _ => {}
         }
         let span = text_range_to_source_span(range, self.line_index);
-        self.tree.open(kind.clone(), span, name);
+        let space_id = self.tree.open(kind.clone(), span, name);
+        self.halstead_routing
+            .record_open(space_id, range.start().into(), range.end().into());
         self.stack.push(child);
         self.kinds.push(kind);
     }
@@ -175,6 +191,14 @@ impl<'a> Visitor<'a> {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
+        // Stash MI inputs (LOC + cyclomatic) for the post-AST Halstead
+        // overlay before they get consumed by `apply_state_to` —
+        // [`MiStats::compute`] is recomputed in the overlay against the
+        // final per-space Halstead.
+        if let Some(space_id) = self.tree.current_id() {
+            self.halstead_routing
+                .record_close(space_id, &state.loc, &state.cyclomatic);
+        }
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
             let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
@@ -592,22 +616,34 @@ impl<'a> Visitor<'a> {
             return;
         }
 
+        let s: u32 = range.start().into();
+        let e: u32 = range.end().into();
         match classify_token(kind) {
             TokenClass::Operator(kind_str) => {
-                self.stack[0].halstead.observe_operator(HalsteadOperator {
-                    kind: SmolStr::new(kind_str),
-                    text: None,
-                });
+                self.halstead_routing.observe_operator(
+                    s,
+                    e,
+                    &mut self.stack[0].halstead,
+                    HalsteadOperator {
+                        kind: SmolStr::new(kind_str),
+                        text: None,
+                    },
+                );
             }
             TokenClass::Operand(kind_str) => {
                 let text = self
                     .source
                     .get(usize::from(range.start())..usize::from(range.end()))
                     .unwrap_or("");
-                self.stack[0].halstead.observe_operand(HalsteadOperand {
-                    kind: SmolStr::new(kind_str),
-                    text: Some(SmolStr::new(text)),
-                });
+                self.halstead_routing.observe_operand(
+                    s,
+                    e,
+                    &mut self.stack[0].halstead,
+                    HalsteadOperand {
+                        kind: SmolStr::new(kind_str),
+                        text: Some(SmolStr::new(text)),
+                    },
+                );
 
                 // Note an LLOC line for the token (matches legacy
                 // `is_rust_tail_expression` which counts the trailing

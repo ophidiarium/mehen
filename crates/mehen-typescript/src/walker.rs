@@ -22,8 +22,8 @@
 
 use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
 use mehen_metrics::{
-    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
+    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, SpaceRangeTracker, State,
+    apply_state_to, finalize_state, merge_child_into_parent,
 };
 use oxc_allocator::Vec as ArenaVec;
 use oxc_ast::AstKind;
@@ -98,6 +98,13 @@ struct Visitor<'a> {
     /// of these ranges so TS-only identifiers don't inflate `n2 / N2`.
     /// See `docs/typescript-halstead-spec.md`.
     type_only_ranges: Vec<Span>,
+    /// Routes Halstead tokens emitted by the post-AST sweep to the
+    /// deepest enclosing function/class/closure space so per-space
+    /// JSON entries are non-zero. PR #95 discussion_r3265658502
+    /// flagged the same gap on the Python walker; the TS walker had
+    /// the same `stack[0]`-only behaviour and now shares the routing
+    /// helper.
+    halstead_routing: SpaceRangeTracker,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -123,6 +130,7 @@ impl<'a> Visitor<'a> {
             kinds: vec![SpaceKind::Unit],
             cognitive: CognitiveContext::default(),
             type_only_ranges: Vec::new(),
+            halstead_routing: SpaceRangeTracker::new(),
         }
     }
 
@@ -134,8 +142,20 @@ impl<'a> Visitor<'a> {
         // Close the unit.
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        apply_state_to(unit_state, self.tree.metrics_mut());
-        self.tree.finish()
+        // Route post-AST Halstead tokens to nested spaces. The tracker
+        // already accumulated per-space token events during the token
+        // sweep; we now propagate child counts up the parent chain
+        // (set-union) and overlay each entry's Halstead-derived keys
+        // onto the matching `MetricSpace`. The unit's own state is
+        // re-published below with the rolled-up unit builder so its
+        // keys reflect the file-wide Halstead.
+        let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut tree = self.tree.finish();
+        self.halstead_routing
+            .finalize_into_tree(&mut tree, &mut unit_halstead);
+        unit_state.halstead = unit_halstead;
+        apply_state_to(unit_state, &mut tree.metrics);
+        tree
     }
 
     /// Push a fresh `State` for an opened space.
@@ -166,7 +186,11 @@ impl<'a> Visitor<'a> {
             _ => {}
         }
         let source_span = span_to_source_span(span, self.line_index);
-        self.tree.open(kind.clone(), source_span, name);
+        let space_id = self.tree.open(kind.clone(), source_span, name);
+        // Record the byte range so the post-AST Halstead token sweep
+        // can route tokens to this scope.
+        self.halstead_routing
+            .record_open(space_id, span.start, span.end);
         self.stack.push(child);
         self.kinds.push(kind);
     }
@@ -180,6 +204,14 @@ impl<'a> Visitor<'a> {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
+        // Stash MI inputs (LOC + cyclomatic) for the post-AST Halstead
+        // overlay before they get consumed by `apply_state_to` —
+        // `MiStats::compute` is recomputed in the overlay against the
+        // final per-space Halstead.
+        if let Some(space_id) = self.tree.current_id() {
+            self.halstead_routing
+                .record_close(space_id, &state.loc, &state.cyclomatic);
+        }
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
             let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
@@ -201,25 +233,14 @@ impl<'a> Visitor<'a> {
     /// Each Oxc lexer token is mapped to a `HalsteadOperator` or
     /// `HalsteadOperand` event using a kind translation that mirrors
     /// the legacy `Getter::get_op_type for TypescriptCode` (see
-    /// `crates/mehen-engine/src/legacy/getter.rs:119-137`). Tokens are
-    /// only ever emitted into the unit space here — per-space rolling
-    /// up of Halstead is handled by the AST walk's
-    /// `merge_child_into_parent`. This keeps the post-pass simple at
-    /// the cost of slightly different per-space `volume` rollups; the
-    /// legacy walker emitted Halstead per-node into the *innermost*
-    /// open space, then merged child sets into parent on close, so the
-    /// unit-level `volume` is identical either way (a union of children
-    /// equals the union evaluated at the parent).
+    /// `crates/mehen-engine/src/legacy/getter.rs:119-137`). Each event
+    /// is routed to the deepest enclosing function/class/closure space
+    /// via [`SpaceRangeTracker`] — tokens that fall outside every
+    /// recorded scope go into the unit `HalsteadBuilder`. The tracker's
+    /// `finalize_into_tree` (called from [`Self::finish`]) then
+    /// propagates each space's set up its parent chain (set-union for
+    /// `n1`/`n2`, sum for `N1`/`N2`).
     fn emit_halstead_from_tokens(&mut self, tokens: &ArenaVec<'a, Token>, source: &str) {
-        // The legacy walker accumulated Halstead per-space and folded
-        // child sets up to the parent on close. The token stream does
-        // not carry AST context, so to reproduce the per-space rollups
-        // exactly we'd need to map each token to the innermost space
-        // covering it. For now we emit tokens into the *unit* space
-        // only; downstream metrics (`volume`, `n1`, `N1`, …) use the
-        // unit-level rollup which equals the union of all per-space
-        // sets. Any test that asserts per-function Halstead instead of
-        // unit-level is one we have to revisit.
         // Sort `type_only_ranges` once so we can answer "is this span
         // inside any range" with a binary search.
         self.type_only_ranges.sort_by_key(|s| s.start);
@@ -240,19 +261,29 @@ impl<'a> Visitor<'a> {
             }
             match classify_token(tok.kind()) {
                 TokenClass::Operator(kind) => {
-                    self.stack[0].halstead.observe_operator(HalsteadOperator {
-                        kind: SmolStr::new(kind),
-                        text: None,
-                    });
+                    self.halstead_routing.observe_operator(
+                        tspan.start,
+                        tspan.end,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperator {
+                            kind: SmolStr::new(kind),
+                            text: None,
+                        },
+                    );
                 }
                 TokenClass::Operand(kind) => {
                     let text = source
                         .get(tspan.start as usize..tspan.end as usize)
                         .unwrap_or("");
-                    self.stack[0].halstead.observe_operand(HalsteadOperand {
-                        kind: SmolStr::new(kind),
-                        text: Some(SmolStr::new(text)),
-                    });
+                    self.halstead_routing.observe_operand(
+                        tspan.start,
+                        tspan.end,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperand {
+                            kind: SmolStr::new(kind),
+                            text: Some(SmolStr::new(text)),
+                        },
+                    );
                 }
                 TokenClass::Skip => {}
             }
@@ -856,10 +887,19 @@ impl<'a> Visit<'a> for Visitor<'a> {
                     .source
                     .get(span.start as usize..span.end as usize)
                     .unwrap_or("");
-                self.stack[0].halstead.observe_operand(HalsteadOperand {
-                    kind: SmolStr::new("MemberExpression"),
-                    text: Some(SmolStr::new(text)),
-                });
+                // Route to the deepest enclosing scope so per-space
+                // JSON entries pick up the wrapper-text operand. The
+                // tracker falls back to the unit `HalsteadBuilder` for
+                // top-level member expressions.
+                self.halstead_routing.observe_operand(
+                    span.start,
+                    span.end,
+                    &mut self.stack[0].halstead,
+                    HalsteadOperand {
+                        kind: SmolStr::new("MemberExpression"),
+                        text: Some(SmolStr::new(text)),
+                    },
+                );
             }
             _ => {}
         }

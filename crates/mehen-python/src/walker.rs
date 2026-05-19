@@ -38,8 +38,8 @@
 
 use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
 use mehen_metrics::{
-    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
+    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, SpaceRangeTracker, State,
+    apply_state_to, finalize_state, merge_child_into_parent,
 };
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, walk_expr, walk_stmt};
@@ -96,6 +96,12 @@ struct Visitor<'a> {
     /// (per PEP 257). Type annotation spans are NOT added here because
     /// Python types are runtime-accessible — see crate docs.
     docstring_ranges: Vec<TextRange>,
+    /// Routes Halstead tokens emitted by the post-AST sweep to the
+    /// deepest enclosing function/class/lambda space. Without this,
+    /// nested-scope Halstead numbers are zero in the per-space JSON
+    /// even though the unit rollup is correct (PR #95
+    /// discussion_r3265658502).
+    halstead_routing: SpaceRangeTracker,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -127,6 +133,7 @@ impl<'a> Visitor<'a> {
             kinds: vec![SpaceKind::Unit],
             cognitive: CognitiveContext::default(),
             docstring_ranges: Vec::new(),
+            halstead_routing: SpaceRangeTracker::new(),
         }
     }
 
@@ -141,8 +148,21 @@ impl<'a> Visitor<'a> {
     fn finish(mut self) -> MetricSpace {
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        apply_state_to(unit_state, self.tree.metrics_mut());
-        self.tree.finish()
+        // Route post-AST Halstead tokens to nested spaces. The unit
+        // builder is taken out of `unit_state` so the tracker can
+        // accumulate fall-through tokens into it before we publish
+        // the unit's metrics; the routing pass also propagates each
+        // child's counts up the parent chain so `unit_halstead` ends
+        // up with the file-wide rollup.
+        let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut tree = self.tree.finish();
+        self.halstead_routing
+            .finalize_into_tree(&mut tree, &mut unit_halstead);
+        unit_state.halstead = unit_halstead;
+        // Re-run the unit publish so its Halstead and MI keys reflect
+        // the rolled-up values.
+        apply_state_to(unit_state, &mut tree.metrics);
+        tree
     }
 
     fn record_module_docstring(&mut self, body: &[Stmt]) {
@@ -182,7 +202,11 @@ impl<'a> Visitor<'a> {
             _ => {}
         }
         let span = text_range_to_source_span(range, self.line_index);
-        self.tree.open(kind.clone(), span, name);
+        let space_id = self.tree.open(kind.clone(), span, name);
+        // Record the byte range so the post-AST Halstead token sweep
+        // can route tokens to this scope.
+        self.halstead_routing
+            .record_open(space_id, range.start().to_u32(), range.end().to_u32());
         self.stack.push(child);
         self.kinds.push(kind);
     }
@@ -194,6 +218,14 @@ impl<'a> Visitor<'a> {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
+        // Stash LOC + cyclomatic snapshots for the post-AST overlay
+        // before they get consumed by `apply_state_to` — MI is
+        // recomputed there from these inputs against the final
+        // per-space Halstead.
+        if let Some(space_id) = self.tree.current_id() {
+            self.halstead_routing
+                .record_close(space_id, &state.loc, &state.cyclomatic);
+        }
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
             let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
@@ -440,22 +472,37 @@ impl<'a> Visitor<'a> {
             if self.is_inside_docstring(span) {
                 continue;
             }
+            // Route Halstead events to the deepest enclosing
+            // function/class/lambda space so per-space JSON entries
+            // are non-zero (and the rolled-up unit values match).
+            // `route_through_tracker` falls back to the unit
+            // `HalsteadBuilder` when no recorded entry covers the
+            // token.
+            let s = span.start().to_u32();
+            let e = span.end().to_u32();
             match classify_token(tok.kind()) {
                 TokenClass::Operator(kind) => {
-                    self.stack[0].halstead.observe_operator(HalsteadOperator {
-                        kind: SmolStr::new(kind),
-                        text: None,
-                    });
+                    self.halstead_routing.observe_operator(
+                        s,
+                        e,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperator {
+                            kind: SmolStr::new(kind),
+                            text: None,
+                        },
+                    );
                 }
                 TokenClass::Operand(kind) => {
-                    let text = self
-                        .source
-                        .get(span.start().to_u32() as usize..span.end().to_u32() as usize)
-                        .unwrap_or("");
-                    self.stack[0].halstead.observe_operand(HalsteadOperand {
-                        kind: SmolStr::new(kind),
-                        text: Some(SmolStr::new(text)),
-                    });
+                    let text = self.source.get(s as usize..e as usize).unwrap_or("");
+                    self.halstead_routing.observe_operand(
+                        s,
+                        e,
+                        &mut self.stack[0].halstead,
+                        HalsteadOperand {
+                            kind: SmolStr::new(kind),
+                            text: Some(SmolStr::new(text)),
+                        },
+                    );
                 }
                 TokenClass::Skip => {}
             }

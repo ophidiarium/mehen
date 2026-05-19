@@ -2331,6 +2331,7 @@ dependencies = [
  "oxc_parser",
  "oxc_span",
  "oxc_syntax",
+ "serde_json",
  "smol_str",
 ]
 

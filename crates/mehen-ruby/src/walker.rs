@@ -302,22 +302,27 @@ impl<'a> Visitor<'a> {
         }
     }
 
+    /// Halstead routes to the *current* (innermost) space so nested
+    /// def/class bodies carry their own counts; the close path's
+    /// `merge_child_into_parent` rolls these up into the enclosing
+    /// scope and the unit (set-union for `n1`/`n2`, sum for
+    /// `N1`/`N2`).
     fn record_halstead_op(&mut self, kind: &'static str) {
-        self.stack[0].halstead.observe_operator(HalsteadOperator {
+        self.current().halstead.observe_operator(HalsteadOperator {
             kind: SmolStr::new(kind),
             text: None,
         });
     }
 
     fn record_halstead_op_text(&mut self, kind: &'static str, text: &str) {
-        self.stack[0].halstead.observe_operator(HalsteadOperator {
+        self.current().halstead.observe_operator(HalsteadOperator {
             kind: SmolStr::new(kind),
             text: Some(SmolStr::new(text)),
         });
     }
 
     fn record_halstead_operand_text(&mut self, kind: &'static str, text: &str) {
-        self.stack[0].halstead.observe_operand(HalsteadOperand {
+        self.current().halstead.observe_operand(HalsteadOperand {
             kind: SmolStr::new(kind),
             text: Some(SmolStr::new(text)),
         });

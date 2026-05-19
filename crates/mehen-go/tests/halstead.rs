@@ -47,3 +47,47 @@ fn go_operators_and_operands() {
     }"###
     );
 }
+
+/// Regression: nested function spaces must carry their own Halstead
+/// counts in the per-space JSON. PR #95 discussion_r3265658502 flagged
+/// this on the Python walker; the Go walker had the same
+/// `stack[0]`-only bug.
+#[test]
+fn go_nested_function_halstead_is_non_zero() {
+    // Go closures (anonymous funcs) get their own scope inside the
+    // enclosing function. The closure's body is a nested scope and
+    // must record its own Halstead.
+    let a = analyze(
+        "package main
+
+func outer() {
+    inner := func() int {
+        x := 1 + 2
+        return x
+    }
+    inner()
+}",
+    );
+    assert_eq!(a.root.spaces.len(), 1, "expected outer fn");
+    let outer = &a.root.spaces[0];
+    assert!(!outer.spaces.is_empty(), "expected nested closure");
+    let closure = &outer.spaces[0];
+    let closure_h = mehen_report::metrics_json::halstead(&closure.metrics);
+    assert!(
+        closure_h.big_n1 > 0.0,
+        "closure must record `:=`, `+` operators, got {}",
+        serde_json::to_string(&closure_h).unwrap()
+    );
+    assert!(
+        closure_h.big_n2 > 0.0,
+        "closure must record `x`, `1`, `2` operands, got {}",
+        serde_json::to_string(&closure_h).unwrap()
+    );
+    let outer_h = mehen_report::metrics_json::halstead(&outer.metrics);
+    assert!(
+        outer_h.big_n1 >= closure_h.big_n1,
+        "outer N1 must roll up closure: outer={} closure={}",
+        serde_json::to_string(&outer_h).unwrap(),
+        serde_json::to_string(&closure_h).unwrap()
+    );
+}

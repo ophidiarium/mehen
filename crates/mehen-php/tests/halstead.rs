@@ -75,3 +75,41 @@ fn php_halstead_string_part_is_skipped() {
     assert_eq!(h.n2, 2.0, "{}", serde_json::to_string(&h).unwrap());
     assert_eq!(h.length, 7.0, "{}", serde_json::to_string(&h).unwrap());
 }
+
+/// Regression: methods inside a class must record their own Halstead
+/// counts in the per-space JSON. PR #95 discussion_r3265658502 flagged
+/// this on the Python walker; PHP had the same `stack[0]`-only bug, so
+/// every method's `halstead.N1`/`halstead.N2` was zero in the report.
+#[test]
+fn php_method_halstead_is_non_zero() {
+    let a = analyze(
+        "<?php
+class C {
+    public function m(int $a, int $b): int {
+        return $a + $b;
+    }
+}",
+    );
+    assert_eq!(a.root.spaces.len(), 1, "expected one class space");
+    let class = &a.root.spaces[0];
+    assert_eq!(class.spaces.len(), 1, "expected one method space");
+    let method = &class.spaces[0];
+    let method_h = mehen_report::metrics_json::halstead(&method.metrics);
+    assert!(
+        method_h.big_n1 > 0.0,
+        "method must record `function`, `return`, `+` operators, got {}",
+        serde_json::to_string(&method_h).unwrap()
+    );
+    assert!(
+        method_h.big_n2 > 0.0,
+        "method must record `m`, `$a`, `$b` operands, got {}",
+        serde_json::to_string(&method_h).unwrap()
+    );
+    let class_h = mehen_report::metrics_json::halstead(&class.metrics);
+    assert!(
+        class_h.big_n1 >= method_h.big_n1,
+        "class N1 must roll up the method: class={} method={}",
+        serde_json::to_string(&class_h).unwrap(),
+        serde_json::to_string(&method_h).unwrap()
+    );
+}
