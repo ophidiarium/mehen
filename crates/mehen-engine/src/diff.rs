@@ -126,17 +126,31 @@ fn collect_diagnostics(
     if analysis.diagnostics.is_empty() {
         return;
     }
-    let any_fatal = analysis.diagnostics.iter().any(|d| {
-        d.severity == mehen_core::DiagnosticSeverity::Fatal
-            || d.severity == mehen_core::DiagnosticSeverity::Error
-    });
-    if any_fatal {
+    if has_blocking_diagnostic(&analysis.diagnostics) {
         report.analysis_errors.push(AnalysisErrorRecord {
             path: path.clone(),
             side,
             diagnostics: analysis.diagnostics.clone(),
         });
     }
+}
+
+/// Classify a diagnostic batch for diff-side severity gating.
+///
+/// Per the diagnostic contract (rewrite plan §9.3), `Warning` is
+/// informational, while `Error` or `Fatal` signals that the analysis is
+/// incomplete — diff orchestrators must surface those (CLI exit 1, JSON
+/// `analysis_errors`). Returns `true` iff any diagnostic in `diagnostics`
+/// reaches the blocking threshold. Lives in the post-1.0 `diff` module
+/// so it survives the legacy-engine teardown; the legacy diff path
+/// re-uses it via `pub(crate)`.
+pub(crate) fn has_blocking_diagnostic(diagnostics: &[ParseDiagnostic]) -> bool {
+    diagnostics.iter().any(|d| {
+        matches!(
+            d.severity,
+            mehen_core::DiagnosticSeverity::Error | mehen_core::DiagnosticSeverity::Fatal
+        )
+    })
 }
 
 fn record_unavailable(report: &mut DiffReport, path: &Utf8PathBuf, language: mehen_core::Language) {
@@ -167,3 +181,46 @@ impl core::fmt::Display for DiffError {
 }
 
 impl core::error::Error for DiffError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_diagnostics_are_not_blocking() {
+        assert!(!has_blocking_diagnostic(&[]));
+    }
+
+    #[test]
+    fn warning_only_is_not_blocking() {
+        let diags = vec![ParseDiagnostic::warning("python.style", "long line")];
+        assert!(!has_blocking_diagnostic(&diags));
+    }
+
+    #[test]
+    fn error_severity_is_blocking() {
+        let diags = vec![ParseDiagnostic::error(
+            "ruby.syntax_error",
+            "unterminated string",
+        )];
+        assert!(has_blocking_diagnostic(&diags));
+    }
+
+    #[test]
+    fn fatal_severity_is_blocking() {
+        let diags = vec![ParseDiagnostic::fatal(
+            "rust.parse_error",
+            "tree-sitter-rust failed",
+        )];
+        assert!(has_blocking_diagnostic(&diags));
+    }
+
+    #[test]
+    fn warning_mixed_with_error_is_blocking() {
+        let diags = vec![
+            ParseDiagnostic::warning("python.style", "long line"),
+            ParseDiagnostic::error("python.syntax_error", "invalid syntax"),
+        ];
+        assert!(has_blocking_diagnostic(&diags));
+    }
+}

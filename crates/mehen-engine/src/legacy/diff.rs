@@ -155,50 +155,6 @@ fn parse_fail_on_flag(raw: &str) -> Result<FailOn, clap::Error> {
     }
 }
 
-// ── Diagnostics surfacing ──────────────────────────────────────────────
-
-/// Log the analyzer's diagnostics for one side of the diff and flip
-/// `failed` to `true` when any of them are `Error` or `Fatal`.
-///
-/// Per the diagnostic contract (rewrite plan §9.3), recoverable parser
-/// errors must surface as a non-zero exit; warnings are informational.
-/// Returns `true` if any `Error`/`Fatal` was seen so callers (and the
-/// unit test below) can branch on the diff-of-this-file outcome
-/// without re-reading the flag.
-fn log_and_promote_diagnostics(
-    diagnostics: &[mehen_core::ParseDiagnostic],
-    path: &std::path::Path,
-    side: &str,
-    failed: &mut bool,
-) -> bool {
-    let mut saw_error = false;
-    for diag in diagnostics {
-        match diag.severity {
-            DiagnosticSeverity::Warning => {
-                log::warn!(
-                    "{} ({side}): {}: {}",
-                    path.display(),
-                    diag.code,
-                    diag.message
-                );
-            }
-            DiagnosticSeverity::Error | DiagnosticSeverity::Fatal => {
-                log::error!(
-                    "{} ({side}): {}: {}",
-                    path.display(),
-                    diag.code,
-                    diag.message
-                );
-                saw_error = true;
-            }
-        }
-    }
-    if saw_error {
-        *failed = true;
-    }
-    saw_error
-}
-
 // ── Orchestration ──────────────────────────────────────────────────────
 
 pub fn run_diff(opts: DiffOpts) {
@@ -299,14 +255,24 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
                     return None;
                 }
             };
-            if log_and_promote_diagnostics(
-                &analysis.diagnostics,
-                &cf.path,
-                side,
-                &mut analysis_failed,
-            ) {
-                // No-op: the helper already wrote the log lines and
-                // updated `analysis_failed`. Bool return is for tests.
+            for diag in &analysis.diagnostics {
+                match diag.severity {
+                    DiagnosticSeverity::Warning => log::warn!(
+                        "{} ({side}): {}: {}",
+                        cf.path.display(),
+                        diag.code,
+                        diag.message
+                    ),
+                    DiagnosticSeverity::Error | DiagnosticSeverity::Fatal => log::error!(
+                        "{} ({side}): {}: {}",
+                        cf.path.display(),
+                        diag.code,
+                        diag.message
+                    ),
+                }
+            }
+            if crate::diff::has_blocking_diagnostic(&analysis.diagnostics) {
+                analysis_failed = true;
             }
             Some(analysis.root)
         };
@@ -880,59 +846,9 @@ mod tests {
         opts: DiffOpts,
     }
 
-    use mehen_core::ParseDiagnostic;
-    use std::path::Path;
-
-    #[test]
-    fn diagnostics_warning_does_not_flip_failure_flag() {
-        let diags = vec![ParseDiagnostic::warning(
-            "ruby.syntax_error",
-            "unterminated string",
-        )];
-        let mut failed = false;
-        let saw_err =
-            log_and_promote_diagnostics(&diags, Path::new("a.rb"), "current", &mut failed);
-        assert!(!saw_err);
-        assert!(!failed);
-    }
-
-    #[test]
-    fn diagnostics_error_flips_failure_flag() {
-        let diags = vec![ParseDiagnostic::error(
-            "ruby.syntax_error",
-            "unterminated string",
-        )];
-        let mut failed = false;
-        let saw_err =
-            log_and_promote_diagnostics(&diags, Path::new("a.rb"), "current", &mut failed);
-        assert!(saw_err);
-        assert!(failed);
-    }
-
-    #[test]
-    fn diagnostics_fatal_flips_failure_flag() {
-        let diags = vec![ParseDiagnostic::fatal(
-            "rust.parse_error",
-            "tree-sitter-rust failed",
-        )];
-        let mut failed = false;
-        let saw_err =
-            log_and_promote_diagnostics(&diags, Path::new("a.rs"), "baseline", &mut failed);
-        assert!(saw_err);
-        assert!(failed);
-    }
-
-    #[test]
-    fn diagnostics_failure_flag_is_sticky_across_clean_diagnostics() {
-        // Once a previous file flipped the flag, a clean file's
-        // diagnostic batch must not reset it back to false.
-        let mut failed = true;
-        let diags: Vec<ParseDiagnostic> = Vec::new();
-        let saw_err =
-            log_and_promote_diagnostics(&diags, Path::new("clean.rs"), "current", &mut failed);
-        assert!(!saw_err);
-        assert!(failed, "previously-flipped failure flag must stay set");
-    }
+    // Diagnostic-severity classification has its tests in
+    // `mehen_engine::diff::tests` (the post-1.0 module) so they survive
+    // the legacy-engine teardown.
 
     #[test]
     fn test_parse_metric_selectors_defaults() {
