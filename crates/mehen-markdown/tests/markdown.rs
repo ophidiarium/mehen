@@ -600,3 +600,89 @@ fn mermaid_two_node_cycle_matches_spec() {
     assert_eq!(sig.cycles, 1);
     assert!(!sig.parse_error);
 }
+
+/// Regression: `MarkdownAnalyzer::analyze` (the registry path
+/// reached via `mehen metrics README.md`) must populate the
+/// `MetricSet` from the rich `analyze_markdown` pipeline. PR #95
+/// discussion_r3265727847 flagged that the analyzer was returning a
+/// fresh empty `MetricSpace`, so every Markdown file's flat-keyed
+/// JSON came back as zeros.
+#[test]
+fn markdown_analyzer_publishes_loc_and_complexity_keys() {
+    use mehen_core::{AnalysisConfig, Language, LanguageAnalyzer, MetricKey, SourceFile};
+    use mehen_markdown::MarkdownAnalyzer;
+
+    let (source, path) = load_fixture("readme_en.md");
+    let analyzer = MarkdownAnalyzer::new();
+    let utf8_path = camino::Utf8PathBuf::try_from(path).unwrap();
+    let file = SourceFile::new(utf8_path, Language::Markdown, source);
+    let analysis = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+
+    let metrics = &analysis.root.metrics;
+    let dloc = metrics
+        .get(&MetricKey::new("markdown.loc.dloc"))
+        .expect("markdown.loc.dloc must be published");
+    assert!(
+        dloc.as_f64() > 0.0,
+        "real Markdown file must report non-zero documentation LOC, got {}",
+        dloc.as_f64()
+    );
+
+    let words = metrics
+        .get(&MetricKey::new("markdown.size.words"))
+        .expect("markdown.size.words must be published");
+    assert!(
+        words.as_f64() > 0.0,
+        "real Markdown file must report non-zero word count, got {}",
+        words.as_f64()
+    );
+
+    let cognitive = metrics
+        .get(&MetricKey::new("markdown.complexity.cognitive_complexity"))
+        .expect("markdown.complexity.cognitive_complexity must be published");
+    assert!(
+        cognitive.as_f64() >= 0.0,
+        "cognitive complexity must be present and non-negative, got {}",
+        cognitive.as_f64()
+    );
+
+    let dmi = metrics
+        .get(&MetricKey::new(
+            "markdown.maintainability.documentation_maintainability_index",
+        ))
+        .expect("DMI must be published");
+    assert!(
+        dmi.as_f64() > 0.0,
+        "real Markdown fixture should yield a positive DMI, got {}",
+        dmi.as_f64()
+    );
+}
+
+/// Regression: an empty Markdown buffer must still go through the
+/// rich pipeline (returning zeros, not panicking) — exercising the
+/// `analyze` impl on the smallest input guards against future
+/// regressions where someone shortcut the empty case.
+#[test]
+fn markdown_analyzer_handles_empty_input() {
+    use mehen_core::{AnalysisConfig, Language, LanguageAnalyzer, MetricKey, SourceFile};
+    use mehen_markdown::MarkdownAnalyzer;
+
+    let analyzer = MarkdownAnalyzer::new();
+    let file = SourceFile::new("empty.md".into(), Language::Markdown, String::new());
+    let analysis = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+
+    // Headline keys exist even on an empty input so consumers can
+    // rely on the shape of the JSON output.
+    let metrics = &analysis.root.metrics;
+    assert!(metrics.get(&MetricKey::new("markdown.loc.dloc")).is_some());
+    assert!(
+        metrics
+            .get(&MetricKey::new("markdown.size.words"))
+            .is_some()
+    );
+    assert!(
+        metrics
+            .get(&MetricKey::new("markdown.complexity.cognitive_complexity"))
+            .is_some()
+    );
+}

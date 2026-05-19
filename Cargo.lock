@@ -2200,6 +2200,7 @@ dependencies = [
 name = "mehen-markdown"
 version = "0.7.0"
 dependencies = [
+ "camino",
  "insta",
  "mehen-core",
  "mehen-engine",

@@ -53,17 +53,22 @@ pub use analyzer::analyze_markdown;
 pub use embedded_code::{EmbeddedFenceMetrics, FenceLanguage, set_legacy_dispatch};
 
 use mehen_core::{
-    AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricSpace,
-    SourceFile, SourceSpan, SpaceId, SpaceKind, byte_offset_clamped,
+    AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricKey,
+    MetricSet, MetricSpace, SourceFile, SourceSpan, SpaceId, SpaceKind, byte_offset_clamped,
 };
+
+use crate::types::MarkdownMetrics;
 
 /// Tree-sitter-backed Markdown analyzer for the engine registry.
 ///
 /// The rich metric pipeline runs through [`analyze_markdown`] and
 /// produces [`types::MarkdownMetrics`] (a Markdown-specific report
-/// shape). The engine's `LanguageAnalyzer` integration ships an empty
-/// `MetricSpace` here — phase-5 follow-up wires the rich Markdown
-/// metrics into the diff JSON via `mehen-report`.
+/// shape). This `LanguageAnalyzer::analyze` implementation drives that
+/// same pipeline and translates the headline numbers (LOC family,
+/// size, complexity, Halstead, links, visuals, tables, maintainability,
+/// grounding, AI-era risk, review criticality) into the shared
+/// `MetricSet` flat-key shape so `mehen metrics README.md` returns
+/// real values instead of an empty space.
 pub struct MarkdownAnalyzer;
 
 impl MarkdownAnalyzer {
@@ -98,12 +103,199 @@ impl LanguageAnalyzer for MarkdownAnalyzer {
             start_line: 1,
             end_line: source.line_index.line_count(),
         };
+        let metrics = analyze_markdown(&source.text, source.path.as_std_path());
+        let mut root = MetricSpace::new(SpaceId(0), SpaceKind::Unit, span);
+        publish_markdown_metrics(&metrics, &mut root.metrics);
         Ok(LanguageAnalysis {
             language: Language::Markdown,
             backend: AnalysisBackend::MarkdownLegacy,
             diagnostics: Vec::new(),
-            root: MetricSpace::new(SpaceId(0), SpaceKind::Unit, span),
+            root,
             contributions: Vec::new(),
         })
     }
+}
+
+/// Publish the headline `MarkdownMetrics` numbers into the shared
+/// `MetricSet` flat-key shape that the `mehen metrics --format json`
+/// envelope serializes. Keys mirror the §23 export schema documented
+/// in `mehen-book/src/markdown/metrics.md` so the registry-driven
+/// path returns the same numeric values that `analyze_markdown` does.
+///
+/// The full `MarkdownMetrics` record (sections, link records, prose
+/// detail, etc.) is intentionally not flattened — those live in the
+/// Markdown-specific report shape that the diff renderer in
+/// `mehen-report::github_markdown_docs` consumes directly. Flat-key
+/// publishing covers the scalar headline values consumed by the CLI's
+/// JSON output and any threshold/selector lookup.
+fn publish_markdown_metrics(m: &MarkdownMetrics, target: &mut MetricSet) {
+    // LOC family (§5).
+    target.insert(MetricKey::new("markdown.loc.dloc"), m.loc.dloc);
+    target.insert(MetricKey::new("markdown.loc.ploc"), m.loc.ploc);
+    target.insert(MetricKey::new("markdown.loc.cloc"), m.loc.cloc);
+    target.insert(MetricKey::new("markdown.loc.tloc"), m.loc.tloc);
+    target.insert(MetricKey::new("markdown.loc.mloc"), m.loc.mloc);
+    target.insert(MetricKey::new("markdown.loc.bloc"), m.loc.bloc);
+    target.insert(MetricKey::new("markdown.loc.aloc"), m.loc.aloc);
+
+    // LOC ratios (§5.1).
+    target.insert(
+        MetricKey::new("markdown.loc_ratios.artifact_line_ratio"),
+        m.loc_ratios.artifact_line_ratio,
+    );
+    target.insert(
+        MetricKey::new("markdown.loc_ratios.code_line_ratio"),
+        m.loc_ratios.code_line_ratio,
+    );
+    target.insert(
+        MetricKey::new("markdown.loc_ratios.table_line_ratio"),
+        m.loc_ratios.table_line_ratio,
+    );
+    target.insert(
+        MetricKey::new("markdown.loc_ratios.math_line_ratio"),
+        m.loc_ratios.math_line_ratio,
+    );
+    target.insert(
+        MetricKey::new("markdown.loc_ratios.blank_line_ratio"),
+        m.loc_ratios.blank_line_ratio,
+    );
+
+    // Size (§4 / §6).
+    target.insert(MetricKey::new("markdown.size.words"), m.size.words);
+    target.insert(
+        MetricKey::new("markdown.size.effective_content_units"),
+        m.size.effective_content_units,
+    );
+    target.insert(MetricKey::new("markdown.size.sections"), m.size.sections);
+    target.insert(MetricKey::new("markdown.size.headings"), m.size.headings);
+
+    // Complexity (§7 / §8 / §9).
+    target.insert(
+        MetricKey::new("markdown.complexity.reading_path_complexity"),
+        m.complexity.reading_path_complexity,
+    );
+    target.insert(
+        MetricKey::new("markdown.complexity.reading_path_complexity_raw"),
+        m.complexity.reading_path_complexity_raw,
+    );
+    target.insert(
+        MetricKey::new("markdown.complexity.cognitive_complexity"),
+        m.complexity.cognitive_complexity,
+    );
+
+    // Halstead under complexity (§9).
+    let h = &m.complexity.halstead;
+    target.insert(
+        MetricKey::new("markdown.halstead.operators_distinct"),
+        h.operators_distinct,
+    );
+    target.insert(
+        MetricKey::new("markdown.halstead.operators_total"),
+        h.operators_total,
+    );
+    target.insert(
+        MetricKey::new("markdown.halstead.operands_distinct"),
+        h.operands_distinct,
+    );
+    target.insert(
+        MetricKey::new("markdown.halstead.operands_total"),
+        h.operands_total,
+    );
+    target.insert(MetricKey::new("markdown.halstead.vocabulary"), h.vocabulary);
+    target.insert(MetricKey::new("markdown.halstead.length"), h.length);
+    target.insert(MetricKey::new("markdown.halstead.volume"), h.volume);
+    target.insert(MetricKey::new("markdown.halstead.difficulty"), h.difficulty);
+    target.insert(MetricKey::new("markdown.halstead.effort"), h.effort);
+    target.insert(
+        MetricKey::new("markdown.halstead.embedded_volume"),
+        h.embedded_volume,
+    );
+    target.insert(
+        MetricKey::new("markdown.halstead.total_volume"),
+        h.total_volume,
+    );
+
+    // Links (§11).
+    target.insert(MetricKey::new("markdown.links.total"), m.links.total);
+    target.insert(MetricKey::new("markdown.links.broken"), m.links.broken);
+    target.insert(
+        MetricKey::new("markdown.links.link_debt_score"),
+        m.links.link_debt_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.links.information_scent_score"),
+        m.links.information_scent_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.links.review_burden"),
+        m.links.review_burden,
+    );
+
+    // Visuals (§12).
+    target.insert(MetricKey::new("markdown.visuals.images"), m.visuals.images);
+    target.insert(
+        MetricKey::new("markdown.visuals.diagrams"),
+        m.visuals.diagrams,
+    );
+    target.insert(
+        MetricKey::new("markdown.visuals.diagram_parse_error_count"),
+        m.visuals.diagram_parse_error_count,
+    );
+    target.insert(
+        MetricKey::new("markdown.visuals.visual_net_effect"),
+        m.visuals.visual_net_effect,
+    );
+
+    // Tables (§13).
+    target.insert(MetricKey::new("markdown.tables.count"), m.tables.count);
+    target.insert(
+        MetricKey::new("markdown.tables.max_cells"),
+        m.tables.max_cells,
+    );
+    target.insert(
+        MetricKey::new("markdown.tables.table_burden_score"),
+        m.tables.table_burden_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.tables.hard_warnings"),
+        m.tables.hard_warnings,
+    );
+
+    // Maintainability (§10 / §19 / §20 / §21).
+    target.insert(
+        MetricKey::new("markdown.maintainability.documentation_maintainability_index"),
+        m.maintainability.documentation_maintainability_index,
+    );
+    target.insert(
+        MetricKey::new("markdown.maintainability.section_balance_score"),
+        m.maintainability.section_balance_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.maintainability.good_scaffold_score"),
+        m.maintainability.good_scaffold_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.maintainability.artifact_debt_score"),
+        m.maintainability.artifact_debt_score,
+    );
+
+    // Grounding (§15 / §16).
+    target.insert(
+        MetricKey::new("markdown.grounding.repository_grounding_score"),
+        m.grounding.repository_grounding_score,
+    );
+    target.insert(
+        MetricKey::new("markdown.grounding.evidence_coverage_score"),
+        m.grounding.evidence_coverage_score,
+    );
+
+    // AI era (§17) and review (§18).
+    target.insert(
+        MetricKey::new("markdown.ai_era.filler_lazy_structure_risk"),
+        m.ai_era.filler_lazy_structure_risk,
+    );
+    target.insert(
+        MetricKey::new("markdown.review.review_criticality_index"),
+        m.review.review_criticality_index,
+    );
 }
