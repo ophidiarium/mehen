@@ -246,7 +246,7 @@ impl Stats {
         if matches!(lang, LANG::Markdown) {
             return false;
         }
-        !matches!(lang, LANG::Go | LANG::C)
+        !matches!(lang, LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -290,11 +290,6 @@ fn record_method(stats: &mut Stats, container: SpaceKind, is_public: bool) {
         }
         _ => return,
     };
-}
-
-// Go has no class-like constructs; Npm is not applicable.
-impl Npm for GoCode {
-    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
 // C has no class-like constructs; Npm is not applicable.

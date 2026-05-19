@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -282,12 +282,6 @@ fn compute_halstead<'a, T: Getter>(
     }
 }
 
-impl Halstead for GoCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for KotlinCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -310,42 +304,8 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn go_operators_and_operands() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func add(a, b int) int {
-                return a + b
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    @r###"
-                    {
-                      "n1": 7.0,
-                      "N1": 7.0,
-                      "n2": 5.0,
-                      "N2": 8.0,
-                      "length": 15.0,
-                      "estimated_program_length": 31.26112492884004,
-                      "purity_ratio": 2.0840749952560027,
-                      "vocabulary": 12.0,
-                      "volume": 53.77443751081734,
-                      "difficulty": 5.6,
-                      "level": 0.17857142857142858,
-                      "effort": 301.1368500605771,
-                      "time": 16.729825003365395,
-                      "bugs": 0.014975730436275946
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_operators_and_operands() {

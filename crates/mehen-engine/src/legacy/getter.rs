@@ -1,6 +1,6 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::metrics::halstead::HalsteadType;
 use crate::legacy::node::Node;
@@ -23,43 +23,6 @@ pub(crate) trait Getter {
 
     fn get_op_type(_node: &Node) -> HalsteadType {
         HalsteadType::Unknown
-    }
-}
-
-impl Getter for GoCode {
-    fn get_space_kind(node: &Node) -> SpaceKind {
-        use crate::legacy::languages::Go::*;
-        match node.kind_id().into() {
-            FunctionDeclaration | MethodDeclaration | FuncLiteral => SpaceKind::Function,
-            SourceFile => SpaceKind::Unit,
-            _ => SpaceKind::Unknown,
-        }
-    }
-
-    fn get_op_type(node: &Node) -> HalsteadType {
-        use crate::legacy::languages::Go::*;
-        match node.kind_id().into() {
-            // Operators: keywords and control flow
-            // Note: Go::Go is the `go` keyword for goroutines
-            Func | Go | Defer | Return | If | Else | For | Range | Switch | Select
-            | Case | Default | Break | Continue | Goto | Fallthrough | Chan | Map | Struct
-            | Interface | Type | Var | Const | Package | Import
-            // Operators: punctuation
-            | DOT | COMMA | SEMI | COLON | COLONEQ | EQ
-            | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | PERCENTEQ
-            | AMPEQ | PIPEEQ | CARETEQ | LTLTEQ | GTGTEQ | AMPCARETEQ
-            // Operators: arithmetic/logic
-            | PLUS | DASH | STAR | SLASH | PERCENT | AMP | PIPE | CARET | LTLT | GTGT
-            | AMPAMP | PIPEPIPE | AMPCARET | PLUSPLUS | DASHDASH | LTDASH | TILDE
-            | EQEQ | BANGEQ | LT | LTEQ | GT | GTEQ | BANG
-            | LPAREN | LBRACK | LBRACE | DOTDOTDOT => HalsteadType::Operator,
-            // Operands
-            Identifier | Identifier2 | Identifier3 | BlankIdentifier | FieldIdentifier
-            | LabelName | PackageIdentifier | TypeIdentifier | IntLiteral | FloatLiteral
-            | ImaginaryLiteral | RuneLiteral | RawStringLiteral | InterpretedStringLiteral | True
-            | False | Nil | Iota => HalsteadType::Operand,
-            _ => HalsteadType::Unknown,
-        }
     }
 }
 

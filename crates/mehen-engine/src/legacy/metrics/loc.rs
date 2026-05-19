@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
@@ -564,53 +564,6 @@ fn check_comment_ends_on_code_line(stats: &mut Stats, start_code_line: usize) {
     }
 }
 
-impl Loc for GoCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use crate::legacy::languages::Go::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-        match node.kind_id().into() {
-            SourceFile => {}
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-            // LLOC: count statements
-            ExpressionStatement
-            | SendStatement
-            | ReceiveStatement
-            | IncStatement
-            | DecStatement
-            | AssignmentStatement
-            | ShortVarDeclaration
-            | ImportSpec
-            | VarSpec
-            | ConstSpec
-            | TypeSpec
-            | EmptyStatement
-            | LabeledStatement
-            | LabeledStatement2
-            | GoStatement
-            | DeferStatement
-            | ReturnStatement
-            | BreakStatement
-            | ContinueStatement
-            | GotoStatement
-            | FallthroughStatement
-            | IfStatement
-            | ExpressionSwitchStatement
-            | TypeSwitchStatement
-            | SelectStatement
-            | ForStatement => {
-                stats.lloc.logical_lines += 1;
-            }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
 impl Loc for KotlinCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use Kotlin::*;
@@ -714,146 +667,8 @@ impl Loc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, GoParser, KotlinParser};
+    use crate::legacy::langs::{CParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn go_sloc() {
-        check_metrics::<GoParser>(
-            "package main
-
-            // A comment
-            func main() {
-                x := 1
-            }
-            ",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 6.0,
-                      "ploc": 4.0,
-                      "lloc": 1.0,
-                      "cloc": 1.0,
-                      "blank": 1.0,
-                      "sloc_average": 3.0,
-                      "ploc_average": 2.0,
-                      "lloc_average": 0.5,
-                      "cloc_average": 0.5,
-                      "blank_average": 0.5,
-                      "sloc_min": 3.0,
-                      "sloc_max": 3.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 3.0,
-                      "ploc_max": 3.0,
-                      "lloc_min": 1.0,
-                      "lloc_max": 1.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_lloc() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func main() {
-                x := 1
-                y := 2
-                if x > y {
-                    return
-                }
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 9.0,
-                      "ploc": 8.0,
-                      "lloc": 4.0,
-                      "cloc": 0.0,
-                      "blank": 1.0,
-                      "sloc_average": 4.5,
-                      "ploc_average": 4.0,
-                      "lloc_average": 2.0,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.5,
-                      "sloc_min": 7.0,
-                      "sloc_max": 7.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 7.0,
-                      "ploc_max": 7.0,
-                      "lloc_min": 4.0,
-                      "lloc_max": 4.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_lloc_counts_go_declaration_specs_and_receive_statements() {
-        check_metrics::<GoParser>(
-            "package main
-
-            import (
-                \"fmt\"
-                _ \"net/http\"
-            )
-
-            var (
-                a = 1
-                b = 2
-            )
-
-            func main(ch chan int) {
-            Loop:
-                <-ch
-                fmt.Println(a, b)
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 17.0,
-                      "ploc": 14.0,
-                      "lloc": 7.0,
-                      "cloc": 0.0,
-                      "blank": 3.0,
-                      "sloc_average": 8.5,
-                      "ploc_average": 7.0,
-                      "lloc_average": 3.5,
-                      "cloc_average": 0.0,
-                      "blank_average": 1.5,
-                      "sloc_min": 5.0,
-                      "sloc_max": 5.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 5.0,
-                      "ploc_max": 5.0,
-                      "lloc_min": 3.0,
-                      "lloc_max": 3.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_simple_loc() {

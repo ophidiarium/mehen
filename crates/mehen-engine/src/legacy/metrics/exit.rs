@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
-use crate::legacy::languages::{C, Go, Kotlin};
+use crate::legacy::langs::{CCode, KotlinCode};
+use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
 /// The `NExit` metric.
@@ -111,14 +111,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Exit for GoCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Go::ReturnStatement) {
-            stats.exit += 1;
-        }
-    }
-}
-
 impl Exit for KotlinCode {
     fn compute(node: &Node, stats: &mut Stats) {
         // Function exit points in Kotlin are bare `return` and `throw` — both
@@ -162,82 +154,8 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn go_no_exit() {
-        check_metrics::<GoParser>("var a = 42", "foo.go", |metric| {
-            // 0 functions
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-            );
-        });
-    }
-
-    #[test]
-    fn go_simple_function() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func max(a, b int) int {
-                if a > b {
-                    return a
-                }
-                return b
-            }",
-            "foo.go",
-            |metric| {
-                // 2 exits / 1 function
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_multiple_functions() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f1() int {
-                return 1
-            }
-
-            func f2() int {
-                return 2
-            }",
-            "foo.go",
-            |metric| {
-                // 2 exits / 2 functions
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_return_and_throw_count_as_exits() {

@@ -353,37 +353,3 @@ pub(crate) fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Opti
         state.space
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::GoParser;
-    use crate::legacy::tools::check_func_space;
-
-    fn collect_metric_keys(json: &serde_json::Value, out: &mut std::collections::BTreeSet<String>) {
-        if let Some(metrics) = json.get("metrics").and_then(|m| m.as_object()) {
-            for k in metrics.keys() {
-                out.insert(k.clone());
-            }
-        }
-        if let Some(spaces) = json.get("spaces").and_then(|s| s.as_array()) {
-            for sub in spaces {
-                collect_metric_keys(sub, out);
-            }
-        }
-    }
-
-    #[test]
-    fn go_omits_class_metrics_everywhere() {
-        check_func_space::<GoParser, _>("package main\nfunc f() {}\n", "foo.go", |space| {
-            let json = serde_json::to_value(&space).unwrap();
-            let mut keys = std::collections::BTreeSet::new();
-            collect_metric_keys(&json, &mut keys);
-            for forbidden in ["wmc", "npm", "npa"] {
-                assert!(
-                    !keys.contains(forbidden),
-                    "Go output should not include `{forbidden}`, got keys: {keys:?}"
-                );
-            }
-        });
-    }
-}

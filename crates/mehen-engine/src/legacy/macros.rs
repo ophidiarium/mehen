@@ -78,7 +78,7 @@ macro_rules! mk_lang {
             /// ```
             /// use mehen::LANG;
             ///
-            /// println!("{}", LANG::Go.get_name());
+            /// println!("{}", LANG::Kotlin.get_name());
             /// ```
             #[allow(dead_code)]
             pub(crate) fn get_name(&self) -> &'static str {
@@ -117,10 +117,10 @@ macro_rules! mk_action {
         ///
         /// use mehen::{action, Callback, LANG, Metrics, MetricsCfg};
         ///
-        /// let source_code = "package main\nfunc main() { var a = 42 }";
-        /// let language = LANG::Go;
+        /// let source_code = "fun main() { val a = 42 }";
+        /// let language = LANG::Kotlin;
         ///
-        /// let path = PathBuf::from("foo.go");
+        /// let path = PathBuf::from("foo.kt");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// let cfg = MetricsCfg {
@@ -153,10 +153,10 @@ macro_rules! mk_action {
         ///
         /// use mehen::{get_function_spaces, LANG};
         ///
-        /// let source_code = "package main\nfunc main() { var a = 42 }";
-        /// let language = LANG::Go;
+        /// let source_code = "fun main() { val a = 42 }";
+        /// let language = LANG::Kotlin;
         ///
-        /// let path = PathBuf::from("foo.go");
+        /// let path = PathBuf::from("foo.kt");
         /// let source_as_vec = source_code.as_bytes().to_vec();
         ///
         /// get_function_spaces(&language, source_as_vec, &path, None).unwrap();

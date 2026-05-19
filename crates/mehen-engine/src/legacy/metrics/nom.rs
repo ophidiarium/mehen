@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 
@@ -188,7 +188,7 @@ where
     }
 }
 
-implement_metric_trait!([Nom], GoCode, KotlinCode, CCode);
+implement_metric_trait!([Nom], KotlinCode, CCode);
 
 // Markdown documents have no functions or closures.
 #[cfg(feature = "markdown")]

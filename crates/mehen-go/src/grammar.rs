@@ -1,8 +1,11 @@
 // Code generated; DO NOT EDIT.
 
+#![allow(clippy::enum_variant_names)]
+#![allow(clippy::upper_case_acronyms)]
+
 use num_derive::FromPrimitive;
 
-#[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
 pub(crate) enum Go {
     End = 0,
     Identifier = 1,
@@ -224,7 +227,6 @@ pub(crate) enum Go {
     TypeConstraint = 217,
     TypeIdentifier = 218,
     Error = 219,
-    
 }
 
 impl From<Go> for &'static str {
@@ -451,7 +453,6 @@ impl From<Go> for &'static str {
             Go::TypeConstraint => "type_constraint",
             Go::TypeIdentifier => "type_identifier",
             Go::Error => "ERROR",
-            
         }
     }
 }

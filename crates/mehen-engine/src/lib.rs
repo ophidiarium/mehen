@@ -138,7 +138,6 @@ pub fn init_markdown() {
     fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
         use crate::legacy::langs::LANG;
         Some(match lang {
-            FenceLanguage::Go => LANG::Go,
             FenceLanguage::Kotlin => LANG::Kotlin,
             FenceLanguage::C => LANG::C,
             // Migrated to per-language crate analyzers; no legacy fallback.
@@ -148,7 +147,8 @@ pub fn init_markdown() {
             | FenceLanguage::Python
             | FenceLanguage::Rust
             | FenceLanguage::Php
-            | FenceLanguage::Ruby => return None,
+            | FenceLanguage::Ruby
+            | FenceLanguage::Go => return None,
         })
     }
 

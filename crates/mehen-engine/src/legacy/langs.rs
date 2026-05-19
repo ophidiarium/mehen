@@ -4,7 +4,7 @@ use tree_sitter::Language;
 
 #[cfg(feature = "markdown")]
 use crate::legacy::languages::Markdown;
-use crate::legacy::languages::{C, Go, Kotlin};
+use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::macros::{
     get_language, mk_action, mk_code, mk_emacs_mode, mk_extensions, mk_lang, mk_langs,
 };
@@ -23,16 +23,6 @@ mk_langs!(
     // 6) tree-sitter function to call to get a Language
     // 7) file extensions
     // 8) emacs modes
-    (
-        Go,
-        "The `Go` language",
-        "go",
-        GoCode,
-        GoParser,
-        tree_sitter_go,
-        [go],
-        ["go"]
-    ),
     (
         Kotlin,
         "The `Kotlin` language",
@@ -75,16 +65,6 @@ mk_langs!(
     // 6) tree-sitter function to call to get a Language
     // 7) file extensions
     // 8) emacs modes
-    (
-        Go,
-        "The `Go` language",
-        "go",
-        GoCode,
-        GoParser,
-        tree_sitter_go,
-        [go],
-        ["go"]
-    ),
     (
         Kotlin,
         "The `Kotlin` language",

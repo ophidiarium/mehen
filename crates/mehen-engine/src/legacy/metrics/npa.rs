@@ -225,7 +225,7 @@ impl Stats {
         if matches!(lang, LANG::Markdown) {
             return false;
         }
-        !matches!(lang, LANG::Go | LANG::C)
+        !matches!(lang, LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -249,11 +249,6 @@ where
     Self: Checker,
 {
     fn compute(node: &Node, code: &[u8], stats: &mut Stats);
-}
-
-// Go has no class-like constructs; Npa is not applicable.
-impl Npa for GoCode {
-    fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
 }
 
 // C has no class-like constructs; Npa is not applicable.

@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
@@ -110,30 +110,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Cyclomatic for GoCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use crate::legacy::languages::Go::*;
-
-        match node.kind_id().into() {
-            If | For | ExpressionCase | TypeCase | CommunicationCase | AMPAMP | PIPEPIPE => {
-                stats.cyclomatic += 1.;
-            }
-            // `default_case` is shared between switch and select in the Go
-            // grammar. In switch it is fallthrough (no branch), but in
-            // `select` the default branch is an additional executable path
-            // and should count as a decision point.
-            DefaultCase
-                if node
-                    .parent()
-                    .is_some_and(|p| p.kind_id() == SelectStatement as u16) =>
-            {
-                stats.cyclomatic += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Cyclomatic for KotlinCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Kotlin::*;
@@ -192,129 +168,8 @@ impl Cyclomatic for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn go_simple_function() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func calculate(a, b int) int { // +2 (+1 unit space)
-                if a > b { // +1
-                    return a
-                }
-                return b
-            }",
-            "foo.go",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 1.5,
-                      "min": 1.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_switch_statement() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func grade(score int) string { // +2 (+1 unit space)
-                switch { // switch itself doesn't add, cases do
-                case score >= 90: // +1
-                    return \"A\"
-                case score >= 80: // +1
-                    return \"B\"
-                case score >= 70: // +1
-                    return \"C\"
-                default: // default is fallthrough, not a decision point
-                    return \"F\"
-                }
-            }",
-            "foo.go",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 5.0,
-                      "average": 2.5,
-                      "min": 1.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_select_default_counts() {
-        // `default` in a `switch` is fallthrough and should NOT count,
-        // but `default` in a `select` is an additional executable
-        // communication branch and SHOULD count.
-        check_metrics::<GoParser>(
-            "package main
-
-            func f(ch chan int) { // +2 (+1 unit space)
-                select { // +1 CommunicationCase
-                case v := <-ch:
-                    _ = v
-                default: // +1 default branch of select
-                }
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 2.0,
-                      "min": 1.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_logical_operators() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func check(a, b, c bool) bool { // +2 (+1 unit space)
-                if a && b || c { // +3 (+1 if, +1 &&, +1 ||)
-                    return true
-                }
-                return false
-            }",
-            "foo.go",
-            |metric| {
-                // nspace = 2 (func and unit)
-                insta::assert_json_snapshot!(
-                    metric.cyclomatic,
-                    @r###"
-                    {
-                      "sum": 5.0,
-                      "average": 2.5,
-                      "min": 1.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_simple_function() {

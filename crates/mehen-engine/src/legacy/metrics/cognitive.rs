@@ -5,7 +5,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
@@ -207,10 +207,6 @@ fn get_nesting_from_map(
     }
 }
 
-fn increment_function_depth<T: PartialEq + From<u16>>(depth: &mut usize, node: &Node, stop: &T) {
-    increment_function_depth_any(depth, node, std::slice::from_ref(stop));
-}
-
 fn increment_function_depth_any<T: PartialEq + From<u16>>(
     depth: &mut usize,
     node: &Node,
@@ -234,55 +230,6 @@ fn increase_nesting(stats: &mut Stats, nesting: &mut usize, depth: usize, lambda
     increment(stats);
     *nesting += 1;
     stats.boolean_seq.reset();
-}
-
-impl Cognitive for GoCode {
-    fn compute(
-        node: &Node,
-        stats: &mut Stats,
-        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
-    ) {
-        use crate::legacy::languages::Go::*;
-
-        let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
-
-        match node.kind_id().into() {
-            IfStatement if !Self::is_else_if(node) => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            IfStatement => {}
-            ForStatement | ExpressionSwitchStatement | TypeSwitchStatement | SelectStatement => {
-                increase_nesting(stats, &mut nesting, depth, lambda);
-            }
-            Else /* else-if also */ => {
-                increment_by_one(stats);
-            }
-            ExpressionStatement | SendStatement | ReceiveStatement | IncStatement
-            | DecStatement | AssignmentStatement | ShortVarDeclaration | VarSpec | ConstSpec
-            | ReturnStatement => {
-                stats.boolean_seq.reset();
-            }
-            UnaryExpression => {
-                stats.boolean_seq.not_operator(node.kind_id());
-            }
-            BinaryExpression => {
-                compute_booleans::<crate::legacy::languages::Go>(node, stats, &AMPAMP, &PIPEPIPE);
-            }
-            FuncLiteral => {
-                lambda += 1;
-            }
-            FunctionDeclaration | MethodDeclaration => {
-                nesting = 0;
-                increment_function_depth::<crate::legacy::languages::Go>(
-                    &mut depth,
-                    node,
-                    &FunctionDeclaration,
-                );
-            }
-            _ => {}
-        }
-        nesting_map.insert(node.id(), (nesting, depth, lambda));
-    }
 }
 
 impl Cognitive for KotlinCode {
@@ -436,164 +383,8 @@ impl Cognitive for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, GoParser, KotlinParser};
+    use crate::legacy::langs::{CParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn go_no_cognitive() {
-        check_metrics::<GoParser>(
-            "package main
-
-            var x = 42",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 0.0,
-                      "average": null,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_simple_function() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f() {
-                if true { // +1
-                    if false { // +2 (nesting = 1)
-                        println(\"test\")
-                    }
-                }
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_for_loop() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f() {
-                for i := 0; i < 10; i++ { // +1
-                    if i > 5 { // +2 (nesting = 1)
-                        println(i)
-                    }
-                }
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 3.0,
-                      "average": 3.0,
-                      "min": 0.0,
-                      "max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_logical_operators() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f(a, b, c bool) {
-                if a && b && c { // +1 (if) +1 (sequence of &&)
-                    println(\"all true\")
-                }
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_logical_operator_sequences_reset_between_statements() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f(a, b, c, d bool) {
-                _ = a && b
-                _ = c && d
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_logical_operator_sequences_reset_between_declaration_specs() {
-        check_metrics::<GoParser>(
-            "package main
-
-            func f(a, b, c, d bool) {
-                var x = a && b
-                var y = c && d
-                const p = true && false
-                const q = false && true
-            }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.cognitive,
-                    @r###"
-                    {
-                      "sum": 4.0,
-                      "average": 4.0,
-                      "min": 0.0,
-                      "max": 4.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_nested_if_increments_nesting() {

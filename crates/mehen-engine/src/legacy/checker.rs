@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
-use crate::legacy::languages::{C, Go, Kotlin};
+use crate::legacy::langs::{CCode, KotlinCode};
+use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
 pub(crate) trait Checker {
@@ -10,40 +10,6 @@ pub(crate) trait Checker {
     fn is_closure(_: &Node) -> bool;
     fn is_non_arg(_: &Node) -> bool;
     fn is_else_if(_: &Node) -> bool;
-}
-
-impl Checker for GoCode {
-    fn is_func_space(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Go::SourceFile | Go::FunctionDeclaration | Go::MethodDeclaration | Go::FuncLiteral
-        )
-    }
-
-    fn is_func(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Go::FunctionDeclaration | Go::MethodDeclaration
-        )
-    }
-
-    fn is_closure(node: &Node) -> bool {
-        node.kind_id() == Go::FuncLiteral
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(node.kind_id().into(), Go::LPAREN | Go::COMMA | Go::RPAREN)
-    }
-
-    fn is_else_if(node: &Node) -> bool {
-        if node.kind_id() != Go::IfStatement {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return parent.kind_id() == Go::IfStatement;
-        }
-        false
-    }
 }
 
 impl Checker for KotlinCode {

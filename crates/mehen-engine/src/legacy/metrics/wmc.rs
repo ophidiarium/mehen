@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG};
+use crate::legacy::langs::{CCode, KotlinCode, LANG};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -142,7 +142,7 @@ impl Stats {
         if matches!(lang, LANG::Markdown) {
             return false;
         }
-        !matches!(lang, LANG::Go | LANG::C)
+        !matches!(lang, LANG::C)
     }
 
     /// Records the kind of the enclosing space. Also flags the stats as
@@ -188,11 +188,6 @@ macro_rules! impl_wmc {
 }
 
 impl_wmc!(KotlinCode);
-
-// Go has no class-like constructs; WMC is not applicable.
-impl Wmc for GoCode {
-    fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
-}
 
 // C has no class-like constructs; WMC is not applicable.
 impl Wmc for CCode {

@@ -3,10 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::langs::{CCode, KotlinCode};
 #[cfg(test)]
-use crate::legacy::langs::{CParser, GoParser, KotlinParser};
-use crate::legacy::languages::{C, Go, Kotlin};
+use crate::legacy::langs::{CParser, KotlinParser};
+use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 use crate::legacy::traits::Search;
 
@@ -198,27 +198,6 @@ fn compute_args<T: Checker>(node: &Node, nargs: &mut usize) {
 }
 
 #[inline(always)]
-fn compute_go_args(node: &Node, nargs: &mut usize) {
-    if let Some(params) = node.child_by_field_name("parameters") {
-        params.act_on_child(&mut |n| match n.kind_id().into() {
-            Go::ParameterDeclaration | Go::VariadicParameterDeclaration => {
-                let mut names = 0;
-                n.act_on_child(&mut |child| {
-                    if matches!(
-                        child.kind_id().into(),
-                        Go::Identifier | Go::Identifier2 | Go::Identifier3 | Go::BlankIdentifier
-                    ) {
-                        names += 1;
-                    }
-                });
-                *nargs += names.max(1);
-            }
-            _ => {}
-        });
-    }
-}
-
-#[inline(always)]
 fn compute_kotlin_parameter_list(params: &Node, nargs: &mut usize) {
     params.act_on_child(&mut |n| match n.kind_id().into() {
         Kotlin::ClassParameter
@@ -255,19 +234,6 @@ where
 
         if Self::is_closure(node) {
             compute_args::<Self>(node, &mut stats.closure_nargs);
-        }
-    }
-}
-
-impl NArgs for GoCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        if Self::is_func(node) {
-            compute_go_args(node, &mut stats.fn_nargs);
-            return;
-        }
-
-        if Self::is_closure(node) {
-            compute_go_args(node, &mut stats.closure_nargs);
         }
     }
 }
@@ -388,68 +354,6 @@ mod tests {
                 assert_eq!(metric.nargs.closure_args_sum(), 1.0);
                 assert_eq!(metric.nargs.fn_args_max(), 3.0);
                 assert_eq!(metric.nargs.closure_args_max(), 1.0);
-            },
-        );
-    }
-
-    #[test]
-    fn go_grouped_and_variadic_parameters() {
-        check_metrics::<GoParser>(
-            "package main
-
-             func add(a, b int, rest ...string) int {
-                 return a + b
-             }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 3.0,
-                      "total_closures": 0.0,
-                      "average_functions": 3.0,
-                      "average_closures": 0.0,
-                      "total": 3.0,
-                      "average": 3.0,
-                      "functions_min": 0.0,
-                      "functions_max": 3.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn go_func_literal_parameters_are_counted_as_closures() {
-        check_metrics::<GoParser>(
-            "package main
-
-             func main() {
-                 _ = func(x, y int, done chan bool) {
-                     done <- x > y
-                 }
-             }",
-            "foo.go",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 3.0,
-                      "average_functions": 0.0,
-                      "average_closures": 3.0,
-                      "total": 3.0,
-                      "average": 1.5,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 3.0
-                    }"###
-                );
             },
         );
     }

@@ -2168,7 +2168,6 @@ dependencies = [
  "toml",
  "tree-sitter",
  "tree-sitter-c",
- "tree-sitter-go",
  "tree-sitter-kotlin-sg",
  "tree-sitter-markdown-text",
  "walkdir",
@@ -2185,9 +2184,16 @@ dependencies = [
 name = "mehen-go"
 version = "0.7.0"
 dependencies = [
+ "insta",
  "mehen-core",
  "mehen-metrics",
+ "mehen-report",
  "mehen-tree-sitter",
+ "num",
+ "num-derive",
+ "num-traits",
+ "serde_json",
+ "smol_str",
  "tree-sitter",
  "tree-sitter-go",
 ]

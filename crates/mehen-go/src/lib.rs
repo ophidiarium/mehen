@@ -1,19 +1,23 @@
 //! `mehen-go` — Go language analyzer.
 //!
-//! Phase 3 implementation: walks tree-sitter-go with Go-specific decision
-//! rules mirroring the pre-1.0 `Cyclomatic for GoCode`
-//! (`src/metrics/cyclomatic.rs:184-206`).
+//! Phase-3 reorganization complete: the analyzer owns its tree-sitter
+//! cursor walk locally (`walker.rs`) and the language-specific kind
+//! enum (`grammar.rs`) instead of relying on the shared
+//! `mehen-tree-sitter::walker::LanguageRules` plug-in. This mirrors the
+//! per-language crate shape used by `mehen-ruby`, `mehen-python`,
+//! `mehen-typescript`, and `mehen-php`. Per the rewrite plan §6.1 Go
+//! stays on tree-sitter for 1.0 — only the *interpretation* moves.
 
 #![forbid(unsafe_code)]
 
+mod grammar;
+mod walker;
+
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
-    Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
+    Result, SourceFile, SourceSpan, byte_offset_clamped,
 };
-use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, empty_space, text_of, walk,
-};
-use tree_sitter::Node;
+use mehen_tree_sitter::{TreeSitterParser, empty_space};
 
 pub struct GoAnalyzer;
 
@@ -26,104 +30,6 @@ impl GoAnalyzer {
 impl Default for GoAnalyzer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-struct GoRules;
-
-impl LanguageRules for GoRules {
-    fn scope_for(&self, node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
-        let kind = node.kind();
-        let opened = match kind {
-            "function_declaration" | "method_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Function,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            "func_literal" => ScopeOpen::Open {
-                kind: SpaceKind::Closure,
-                name: None,
-            },
-            "type_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Class,
-                name: None,
-            },
-            _ => return None,
-        };
-        Some(opened)
-    }
-
-    fn classify(&self, node: &Node<'_>) -> NodeFacts {
-        let kind = node.kind();
-        let cyclomatic_decision = matches!(
-            kind,
-            "if_statement"
-                | "for_statement"
-                | "expression_case"
-                | "type_case"
-                | "communication_case"
-                | "&&"
-                | "||"
-        );
-        let nexit = matches!(
-            kind,
-            "return_statement" | "break_statement" | "continue_statement"
-        );
-        let halstead_operator = matches!(
-            kind,
-            "+" | "-"
-                | "*"
-                | "/"
-                | "%"
-                | "="
-                | ":="
-                | "+="
-                | "-="
-                | "*="
-                | "/="
-                | "%="
-                | "=="
-                | "!="
-                | "<"
-                | ">"
-                | "<="
-                | ">="
-                | "&&"
-                | "||"
-                | "!"
-        );
-        let halstead_operand = matches!(
-            kind,
-            "identifier"
-                | "field_identifier"
-                | "type_identifier"
-                | "int_literal"
-                | "float_literal"
-                | "interpreted_string_literal"
-                | "raw_string_literal"
-                | "true"
-                | "false"
-                | "nil"
-        );
-        let abc_assignment = matches!(kind, "assignment_statement" | "short_var_declaration");
-        let abc_branch = matches!(kind, "call_expression");
-        let abc_condition = matches!(kind, "binary_expression" | "unary_expression");
-        NodeFacts {
-            cyclomatic_decision,
-            cognitive: if cyclomatic_decision {
-                mehen_tree_sitter::CognitiveFact::IncreaseNesting
-            } else {
-                mehen_tree_sitter::CognitiveFact::None
-            },
-            halstead_operator,
-            halstead_operand,
-            nexit,
-            abc_branch,
-            abc_condition,
-            abc_assignment,
-            loc: mehen_tree_sitter::LocFact::Code,
-        }
     }
 }
 
@@ -162,12 +68,12 @@ impl LanguageAnalyzer for GoAnalyzer {
             }
         };
 
-        let result = walk(parser.root(), parser.source(), &source.line_index, &GoRules);
+        let root = walker::walk_program(parser.root(), parser.source(), &source.line_index);
         Ok(LanguageAnalysis {
             language: Language::Go,
             backend: AnalysisBackend::TreeSitter,
             diagnostics: Vec::new(),
-            root: result.root,
+            root,
             contributions: Vec::new(),
         })
     }
@@ -176,7 +82,7 @@ impl LanguageAnalyzer for GoAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile};
+    use mehen_core::{AnalysisConfig, Language, MetricKey, SourceFile, SpaceKind};
     use mehen_metrics::keys;
 
     fn analyze(source: &str) -> LanguageAnalysis {
