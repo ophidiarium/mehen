@@ -320,3 +320,39 @@ fn rust_closure_expression_lloc() {
         serde_json::to_string(&loc).unwrap()
     );
 }
+
+/// Regression: nested function spaces must carry their own
+/// `loc.ploc` and `loc.cloc` in the per-space JSON. PR #95
+/// discussion_r3265962147 flagged that the post-AST token sweep
+/// observed every code/comment line on `stack[0]`, leaving the
+/// per-space `loc.ploc` at 0 even when the function body had
+/// multiple code lines.
+#[test]
+fn rust_nested_function_loc_ploc_routes_to_active_space() {
+    let a = analyze(
+        "fn outer() {
+    // outer comment
+    fn inner() {
+        // inner comment
+        let x = 1 + 2;
+        let y = x * 3;
+    }
+    inner();
+}",
+    );
+    assert_eq!(a.root.spaces.len(), 1);
+    let outer = &a.root.spaces[0];
+    assert_eq!(outer.spaces.len(), 1);
+    let inner = &outer.spaces[0];
+    let loc = mehen_report::metrics_json::loc(&inner.metrics);
+    assert!(
+        loc.ploc > 0.0,
+        "inner fn must record `let` lines as ploc, got {}",
+        serde_json::to_string(&loc).unwrap()
+    );
+    assert!(
+        loc.cloc > 0.0,
+        "inner fn must record its `// inner comment` as cloc, got {}",
+        serde_json::to_string(&loc).unwrap()
+    );
+}

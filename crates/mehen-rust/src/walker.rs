@@ -135,13 +135,16 @@ impl<'a> Visitor<'a> {
     fn finish(mut self) -> MetricSpace {
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        // Route post-AST Halstead tokens to nested spaces (set-union
-        // for `n1`/`n2`, sum for `N1`/`N2`); see [`SpaceRangeTracker`].
+        // Route post-AST tokens (Halstead operator/operand,
+        // PLOC code lines, comment lines) to nested spaces; see
+        // [`SpaceRangeTracker`].
         let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut unit_loc = std::mem::take(&mut unit_state.loc);
         let mut tree = self.tree.finish();
         self.halstead_routing
-            .finalize_into_tree(&mut tree, &mut unit_halstead);
+            .finalize_into_tree(&mut tree, &mut unit_halstead, &mut unit_loc);
         unit_state.halstead = unit_halstead;
+        unit_state.loc = unit_loc;
         apply_state_to(unit_state, &mut tree.metrics);
         tree
     }
@@ -586,11 +589,10 @@ impl<'a> Visitor<'a> {
         let kind = token.kind();
         let range = token.text_range();
 
-        // LOC: comment tokens — both line and block — count toward `cloc`
-        // on the unit. Whitespace tokens that contain a blank line bump
-        // the unit's blank counter (set_span has already recorded the
-        // total line span; LOC's blank counter is derived from
-        // sloc - ploc - cloc internally).
+        // LOC: comment tokens — both line and block — route to the
+        // deepest enclosing scope so per-space `loc.cloc` reflects
+        // comments inside that scope's body. Lines that fall outside
+        // every recorded scope go into the unit's LocStats.
         if kind == SyntaxKind::COMMENT {
             let start_row = self
                 .line_index
@@ -600,8 +602,13 @@ impl<'a> Visitor<'a> {
                 .line_index
                 .line_at(range.end().into())
                 .saturating_sub(1);
-            // Apply to the *unit* state — comments are file-level.
-            self.stack[0].loc.observe_comment(start_row, end_row);
+            self.halstead_routing.observe_comment(
+                range.start().into(),
+                range.end().into(),
+                &mut self.stack[0].loc,
+                start_row,
+                end_row,
+            );
             return;
         }
         if kind == SyntaxKind::WHITESPACE {
@@ -655,13 +662,21 @@ impl<'a> Visitor<'a> {
             TokenClass::Skip => {}
         }
 
-        // PLOC: any non-whitespace, non-comment token's starting line is
-        // a code line.
+        // PLOC: any non-whitespace, non-comment token's starting line
+        // is a code line — routed to the deepest enclosing scope so
+        // per-space `loc.ploc` reflects the function/closure body.
+        // Lines outside every recorded scope go into the unit
+        // (top-level use statements, free constants, etc.).
         let start_row = self
             .line_index
             .line_at(range.start().into())
             .saturating_sub(1);
-        self.stack[0].loc.observe_code_line(start_row);
+        self.halstead_routing.observe_code_line(
+            range.start().into(),
+            range.end().into(),
+            &mut self.stack[0].loc,
+            start_row,
+        );
     }
 
     fn is_inside_macro_body(&self, range: TextRange) -> bool {

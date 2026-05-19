@@ -85,13 +85,16 @@ pub(crate) fn walk_program<'arena>(
 
     let mut visitor = Visitor::new(source, line_index, unit_span);
 
-    // Comments / docblocks live in `program.trivia`; record them
-    // before walking so LOC's `cloc` count picks them up regardless
-    // of where they appear in the file.
-    visitor.observe_trivia(&program.trivia);
-
     let walker = MehenPhpWalker;
     walker.walk_program(program, &mut visitor);
+
+    // Comments / docblocks live in `program.trivia`; record them
+    // *after* the AST walk so the `SpaceRangeTracker` has populated
+    // every opened space's byte range and each comment routes to its
+    // enclosing scope's `loc.cloc` (PR #95 discussion_r3265962147 —
+    // routing comments before the walk left every per-space `cloc`
+    // at zero).
+    visitor.observe_trivia(&program.trivia);
 
     visitor.finish()
 }
@@ -166,8 +169,11 @@ impl<'a> Visitor<'a> {
         &mut self,
         trivia: &mago_syntax::ast::Sequence<'_, mago_syntax::ast::Trivia<'_>>,
     ) {
-        // Each comment span contributes to the unit's LOC so `cloc`
-        // reflects the full file.
+        // Route each comment to the deepest enclosing scope so a
+        // `// foo` inside a method body lands on that method's
+        // `loc.cloc` rather than the unit's. Lines outside every
+        // recorded scope (file-level docblocks, license headers)
+        // fall through to the unit's LocStats.
         for comment in trivia.iter() {
             if !comment.kind.is_comment() {
                 continue;
@@ -175,7 +181,13 @@ impl<'a> Visitor<'a> {
             let span = comment.span;
             let start_row = self.line_at(span.start.offset).saturating_sub(1);
             let end_row = self.line_at(span.end.offset).saturating_sub(1);
-            self.stack[0].loc.observe_comment(start_row, end_row);
+            self.halstead_routing.observe_comment(
+                span.start.offset,
+                span.end.offset,
+                &mut self.stack[0].loc,
+                start_row,
+                end_row,
+            );
         }
     }
 
@@ -202,13 +214,16 @@ impl<'a> Visitor<'a> {
 
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        // Route post-AST Halstead tokens to nested spaces (set-union
-        // for `n1`/`n2`, sum for `N1`/`N2`); see [`SpaceRangeTracker`].
+        // Route post-AST tokens (Halstead operator/operand, PLOC code
+        // lines, comment lines) to nested spaces; see
+        // [`SpaceRangeTracker`].
         let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut unit_loc = std::mem::take(&mut unit_state.loc);
         let mut tree = self.tree.finish();
         self.halstead_routing
-            .finalize_into_tree(&mut tree, &mut unit_halstead);
+            .finalize_into_tree(&mut tree, &mut unit_halstead, &mut unit_loc);
         unit_state.halstead = unit_halstead;
+        unit_state.loc = unit_loc;
         apply_state_to(unit_state, &mut tree.metrics);
         tree
     }
@@ -268,7 +283,33 @@ impl<'a> Visitor<'a> {
         // token is a code token contributes a code line. Comments are
         // already handled in `observe_trivia`; here we just need PLOC
         // / blank tracking. Halstead / LLOC are recorded at AST nodes.
+        // Each line is routed by its byte range so a code line inside
+        // a function body lands on that function's `loc.ploc` instead
+        // of the unit's.
+        let total_len = self.source.len() as u32;
+        let mut byte_offset: u32 = 0;
         for (idx, line) in self.source.lines().enumerate() {
+            let line_start = byte_offset;
+            // `lines()` strips the line terminator; advance the cursor
+            // by the line's byte length plus the consumed `\n` (or
+            // `\r\n`). This keeps `byte_offset` valid for the next
+            // iteration regardless of which terminator the source
+            // uses.
+            byte_offset = byte_offset.saturating_add(line.len() as u32);
+            let line_end = byte_offset.min(total_len);
+            // Step past `\n` (and an optional preceding `\r`) so the
+            // next iteration's `line_start` is correct.
+            if (byte_offset as usize) < self.source.len() {
+                let after_line = self.source.as_bytes().get(byte_offset as usize).copied();
+                if after_line == Some(b'\r') {
+                    byte_offset = byte_offset.saturating_add(1);
+                    if self.source.as_bytes().get(byte_offset as usize).copied() == Some(b'\n') {
+                        byte_offset = byte_offset.saturating_add(1);
+                    }
+                } else if after_line == Some(b'\n') {
+                    byte_offset = byte_offset.saturating_add(1);
+                }
+            }
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
@@ -285,7 +326,12 @@ impl<'a> Visitor<'a> {
             {
                 continue;
             }
-            self.stack[0].loc.observe_code_line(idx as u32);
+            self.halstead_routing.observe_code_line(
+                line_start,
+                line_end,
+                &mut self.stack[0].loc,
+                idx as u32,
+            );
         }
     }
 

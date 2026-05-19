@@ -148,19 +148,22 @@ impl<'a> Visitor<'a> {
     fn finish(mut self) -> MetricSpace {
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        // Route post-AST Halstead tokens to nested spaces. The unit
-        // builder is taken out of `unit_state` so the tracker can
-        // accumulate fall-through tokens into it before we publish
-        // the unit's metrics; the routing pass also propagates each
-        // child's counts up the parent chain so `unit_halstead` ends
-        // up with the file-wide rollup.
+        // Route post-AST tokens (Halstead operator/operand events,
+        // PLOC code-lines, comment lines) to nested spaces. The unit
+        // builder + LocStats are taken out of `unit_state` so the
+        // tracker can accumulate fall-through events into them; the
+        // routing pass also propagates each child's counts up the
+        // parent chain so the unit ends up with the file-wide rollup.
         let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut unit_loc = std::mem::take(&mut unit_state.loc);
         let mut tree = self.tree.finish();
         self.halstead_routing
-            .finalize_into_tree(&mut tree, &mut unit_halstead);
+            .finalize_into_tree(&mut tree, &mut unit_halstead, &mut unit_loc);
         unit_state.halstead = unit_halstead;
-        // Re-run the unit publish so its Halstead and MI keys reflect
-        // the rolled-up values.
+        unit_state.loc = unit_loc;
+        // Re-run the unit publish so its Halstead, LOC, and MI keys
+        // reflect the rolled-up values that include token-driven
+        // events routed to nested scopes.
         apply_state_to(unit_state, &mut tree.metrics);
         tree
     }
@@ -429,11 +432,14 @@ impl<'a> Visitor<'a> {
         for tok in tokens.iter() {
             let span = tok.range();
 
-            // LOC: comment tokens contribute to `cloc`. The legacy
-            // walker `legacy/metrics/loc.rs::PythonCode::compute`
-            // matches the `Comment` node and calls `add_cloc_lines`;
-            // the equivalent here is `observe_comment` on the unit
-            // state (Python comments are always single-line).
+            // LOC: comment tokens contribute to `cloc`. Routed to the
+            // deepest enclosing scope so per-space `loc.cloc` reflects
+            // comments inside that scope's body; lines outside every
+            // recorded scope go into the unit. The legacy walker
+            // (`legacy/metrics/loc.rs::PythonCode::compute`) matched
+            // the `Comment` node and called `add_cloc_lines`; the
+            // equivalent here is `observe_comment` (Python comments
+            // are always single-line).
             if matches!(tok.kind(), TokenKind::Comment) {
                 let start_row = self
                     .line_index
@@ -443,7 +449,13 @@ impl<'a> Visitor<'a> {
                     .line_index
                     .line_at(span.end().to_u32())
                     .saturating_sub(1);
-                self.stack[0].loc.observe_comment(start_row, end_row);
+                self.halstead_routing.observe_comment(
+                    span.start().to_u32(),
+                    span.end().to_u32(),
+                    &mut self.stack[0].loc,
+                    start_row,
+                    end_row,
+                );
             }
 
             // Module-level docstrings are PEP 257 documentation, so
@@ -451,7 +463,8 @@ impl<'a> Visitor<'a> {
             // walker also folded triple-quoted module/class/function
             // docstrings into `cloc` via the `String` arm — apply the
             // same here so cloc covers both `# …` line comments and
-            // top-of-body docstrings.
+            // top-of-body docstrings. Routed by span so a function's
+            // docstring lands on its space's `loc.cloc`.
             if self.is_inside_docstring(span)
                 && matches!(
                     tok.kind(),
@@ -466,7 +479,13 @@ impl<'a> Visitor<'a> {
                     .line_index
                     .line_at(span.end().to_u32())
                     .saturating_sub(1);
-                self.stack[0].loc.observe_comment(start_row, end_row);
+                self.halstead_routing.observe_comment(
+                    span.start().to_u32(),
+                    span.end().to_u32(),
+                    &mut self.stack[0].loc,
+                    start_row,
+                    end_row,
+                );
             }
 
             if self.is_inside_docstring(span) {

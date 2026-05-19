@@ -197,6 +197,46 @@ impl LocStats {
         self.minmax_seen = true;
     }
 
+    /// Copy the `ploc_lines` set from another `LocStats` into this
+    /// one. Used by [`crate::SpaceRangeTracker::record_close`] to
+    /// seed a token-routed accumulator with the AST-walk's known
+    /// PLOC lines so comment-after-code classification works
+    /// correctly. Does NOT touch any other field — only the set is
+    /// copied.
+    pub fn seed_ploc_lines(&mut self, source: &LocStats) {
+        for line in &source.ploc_lines {
+            self.ploc_lines.insert(*line);
+        }
+    }
+
+    /// Absorb a sibling's *token-only* observations into this state.
+    ///
+    /// Used by [`crate::SpaceRangeTracker`] to fold post-AST token
+    /// events (PLOC code lines, CLOC comment lines) into a space's
+    /// AST-driven LocStats without mutating min/max bounds, the
+    /// space-count denominator, or the LLOC counter (which is
+    /// AST-driven and would double-count if folded here).
+    ///
+    /// Semantics:
+    /// - `ploc_lines` is set-unioned (a code line is counted once
+    ///   regardless of how many tokens started on it).
+    /// - `only_comment_lines` and `code_comment_lines` accumulate
+    ///   (each comment-token contribution adds to the count).
+    /// - `lloc_count`, `space_count`, span fields, and min/max
+    ///   bounds are intentionally NOT touched here — those are
+    ///   AST-driven invariants finalized before token routing.
+    pub fn merge_token_observations(&mut self, other: &LocStats) {
+        for line in &other.ploc_lines {
+            self.ploc_lines.insert(*line);
+        }
+        self.only_comment_lines = self
+            .only_comment_lines
+            .saturating_add(other.only_comment_lines);
+        self.code_comment_lines = self
+            .code_comment_lines
+            .saturating_add(other.code_comment_lines);
+    }
+
     /// Merge a finalized child's stats into this (parent) one.
     ///
     /// Mirrors the pre-1.0 `loc::Stats::merge`:

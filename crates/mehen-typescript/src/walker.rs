@@ -142,18 +142,21 @@ impl<'a> Visitor<'a> {
         // Close the unit.
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        // Route post-AST Halstead tokens to nested spaces. The tracker
-        // already accumulated per-space token events during the token
-        // sweep; we now propagate child counts up the parent chain
-        // (set-union) and overlay each entry's Halstead-derived keys
-        // onto the matching `MetricSpace`. The unit's own state is
-        // re-published below with the rolled-up unit builder so its
-        // keys reflect the file-wide Halstead.
+        // Route post-AST tokens (Halstead operator/operand, PLOC code
+        // lines, comment lines) to nested spaces. The tracker
+        // accumulated per-space events during the token sweep; we now
+        // propagate child counts up the parent chain and overlay
+        // each entry's Halstead/LOC/MI keys onto the matching
+        // `MetricSpace`. The unit's own state is re-published below
+        // with the rolled-up unit builders so its keys reflect the
+        // file-wide values.
         let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut unit_loc = std::mem::take(&mut unit_state.loc);
         let mut tree = self.tree.finish();
         self.halstead_routing
-            .finalize_into_tree(&mut tree, &mut unit_halstead);
+            .finalize_into_tree(&mut tree, &mut unit_halstead, &mut unit_loc);
         unit_state.halstead = unit_halstead;
+        unit_state.loc = unit_loc;
         apply_state_to(unit_state, &mut tree.metrics);
         tree
     }

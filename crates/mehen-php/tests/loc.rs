@@ -121,3 +121,38 @@ fn php_lloc_does_not_count_else_clauses_separately() {
     let loc = mehen_report::metrics_json::loc(&a.root.metrics);
     assert_eq!(loc.lloc, 4.0, "{}", serde_json::to_string(&loc).unwrap());
 }
+
+/// Regression: PR #95 discussion_r3265962147 — per-method
+/// `loc.cloc` and `loc.ploc` must capture comments / code lines
+/// inside that method's body. Before the fix, the trivia loop and
+/// `scan_source_loc` both wrote to `stack[0]` so per-method LOC
+/// counts read as zero.
+#[test]
+fn php_method_loc_routes_to_active_space() {
+    let a = analyze(
+        "<?php
+class C {
+    // class-level comment
+    public function m(int $a, int $b): int {
+        // inner comment
+        $sum = $a + $b;
+        return $sum;
+    }
+}",
+    );
+    assert_eq!(a.root.spaces.len(), 1, "expected one class space");
+    let class = &a.root.spaces[0];
+    assert_eq!(class.spaces.len(), 1, "expected one method space");
+    let method = &class.spaces[0];
+    let method_loc = mehen_report::metrics_json::loc(&method.metrics);
+    assert!(
+        method_loc.cloc >= 1.0,
+        "method must record its `// inner comment` as cloc, got {}",
+        serde_json::to_string(&method_loc).unwrap()
+    );
+    assert!(
+        method_loc.ploc >= 2.0,
+        "method must record `$sum = ...` and `return $sum;` as ploc, got {}",
+        serde_json::to_string(&method_loc).unwrap()
+    );
+}

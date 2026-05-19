@@ -108,16 +108,26 @@ pub(crate) fn walk_program(
     let root = parse.node();
     visitor.visit(&root);
 
-    // LOC: Ruby comments come from `parse.comments()` (inline `#` lines and
-    // `=begin`/`=end` block-doc comments). The legacy tree-sitter Loc rule
-    // counts both as `cloc` lines on the unit-level state.
+    // LOC: Ruby comments come from `parse.comments()` (inline `#`
+    // lines and `=begin`/`=end` block-doc comments). The legacy
+    // tree-sitter Loc rule counts both as `cloc` lines, but on the
+    // unit only — that loses per-method `loc.cloc` for any comment
+    // inside a method body. Route each comment by byte range to the
+    // deepest enclosing scope; `finish` then propagates them up the
+    // parent chain.
     for comment in parse.comments() {
         let loc = comment.location();
         let start = u32::try_from(loc.start_offset()).unwrap_or(0);
         let end = u32::try_from(loc.end_offset()).unwrap_or(0);
         let start_row = line_index.line_at(start).saturating_sub(1);
         let end_row = line_index.line_at(end.saturating_sub(1)).saturating_sub(1);
-        visitor.stack[0].loc.observe_comment(start_row, end_row);
+        visitor.halstead_routing.observe_comment(
+            start,
+            end,
+            &mut visitor.stack[0].loc,
+            start_row,
+            end_row,
+        );
     }
 
     visitor.finish()
@@ -147,6 +157,13 @@ struct Visitor<'a> {
     /// "statement-boundary" event in a clean way, so we observe lloc at
     /// statement-shaped node hooks (see `record_lloc_for_node`).
     _phantom: std::marker::PhantomData<&'a ()>,
+    /// Routes comment / PLOC observations to the deepest enclosing
+    /// space. Ruby's `parse.comments()` lives on the `ParseResult`
+    /// (no AST wrapper to record on), so the walker observes them
+    /// after the AST walk has populated the tracker entries —
+    /// otherwise every comment lands on the unit and per-space
+    /// `loc.cloc` is zero (PR #95 discussion_r3265962147).
+    halstead_routing: mehen_metrics::SpaceRangeTracker,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -173,6 +190,7 @@ impl<'a> Visitor<'a> {
             inside_lambda_body: false,
             bool_depth: 0,
             _phantom: std::marker::PhantomData,
+            halstead_routing: mehen_metrics::SpaceRangeTracker::new(),
         }
     }
 
@@ -183,8 +201,22 @@ impl<'a> Visitor<'a> {
     fn finish(mut self) -> MetricSpace {
         let mut unit_state = self.stack.pop().expect("walker stack underflow");
         finalize_state(&mut unit_state);
-        apply_state_to(unit_state, self.tree.metrics_mut());
-        self.tree.finish()
+        // Route post-AST observations (only LOC for Ruby — Halstead is
+        // emitted *during* the AST walk via `current()`) to nested
+        // spaces. The tracker has accumulated comments routed by
+        // byte range; `finalize_into_tree` propagates each entry's
+        // contributions up the parent chain (set-union for ploc lines,
+        // sum for comment counts) and overlays the LOC keys + MI on
+        // the matching `MetricSpace`.
+        let mut unit_halstead = std::mem::take(&mut unit_state.halstead);
+        let mut unit_loc = std::mem::take(&mut unit_state.loc);
+        let mut tree = self.tree.finish();
+        self.halstead_routing
+            .finalize_into_tree(&mut tree, &mut unit_halstead, &mut unit_loc);
+        unit_state.halstead = unit_halstead;
+        unit_state.loc = unit_loc;
+        apply_state_to(unit_state, &mut tree.metrics);
+        tree
     }
 
     fn open_space(
@@ -226,7 +258,9 @@ impl<'a> Visitor<'a> {
             start_line: self.line_index.line_at(start_byte),
             end_line: self.line_index.line_at(end_byte.saturating_sub(1)),
         };
-        self.tree.open(kind.clone(), span, name);
+        let space_id = self.tree.open(kind.clone(), span, name);
+        self.halstead_routing
+            .record_open(space_id, start_byte, end_byte);
         self.stack.push(child);
         self.kinds.push(kind);
     }
@@ -238,6 +272,12 @@ impl<'a> Visitor<'a> {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
         finalize_state(&mut state);
+        // Stash MI inputs for the post-AST overlay before
+        // `apply_state_to` consumes them.
+        if let Some(space_id) = self.tree.current_id() {
+            self.halstead_routing
+                .record_close(space_id, &state.loc, &state.cyclomatic);
+        }
         apply_state_to(state.clone(), self.tree.metrics_mut());
         if let Some(parent) = self.stack.last_mut() {
             let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);

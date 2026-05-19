@@ -47,3 +47,31 @@ fn ruby_simple_loc() {
     }"###
     );
 }
+
+/// Regression: PR #95 discussion_r3265962147 — per-method `loc.cloc`
+/// must capture comments inside the method body. Before the fix,
+/// `walk_program`'s comment loop wrote every comment to the unit so
+/// per-method `cloc` was always 0.
+#[test]
+fn ruby_method_cloc_routes_to_active_space() {
+    let a = analyze(
+        "class C
+  # class-level comment
+  def m(a, b)
+    # inner comment 1
+    # inner comment 2
+    a + b
+  end
+end",
+    );
+    assert_eq!(a.root.spaces.len(), 1);
+    let class = &a.root.spaces[0];
+    assert_eq!(class.spaces.len(), 1);
+    let method = &class.spaces[0];
+    let method_loc = mehen_report::metrics_json::loc(&method.metrics);
+    assert!(
+        method_loc.cloc >= 2.0,
+        "method must record its two `#` comments as cloc, got {}",
+        serde_json::to_string(&method_loc).unwrap()
+    );
+}

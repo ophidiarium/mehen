@@ -529,3 +529,37 @@ fn python_real_loc() {
     }"###
     );
 }
+
+/// Regression: PR #95 discussion_r3265962147 — per-function
+/// `loc.cloc` must capture comments inside that function's body.
+/// Before the fix, every comment routed to the unit and inner
+/// functions reported `cloc = 0`.
+#[test]
+fn python_nested_function_cloc_routes_to_active_space() {
+    let a = analyze(
+        "def outer():
+    # outer comment
+    def inner():
+        # inner comment 1
+        # inner comment 2
+        x = 1 + 2
+        return x
+    return inner",
+        "nested.py",
+    );
+    assert_eq!(a.root.spaces.len(), 1);
+    let outer = &a.root.spaces[0];
+    assert_eq!(outer.spaces.len(), 1);
+    let inner = &outer.spaces[0];
+    let loc = mehen_report::metrics_json::loc(&inner.metrics);
+    assert!(
+        loc.cloc >= 2.0,
+        "inner def must record its two `#` comments, got {}",
+        serde_json::to_string(&loc).unwrap()
+    );
+    assert!(
+        loc.ploc > 0.0,
+        "inner def must record code lines (the `x = 1 + 2`, etc.), got {}",
+        serde_json::to_string(&loc).unwrap()
+    );
+}
