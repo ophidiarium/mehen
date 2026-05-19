@@ -13,9 +13,29 @@ use mehen_metrics::MetricTreeBuilder;
 use oxc_allocator::Allocator;
 use oxc_parser::Parser;
 use oxc_parser::config::TokensParserConfig;
-use oxc_span::SourceType;
+use oxc_span::{FileExtension, SourceType};
 
 use crate::walker;
+
+/// Refine an analyzer-default [`SourceType`] using the file extension.
+///
+/// `Language::JavaScript` covers `.js` / `.mjs` / `.cjs`, but the
+/// analyzer's default `SourceType::mjs()` would force module parsing
+/// for every input — which rejects valid CommonJS scripts (e.g.
+/// top-level `return` in a `.cjs` file). The same trade-off applies on
+/// the TypeScript side: `.cts` is CommonJS by spec. We defer to Oxc's
+/// own [`From<FileExtension> for SourceType`] mapping when the path
+/// carries a known extension; otherwise we keep the analyzer's
+/// default.
+fn refine_source_type(default: SourceType, source: &SourceFile) -> SourceType {
+    let Some(ext) = source.path.extension() else {
+        return default;
+    };
+    match ext.parse::<FileExtension>() {
+        Ok(file_ext) => SourceType::from(file_ext),
+        Err(_) => default,
+    }
+}
 
 /// Run the parser and walker, returning a populated `LanguageAnalysis`.
 ///
@@ -30,6 +50,7 @@ fn analyze_with_source_type(
     source: &SourceFile,
     source_type: SourceType,
 ) -> LanguageAnalysis {
+    let source_type = refine_source_type(source_type, source);
     let allocator = Allocator::default();
     let parser_return = Parser::new(&allocator, source.text.as_str(), source_type)
         .with_config(TokensParserConfig)
@@ -163,5 +184,61 @@ mod tests {
             .unwrap()
             .as_f64();
         assert!(cy >= 3.0, "expected >= 3, got {cy}");
+    }
+
+    /// `.cjs` files use CommonJS semantics — top-level `return` is
+    /// valid (Node wraps the script in an immediately-invoked function).
+    /// Forcing `SourceType::mjs()` would emit a syntax error and exit
+    /// the CLI non-zero. See PR #95 review comment 3265424682.
+    #[test]
+    fn cjs_top_level_return_parses_clean() {
+        let analyzer = JavaScriptAnalyzer::new();
+        let file = SourceFile::new(
+            "a.cjs".into(),
+            Language::JavaScript,
+            "return 42;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            a.diagnostics.is_empty(),
+            "expected clean parse, got {:?}",
+            a.diagnostics
+        );
+    }
+
+    /// `.mjs` keeps explicit module parsing — top-level `return` is
+    /// invalid in modules and must surface as a syntax error.
+    #[test]
+    fn mjs_top_level_return_is_diagnostic() {
+        let analyzer = JavaScriptAnalyzer::new();
+        let file = SourceFile::new(
+            "a.mjs".into(),
+            Language::JavaScript,
+            "return 42;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            !a.diagnostics.is_empty(),
+            "expected at least one diagnostic for top-level return in module"
+        );
+    }
+
+    /// `.cts` is the TypeScript counterpart of `.cjs` (CommonJS module
+    /// kind per Oxc's `FileExtension::Cts`). Top-level `return` should
+    /// parse without diagnostics.
+    #[test]
+    fn cts_top_level_return_parses_clean() {
+        let analyzer = TypeScriptAnalyzer::new();
+        let file = SourceFile::new(
+            "a.cts".into(),
+            Language::TypeScript,
+            "return 42;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            a.diagnostics.is_empty(),
+            "expected clean parse, got {:?}",
+            a.diagnostics
+        );
     }
 }
