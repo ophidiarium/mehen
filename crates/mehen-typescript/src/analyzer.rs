@@ -19,21 +19,38 @@ use crate::walker;
 
 /// Refine an analyzer-default [`SourceType`] using the file extension.
 ///
-/// `Language::JavaScript` covers `.js` / `.mjs` / `.cjs`, but the
-/// analyzer's default `SourceType::mjs()` would force module parsing
-/// for every input — which rejects valid CommonJS scripts (e.g.
-/// top-level `return` in a `.cjs` file). The same trade-off applies on
-/// the TypeScript side: `.cts` is CommonJS by spec. We defer to Oxc's
-/// own [`From<FileExtension> for SourceType`] mapping when the path
-/// carries a known extension; otherwise we keep the analyzer's
-/// default.
+/// The only purpose of this refinement is to flip the module flavor
+/// when the extension explicitly disambiguates it: `.cjs` / `.cts` are
+/// CommonJS by spec, `.mjs` / `.mts` are explicitly modules. Without
+/// it, the analyzer's `SourceType::mjs()` default would reject valid
+/// CommonJS scripts (top-level `return` in a `.cjs` file).
+///
+/// `--language` is authoritative — when the caller forces a language
+/// (`--language typescript file.js`) the refinement does NOT switch
+/// languages or JSX flavor. Cross-language extensions are ignored:
+/// the analyzer parses the file under the requested language with
+/// the analyzer's default module kind. This guarantees that mismatched
+/// extensions don't silently report syntax errors under the wrong
+/// language. (PR #95 discussion_r3267335273.)
 fn refine_source_type(default: SourceType, source: &SourceFile) -> SourceType {
     let Some(ext) = source.path.extension() else {
         return default;
     };
-    match ext.parse::<FileExtension>() {
-        Ok(file_ext) => SourceType::from(file_ext),
-        Err(_) => default,
+    let Ok(file_ext) = ext.parse::<FileExtension>() else {
+        return default;
+    };
+    let from_ext = SourceType::from(file_ext);
+    // Reject any cross-language / cross-JSX-flavor extension — the
+    // analyzer's default already encodes both invariants from the
+    // requested `Language`. We only adopt `from_ext` when both
+    // language family and JSX flavor are identical; otherwise we
+    // fall back to the analyzer's default.
+    let language_matches = from_ext.is_typescript() == default.is_typescript();
+    let jsx_matches = from_ext.is_jsx() == default.is_jsx();
+    if language_matches && jsx_matches {
+        from_ext
+    } else {
+        default
     }
 }
 
@@ -239,6 +256,69 @@ mod tests {
             a.diagnostics.is_empty(),
             "expected clean parse, got {:?}",
             a.diagnostics
+        );
+    }
+
+    /// Regression: `--language` is authoritative. PR #95
+    /// discussion_r3267335273 — when a caller forces TypeScript on a
+    /// `.js` extension, the refinement must NOT downgrade the
+    /// analyzer to JavaScript; TS-only syntax (a type alias) has to
+    /// parse cleanly.
+    #[test]
+    fn typescript_language_with_js_extension_keeps_typescript_parser() {
+        let analyzer = TypeScriptAnalyzer::new();
+        let file = SourceFile::new(
+            "weird.js".into(),
+            Language::TypeScript,
+            "type Id = number;\nconst x: Id = 1;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            a.diagnostics.is_empty(),
+            "TS-only syntax must parse under --language typescript regardless of file extension, got {:?}",
+            a.diagnostics
+        );
+    }
+
+    /// Regression: same direction, opposite refinement.
+    /// `--language javascript file.ts` must NOT promote the parser to
+    /// TypeScript; type-annotation syntax should be reported as a JS
+    /// syntax error, not silently accepted.
+    #[test]
+    fn javascript_language_with_ts_extension_keeps_javascript_parser() {
+        let analyzer = JavaScriptAnalyzer::new();
+        let file = SourceFile::new(
+            "weird.ts".into(),
+            Language::JavaScript,
+            "const x: number = 1;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            !a.diagnostics.is_empty(),
+            "JS parser must reject `: number` annotation when --language javascript is forced",
+        );
+    }
+
+    /// Regression: TSX flavor must not be cross-mapped from a `.tsx`
+    /// path when the analyzer's default is plain TS. Without the
+    /// JSX-flavor guard the `.tsx` extension would override
+    /// `SourceType::ts()` and accept JSX syntax under
+    /// `--language typescript`.
+    #[test]
+    fn typescript_language_with_tsx_extension_keeps_ts_flavor() {
+        let analyzer = TypeScriptAnalyzer::new();
+        // A `<Foo />` JSX element is a syntax error in plain TS but
+        // parses fine in TSX. The refinement must not silently switch
+        // to TSX based on the extension.
+        let file = SourceFile::new(
+            "weird.tsx".into(),
+            Language::TypeScript,
+            "const el = <Foo />;\n".to_string(),
+        );
+        let a = analyzer.analyze(&file, &AnalysisConfig::default()).unwrap();
+        assert!(
+            !a.diagnostics.is_empty(),
+            "TS parser must reject JSX syntax when --language typescript is forced"
         );
     }
 }
