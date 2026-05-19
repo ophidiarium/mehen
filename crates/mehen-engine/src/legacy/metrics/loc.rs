@@ -5,8 +5,8 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
-use crate::legacy::languages::{C, Kotlin, Ruby};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::languages::{C, Kotlin};
 use crate::legacy::node::Node;
 
 /// The `SLoc` metric suite.
@@ -660,44 +660,6 @@ impl Loc for KotlinCode {
     }
 }
 
-impl Loc for RubyCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Ruby::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        match node.kind_id().into() {
-            // Containers and string internals that must not be counted as a
-            // physical or logical line of their own.
-            Program | Statements | BlockBody | BodyStatement | BodyStatement2 | StringContent
-            | HeredocContent | HeredocBody | Interpolation | BareString | BareSymbol => {}
-
-            Comment => {
-                add_cloc_lines(stats, start, end);
-            }
-
-            // LLOC: count statement-like nodes exactly once.
-            //
-            // These cover Ruby's `_statement` supertype plus the primary
-            // statement-ish _expression/_primary forms that carry program
-            // behavior. Other expression nodes contribute to PLOC only.
-            Method | SingletonMethod | Class | Module | SingletonClass | If | Unless | While
-            | Until | For | Case | CaseMatch | Begin | IfModifier | UnlessModifier
-            | WhileModifier | UntilModifier | RescueModifier | RescueModifier2
-            | RescueModifier3 | Return | Return2 | Break | Break2 | Next | Next2 | Yield
-            | Yield2 | Redo | Retry | Alias | Undef | Assignment | Assignment2
-            | OperatorAssignment | OperatorAssignment2 | Call | Call2 | Call3 | Call4 => {
-                stats.lloc.logical_lines += 1;
-            }
-
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
 impl Loc for CCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use C::*;
@@ -752,7 +714,7 @@ impl Loc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser};
+    use crate::legacy::langs::{CParser, GoParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -885,46 +847,6 @@ mod tests {
                       "ploc_max": 5.0,
                       "lloc_min": 3.0,
                       "lloc_max": 3.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_simple_loc() {
-        check_metrics::<RubyParser>(
-            "# header comment
-             def greet(name)
-                 puts \"hi, #{name}\"
-             end",
-            "foo.rb",
-            |metric| {
-                // Spaces: 2 (unit + method)
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 4.0,
-                      "ploc": 3.0,
-                      "lloc": 2.0,
-                      "cloc": 1.0,
-                      "blank": 0.0,
-                      "sloc_average": 2.0,
-                      "ploc_average": 1.5,
-                      "lloc_average": 1.0,
-                      "cloc_average": 0.5,
-                      "blank_average": 0.0,
-                      "sloc_min": 3.0,
-                      "sloc_max": 3.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 3.0,
-                      "ploc_max": 3.0,
-                      "lloc_min": 2.0,
-                      "lloc_max": 2.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###

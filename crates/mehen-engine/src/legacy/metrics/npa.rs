@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Ruby};
+use crate::legacy::languages::Kotlin;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -251,48 +251,6 @@ where
     fn compute(node: &Node, code: &[u8], stats: &mut Stats);
 }
 
-impl Npa for RubyCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        if !matches!(stats.space_kind, SpaceKind::Class) {
-            return;
-        }
-        // Ruby attributes exposed through `attr_accessor`, `attr_reader`,
-        // `attr_writer` are public by convention. Detecting those requires a
-        // call-site match — treat any `@instance_variable` assignment that's a
-        // direct statement of the class body as an attribute, and count it as
-        // non-public (encapsulated) by default.
-        if node.kind_id() != Ruby::Assignment {
-            return;
-        }
-        // Ruby class bodies are wrapped in a `body_statement` node, so walk
-        // one step up if we land on that wrapper. Mirrors the same hop done
-        // in the npm detector.
-        let mut container = node.parent();
-        if let Some(c) = container
-            && matches!(c.kind_id().into(), Ruby::BodyStatement)
-        {
-            container = c.parent();
-        }
-        let in_class = container.is_some_and(|p| {
-            matches!(
-                p.kind_id().into(),
-                Ruby::Class | Ruby::SingletonClass | Ruby::Module
-            )
-        });
-        if !in_class {
-            return;
-        }
-        let left = match node.child_by_field_name("left") {
-            Some(l) => l,
-            None => return,
-        };
-        if left.kind_id() != Ruby::InstanceVariable {
-            return;
-        }
-        stats.record_attribute(SpaceKind::Class, false);
-    }
-}
-
 // Go has no class-like constructs; Npa is not applicable.
 impl Npa for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
@@ -382,7 +340,7 @@ impl Npa for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, RubyParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -478,39 +436,6 @@ mod tests {
                       "total": 3.0,
                       "total_attributes": 4.0,
                       "average": 0.75
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_npa_counts_instance_variables_under_body_statement() {
-        // Ruby class bodies are wrapped in a `body_statement` node in the
-        // tree-sitter grammar, so the ivar assignment's parent is
-        // `body_statement`, not `class` directly. The detector must hop
-        // through the wrapper.
-        check_metrics::<RubyParser>(
-            "class C
-                 @x = 1
-                 @y = 2
-             end",
-            "foo.rb",
-            |metric| {
-                // 2 ivar attributes, both non-public by convention.
-                insta::assert_json_snapshot!(
-                    metric.npa,
-                    @r###"
-                    {
-                      "classes": 0.0,
-                      "interfaces": 0.0,
-                      "class_attributes": 2.0,
-                      "interface_attributes": 0.0,
-                      "classes_average": 0.0,
-                      "interfaces_average": null,
-                      "total": 0.0,
-                      "total_attributes": 2.0,
-                      "average": 0.0
                     }"###
                 );
             },

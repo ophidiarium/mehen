@@ -3,11 +3,10 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
 #[cfg(test)]
-use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser};
+use crate::legacy::langs::{CParser, GoParser, KotlinParser};
 use crate::legacy::languages::{C, Go, Kotlin};
-use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 use crate::legacy::traits::Search;
 
@@ -361,8 +360,6 @@ impl NArgs for CCode {
     }
 }
 
-implement_metric_trait!([NArgs], RubyCode);
-
 // Markdown documents have no function parameters.
 #[cfg(feature = "markdown")]
 impl NArgs for crate::legacy::langs::MarkdownCode {}
@@ -451,64 +448,6 @@ mod tests {
                       "functions_max": 0.0,
                       "closures_min": 0.0,
                       "closures_max": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_single_method() {
-        check_metrics::<RubyParser>(
-            "def f(a, b)
-                 a + b
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 2.0,
-                      "total_closures": 0.0,
-                      "average_functions": 2.0,
-                      "average_closures": 0.0,
-                      "total": 2.0,
-                      "average": 2.0,
-                      "functions_min": 0.0,
-                      "functions_max": 2.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_block_and_lambda_args() {
-        // `do |a, b| ... end` is a block (closure); `-> (x) { ... }` is a lambda.
-        check_metrics::<RubyParser>(
-            "xs.each do |a, b|
-                 a + b
-             end
-             f = -> (x) { x * 2 }",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nargs,
-                    @r###"
-                    {
-                      "total_functions": 0.0,
-                      "total_closures": 3.0,
-                      "average_functions": 0.0,
-                      "average_closures": 1.5,
-                      "total": 3.0,
-                      "average": 1.5,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 2.0
                     }"###
                 );
             },

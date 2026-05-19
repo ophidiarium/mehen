@@ -1,7 +1,7 @@
 #[cfg(feature = "markdown")]
 use crate::legacy::langs::MarkdownCode;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
-use crate::legacy::languages::{C, Go, Kotlin, Ruby};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::node::Node;
 
 pub(crate) trait Checker {
@@ -117,63 +117,6 @@ impl Checker for KotlinCode {
         grand
             .child_by_field_name("alternative")
             .is_some_and(|alt| alt.id() == parent.id())
-    }
-}
-
-impl Checker for RubyCode {
-    fn is_func_space(node: &Node) -> bool {
-        match node.kind_id().into() {
-            Ruby::Program
-            | Ruby::Method
-            | Ruby::SingletonMethod
-            | Ruby::Class
-            | Ruby::Module
-            | Ruby::SingletonClass
-            | Ruby::Lambda => true,
-            // `Block` and `DoBlock` are closure spaces on their own only when
-            // they are NOT the direct body of a `Lambda`; otherwise they would
-            // double-count the same callable.
-            Ruby::Block | Ruby::DoBlock => node
-                .parent()
-                .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
-            _ => false,
-        }
-    }
-
-    fn is_func(node: &Node) -> bool {
-        matches!(node.kind_id().into(), Ruby::Method | Ruby::SingletonMethod)
-    }
-
-    fn is_closure(node: &Node) -> bool {
-        match node.kind_id().into() {
-            Ruby::Lambda => true,
-            // See `is_func_space`: skip lambda-owned blocks.
-            Ruby::Block | Ruby::DoBlock => node
-                .parent()
-                .is_none_or(|parent| parent.kind_id() != Ruby::Lambda),
-            _ => false,
-        }
-    }
-
-    fn is_non_arg(node: &Node) -> bool {
-        matches!(
-            node.kind_id().into(),
-            Ruby::LPAREN | Ruby::RPAREN | Ruby::COMMA | Ruby::PIPE
-        )
-    }
-
-    #[inline(always)]
-    fn is_else_if(node: &Node) -> bool {
-        // Ruby has a dedicated `elsif` named node so nested `if` in the `else`
-        // branch never appears as an `if` child of another `if`. No special
-        // else-if detection is needed.
-        if node.kind_id() != Ruby::If {
-            return false;
-        }
-        if let Some(parent) = node.parent() {
-            return parent.kind_id() == Ruby::Else;
-        }
-        false
     }
 }
 

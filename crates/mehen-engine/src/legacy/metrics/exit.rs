@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
-use crate::legacy::languages::{C, Go, Kotlin, Ruby};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::node::Node;
 
 /// The `NExit` metric.
@@ -140,21 +140,6 @@ impl Exit for KotlinCode {
     }
 }
 
-impl Exit for RubyCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        // Count language-level exits from a method/closure:
-        // `return`, `break`, and `next`. `yield` hands control back to the
-        // caller's block but does not exit the enclosing method, so it is
-        // intentionally excluded.
-        if matches!(
-            node.kind_id().into(),
-            Ruby::Return | Ruby::Return2 | Ruby::Break | Ruby::Break2 | Ruby::Next | Ruby::Next2
-        ) {
-            stats.exit += 1;
-        }
-    }
-}
-
 // No languages require empty Exit implementations
 // implement_metric_trait!(Exit);
 
@@ -177,7 +162,7 @@ impl Exit for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser};
+    use crate::legacy::langs::{GoParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -255,45 +240,6 @@ mod tests {
     }
 
     #[test]
-    fn ruby_no_exit() {
-        check_metrics::<RubyParser>("a = 42", "foo.rb", |metric| {
-            insta::assert_json_snapshot!(
-                metric.nexits,
-                @r###"
-                {
-                  "sum": 0.0,
-                  "average": null,
-                  "min": 0.0,
-                  "max": 0.0
-                }"###
-            );
-        });
-    }
-
-    #[test]
-    fn ruby_simple_method() {
-        check_metrics::<RubyParser>(
-            "def f(a, b)
-                 return a if a > b
-                 return b
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
     fn kotlin_return_and_throw_count_as_exits() {
         check_metrics::<KotlinParser>(
             "fun f(a: Int): Int {
@@ -336,33 +282,6 @@ mod tests {
                       "average": 0.0,
                       "min": 0.0,
                       "max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_break_and_next() {
-        // Both `break` and `next` are counted as exits; `yield` is not.
-        check_metrics::<RubyParser>(
-            "def f(xs)
-                 xs.each do |x|
-                   next if x.nil?
-                   break if x.stop?
-                   yield x
-                 end
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 1.0,
-                      "min": 0.0,
-                      "max": 2.0
                     }"###
                 );
             },

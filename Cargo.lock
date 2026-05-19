@@ -151,6 +151,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "bindgen"
+version = "0.72.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.2",
+ "shlex",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,6 +270,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cexpr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -260,6 +289,17 @@ name = "cfg_aliases"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+
+[[package]]
+name = "clang-sys"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
+dependencies = [
+ "glob",
+ "libc",
+ "libloading",
+]
 
 [[package]]
 name = "clap"
@@ -1758,6 +1798,15 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -1864,6 +1913,16 @@ name = "libc"
 version = "0.2.182"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
 
 [[package]]
 name = "libredox"
@@ -2112,7 +2171,6 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-kotlin-sg",
  "tree-sitter-markdown-text",
- "tree-sitter-ruby",
  "walkdir",
 ]
 
@@ -2238,11 +2296,13 @@ dependencies = [
 name = "mehen-ruby"
 version = "0.7.0"
 dependencies = [
+ "insta",
  "mehen-core",
  "mehen-metrics",
- "mehen-tree-sitter",
- "tree-sitter",
- "tree-sitter-ruby",
+ "mehen-report",
+ "ruby-prism",
+ "serde_json",
+ "smol_str",
 ]
 
 [[package]]
@@ -2310,6 +2370,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
 name = "mio"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2328,6 +2394,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
 ]
 
 [[package]]
@@ -3021,7 +3097,7 @@ checksum = "954f944ee11cc5a571b7368b9534c328ad88027ceada2ce1b833890b1166f62d"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
- "itertools",
+ "itertools 0.14.0",
  "jod-thread",
  "libc",
  "miow",
@@ -3036,7 +3112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7565fc61811cd59b6e0f5c80305f68020259e1bf39d41a02b86331bd2e9e53b1"
 dependencies = [
  "either",
- "itertools",
+ "itertools 0.14.0",
  "ra_ap_parser",
  "ra_ap_stdx",
  "rowan",
@@ -3181,6 +3257,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruby-prism"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b302f00359d0b5423a600314935ca5f994484e15da2db5345631d28c6e029d6"
+dependencies = [
+ "ruby-prism-sys",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ruby-prism-sys"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f85fd9571455bdca2b3bf0b2f543cd13ac39d5de0026a8eb2deb94ffd264f00"
+dependencies = [
+ "bindgen",
+ "cc",
+]
+
+[[package]]
 name = "ruff_python_ast"
 version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff?tag=0.15.13#2afb467ce397e4a89c13a0a814c62cfecb0e9e49"
@@ -3223,7 +3320,7 @@ name = "ruff_python_trivia"
 version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff?tag=0.15.13#2afb467ce397e4a89c13a0a814c62cfecb0e9e49"
 dependencies = [
- "itertools",
+ "itertools 0.14.0",
  "ruff_source_file",
  "ruff_text_size",
  "unicode-ident",
@@ -3853,16 +3950,6 @@ name = "tree-sitter-pwsh"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9bde9b178dbe1aa9f9f756cf2a2090a427a453b287af30225811727b4af74d2"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-ruby"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be0484ea4ef6bb9c575b4fdabde7e31340a8d2dbc7d52b321ac83da703249f95"
 dependencies = [
  "cc",
  "tree-sitter-language",

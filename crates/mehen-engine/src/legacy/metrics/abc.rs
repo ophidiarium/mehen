@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
-use crate::legacy::languages::{C, Go, Kotlin, Ruby};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
+use crate::legacy::languages::{C, Go, Kotlin};
 use crate::legacy::node::Node;
 
 /// The `ABC` metric.
@@ -318,30 +318,6 @@ impl Abc for KotlinCode {
     }
 }
 
-impl Abc for RubyCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Ruby::*;
-
-        match node.kind_id().into() {
-            // A: every assignment, including compound ones.
-            Assignment | Assignment2 | OperatorAssignment | OperatorAssignment2 => {
-                stats.assignments += 1.;
-            }
-            // B: every method call and `yield` (transfers control to a block).
-            Call | Call2 | Call3 | Call4 | Yield | Yield2 => {
-                stats.branches += 1.;
-            }
-            // C: every conditional construct and every comparison operator.
-            If | Unless | IfModifier | UnlessModifier | When | InClause | Conditional | Rescue
-            | RescueModifier | RescueModifier2 | RescueModifier3 | EQEQ | BANGEQ | LT | GT
-            | LTEQ | GTEQ | LTEQGT | EQEQEQ | EQTILDE | BANGTILDE => {
-                stats.conditions += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Abc for CCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use C::*;
@@ -398,7 +374,7 @@ impl Abc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, GoParser, KotlinParser, RubyParser};
+    use crate::legacy::langs::{CParser, GoParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -576,39 +552,6 @@ mod tests {
                       "assignments_max": 0.0,
                       "branches_min": 0.0,
                       "branches_max": 0.0,
-                      "conditions_min": 0.0,
-                      "conditions_max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_abc_basic() {
-        check_metrics::<RubyParser>(
-            "def f(a, b)
-                 c = a + b    # +1 A
-                 log(c)       # +1 B
-                 return c if c > 0  # +1 C (if_modifier) + +1 C (>)
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.abc,
-                    @r###"
-                    {
-                      "assignments": 1.0,
-                      "branches": 1.0,
-                      "conditions": 2.0,
-                      "magnitude": 2.449489742783178,
-                      "assignments_average": 0.5,
-                      "branches_average": 0.5,
-                      "conditions_average": 1.0,
-                      "assignments_min": 0.0,
-                      "assignments_max": 1.0,
-                      "branches_min": 0.0,
-                      "branches_max": 1.0,
                       "conditions_min": 0.0,
                       "conditions_max": 2.0
                     }"###

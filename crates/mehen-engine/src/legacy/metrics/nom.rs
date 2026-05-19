@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 
@@ -188,7 +188,7 @@ where
     }
 }
 
-implement_metric_trait!([Nom], GoCode, RubyCode, KotlinCode, CCode);
+implement_metric_trait!([Nom], GoCode, KotlinCode, CCode);
 
 // Markdown documents have no functions or closures.
 #[cfg(feature = "markdown")]
@@ -196,71 +196,8 @@ impl Nom for crate::legacy::langs::MarkdownCode {}
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, RubyParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn ruby_nom() {
-        check_metrics::<RubyParser>(
-            "def a
-                 1
-             end
-             def b
-                 2
-             end
-             def c
-                 3
-             end
-             x = -> (a) { a + 42 }",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nom,
-                    @r###"
-                    {
-                      "functions": 3.0,
-                      "closures": 1.0,
-                      "functions_average": 0.6,
-                      "closures_average": 0.2,
-                      "total": 4.0,
-                      "average": 0.8,
-                      "functions_min": 0.0,
-                      "functions_max": 1.0,
-                      "closures_min": 0.0,
-                      "closures_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_do_lambda_counts_as_one_closure() {
-        check_metrics::<RubyParser>(
-            "x = -> (a) do
-                 a + 42
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nom,
-                    @r###"
-                    {
-                      "functions": 0.0,
-                      "closures": 1.0,
-                      "functions_average": 0.0,
-                      "closures_average": 0.5,
-                      "total": 1.0,
-                      "average": 0.5,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 1.0
-                    }"###
-                );
-            },
-        );
-    }
 
     #[test]
     fn kotlin_init_block_is_not_counted_as_function() {

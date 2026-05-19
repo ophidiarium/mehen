@@ -125,8 +125,32 @@ mago-span = "=1.27.1"
 mago-php-version = "=1.27.1"
 bumpalo = "^3.16"
 
+# ruby-prism — replaces tree-sitter-ruby for the Ruby analyzer
+# (`crates/mehen-ruby`). Per the rewrite plan §6.5 we move to Ruby's
+# canonical Prism parser so modifier forms (`x if y`, `expr rescue`),
+# pattern matching (`case…in`), endless methods, safe navigation (`&.`),
+# numbered block parameters, and all the Ruby-3-era syntax the
+# tree-sitter grammar lags on become first-class.
+#
+# License audit (plan §6.5): `ruby-prism` (MIT, Ian Ker-Seymer / Steve
+# Loveless / Kevin Newton), `ruby-prism-sys` (MIT), and the bundled
+# upstream Prism C parser (MIT, Shopify Inc.) are all permissive — no
+# copyleft conflict with mehen's licensing.
+#
+# Build prerequisites (plan §6.5 — "Windows CI/release jobs must
+# install the required native toolchain"): `ruby-prism-sys` invokes
+# `bindgen 0.72` unconditionally and compiles vendored Prism C via
+# `cc`, so every release target needs `libclang` and a C toolchain
+# at build time. Linux/macOS GitHub-hosted runners have these
+# preinstalled; Windows runners need `LIBCLANG_PATH` (e.g.
+# `choco install llvm`); musl builds need `clang-dev`. The release
+# binary path means end users do not need any of this — only people
+# building `mehen` from source.
+ruby-prism = "=1.9.0"
+
 tree-sitter-go = "=0.25.0"
-tree-sitter-ruby = "=0.23.1"
+# `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
+# now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
 tree-sitter-c = "=0.24.2"

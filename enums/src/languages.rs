@@ -8,7 +8,6 @@ mk_langs!(
     (Tsx, tree_sitter_tsx),
     (Typescript, tree_sitter_typescript),
     (Go, tree_sitter_go),
-    (Ruby, tree_sitter_ruby),
     (Kotlin, tree_sitter_kotlin),
     (Powershell, tree_sitter_pwsh),
     (C, tree_sitter_c),

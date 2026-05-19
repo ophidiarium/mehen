@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -288,12 +288,6 @@ impl Halstead for GoCode {
     }
 }
 
-impl Halstead for RubyCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for KotlinCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -316,7 +310,7 @@ impl Halstead for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{GoParser, KotlinParser, RubyParser};
+    use crate::legacy::langs::{GoParser, KotlinParser};
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -385,51 +379,6 @@ mod tests {
                       "estimated_program_length": "[masked]",
                       "purity_ratio": "[masked]",
                       "vocabulary": 11.0,
-                      "volume": "[masked]",
-                      "difficulty": "[masked]",
-                      "level": "[masked]",
-                      "effort": "[masked]",
-                      "time": "[masked]",
-                      "bugs": "[masked]"
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_operators_and_operands() {
-        check_metrics::<RubyParser>(
-            "def add(a, b)
-                 a + b
-             end",
-            "foo.rb",
-            |metric| {
-                // Just assert the core counts; full MI/etc. follow from them.
-                // Unique operators: def, +, (, ,
-                // Unique operands: add, a, b
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    {
-                        ".estimated_program_length" => "[masked]",
-                        ".purity_ratio" => "[masked]",
-                        ".volume" => "[masked]",
-                        ".difficulty" => "[masked]",
-                        ".level" => "[masked]",
-                        ".effort" => "[masked]",
-                        ".time" => "[masked]",
-                        ".bugs" => "[masked]"
-                    },
-                    @r###"
-                    {
-                      "n1": 4.0,
-                      "N1": 4.0,
-                      "n2": 3.0,
-                      "N2": 5.0,
-                      "length": 9.0,
-                      "estimated_program_length": "[masked]",
-                      "purity_ratio": "[masked]",
-                      "vocabulary": 7.0,
                       "volume": "[masked]",
                       "difficulty": "[masked]",
                       "level": "[masked]",

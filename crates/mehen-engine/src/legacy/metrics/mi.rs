@@ -7,7 +7,7 @@ use super::halstead;
 use super::loc;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode};
 use crate::legacy::macros::implement_metric_trait;
 
 /// The `Mi` metric.
@@ -118,7 +118,7 @@ where
     }
 }
 
-implement_metric_trait!([Mi], GoCode, RubyCode, KotlinCode, CCode);
+implement_metric_trait!([Mi], GoCode, KotlinCode, CCode);
 
 // Markdown is a documentation language; Maintainability Index depends on
 // source-code LOC / cyclomatic / Halstead counts which are not applicable.

@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG, RubyCode};
+use crate::legacy::langs::{CCode, GoCode, KotlinCode, LANG};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -187,7 +187,7 @@ macro_rules! impl_wmc {
     );
 }
 
-impl_wmc!(RubyCode, KotlinCode);
+impl_wmc!(KotlinCode);
 
 // Go has no class-like constructs; WMC is not applicable.
 impl Wmc for GoCode {
@@ -208,7 +208,7 @@ impl Wmc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, RubyParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -223,33 +223,6 @@ mod tests {
             "foo.kt",
             |metric| {
                 // class C -> a cyc = 2 (if), b cyc = 1 -> 3
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<RubyParser>(
-            "class C
-                 def a(x)
-                     return 1 if x
-                     return 0
-                 end
-                 def b
-                     1
-                 end
-             end",
-            "foo.rb",
-            |metric| {
                 insta::assert_json_snapshot!(
                     metric.wmc,
                     @r###"

@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::{Kotlin, Ruby};
+use crate::legacy::languages::Kotlin;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
 
@@ -292,39 +292,6 @@ fn record_method(stats: &mut Stats, container: SpaceKind, is_public: bool) {
     };
 }
 
-impl Npm for RubyCode {
-    fn compute(node: &Node, _code: &[u8], stats: &mut Stats) {
-        if !matches!(node.kind_id().into(), Ruby::Method | Ruby::SingletonMethod) {
-            return;
-        }
-        // In the Ruby grammar the class body may be wrapped in a
-        // `body_statement` node, so walk one step up to find the owning
-        // class/module.
-        let mut container = node.parent();
-        if let Some(c) = container
-            && matches!(c.kind_id().into(), Ruby::BodyStatement)
-        {
-            container = c.parent();
-        }
-        let in_class = container.is_some_and(|p| {
-            matches!(
-                p.kind_id().into(),
-                Ruby::Class | Ruby::SingletonClass | Ruby::Module
-            )
-        });
-        if !in_class {
-            return;
-        }
-        // Ruby methods are public by default. Visibility modifiers like
-        // `private`/`protected` are method calls that apply to *subsequent*
-        // definitions; fully tracking that state requires a scan pass and is
-        // out of scope for this single-node compute. Count every method as
-        // public here — this matches the common case and keeps the metric
-        // useful as a rough signal.
-        record_method(stats, SpaceKind::Class, true);
-    }
-}
-
 // Go has no class-like constructs; Npm is not applicable.
 impl Npm for GoCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
@@ -454,7 +421,7 @@ impl Npm for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{KotlinParser, RubyParser};
+    use crate::legacy::langs::KotlinParser;
     use crate::legacy::tools::check_metrics;
 
     #[test]
@@ -598,35 +565,6 @@ mod tests {
                   "total": 2.0,
                   "total_methods": 5.0,
                   "average": 0.4
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn ruby_npm_counts_methods_as_public() {
-        check_metrics::<RubyParser>(
-            "class C
-                 def a; end
-                 def b; end
-             end",
-            "foo.rb",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 0.0,
-                  "class_methods": 2.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 1.0,
-                  "interfaces_average": null,
-                  "total": 2.0,
-                  "total_methods": 2.0,
-                  "average": 1.0
                 }
                 "#
                 );

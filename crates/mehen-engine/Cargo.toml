@@ -54,9 +54,10 @@ walkdir = { workspace = true }
 # `mehen-rust` (ra_ap_syntax) per plan §6.1.
 # `tree-sitter-php` was removed in Phase 8 — PHP now flows through
 # `mehen-php` (Mago) per plan §6.4.
+# `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
+# now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
 tree-sitter = { workspace = true }
 tree-sitter-go = { workspace = true }
-tree-sitter-ruby = { workspace = true }
 tree-sitter-kotlin = { workspace = true }
 tree-sitter-c = { workspace = true }
 tree-sitter-markdown-text = { workspace = true, optional = true }
@@ -106,7 +107,6 @@ lang-powershell = ["dep:mehen-powershell"]
 ignored = [
     "num-traits",
     "tree-sitter-go",
-    "tree-sitter-ruby",
     "tree-sitter-kotlin",
     "tree-sitter-c",
     "tree-sitter-markdown-text",
