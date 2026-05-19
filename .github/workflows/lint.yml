@@ -74,15 +74,19 @@ jobs:
         uses: ./
         with:
           install-method: cargo
-          # `src` carries the Rust source; `docs`, `mehen-book/src`, and the
-          # top-level Markdown files feed the Phase-F `<!-- mehen-docs -->`
-          # documentation-metrics section. Any path that matches one of
-          # mehen's registered Markdown extensions (md/markdown/mdown/
-          # mkd/mkdn/mdx) is routed through the documentation pipeline.
-          # Keep this list in sync with every root Markdown file in the
-          # repo so doc-only PRs do not silently skip the self-check.
+          # `crates` carries the per-language analyzer + engine
+          # source after the 1.0 workspace split; `xtask` is the
+          # build-helper crate. `docs`, `mehen-book/src`, and the
+          # top-level Markdown files feed the Phase-F
+          # `<!-- mehen-docs -->` documentation-metrics section. Any
+          # path that matches one of mehen's registered Markdown
+          # extensions (md/markdown/mdown/mkd/mkdn/mdx) is routed
+          # through the documentation pipeline. Keep this list in
+          # sync with every root Markdown file so doc-only PRs do
+          # not silently skip the self-check.
           paths: |
-            src
+            crates
+            xtask
             docs
             mehen-book/src
             README.md
