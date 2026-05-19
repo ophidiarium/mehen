@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, KotlinCode};
-use crate::legacy::languages::{C, Kotlin};
+use crate::legacy::langs::CCode;
+use crate::legacy::languages::C;
 use crate::legacy::node::Node;
 
 /// The `ABC` metric.
@@ -230,34 +230,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Abc for KotlinCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        use Kotlin::*;
-
-        match node.kind_id().into() {
-            // A: assignments. `property_declaration` with an initializer is
-            // also an assignment (`val x = ...`).
-            Assignment => {
-                stats.assignments += 1.;
-            }
-            PropertyDeclaration if node.is_child(EQ as u16) => {
-                stats.assignments += 1.;
-            }
-            // B: function and constructor calls transfer control.
-            CallExpression => {
-                stats.branches += 1.;
-            }
-            // C: every conditional construct and comparison / logical operator.
-            IfExpression | WhenEntry | CatchBlock | ForStatement | WhileStatement
-            | DoWhileStatement | EQEQ | BANGEQ | EQEQEQ | BANGEQEQ | LT | LTEQ | GT | GTEQ
-            | AMPAMP | PIPEPIPE | QMARKCOLON | QMARKDOT | BANGBANG => {
-                stats.conditions += 1.;
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Abc for CCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use C::*;
@@ -314,26 +286,8 @@ impl Abc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, KotlinParser};
+    use crate::legacy::langs::CParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_abc_basic() {
-        check_metrics::<KotlinParser>(
-            "fun f(a: Int, b: Int): Int {
-                 val c = a + b        // +1 A (val with initializer)
-                 log(c)               // +1 B
-                 if (c > 0) {         // +1 C (if) + +1 C (>)
-                     return c
-                 }
-                 return 0
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(metric.abc);
-            },
-        );
-    }
 
     #[test]
     fn c_abc_counts_else_clause_in_conditions() {

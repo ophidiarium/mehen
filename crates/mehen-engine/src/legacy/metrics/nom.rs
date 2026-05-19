@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, KotlinCode};
+use crate::legacy::langs::CCode;
 use crate::legacy::macros::implement_metric_trait;
 use crate::legacy::node::Node;
 
@@ -188,44 +188,8 @@ where
     }
 }
 
-implement_metric_trait!([Nom], KotlinCode, CCode);
+implement_metric_trait!([Nom], CCode);
 
 // Markdown documents have no functions or closures.
 #[cfg(feature = "markdown")]
 impl Nom for crate::legacy::langs::MarkdownCode {}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::KotlinParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_init_block_is_not_counted_as_function() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 init {
-                     println(\"ready\")
-                 }
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nom,
-                    @r###"
-                    {
-                      "functions": 0.0,
-                      "closures": 0.0,
-                      "functions_average": 0.0,
-                      "closures_average": 0.0,
-                      "total": 0.0,
-                      "average": 0.0,
-                      "functions_min": 0.0,
-                      "functions_max": 0.0,
-                      "closures_min": 0.0,
-                      "closures_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-}

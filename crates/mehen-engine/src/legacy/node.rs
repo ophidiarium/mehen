@@ -73,10 +73,6 @@ impl<'a> Node<'a> {
         self.0.child_by_field_name(name).map(Node)
     }
 
-    pub(crate) fn child(&self, pos: usize) -> Option<Node<'a>> {
-        self.0.child(pos as u32).map(Node)
-    }
-
     pub(crate) fn children(&self) -> impl ExactSizeIterator<Item = Node<'a>> + use<'a> {
         let mut cursor = self.cursor();
         cursor.goto_first_child();
@@ -115,31 +111,6 @@ impl<'a> Cursor<'a> {
 }
 
 impl<'a> Search<'a> for Node<'a> {
-    #[cfg(test)]
-    fn act_on_node(&self, action: &mut dyn FnMut(&Node<'a>)) {
-        let mut cursor = self.cursor();
-        let mut stack = Vec::new();
-        let mut children = Vec::new();
-
-        stack.push(*self);
-
-        while let Some(node) = stack.pop() {
-            action(&node);
-            cursor.reset(&node);
-            if cursor.goto_first_child() {
-                loop {
-                    children.push(cursor.node());
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-                for child in children.drain(..).rev() {
-                    stack.push(child);
-                }
-            }
-        }
-    }
-
     fn act_on_child(&self, action: &mut dyn FnMut(&Node<'a>)) {
         for child in self.children() {
             action(&child);

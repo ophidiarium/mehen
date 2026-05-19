@@ -61,10 +61,10 @@ pub fn init_markdown() {
             // PowerShell (plan §8.2 Phase 3), TypeScript / TSX
             // (Phase 7 Oxc migration), Python (Phase 6 Ruff migration),
             // Rust (Phase 9 ra_ap_syntax migration), PHP (Phase 8 Mago
-            // migration), Ruby (Phase 9 Prism migration), and Go (Phase
-            // 9 walker split) flow through the new registry. C and
-            // Kotlin remain on the legacy dispatcher until their
-            // per-language crates reach parity.
+            // migration), Ruby (Phase 9 Prism migration), Go (Phase 9
+            // walker split), and Kotlin (per-language tree-sitter walker)
+            // flow through the new registry. C remains on the legacy
+            // dispatcher until its per-language crate reaches parity.
             FenceLanguage::Powershell
             | FenceLanguage::Typescript
             | FenceLanguage::Tsx
@@ -72,6 +72,7 @@ pub fn init_markdown() {
             | FenceLanguage::Rust
             | FenceLanguage::Php
             | FenceLanguage::Ruby
+            | FenceLanguage::Kotlin
             | FenceLanguage::Go => dispatch_via_registry(lang, body),
             _ => dispatch_via_legacy(lang, body),
         }
@@ -143,7 +144,6 @@ pub fn init_markdown() {
     fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
         use crate::legacy::langs::LANG;
         Some(match lang {
-            FenceLanguage::Kotlin => LANG::Kotlin,
             FenceLanguage::C => LANG::C,
             // Migrated to per-language crate analyzers; no legacy fallback.
             FenceLanguage::Powershell
@@ -153,6 +153,7 @@ pub fn init_markdown() {
             | FenceLanguage::Rust
             | FenceLanguage::Php
             | FenceLanguage::Ruby
+            | FenceLanguage::Kotlin
             | FenceLanguage::Go => return None,
         })
     }

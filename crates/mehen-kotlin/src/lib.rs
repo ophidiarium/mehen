@@ -1,22 +1,19 @@
 //! `mehen-kotlin` — Kotlin language analyzer.
 //!
-//! Phase 3 implementation: walks `tree-sitter-kotlin` (the
-//! `tree-sitter-kotlin-sg` crate, aliased as `tree-sitter-kotlin` in the
-//! workspace's dependency table) with Kotlin-specific decision rules
-//! mirroring the pre-1.0 `Cyclomatic for KotlinCode`
-//! (`src/metrics/cyclomatic.rs:226-245`).
+//! Tree-sitter-kotlin walker that produces per-space metric output
+//! matching the pre-1.0 `legacy::metrics::*::compute for KotlinCode`
+//! arms. See [`walker`] for the metric coverage table.
 
 #![forbid(unsafe_code)]
 
+mod grammar;
+mod walker;
+
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
-    Result, SourceFile, SourceSpan, SpaceKind, byte_offset_clamped,
+    Result, SourceFile, SourceSpan, byte_offset_clamped,
 };
-use mehen_tree_sitter::{
-    LanguageRules, NodeFacts, ScopeOpen, TreeSitterParser, collect_recovered_errors, empty_space,
-    text_of, walk,
-};
-use tree_sitter::Node;
+use mehen_tree_sitter::{TreeSitterParser, collect_recovered_errors, empty_space};
 
 pub struct KotlinAnalyzer;
 
@@ -29,104 +26,6 @@ impl KotlinAnalyzer {
 impl Default for KotlinAnalyzer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-struct KotlinRules;
-
-impl LanguageRules for KotlinRules {
-    fn scope_for(&self, node: &Node<'_>, source: &[u8]) -> Option<ScopeOpen> {
-        let kind = node.kind();
-        let opened = match kind {
-            "function_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Function,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            "lambda_literal" | "anonymous_function" => ScopeOpen::Open {
-                kind: SpaceKind::Closure,
-                name: None,
-            },
-            "class_declaration" | "object_declaration" => ScopeOpen::Open {
-                kind: SpaceKind::Class,
-                name: node
-                    .child_by_field_name("name")
-                    .map(|n| text_of(&n, source).to_string()),
-            },
-            _ => return None,
-        };
-        Some(opened)
-    }
-
-    fn classify(&self, node: &Node<'_>) -> NodeFacts {
-        let kind = node.kind();
-        // Per pre-1.0 src/metrics/cyclomatic.rs:226-245 (catch is excluded).
-        let cyclomatic_decision = matches!(
-            kind,
-            "if_expression"
-                | "for_statement"
-                | "while_statement"
-                | "do_while_statement"
-                | "when_entry"
-                | "&&"
-                | "||"
-        );
-        let nexit = matches!(
-            kind,
-            "jump_expression" | "return_expression" | "break" | "continue" | "throw_expression"
-        );
-        let halstead_operator = matches!(
-            kind,
-            "+" | "-"
-                | "*"
-                | "/"
-                | "%"
-                | "="
-                | "+="
-                | "-="
-                | "*="
-                | "/="
-                | "%="
-                | "=="
-                | "!="
-                | "<"
-                | ">"
-                | "<="
-                | ">="
-                | "&&"
-                | "||"
-                | "!"
-                | "?:"
-        );
-        let halstead_operand = matches!(
-            kind,
-            "simple_identifier"
-                | "integer_literal"
-                | "real_literal"
-                | "string_literal"
-                | "boolean_literal"
-                | "null_literal"
-                | "this_expression"
-        );
-        let abc_assignment = matches!(kind, "assignment");
-        let abc_branch = matches!(kind, "call_expression");
-        let abc_condition = matches!(kind, "comparison_expression" | "equality_expression");
-        NodeFacts {
-            cyclomatic_decision,
-            cognitive: if cyclomatic_decision {
-                mehen_tree_sitter::CognitiveFact::IncreaseNesting
-            } else {
-                mehen_tree_sitter::CognitiveFact::None
-            },
-            halstead_operator,
-            halstead_operand,
-            nexit,
-            abc_branch,
-            abc_condition,
-            abc_assignment,
-            loc: mehen_tree_sitter::LocFact::Code,
-        }
     }
 }
 
@@ -165,12 +64,7 @@ impl LanguageAnalyzer for KotlinAnalyzer {
             }
         };
 
-        let result = walk(
-            parser.root(),
-            parser.source(),
-            &source.line_index,
-            &KotlinRules,
-        );
+        let root = walker::walk_program(parser.root(), parser.source(), &source.line_index);
         // Tree-sitter recovers from syntax errors by inserting ERROR /
         // missing nodes; surface them as `error` diagnostics so the
         // metric output can't masquerade as clean (plan §9.3).
@@ -179,7 +73,7 @@ impl LanguageAnalyzer for KotlinAnalyzer {
             language: Language::Kotlin,
             backend: AnalysisBackend::TreeSitter,
             diagnostics,
-            root: result.root,
+            root,
             contributions: Vec::new(),
         })
     }
@@ -188,20 +82,42 @@ impl LanguageAnalyzer for KotlinAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mehen_core::{AnalysisConfig, Language, SourceFile};
+    use mehen_core::{AnalysisConfig, Language, SourceFile, SpaceKind};
+
+    fn analyze(source: &str, path: &str) -> LanguageAnalysis {
+        let analyzer = KotlinAnalyzer::new();
+        let file = SourceFile::new(path.into(), Language::Kotlin, source.to_string());
+        analyzer.analyze(&file, &AnalysisConfig::default()).unwrap()
+    }
+
+    #[test]
+    fn empty_file_yields_root_unit() {
+        let a = analyze("", "test.kt");
+        assert_eq!(a.root.kind, SpaceKind::Unit);
+        assert!(a.root.spaces.is_empty());
+    }
 
     #[test]
     fn fun_creates_function_space() {
-        let a = KotlinAnalyzer::new()
-            .analyze(
-                &SourceFile::new(
-                    "a.kt".into(),
-                    Language::Kotlin,
-                    "fun foo(): Int { return 1 }\n".to_string(),
-                ),
-                &AnalysisConfig::default(),
-            )
-            .unwrap();
+        let a = analyze("fun foo(): Int { return 1 }\n", "test.kt");
         assert!(a.root.spaces.iter().any(|s| s.kind == SpaceKind::Function));
+        assert_eq!(a.root.spaces[0].name.as_deref(), Some("foo"));
+    }
+
+    #[test]
+    fn class_creates_class_space_with_method() {
+        let a = analyze("class C { fun m() {} }\n", "test.kt");
+        assert_eq!(a.root.spaces.len(), 1);
+        assert_eq!(a.root.spaces[0].kind, SpaceKind::Class);
+        assert_eq!(a.root.spaces[0].name.as_deref(), Some("C"));
+        assert_eq!(a.root.spaces[0].spaces.len(), 1);
+    }
+
+    #[test]
+    fn interface_creates_interface_space() {
+        let a = analyze("interface I { fun m() }\n", "test.kt");
+        assert_eq!(a.root.spaces.len(), 1);
+        assert_eq!(a.root.spaces[0].kind, SpaceKind::Interface);
+        assert_eq!(a.root.spaces[0].name.as_deref(), Some("I"));
     }
 }

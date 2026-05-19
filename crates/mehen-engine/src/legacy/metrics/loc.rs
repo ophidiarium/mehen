@@ -5,8 +5,8 @@ use serde::Serialize;
 use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
-use crate::legacy::langs::{CCode, KotlinCode};
-use crate::legacy::languages::{C, Kotlin};
+use crate::legacy::langs::CCode;
+use crate::legacy::languages::C;
 use crate::legacy::node::Node;
 
 /// The `SLoc` metric suite.
@@ -564,55 +564,6 @@ fn check_comment_ends_on_code_line(stats: &mut Stats, start_code_line: usize) {
     }
 }
 
-impl Loc for KotlinCode {
-    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Kotlin::*;
-
-        let (start, end) = init(node, stats, is_func_space, is_unit);
-
-        // LLOC kind-set is informed by SonarKotlin's `StatementsVisitor`,
-        // which counts (a) non-declaration block statements and (b) single-
-        // expression branches of `if` / `when` / loops as statements. The
-        // tree-sitter grammar surfaces these as concrete named kinds; we
-        // bump LLOC for those kinds and for declarations (`fun`, `class`,
-        // `object`, secondary constructors, properties) as mehen's LLOC is
-        // declaration-inclusive, matching the other languages in this
-        // crate (e.g. Rust counts `let_declaration` and Ruby counts
-        // `method` / `class`).
-        // Reference:
-        //   sonar-kotlin-metrics/.../StatementsVisitor.kt
-        match node.kind_id().into() {
-            // Containers and string internals that should not contribute
-            // their own physical line.
-            SourceFile | Statements | StringLiteral => {}
-            LineComment | MultilineComment => {
-                add_cloc_lines(stats, start, end);
-            }
-            FunctionDeclaration | ClassDeclaration | ObjectDeclaration | CompanionObject
-            | SecondaryConstructor | PropertyDeclaration | Getter | Setter | Assignment
-            | ForStatement | WhileStatement | DoWhileStatement | IfExpression | WhenExpression
-            | TryExpression | JumpExpression => {
-                stats.lloc.logical_lines += 1;
-            }
-            // Top-level or statement-position call expressions carry
-            // program behavior that isn't already captured by a
-            // surrounding declaration; count them once. Nested calls
-            // inside an initializer still only contribute PLOC.
-            CallExpression
-                if node.parent().is_some_and(|parent| {
-                    matches!(parent.kind_id().into(), Statements | ControlStructureBody)
-                }) =>
-            {
-                stats.lloc.logical_lines += 1;
-            }
-            _ => {
-                check_comment_ends_on_code_line(stats, start);
-                stats.ploc.lines.insert(start);
-            }
-        }
-    }
-}
-
 impl Loc for CCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use C::*;
@@ -667,83 +618,8 @@ impl Loc for crate::legacy::langs::MarkdownCode {
 
 #[cfg(test)]
 mod tests {
-    use crate::legacy::langs::{CParser, KotlinParser};
+    use crate::legacy::langs::CParser;
     use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_simple_loc() {
-        // Inline snapshots don't need hand-counted commentary — the goal
-        // here is to lock down the shape so a grammar or Loc-rule change
-        // won't silently shift Kotlin's SLOC/PLOC/LLOC.
-        check_metrics::<KotlinParser>(
-            "// header
-             fun greet(name: String) {
-                 println(\"hi, \" + name)
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(metric.loc);
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_nested_calls_do_not_add_extra_lloc() {
-        check_metrics::<KotlinParser>(
-            "fun f() {
-                 val x = foo(bar())
-                 foo(bar())
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.loc,
-                    @r###"
-                    {
-                      "sloc": 4.0,
-                      "ploc": 4.0,
-                      "lloc": 3.0,
-                      "cloc": 0.0,
-                      "blank": 0.0,
-                      "sloc_average": 2.0,
-                      "ploc_average": 2.0,
-                      "lloc_average": 1.5,
-                      "cloc_average": 0.0,
-                      "blank_average": 0.0,
-                      "sloc_min": 4.0,
-                      "sloc_max": 4.0,
-                      "cloc_min": 0.0,
-                      "cloc_max": 0.0,
-                      "ploc_min": 4.0,
-                      "ploc_max": 4.0,
-                      "lloc_min": 3.0,
-                      "lloc_max": 3.0,
-                      "blank_min": 0.0,
-                      "blank_max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_counts_companion_and_accessors_as_lloc() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 companion object {
-                     fun make() = C()
-                 }
-
-                 var x: Int = 0
-                     get() = field
-                     set(value) { field = value }
-             }",
-            "foo.kt",
-            |metric| {
-                assert_eq!(metric.loc.lloc(), 7.0);
-            },
-        );
-    }
 
     #[test]
     fn c_typedef_counts_as_lloc() {

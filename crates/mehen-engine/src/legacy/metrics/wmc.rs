@@ -3,7 +3,7 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, KotlinCode, LANG};
+use crate::legacy::langs::{CCode, LANG};
 use crate::legacy::metrics::cyclomatic;
 use crate::legacy::spaces::SpaceKind;
 
@@ -144,21 +144,6 @@ impl Stats {
         }
         !matches!(lang, LANG::C)
     }
-
-    /// Records the kind of the enclosing space. Also flags the stats as
-    /// having observed a class-like space if applicable, so unit-level
-    /// aggregation can distinguish "no classes" from "classes with no
-    /// counted methods".
-    #[inline(always)]
-    pub(crate) fn set_space_kind(&mut self, kind: SpaceKind) {
-        self.space_kind = kind;
-        if matches!(
-            kind,
-            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
-        ) {
-            self.has_class_like = true;
-        }
-    }
 }
 
 pub(crate) trait Wmc
@@ -167,27 +152,6 @@ where
 {
     fn compute(space_kind: SpaceKind, cyclomatic: &cyclomatic::Stats, stats: &mut Stats);
 }
-
-macro_rules! impl_wmc {
-    ($($code:ident),+) => (
-        $(
-           impl Wmc for $code {
-               fn compute(
-                   space_kind: SpaceKind,
-                   cyclomatic: &cyclomatic::Stats,
-                   stats: &mut Stats,
-               ) {
-                   stats.set_space_kind(space_kind);
-                   if matches!(space_kind, SpaceKind::Function) {
-                       stats.cyclomatic = cyclomatic.cyclomatic();
-                   }
-               }
-           }
-        )+
-    );
-}
-
-impl_wmc!(KotlinCode);
 
 // C has no class-like constructs; WMC is not applicable.
 impl Wmc for CCode {
@@ -199,35 +163,4 @@ impl Wmc for CCode {
 #[cfg(feature = "markdown")]
 impl Wmc for crate::legacy::langs::MarkdownCode {
     fn compute(_space_kind: SpaceKind, _cyclomatic: &cyclomatic::Stats, _stats: &mut Stats) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::KotlinParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_wmc_class_sums_method_cyclomatics() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 fun a(x: Int): Int {
-                     return if (x > 0) 1 else 0
-                 }
-                 fun b(): Int { return 1 }
-             }",
-            "foo.kt",
-            |metric| {
-                // class C -> a cyc = 2 (if), b cyc = 1 -> 3
-                insta::assert_json_snapshot!(
-                    metric.wmc,
-                    @r###"
-                    {
-                      "classes": 3.0,
-                      "interfaces": 0.0,
-                      "total": 3.0
-                    }"###
-                );
-            },
-        );
-    }
 }

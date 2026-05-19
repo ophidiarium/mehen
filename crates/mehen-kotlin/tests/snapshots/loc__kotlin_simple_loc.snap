@@ -1,6 +1,7 @@
 ---
-source: crates/mehen-engine/src/legacy/metrics/loc.rs
-expression: metric.loc
+source: crates/mehen-kotlin/tests/loc.rs
+assertion_line: 27
+expression: loc
 ---
 {
   "sloc": 4.0,

@@ -1,8 +1,5 @@
 #![allow(clippy::enum_variant_names)]
 
-pub(crate) mod language_kotlin;
-pub(crate) use language_kotlin::*;
-
 pub(crate) mod language_c;
 pub(crate) use language_c::*;
 

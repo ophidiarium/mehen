@@ -52,8 +52,9 @@ walkdir = { workspace = true }
 # `mehen-php` (Mago) per plan §6.4.
 # `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
 # now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
+# `tree-sitter-kotlin` was removed alongside Kotlin's per-language
+# walker — Kotlin now flows through `mehen-kotlin`.
 tree-sitter = { workspace = true }
-tree-sitter-kotlin = { workspace = true }
 tree-sitter-c = { workspace = true }
 tree-sitter-markdown-text = { workspace = true, optional = true }
 
@@ -101,7 +102,6 @@ lang-powershell = ["dep:mehen-powershell"]
 [package.metadata.cargo-machete]
 ignored = [
     "num-traits",
-    "tree-sitter-kotlin",
     "tree-sitter-c",
     "tree-sitter-markdown-text",
 ]

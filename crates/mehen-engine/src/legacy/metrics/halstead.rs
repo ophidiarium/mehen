@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::getter::Getter;
-use crate::legacy::langs::{CCode, KotlinCode};
+use crate::legacy::langs::CCode;
 use crate::legacy::node::Node;
 
 /// The `Halstead` metric suite.
@@ -282,12 +282,6 @@ fn compute_halstead<'a, T: Getter>(
     }
 }
 
-impl Halstead for KotlinCode {
-    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
-        compute_halstead::<Self>(node, code, halstead_maps);
-    }
-}
-
 impl Halstead for CCode {
     fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
         compute_halstead::<Self>(node, code, halstead_maps);
@@ -300,54 +294,4 @@ impl Halstead for CCode {
 #[cfg(feature = "markdown")]
 impl Halstead for crate::legacy::langs::MarkdownCode {
     fn compute<'a>(_node: &Node<'a>, _code: &'a [u8], _halstead_maps: &mut HalsteadMaps<'a>) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::KotlinParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_operators_and_operands() {
-        check_metrics::<KotlinParser>(
-            "fun add(a: Int, b: Int): Int {
-                 return a + b
-             }",
-            "foo.kt",
-            |metric| {
-                // Only core counts are locked in; derived measures shift with
-                // the vocabulary in ways that aren't meaningful to assert.
-                insta::assert_json_snapshot!(
-                    metric.halstead,
-                    {
-                        ".estimated_program_length" => "[masked]",
-                        ".purity_ratio" => "[masked]",
-                        ".volume" => "[masked]",
-                        ".difficulty" => "[masked]",
-                        ".level" => "[masked]",
-                        ".effort" => "[masked]",
-                        ".time" => "[masked]",
-                        ".bugs" => "[masked]"
-                    },
-                    @r###"
-                    {
-                      "n1": 7.0,
-                      "N1": 9.0,
-                      "n2": 4.0,
-                      "N2": 8.0,
-                      "length": 17.0,
-                      "estimated_program_length": "[masked]",
-                      "purity_ratio": "[masked]",
-                      "vocabulary": 11.0,
-                      "volume": "[masked]",
-                      "difficulty": "[masked]",
-                      "level": "[masked]",
-                      "effort": "[masked]",
-                      "time": "[masked]",
-                      "bugs": "[masked]"
-                    }"###
-                );
-            },
-        );
-    }
 }

@@ -61,10 +61,5 @@ pub(crate) trait ParserTrait {
 }
 
 pub(crate) trait Search<'a> {
-    /// Walk every node under `self`, depth-first, and invoke `pred` on
-    /// each. Only consumed by per-language tests in `getter.rs` — clippy
-    /// flags it as dead in non-test builds, hence the `cfg(test)` gate.
-    #[cfg(test)]
-    fn act_on_node(&self, pred: &mut dyn FnMut(&Node<'a>));
     fn act_on_child(&self, action: &mut dyn FnMut(&Node<'a>));
 }

@@ -4,24 +4,8 @@ use std::fmt;
 
 use crate::legacy::checker::Checker;
 use crate::legacy::langs::{LANG, *};
-use crate::legacy::languages::Kotlin;
 use crate::legacy::node::Node;
 use crate::legacy::spaces::SpaceKind;
-
-/// Classifies a function space as a method of a class or interface when its
-/// `Npm::compute` pass detected it as such. Propagated up during `merge` so
-/// the enclosing class/interface space increments its counters exactly once.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum MethodRole {
-    #[default]
-    None,
-    ClassMethod {
-        public: bool,
-    },
-    InterfaceMethod {
-        public: bool,
-    },
-}
 
 /// The `Npm` metric.
 ///
@@ -39,9 +23,6 @@ pub(crate) struct Stats {
     interface_nm_sum: usize,
     space_kind: SpaceKind,
     not_applicable: bool,
-    /// Classification of *this* function-space, set when `Npm::compute`
-    /// recognises the node that opens the space as a method.
-    method_role: MethodRole,
     /// True once any class-like or interface-like space has been observed in
     /// the subtree being aggregated. Kept separate from the numeric sums so
     /// an empty class / interface (no methods) still keeps unit-level `npm`
@@ -89,30 +70,6 @@ impl fmt::Display for Stats {
 impl Stats {
     /// Merges a second `Npm` metric into the first one
     pub(crate) fn merge(&mut self, other: &Self) {
-        use SpaceKind::*;
-
-        // If the child space was classified as a method, bump the enclosing
-        // class/interface counters by one. We prefer the child's explicit
-        // role over a kind-based heuristic so Rust `impl` / `trait` routing
-        // is correct too.
-        if matches!(self.space_kind, Class | Impl | Interface | Trait | Unit) {
-            match other.method_role {
-                MethodRole::ClassMethod { public } => {
-                    self.class_nm += 1;
-                    if public {
-                        self.class_npm += 1;
-                    }
-                }
-                MethodRole::InterfaceMethod { public } => {
-                    self.interface_nm += 1;
-                    if public {
-                        self.interface_npm += 1;
-                    }
-                }
-                MethodRole::None => {}
-            }
-        }
-
         self.class_npm_sum += other.class_npm_sum;
         self.interface_npm_sum += other.interface_npm_sum;
         self.class_nm_sum += other.class_nm_sum;
@@ -272,298 +229,13 @@ where
     fn compute(node: &Node, code: &[u8], stats: &mut Stats);
 }
 
-/// Flags the method's own function-space with its role. `merge` later uses
-/// this flag to increment the enclosing class or interface counters by one,
-/// which avoids the double-counting that happens when counters are carried
-/// on both the method's and its parent's own `class_nm`/`class_nm_sum`.
-///
-/// `container` is the `SpaceKind` of the class-like or interface-like space
-/// that owns this method (derived from the AST parent chain, not
-/// `stats.space_kind`, since the method's stats are created with
-/// `space_kind = Function`).
-#[inline(always)]
-fn record_method(stats: &mut Stats, container: SpaceKind, is_public: bool) {
-    stats.method_role = match container {
-        SpaceKind::Class | SpaceKind::Impl => MethodRole::ClassMethod { public: is_public },
-        SpaceKind::Interface | SpaceKind::Trait => {
-            MethodRole::InterfaceMethod { public: is_public }
-        }
-        _ => return,
-    };
-}
-
 // C has no class-like constructs; Npm is not applicable.
 impl Npm for CCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
-}
-
-/// Explicit Kotlin visibility on a declaration-like node.
-pub(crate) fn kotlin_member_visibility(node: &Node, code: &[u8]) -> Option<bool> {
-    for child in node.children() {
-        if !matches!(
-            child.kind_id().into(),
-            Kotlin::Modifiers | Kotlin::ParameterModifiers
-        ) {
-            continue;
-        }
-        for m in child.children() {
-            if m.kind_id() != Kotlin::VisibilityModifier {
-                continue;
-            }
-            let text = &code[m.start_byte()..m.end_byte()];
-            if text == b"private" || text == b"protected" || text == b"internal" {
-                return Some(false);
-            }
-            if text == b"public" {
-                return Some(true);
-            }
-        }
-    }
-    None
-}
-
-/// Whether a Kotlin class member is public. Defaults to `public`; explicit
-/// `private`/`protected`/`internal` modifiers override.
-pub(crate) fn kotlin_member_is_public(node: &Node, code: &[u8]) -> bool {
-    kotlin_member_visibility(node, code).unwrap_or(true)
-}
-
-fn kotlin_previous_property_visibility(node: &Node, code: &[u8]) -> Option<bool> {
-    let parent = node.parent()?;
-    let mut property_visibility = None;
-
-    for child in parent.children() {
-        if child.id() == node.id() {
-            break;
-        }
-        if child.kind_id() == Kotlin::PropertyDeclaration {
-            property_visibility = kotlin_member_visibility(&child, code);
-        }
-    }
-
-    property_visibility
-}
-
-fn kotlin_accessor_is_public(node: &Node, code: &[u8]) -> bool {
-    kotlin_member_visibility(node, code)
-        .or_else(|| kotlin_previous_property_visibility(node, code))
-        .unwrap_or(true)
-}
-
-/// Returns the `SpaceKind` container for a Kotlin member whose parent node
-/// is a `class_body` / `enum_class_body`. The tree-sitter-kotlin grammar
-/// uses a single `class_declaration` node for classes, interfaces, and
-/// enums, disambiguated only by the `class` / `interface` / `enum`
-/// keyword child — so to tell an interface from a class we have to look
-/// at the declaration's keyword children.
-pub(crate) fn kotlin_member_container(body_parent: &Node) -> Option<SpaceKind> {
-    // `body_parent` is a `class_body` / `enum_class_body`. Its parent is
-    // the `class_declaration` (or `object_declaration`). For interfaces
-    // the declaration contains an `interface` keyword child; otherwise
-    // the member lives in a class-like container.
-    let decl = body_parent.parent()?;
-    match decl.kind_id().into() {
-        Kotlin::ClassDeclaration => {
-            if decl.children().any(|c| c.kind_id() == Kotlin::Interface) {
-                Some(SpaceKind::Interface)
-            } else {
-                Some(SpaceKind::Class)
-            }
-        }
-        Kotlin::ObjectDeclaration | Kotlin::CompanionObject => Some(SpaceKind::Class),
-        _ => None,
-    }
-}
-
-impl Npm for KotlinCode {
-    fn compute(node: &Node, code: &[u8], stats: &mut Stats) {
-        if !matches!(
-            node.kind_id().into(),
-            Kotlin::FunctionDeclaration
-                | Kotlin::SecondaryConstructor
-                | Kotlin::Getter
-                | Kotlin::Setter
-        ) {
-            return;
-        }
-        let parent = match node.parent() {
-            Some(p) => p,
-            None => return,
-        };
-        if !matches!(
-            parent.kind_id().into(),
-            Kotlin::ClassBody | Kotlin::EnumClassBody
-        ) {
-            return;
-        }
-        let Some(container) = kotlin_member_container(&parent) else {
-            return;
-        };
-        let public = if matches!(node.kind_id().into(), Kotlin::Getter | Kotlin::Setter) {
-            kotlin_accessor_is_public(node, code)
-        } else {
-            kotlin_member_is_public(node, code)
-        };
-        record_method(stats, container, public);
-    }
 }
 
 // Markdown has no methods; NPM opts out via `applies_to(LANG::Markdown)`.
 #[cfg(feature = "markdown")]
 impl Npm for crate::legacy::langs::MarkdownCode {
     fn compute(_node: &Node, _code: &[u8], _stats: &mut Stats) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::KotlinParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_npm_counts_visibility_modifiers() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 fun a() {}
-                 public fun b() {}
-                 private fun c() {}
-                 protected fun d() {}
-                 internal fun e() {}
-             }",
-            "foo.kt",
-            |metric| {
-                // public: a, b. non-public: c, d, e.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 0.0,
-                  "class_methods": 5.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.4,
-                  "interfaces_average": null,
-                  "total": 2.0,
-                  "total_methods": 5.0,
-                  "average": 0.4
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_npm_routes_interface_methods_to_interface_counters() {
-        // tree-sitter-kotlin parses `class` and `interface` into the same
-        // `class_declaration` node; only the leading keyword child
-        // distinguishes them. Interface methods must land in the
-        // interface_methods / interfaces counters, not class_methods /
-        // classes. Regression for PR review comment requesting proper
-        // class-vs-interface routing.
-        check_metrics::<KotlinParser>(
-            "interface Foo {
-                 fun a()
-                 fun b(): Int
-             }
-
-             class Bar {
-                 fun c() {}
-                 fun d() {}
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 2.0,
-                  "class_methods": 2.0,
-                  "interface_methods": 2.0,
-                  "classes_average": 1.0,
-                  "interfaces_average": 1.0,
-                  "total": 4.0,
-                  "total_methods": 4.0,
-                  "average": 1.0
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_npm_counts_secondary_constructors() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 constructor()
-                 private constructor(x: Int)
-                 internal constructor(y: String)
-                 fun visible() {}
-             }",
-            "foo.kt",
-            |metric| {
-                // public: default-visible constructor and visible().
-                // non-public: private/internal secondary constructors.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 2.0,
-                  "interfaces": 0.0,
-                  "class_methods": 4.0,
-                  "interface_methods": 0.0,
-                  "classes_average": 0.5,
-                  "interfaces_average": null,
-                  "total": 2.0,
-                  "total_methods": 4.0,
-                  "average": 0.5
-                }
-                "#
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_npm_counts_property_accessors() {
-        check_metrics::<KotlinParser>(
-            "class C {
-                 var x: Int = 0
-                     get() = field
-                     private set(value) { field = value }
-
-                 private var hidden: Int = 0
-                     get() = field
-                     set(value) { field = value }
-             }
-
-             interface I {
-                 val y: Int
-                     get() = 1
-             }",
-            "foo.kt",
-            |metric| {
-                // class C -> public getter + private setter, plus two private
-                // accessors inheriting from private property visibility.
-                // interface I -> public getter.
-                insta::assert_json_snapshot!(
-                    metric.npm,
-                    @r#"
-                {
-                  "classes": 1.0,
-                  "interfaces": 1.0,
-                  "class_methods": 4.0,
-                  "interface_methods": 1.0,
-                  "classes_average": 0.25,
-                  "interfaces_average": 1.0,
-                  "total": 2.0,
-                  "total_methods": 5.0,
-                  "average": 0.4
-                }
-                "#
-                );
-            },
-        );
-    }
 }

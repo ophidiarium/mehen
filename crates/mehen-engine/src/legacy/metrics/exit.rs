@@ -3,8 +3,8 @@ use serde::ser::{SerializeStruct, Serializer};
 use std::fmt;
 
 use crate::legacy::checker::Checker;
-use crate::legacy::langs::{CCode, KotlinCode};
-use crate::legacy::languages::{C, Kotlin};
+use crate::legacy::langs::CCode;
+use crate::legacy::languages::C;
 use crate::legacy::node::Node;
 
 /// The `NExit` metric.
@@ -111,27 +111,6 @@ where
     fn compute(node: &Node, stats: &mut Stats);
 }
 
-impl Exit for KotlinCode {
-    fn compute(node: &Node, stats: &mut Stats) {
-        // Function exit points in Kotlin are bare `return` and `throw` — both
-        // transfer control out of the enclosing function. The grammar wraps
-        // all jumps (`return`, `throw`, `continue`, `break`, and their `@label`
-        // forms) in a single `jump_expression` named node, so we look at the
-        // lead keyword child to filter out loop-local `continue` / `break` and
-        // lambda-local `return@label`.
-        //
-        // Matches the spirit of mozilla/rust-code-analysis's exit metric for
-        // other languages (e.g. Rust counts `return`/`?`, TypeScript counts
-        // `return`/`throw`).
-        if node.kind_id() == Kotlin::JumpExpression {
-            let lead = node.child(0).map(|c| c.kind_id().into());
-            if matches!(lead, Some(Kotlin::Return) | Some(Kotlin::Throw)) {
-                stats.exit += 1;
-            }
-        }
-    }
-}
-
 // No languages require empty Exit implementations
 // implement_metric_trait!(Exit);
 
@@ -150,59 +129,4 @@ impl Exit for CCode {
 #[cfg(feature = "markdown")]
 impl Exit for crate::legacy::langs::MarkdownCode {
     fn compute(_node: &Node, _stats: &mut Stats) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::legacy::langs::KotlinParser;
-    use crate::legacy::tools::check_metrics;
-
-    #[test]
-    fn kotlin_return_and_throw_count_as_exits() {
-        check_metrics::<KotlinParser>(
-            "fun f(a: Int): Int {
-                 if (a < 0) {
-                     throw IllegalArgumentException(\"bad\")
-                 }
-                 return a
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 2.0,
-                      "average": 2.0,
-                      "min": 0.0,
-                      "max": 2.0
-                    }"###
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn kotlin_labeled_lambda_return_does_not_count_as_function_exit() {
-        check_metrics::<KotlinParser>(
-            "fun f(xs: List<Int>) {
-                 xs.forEach { x ->
-                     if (x < 0) return@forEach
-                 }
-             }",
-            "foo.kt",
-            |metric| {
-                insta::assert_json_snapshot!(
-                    metric.nexits,
-                    @r###"
-                    {
-                      "sum": 0.0,
-                      "average": 0.0,
-                      "min": 0.0,
-                      "max": 0.0
-                    }"###
-                );
-            },
-        );
-    }
 }
