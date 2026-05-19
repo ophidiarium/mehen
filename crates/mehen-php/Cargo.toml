@@ -16,7 +16,6 @@ mago-syntax = { workspace = true }
 mago-syntax-core = { workspace = true }
 mago-database = { workspace = true }
 mago-span = { workspace = true }
-mago-php-version = { workspace = true }
 bumpalo = { workspace = true }
 smol_str = { workspace = true }
 

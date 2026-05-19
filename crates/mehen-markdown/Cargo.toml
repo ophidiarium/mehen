@@ -11,13 +11,14 @@ publish = false
 
 [dependencies]
 mehen-core = { workspace = true }
-mehen-metrics = { workspace = true }
 num = { workspace = true }
 num-derive = { workspace = true }
+# Required transitively by `num_derive::FromPrimitive` in `grammar.rs`
+# — the derive expansion references `num_traits::FromPrimitive` by
+# absolute path. Keep as a direct dependency and silence cargo-machete.
 num-traits = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-markdown-text = { workspace = true }
 unicode-script = { workspace = true }
@@ -35,6 +36,9 @@ mehen-engine = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["num-traits"]
 
 [lints]
 workspace = true

@@ -11,7 +11,6 @@ publish = false
 
 [dependencies]
 mehen-core = { workspace = true }
-mehen-metrics = { workspace = true }
 mehen-markdown = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
