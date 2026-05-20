@@ -1,40 +1,18 @@
-//! Pre-1.0 metric and analysis machinery, relocated wholesale from the
-//! pre-1.0 `mehen/src/` tree per rewrite plan §8.
+//! Pre-1.0 `diff` and `top-offenders` orchestrators retained verbatim.
 //!
-//! Each item is re-exposed under `mehen_engine::legacy::*` so the
-//! transitional thin wrapper at `mehen/src/lib.rs` can re-export them
-//! through the original `crate::*` paths (`crate::legacy::langs::LANG`,
-//! `crate::legacy::metrics::*`, `crate::legacy::diff::*`, `crate::legacy::top_offenders::*` …)
-//! and keep every pre-1.0 test, snapshot and CLI command compiling
-//! without modification.
-//!
-//! Phase 5 lives here unchanged from the pre-1.0 layout — the legacy
-//! tree splits into `mehen-metrics`, the per-language analyzer crates
-//! and `mehen-engine` proper as the new analyzers reach parity (plan
-//! §8.2 / §8.3). The unsafe-code lint is relaxed because the legacy
-//! `mehen-pre1` crate did not deny it, and a few macro-generated
-//! tests rely on `unsafe` extern declarations for tree-sitter
-//! grammars.
-#![allow(unsafe_code)]
-#![allow(clippy::upper_case_acronyms)]
+//! After the per-language migrations (Python/TS/PHP/Ruby/Rust/Go/C/Kotlin/
+//! PowerShell), every analyzer flows through `mehen-engine::AnalyzerRegistry`
+//! and the legacy tree-sitter walker is gone. What remains here is the
+//! pre-1.0 CLI dispatch surface — `run_diff`, `run_top_offenders`, the
+//! shared metric selector catalogue, the rayon-based file walker, and the
+//! glob helper — kept until plan §7 Phase 5 ports the orchestrators to the
+//! new `analyze_diff` / `rank_top_offenders` entry points and rewires
+//! `mehen-cli` directly.
 
-pub(crate) mod alterator;
-pub(crate) mod checker;
 pub(crate) mod concurrent_files;
 pub(crate) mod diff;
-pub(crate) mod getter;
-pub(crate) mod langs;
-pub(crate) mod languages;
-pub(crate) mod macros;
 pub(crate) mod metric_selector;
-pub(crate) mod metrics;
-pub(crate) mod node;
-pub(crate) mod parser;
-pub(crate) mod preproc;
-pub(crate) mod spaces;
-pub(crate) mod tools;
 pub(crate) mod top_offenders;
-pub(crate) mod traits;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 

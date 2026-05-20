@@ -1,9 +1,0 @@
-#![allow(clippy::enum_variant_names)]
-
-pub(crate) mod language_c;
-pub(crate) use language_c::*;
-
-#[cfg(feature = "markdown")]
-pub(crate) mod language_markdown;
-#[cfg(feature = "markdown")]
-pub(crate) use language_markdown::Markdown;

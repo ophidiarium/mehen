@@ -45,50 +45,22 @@ pub use legacy::top_offenders::{TopOffendersOpts, run_top_offenders};
 /// `OnceLock` inside `mehen-markdown`, so repeat calls are silent
 /// no-ops.
 ///
-/// PowerShell fences route through the new [`AnalyzerRegistry`]
-/// (the `mehen-powershell` analyzer is at parity per plan §8.2);
-/// the remaining languages still flow through
-/// `legacy::langs::get_function_spaces` until their per-language
-/// crates reach parity. Each fence-language switch lives in
-/// `dispatch_per_language` so the migration tracks one match arm
-/// at a time.
-#[cfg(feature = "markdown")]
+/// Every supported fence language is now backed by a per-language
+/// analyzer crate, so this dispatch path goes straight through the
+/// new `AnalyzerRegistry`.
 pub fn init_markdown() {
     mehen_markdown::set_legacy_dispatch(markdown_dispatch::dispatch);
 }
 
-#[cfg(feature = "markdown")]
 mod markdown_dispatch {
     use mehen_markdown::{EmbeddedFenceMetrics, FenceLanguage};
 
     use crate::AnalyzerRegistry;
 
+    /// Run the AnalyzerRegistry against a fence body. Every supported
+    /// fence language now has a per-language analyzer crate, so this
+    /// is the only dispatch path Markdown needs.
     pub(super) fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
-        match lang {
-            // PowerShell (plan §8.2 Phase 3), TypeScript / TSX
-            // (Phase 7 Oxc migration), Python (Phase 6 Ruff migration),
-            // Rust (Phase 9 ra_ap_syntax migration), PHP (Phase 8 Mago
-            // migration), Ruby (Phase 9 Prism migration), Go (Phase 9
-            // walker split), and Kotlin (per-language tree-sitter walker)
-            // flow through the new registry. C remains on the legacy
-            // dispatcher until its per-language crate reaches parity.
-            FenceLanguage::Powershell
-            | FenceLanguage::Typescript
-            | FenceLanguage::Tsx
-            | FenceLanguage::Python
-            | FenceLanguage::Rust
-            | FenceLanguage::Php
-            | FenceLanguage::Ruby
-            | FenceLanguage::Kotlin
-            | FenceLanguage::Go => dispatch_via_registry(lang, body),
-            _ => dispatch_via_legacy(lang, body),
-        }
-    }
-
-    pub(super) fn dispatch_via_registry(
-        lang: FenceLanguage,
-        body: String,
-    ) -> Option<EmbeddedFenceMetrics> {
         use mehen_core::{AnalysisConfig, MetricKey, SourceFile, keys};
 
         let language = language_for(lang);
@@ -120,23 +92,6 @@ mod markdown_dispatch {
         })
     }
 
-    fn dispatch_via_legacy(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
-        let bytes = body.into_bytes();
-        let path = synthetic_path(lang);
-        let legacy_lang = legacy_lang_for(lang)?;
-        let space = crate::legacy::langs::get_function_spaces(
-            &legacy_lang,
-            bytes,
-            std::path::Path::new(&path),
-            None,
-        )?;
-        Some(EmbeddedFenceMetrics {
-            volume: space.metrics.halstead.volume(),
-            cognitive_sum: space.metrics.cognitive.cognitive_sum(),
-            sloc: space.metrics.loc.sloc(),
-        })
-    }
-
     fn synthetic_path(lang: FenceLanguage) -> std::path::PathBuf {
         let name = match lang {
             FenceLanguage::Rust => "fence.rs",
@@ -151,29 +106,6 @@ mod markdown_dispatch {
             FenceLanguage::Php => "fence.php",
         };
         std::path::PathBuf::from(name)
-    }
-
-    /// Map a fence language to its legacy `LANG` variant. Languages
-    /// that have completed their Oxc / Ruff / Mago / ra_ap_syntax /
-    /// Prism migration (currently PowerShell + TypeScript / TSX +
-    /// Python + Rust + PHP + Ruby) return `None` — they route through
-    /// `dispatch_via_registry`, which lets each migrated per-language
-    /// crate's analyzer drive the embedded fence metrics.
-    fn legacy_lang_for(lang: FenceLanguage) -> Option<crate::legacy::langs::LANG> {
-        use crate::legacy::langs::LANG;
-        Some(match lang {
-            FenceLanguage::C => LANG::C,
-            // Migrated to per-language crate analyzers; no legacy fallback.
-            FenceLanguage::Powershell
-            | FenceLanguage::Typescript
-            | FenceLanguage::Tsx
-            | FenceLanguage::Python
-            | FenceLanguage::Rust
-            | FenceLanguage::Php
-            | FenceLanguage::Ruby
-            | FenceLanguage::Kotlin
-            | FenceLanguage::Go => return None,
-        })
     }
 
     fn language_for(lang: FenceLanguage) -> mehen_core::Language {
@@ -205,13 +137,13 @@ mod markdown_dispatch {
         #[test]
         fn registry_dispatch_drops_blocking_diagnostic_python() {
             let bad = "def f(:\n    return 1\n".to_string();
-            assert!(dispatch_via_registry(FenceLanguage::Python, bad).is_none());
+            assert!(dispatch(FenceLanguage::Python, bad).is_none());
         }
 
         #[test]
         fn registry_dispatch_keeps_clean_python() {
             let good = "def f():\n    return 1\n".to_string();
-            assert!(dispatch_via_registry(FenceLanguage::Python, good).is_some());
+            assert!(dispatch(FenceLanguage::Python, good).is_some());
         }
     }
 }

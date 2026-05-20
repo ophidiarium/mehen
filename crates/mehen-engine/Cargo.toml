@@ -13,11 +13,11 @@ publish = false
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
 mehen-git = { workspace = true }
-mehen-report = { workspace = true, optional = true }
+mehen-report = { workspace = true, features = ["docs-diff"] }
+mehen-markdown = { workspace = true }
 
-# Language analyzer crates — feature-gated via the `default` feature set.
-# Phase 1 keeps every language compiled in so the registry is exercised.
-mehen-markdown = { workspace = true, optional = true }
+# Language analyzer crates — feature-gated via the per-language `lang-*`
+# features below. The `default` set compiles every analyzer in.
 mehen-python = { workspace = true, optional = true }
 mehen-typescript = { workspace = true, optional = true }
 mehen-php = { workspace = true, optional = true }
@@ -34,29 +34,9 @@ crossbeam = { workspace = true }
 globset = { workspace = true }
 gix = { workspace = true }
 log = { workspace = true }
-num = { workspace = true }
-num-derive = { workspace = true }
-num-traits = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
-
-# tree-sitter grammars used by the legacy analyzer pipeline.
-# `tree-sitter-typescript` was removed in Phase 7 — TS / TSX / JS / JSX
-# now flow through `mehen-typescript` (Oxc) per plan §8.2.
-# `tree-sitter-python` was removed in Phase 6 — Python now flows through
-# `mehen-python` (Ruff) per plan §6.2.
-# `tree-sitter-rust` was removed in Phase 9 — Rust now flows through
-# `mehen-rust` (ra_ap_syntax) per plan §6.1.
-# `tree-sitter-php` was removed in Phase 8 — PHP now flows through
-# `mehen-php` (Mago) per plan §6.4.
-# `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
-# now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
-# `tree-sitter-kotlin` was removed alongside Kotlin's per-language
-# walker — Kotlin now flows through `mehen-kotlin`.
-tree-sitter = { workspace = true }
-tree-sitter-c = { workspace = true }
-tree-sitter-markdown-text = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta = { workspace = true }
@@ -65,8 +45,6 @@ tempfile = { workspace = true }
 
 [features]
 default = [
-    "markdown",
-    "lang-markdown",
     "lang-python",
     "lang-typescript",
     "lang-php",
@@ -77,18 +55,6 @@ default = [
     "lang-kotlin",
     "lang-powershell",
 ]
-# Legacy `markdown` feature — gates the markdown analyzer & document
-# diff renderer in the relocated `legacy/` machinery (matches the
-# pre-1.0 root-crate `markdown` feature). Pulls in `mehen-report`'s
-# `docs-diff` feature so `legacy::diff` can call into the
-# `github_markdown_docs` template catalog.
-markdown = [
-    "dep:mehen-markdown",
-    "dep:mehen-report",
-    "mehen-report/docs-diff",
-    "dep:tree-sitter-markdown-text",
-]
-lang-markdown = ["dep:mehen-markdown"]
 lang-python = ["dep:mehen-python"]
 lang-typescript = ["dep:mehen-typescript"]
 lang-php = ["dep:mehen-php"]
@@ -98,13 +64,6 @@ lang-go = ["dep:mehen-go"]
 lang-c = ["dep:mehen-c"]
 lang-kotlin = ["dep:mehen-kotlin"]
 lang-powershell = ["dep:mehen-powershell"]
-
-[package.metadata.cargo-machete]
-ignored = [
-    "num-traits",
-    "tree-sitter-c",
-    "tree-sitter-markdown-text",
-]
 
 [lints]
 workspace = true

@@ -16,7 +16,6 @@ tree-sitter-python = "=0.25.0"
 tree-sitter-rust = "=0.24.2"
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
-tree-sitter-c = "=0.24.2"
 tree-sitter-php = "=0.24.2"
 tree-sitter-markdown-text = "=0.2.1"
 

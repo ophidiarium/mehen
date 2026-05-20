@@ -1,8 +1,11 @@
 // Code generated; DO NOT EDIT.
 
+#![allow(clippy::enum_variant_names)]
+#![allow(clippy::upper_case_acronyms)]
+
 use num_derive::FromPrimitive;
 
-#[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
 pub(crate) enum C {
     End = 0,
     Identifier = 1,
@@ -368,7 +371,6 @@ pub(crate) enum C {
     StatementIdentifier = 361,
     TypeIdentifier = 362,
     Error = 363,
-    
 }
 
 impl From<C> for &'static str {
@@ -702,9 +704,13 @@ impl From<C> for &'static str {
             C::TranslationUnitRepeat1 => "translation_unit_repeat1",
             C::PreprocParamsRepeat1 => "preproc_params_repeat1",
             C::PreprocIfRepeat1 => "preproc_if_repeat1",
-            C::PreprocIfInFieldDeclarationListRepeat1 => "preproc_if_in_field_declaration_list_repeat1",
+            C::PreprocIfInFieldDeclarationListRepeat1 => {
+                "preproc_if_in_field_declaration_list_repeat1"
+            }
             C::PreprocIfInEnumeratorListRepeat1 => "preproc_if_in_enumerator_list_repeat1",
-            C::PreprocIfInEnumeratorListNoCommaRepeat1 => "preproc_if_in_enumerator_list_no_comma_repeat1",
+            C::PreprocIfInEnumeratorListNoCommaRepeat1 => {
+                "preproc_if_in_enumerator_list_no_comma_repeat1"
+            }
             C::PreprocArgumentListRepeat1 => "preproc_argument_list_repeat1",
             C::OldStyleFunctionDefinitionRepeat1 => "_old_style_function_definition_repeat1",
             C::DeclarationRepeat1 => "declaration_repeat1",
@@ -739,7 +745,6 @@ impl From<C> for &'static str {
             C::StatementIdentifier => "statement_identifier",
             C::TypeIdentifier => "type_identifier",
             C::Error => "ERROR",
-            
         }
     }
 }

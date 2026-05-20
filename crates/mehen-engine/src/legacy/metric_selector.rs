@@ -7,8 +7,6 @@
 
 use mehen_core::{MetricKey, MetricSpace};
 
-use crate::legacy::spaces::FuncSpace;
-
 /// Whether a metric is "better" when higher or lower.
 ///
 /// Used by callers to interpret deltas/rankings (e.g. `Cyclomatic` is
@@ -28,43 +26,19 @@ pub(crate) struct MetricSelector {
     pub polarity: Polarity,
 }
 
-type MetricDef = (&'static str, &'static str, Polarity, fn(&FuncSpace) -> f64);
+type MetricDef = (&'static str, &'static str, Polarity);
 
 /// Catalogue of metrics that can be referenced by name from the CLI.
 pub(crate) const KNOWN_METRICS: &[MetricDef] = &[
-    ("cyclomatic", "Cyclomatic", Polarity::LowerIsBetter, |s| {
-        s.metrics.cyclomatic.cyclomatic_sum()
-    }),
-    ("cognitive", "Cognitive", Polarity::LowerIsBetter, |s| {
-        s.metrics.cognitive.cognitive_sum()
-    }),
-    ("nom.functions", "Functions", Polarity::LowerIsBetter, |s| {
-        s.metrics.nom.functions_sum()
-    }),
-    ("loc.lloc", "LLOC", Polarity::LowerIsBetter, |s| {
-        s.metrics.loc.lloc()
-    }),
-    (
-        "mi.original",
-        "MI (Original)",
-        Polarity::HigherIsBetter,
-        |s| s.metrics.mi.mi_original(),
-    ),
-    ("mi.sei", "MI (SEI)", Polarity::HigherIsBetter, |s| {
-        s.metrics.mi.mi_sei()
-    }),
-    ("mi.visual_studio", "MI", Polarity::HigherIsBetter, |s| {
-        s.metrics.mi.mi_visual_studio()
-    }),
-    (
-        "halstead.volume",
-        "Halstead Vol",
-        Polarity::LowerIsBetter,
-        |s| s.metrics.halstead.volume(),
-    ),
-    ("abc", "ABC", Polarity::LowerIsBetter, |s| {
-        s.metrics.abc.magnitude_sum()
-    }),
+    ("cyclomatic", "Cyclomatic", Polarity::LowerIsBetter),
+    ("cognitive", "Cognitive", Polarity::LowerIsBetter),
+    ("nom.functions", "Functions", Polarity::LowerIsBetter),
+    ("loc.lloc", "LLOC", Polarity::LowerIsBetter),
+    ("mi.original", "MI (Original)", Polarity::HigherIsBetter),
+    ("mi.sei", "MI (SEI)", Polarity::HigherIsBetter),
+    ("mi.visual_studio", "MI", Polarity::HigherIsBetter),
+    ("halstead.volume", "Halstead Vol", Polarity::LowerIsBetter),
+    ("abc", "ABC", Polarity::LowerIsBetter),
 ];
 
 /// Default metric set for `diff` (kept here so both diff and top-offenders
@@ -104,8 +78,7 @@ pub(crate) fn parse_metric_selectors(specs: &[String]) -> Vec<MetricSelector> {
             (None, spec)
         };
 
-        if let Some(&(n, label, default_polarity, _extract)) =
-            KNOWN_METRICS.iter().find(|(n, ..)| *n == name)
+        if let Some(&(n, label, default_polarity)) = KNOWN_METRICS.iter().find(|(n, ..)| *n == name)
         {
             selectors.push(MetricSelector {
                 name: n,

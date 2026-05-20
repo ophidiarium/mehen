@@ -2107,8 +2107,16 @@ dependencies = [
 name = "mehen-c"
 version = "0.7.0"
 dependencies = [
+ "insta",
  "mehen-core",
+ "mehen-metrics",
+ "mehen-report",
  "mehen-tree-sitter",
+ "num",
+ "num-derive",
+ "num-traits",
+ "serde_json",
+ "smol_str",
  "tree-sitter",
  "tree-sitter-c",
 ]
@@ -2147,16 +2155,10 @@ dependencies = [
  "mehen-ruby",
  "mehen-rust",
  "mehen-typescript",
- "num",
- "num-derive",
- "num-traits",
  "pretty_assertions",
  "serde",
  "serde_json",
  "tempfile",
- "tree-sitter",
- "tree-sitter-c",
- "tree-sitter-markdown-text",
  "walkdir",
 ]
 

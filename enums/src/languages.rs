@@ -9,7 +9,6 @@ mk_langs!(
     (Typescript, tree_sitter_typescript),
     (Kotlin, tree_sitter_kotlin),
     (Powershell, tree_sitter_pwsh),
-    (C, tree_sitter_c),
     (Php, tree_sitter_php),
     (Markdown, tree_sitter_markdown_text)
 );

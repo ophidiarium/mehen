@@ -13,7 +13,6 @@ use crate::legacy::mk_globset;
 use crate::registry::AnalyzerRegistry;
 use mehen_core::{AnalysisConfig, DiagnosticSeverity, Language, MetricSpace, SourceFile};
 use mehen_git::{ChangeStatus, GitError};
-#[cfg(feature = "markdown")]
 use mehen_report::github_markdown_docs::{DocDiffFile, DocRenderCtx, render_doc_section};
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -126,7 +125,6 @@ pub(crate) enum FailOn {
 }
 
 impl FailOn {
-    #[cfg(feature = "markdown")]
     fn as_str(self) -> &'static str {
         match self {
             Self::DmiDrop => "dmi-drop",
@@ -188,7 +186,6 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     let analysis_config = AnalysisConfig::default();
 
     let mut filtered: Vec<(mehen_git::ChangedFile, Utf8PathBuf, Language)> = Vec::new();
-    #[cfg(feature = "markdown")]
     let mut markdown_files: Vec<mehen_git::ChangedFile> = Vec::new();
     for cf in changed {
         let p = &cf.path;
@@ -214,7 +211,6 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         };
 
-        #[cfg(feature = "markdown")]
         if matches!(language, Language::Markdown) {
             markdown_files.push(cf.clone());
             continue;
@@ -344,7 +340,6 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     diffs.sort_by_key(|a| a.sort_key());
 
     // Markdown doc section — parallel pipeline for `.md`-like files.
-    #[cfg(feature = "markdown")]
     let doc_files: Vec<DocDiffFile> = {
         let mut out: Vec<DocDiffFile> = Vec::new();
         for cf in &markdown_files {
@@ -397,7 +392,6 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     match format {
         DiffFormat::Markdown => {
             print_markdown(&diffs, &selectors, &from_label, &from_ref, &to_ref);
-            #[cfg(feature = "markdown")]
             if !doc_files.is_empty() {
                 let mut ctx = DocRenderCtx::new(&from_label);
                 let repo_url = ci_ctx
@@ -414,14 +408,11 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         DiffFormat::Json => {
-            #[cfg(feature = "markdown")]
             let doc_ref: Option<&[DocDiffFile]> = if doc_files.is_empty() {
                 None
             } else {
                 Some(&doc_files)
             };
-            #[cfg(not(feature = "markdown"))]
-            let doc_ref: Option<&[()]> = None;
             if let Err(e) = print_json(&diffs, doc_ref) {
                 // Surface the error loudly — exit code 2 mirrors the
                 // --fail-on gate and is distinct from the generic exit 1
@@ -433,21 +424,10 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // --fail-on check.
-    #[cfg(feature = "markdown")]
-    {
-        let failures = evaluate_fail_on(&opts.fail_on, &doc_files);
-        if !failures.is_empty() {
-            log::error!("--fail-on threshold crossed: {}", failures.join(", "));
-            std::process::exit(2);
-        }
-    }
-    #[cfg(not(feature = "markdown"))]
-    {
-        if !opts.fail_on.is_empty() {
-            log::warn!(
-                "--fail-on was set but the `markdown` feature is disabled; no doc-metric thresholds are evaluated"
-            );
-        }
+    let failures = evaluate_fail_on(&opts.fail_on, &doc_files);
+    if !failures.is_empty() {
+        log::error!("--fail-on threshold crossed: {}", failures.join(", "));
+        std::process::exit(2);
     }
 
     // Per the diagnostic contract (rewrite plan §9.3), recoverable
@@ -463,7 +443,6 @@ fn run_diff_inner(opts: DiffOpts) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(feature = "markdown")]
 fn doc_json_payload(files: &[DocDiffFile]) -> Vec<serde_json::Value> {
     files
         .iter()
@@ -479,7 +458,6 @@ fn doc_json_payload(files: &[DocDiffFile]) -> Vec<serde_json::Value> {
         .collect()
 }
 
-#[cfg(feature = "markdown")]
 fn evaluate_fail_on(flags: &[FailOn], docs: &[DocDiffFile]) -> Vec<String> {
     let mut enabled: std::collections::BTreeSet<FailOn> = std::collections::BTreeSet::new();
     for f in flags {
@@ -802,7 +780,6 @@ fn format_f64(v: f64) -> String {
 ///
 /// Serialization errors bubble up as `Err` so `run_diff_inner` exits
 /// non-zero instead of silently writing an empty `""` to stdout.
-#[cfg(feature = "markdown")]
 fn print_json(
     diffs: &[FileDiff],
     docs: Option<&[DocDiffFile]>,
@@ -815,15 +792,6 @@ fn print_json(
             serde_json::Value::Array(doc_json_payload(docs)),
         );
     }
-    let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
-    writeln!(std::io::stdout().lock(), "{json}")?;
-    Ok(())
-}
-
-#[cfg(not(feature = "markdown"))]
-fn print_json(diffs: &[FileDiff], _docs: Option<&[()]>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut payload = serde_json::Map::new();
-    payload.insert("source_code".to_string(), serde_json::to_value(diffs)?);
     let json = serde_json::to_string_pretty(&serde_json::Value::Object(payload))?;
     writeln!(std::io::stdout().lock(), "{json}")?;
     Ok(())
@@ -1204,7 +1172,6 @@ src/value.txt linguist-generated=true
     // that merely shifts to a different line number MUST NOT trip the gate,
     // but a duplicate broken destination MUST.
 
-    #[cfg(feature = "markdown")]
     fn broken_link_for_fail_on(
         line: u64,
         class: mehen_markdown::types::LinkClass,
@@ -1221,7 +1188,6 @@ src/value.txt linguist-generated=true
         }
     }
 
-    #[cfg(feature = "markdown")]
     fn minimal_md_metrics(path: &str) -> mehen_markdown::types::MarkdownMetrics {
         mehen_markdown::types::MarkdownMetrics {
             path: path.to_string(),
@@ -1244,7 +1210,6 @@ src/value.txt linguist-generated=true
         }
     }
 
-    #[cfg(feature = "markdown")]
     #[test]
     fn fail_on_new_broken_link_ignores_line_only_shift() {
         let mut head = minimal_md_metrics("docs/a.md");
@@ -1276,7 +1241,6 @@ src/value.txt linguist-generated=true
         );
     }
 
-    #[cfg(feature = "markdown")]
     #[test]
     fn fail_on_new_broken_link_trips_on_new_occurrence() {
         // Head has 2 broken refs to the same destination; base has 1. The
@@ -1307,7 +1271,6 @@ src/value.txt linguist-generated=true
         assert!(failures[0].starts_with("new-broken-link:"));
     }
 
-    #[cfg(feature = "markdown")]
     #[test]
     fn fail_on_new_broken_link_trips_on_brand_new_destination() {
         let mut head = minimal_md_metrics("docs/a.md");
@@ -1341,9 +1304,6 @@ src/value.txt linguist-generated=true
             is_new: false,
             is_deleted: false,
         }];
-        #[cfg(feature = "markdown")]
-        let res = print_json(&diffs, None);
-        #[cfg(not(feature = "markdown"))]
         let res = print_json(&diffs, None);
         assert!(res.is_ok(), "valid input must serialize cleanly");
     }
@@ -1363,9 +1323,6 @@ src/value.txt linguist-generated=true
         // so any future regression to an infallible signature would
         // break compilation.
         let diffs: Vec<FileDiff> = vec![];
-        #[cfg(feature = "markdown")]
-        let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
-        #[cfg(not(feature = "markdown"))]
         let res: Result<(), Box<dyn std::error::Error>> = print_json(&diffs, None);
         assert!(res.is_ok());
     }

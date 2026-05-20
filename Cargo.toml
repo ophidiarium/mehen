@@ -157,7 +157,8 @@ tree-sitter-go = "=0.25.0"
 # now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
-tree-sitter-c = "=0.24.2"
+# `tree-sitter-c` removed from the workspace pin in this phase —
+# `mehen-c` is the sole consumer and now pins the version inline.
 # `tree-sitter-php` was removed in Phase 8 — PHP now flows through
 # `mehen-php` (mago-syntax) per plan §6.4.
 tree-sitter-markdown-text = "=0.2.1"
