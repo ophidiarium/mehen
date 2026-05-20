@@ -123,7 +123,7 @@ ra_ap_syntax = "=0.0.333"
 # crates; bump them as a group.
 mago-syntax = "=1.27.1"
 mago-syntax-core = "=1.27.1"
-mago-database = "=1.27.1"
+mago-database = "=1.28.0"
 mago-span = "=1.27.1"
 mago-php-version = "=1.28.0"
 bumpalo = "^3.16"
