@@ -171,16 +171,23 @@ fn collect_diagnostics(
     side: DiffSide,
     analysis: &LanguageAnalysis,
 ) {
+    // Surface every non-empty diagnostic batch — including
+    // warning-only batches. Per plan §9.3 a `Warning` is
+    // *informational* (CLI keeps exit 0 unless thresholds fail), but
+    // it still has to be visible to callers; otherwise a Ruff-style
+    // recoverable parse issue or a markdown cross-reference warning
+    // is silently swallowed before it reaches the JSON output.
+    // Severity-based exit-code routing happens at the CLI layer
+    // against this same `analysis_errors` list, which carries the
+    // severity on every entry via `ParseDiagnostic::severity`.
     if analysis.diagnostics.is_empty() {
         return;
     }
-    if has_blocking_diagnostic(&analysis.diagnostics) {
-        report.analysis_errors.push(AnalysisErrorRecord {
-            path: path.clone(),
-            side,
-            diagnostics: analysis.diagnostics.clone(),
-        });
-    }
+    report.analysis_errors.push(AnalysisErrorRecord {
+        path: path.clone(),
+        side,
+        diagnostics: analysis.diagnostics.clone(),
+    });
 }
 
 /// Classify a diagnostic batch for diff-side severity gating.
@@ -298,6 +305,74 @@ mod tests {
             analysis_errors: Vec::new(),
             threshold_violations: Vec::new(),
         }
+    }
+
+    fn analysis_with_diagnostics(diagnostics: Vec<ParseDiagnostic>) -> LanguageAnalysis {
+        LanguageAnalysis {
+            language: Language::Rust,
+            backend: AnalysisBackend::TreeSitter,
+            diagnostics,
+            root: MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty()),
+            contributions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn collect_diagnostics_records_warning_only_batches() {
+        // Regression: prior gate dropped warning-only batches before
+        // they reached `analysis_errors`, so a Ruff-style recoverable
+        // parse warning or a markdown cross-reference warning would
+        // never surface in `mehen diff --format json`. The
+        // `analysis_errors` field carries `severity` per entry, so
+        // CLI exit-code routing can still distinguish warning vs.
+        // error vs. fatal — but emitting them is required so callers
+        // can see them at all.
+        let analysis =
+            analysis_with_diagnostics(vec![ParseDiagnostic::warning("python.style", "long line")]);
+        let mut report = empty_report();
+        collect_diagnostics(
+            &mut report,
+            &Utf8PathBuf::from("src/main.py"),
+            DiffSide::Head,
+            &analysis,
+        );
+        assert_eq!(report.analysis_errors.len(), 1);
+        let rec = &report.analysis_errors[0];
+        assert_eq!(rec.path, Utf8PathBuf::from("src/main.py"));
+        assert_eq!(rec.diagnostics.len(), 1);
+        assert_eq!(rec.diagnostics[0].code, "python.style");
+    }
+
+    #[test]
+    fn collect_diagnostics_skips_empty_batch() {
+        let analysis = analysis_with_diagnostics(Vec::new());
+        let mut report = empty_report();
+        collect_diagnostics(
+            &mut report,
+            &Utf8PathBuf::from("src/main.py"),
+            DiffSide::Head,
+            &analysis,
+        );
+        assert!(report.analysis_errors.is_empty());
+    }
+
+    #[test]
+    fn collect_diagnostics_records_blocking_batch() {
+        let analysis = analysis_with_diagnostics(vec![
+            ParseDiagnostic::warning("python.style", "long line"),
+            ParseDiagnostic::error("python.syntax_error", "unexpected token"),
+        ]);
+        let mut report = empty_report();
+        collect_diagnostics(
+            &mut report,
+            &Utf8PathBuf::from("src/main.py"),
+            DiffSide::Base,
+            &analysis,
+        );
+        assert_eq!(report.analysis_errors.len(), 1);
+        // Both diagnostics are preserved, so CLI exit-code routing
+        // still sees the error severity.
+        assert_eq!(report.analysis_errors[0].diagnostics.len(), 2);
     }
 
     #[test]
