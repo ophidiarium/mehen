@@ -8,12 +8,12 @@ on:
       # Negative patterns mirror the runtime filter so PRs that touch only
       # generated/test/template Rust files do not start a no-op job.
       - '**/*.rs'
-      - '!src/languages/language_*.rs'
+      - '!crates/*/src/grammar.rs'
       - '!tests/**'
       - '!**/snapshots/**'
       - '!**/fixtures/**'
       - '!**/testdata/**'
-      - '!enums/templates/**'
+      - '!xtask/templates/**'
       # Re-run when this workflow itself changes.
       - '.github/workflows/cpd.yml'
 
@@ -49,7 +49,7 @@ jobs:
           # Strip generated grammar enums, tests, snapshots, fixtures, templates.
           # Mirrors the `paths:` filter on the workflow trigger.
           git diff --name-only --diff-filter=d "$BASE_SHA" HEAD -- '*.rs' \
-            | grep -Ev '^src/languages/language_.*\.rs$|^tests/|/snapshots/|/fixtures/|/testdata/|^enums/templates/|^target/' \
+            | grep -Ev '^crates/[^/]+/src/grammar\.rs$|^tests/|/snapshots/|/fixtures/|/testdata/|^xtask/templates/|^target/' \
             > changed-files.txt || true
           COUNT=$(wc -l < changed-files.txt | tr -d ' ')
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"

@@ -1,9 +1,10 @@
 // Code generated; DO NOT EDIT.
 
+#![allow(clippy::enum_variant_names)]
+#![allow(clippy::upper_case_acronyms)]
+
 use num_derive::FromPrimitive;
 
-#[allow(clippy::enum_variant_names)]
-#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
 pub(crate) enum Kotlin {
     End = 0,

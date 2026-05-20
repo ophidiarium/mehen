@@ -184,7 +184,7 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
         let text = extract_prose_text(node, source);
         if !text.trim().is_empty() {
             blocks.push(ProseBlock {
-                kind: kind.clone(),
+                kind,
                 start_line,
                 end_line,
                 text,
@@ -408,7 +408,7 @@ fn normalize_whitespace(s: &str) -> String {
 pub(crate) fn classify_block(block: &ProseBlock<'_>) -> DetectedBlock {
     let language = classify_text(&block.text);
     DetectedBlock {
-        kind: block.kind.clone(),
+        kind: block.kind,
         start_line: block.start_line,
         end_line: block.end_line,
         text: block.text.clone(),
@@ -766,7 +766,7 @@ mod tests {
             paragraph_blocks.len(),
             blocks
                 .iter()
-                .map(|b| (b.kind.clone(), b.text.clone()))
+                .map(|b| (b.kind, b.text.clone()))
                 .collect::<Vec<_>>()
         );
         assert!(
@@ -774,7 +774,7 @@ mod tests {
             "container blocks (blockquote/callout) must not emit their own slice, got: {:?}",
             container_blocks
                 .iter()
-                .map(|b| (b.kind.clone(), b.text.clone()))
+                .map(|b| (b.kind, b.text.clone()))
                 .collect::<Vec<_>>()
         );
     }

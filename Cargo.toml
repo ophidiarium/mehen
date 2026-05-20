@@ -24,7 +24,6 @@ members = [
 # package in `crates/mehen-cli/`. The xtask binary is reached via
 # `cargo xtask …` (per `.cargo/config.toml`).
 default-members = ["crates/mehen-cli"]
-exclude = ["enums"]
 
 [workspace.lints.rust]
 # Catch `pub` items in internal crates that are never re-exported across

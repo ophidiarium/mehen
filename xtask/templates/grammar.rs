@@ -1,8 +1,11 @@
 // Code generated; DO NOT EDIT.
 
+#![allow(clippy::enum_variant_names)]
+#![allow(clippy::upper_case_acronyms)]
+
 use num_derive::FromPrimitive;
 
-#[derive(Clone, Debug, PartialEq, Eq, FromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
 pub(crate) enum {{ c_name }} {
     {% for (name, _, _) in names -%}
     {{ name }} = {{ loop.index0 }},
