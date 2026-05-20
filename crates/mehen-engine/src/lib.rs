@@ -20,24 +20,16 @@
 #![deny(unsafe_code)]
 
 pub mod ci;
+mod concurrent_files;
 mod detection;
 mod diff;
 mod dispatcher;
+mod metric_selector;
 mod registry;
 mod top_offenders;
 
-/// Pre-1.0 metric machinery relocated from `mehen/src/`. This is an
-/// internal implementation detail of `mehen-engine` for the duration of
-/// the v1 transition; the published `run_diff`, `run_top_offenders`,
-/// `DiffOpts`, and `TopOffendersOpts` are re-exported at the crate root
-/// so `mehen-cli` does not need to reach into a `legacy::` submodule.
-/// Plan §8.2/§8.3 ultimately splits this content across the per-language
-/// crates and `mehen-metrics`; until each language reaches parity through
-/// its own analyzer, the legacy dispatch supplies the metric tree.
-mod legacy;
-
-pub use legacy::diff::{DiffOpts, run_diff};
-pub use legacy::top_offenders::{TopOffendersOpts, run_top_offenders};
+pub use diff::{DiffOpts, run_diff};
+pub use top_offenders::{TopOffendersOpts, run_top_offenders};
 
 /// Register the embedded-code dispatch callback the moved
 /// [`mehen_markdown::analyze_markdown`] uses to fold fenced source

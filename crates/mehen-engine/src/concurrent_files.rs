@@ -4,8 +4,25 @@ use std::sync::Arc;
 use std::thread;
 
 use crossbeam::channel::{Receiver, Sender, unbounded};
-use globset::GlobSet;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use walkdir::{DirEntry, WalkDir};
+
+/// Build a `GlobSet` from a list of glob strings, ignoring empty entries.
+///
+/// Used by both the `diff` and `top-offenders` orchestrators to turn the
+/// user's `--include` / `--exclude` flags into a usable matcher.
+pub(crate) fn mk_globset(elems: Vec<String>) -> GlobSet {
+    if elems.is_empty() {
+        return GlobSet::empty();
+    }
+    let mut globset = GlobSetBuilder::new();
+    elems.iter().filter(|e| !e.is_empty()).for_each(|e| {
+        if let Ok(glob) = Glob::new(e) {
+            globset.add(glob);
+        }
+    });
+    globset.build().map_or(GlobSet::empty(), |globset| globset)
+}
 
 type ProcFilesFunction<Config> = dyn Fn(PathBuf, &Config) -> std::io::Result<()> + Send + Sync;
 

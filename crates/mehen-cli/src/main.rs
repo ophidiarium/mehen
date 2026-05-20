@@ -1,11 +1,9 @@
 //! `mehen` — 1.0 CLI binary.
 //!
 //! `metrics` runs through the new architecture (mehen-engine + per-language
-//! analyzer crates). `diff` and `top-offenders` delegate to the
-//! pre-1.0 orchestrators that now live in `mehen_engine::legacy::*`
-//! until phase 5 follow-up commits split them across `mehen-engine`,
-//! the per-language crates and `mehen-report` while preserving every
-//! existing test fixture and snapshot.
+//! analyzer crates). `diff` and `top-offenders` delegate to the pre-1.0
+//! orchestrators that now live alongside the post-1.0 entry points in
+//! `mehen_engine::diff` / `mehen_engine::top_offenders`.
 
 mod args;
 mod commands;
