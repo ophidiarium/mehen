@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8PathBuf};
 
 use mehen_core::{
     AnalysisConfig, DiagnosticSeverity, Language, LanguageAnalysis, MetricSpace, ParseDiagnostic,
@@ -176,7 +176,29 @@ fn path_is_selected(path: &Utf8PathBuf, paths: &[Utf8PathBuf]) -> bool {
     if paths.is_empty() {
         return true;
     }
-    paths.iter().any(|prefix| path.starts_with(prefix))
+    paths.iter().any(|prefix| {
+        let normalized = normalize_utf8_filter(prefix);
+        // A prefix that normalizes to empty (e.g. `""`, `"."`,
+        // `"././/"`) names the repo root — treat it as "match
+        // everything", consistent with the CLI path filter.
+        normalized.as_str().is_empty() || path.starts_with(&normalized)
+    })
+}
+
+/// Strip `.` components from a `Utf8PathBuf` filter prefix so callers
+/// can pass intuitive scopes like `"./src"` (or even `"."`) without
+/// silently dropping every changed file from the report. Mirrors the
+/// CLI-side [`normalize_path_filter`] used for the `--paths` flag.
+fn normalize_utf8_filter(path: &Utf8PathBuf) -> Utf8PathBuf {
+    let mut cleaned = Utf8PathBuf::new();
+    for component in path.components() {
+        match component {
+            Utf8Component::CurDir => {}
+            Utf8Component::Normal(part) => cleaned.push(part),
+            other => cleaned.push(other.as_str()),
+        }
+    }
+    cleaned
 }
 
 fn collect_diagnostics(
@@ -1281,6 +1303,46 @@ mod tests {
             &analysis,
         );
         assert!(report.threshold_violations.is_empty());
+    }
+
+    #[test]
+    fn path_is_selected_treats_curdir_as_match_all() {
+        // Regression: callers that scope `analyze_diff` to "the whole
+        // repo" by passing `"."` (or `"./src"` for "src and below")
+        // used to silently match nothing because raw `starts_with`
+        // never strips the `.` component. The normalized prefix
+        // collapses `"."` to empty (= match all) and `"./src"` to
+        // `"src"` so changed files are actually included.
+        let changed = Utf8PathBuf::from("src/main.rs");
+
+        // `"."` selects every file.
+        assert!(path_is_selected(&changed, &[Utf8PathBuf::from(".")]));
+        // `""` likewise — both spellings of "root" must match.
+        assert!(path_is_selected(&changed, &[Utf8PathBuf::from("")]));
+        // `"./src"` is a real prefix of `src/main.rs`.
+        assert!(path_is_selected(&changed, &[Utf8PathBuf::from("./src")]));
+        // A directory we're *not* under must still fail.
+        assert!(!path_is_selected(&changed, &[Utf8PathBuf::from("./tests")]));
+    }
+
+    #[test]
+    fn normalize_utf8_filter_strips_curdir_components() {
+        assert_eq!(
+            normalize_utf8_filter(&Utf8PathBuf::from("./src")),
+            Utf8PathBuf::from("src"),
+        );
+        assert_eq!(
+            normalize_utf8_filter(&Utf8PathBuf::from(".")),
+            Utf8PathBuf::from(""),
+        );
+        assert_eq!(
+            normalize_utf8_filter(&Utf8PathBuf::from("./a/./b")),
+            Utf8PathBuf::from("a/b"),
+        );
+        assert_eq!(
+            normalize_utf8_filter(&Utf8PathBuf::from("src")),
+            Utf8PathBuf::from("src"),
+        );
     }
 
     // ── pre-1.0 CLI orchestrator tests ─────────────────────────────────
