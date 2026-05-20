@@ -48,190 +48,99 @@
 //!   are intentionally no-ops, matching the legacy
 //!   `impl X for GoCode` empty bodies.
 
-use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
-use mehen_metrics::{
-    HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to, finalize_state,
-    merge_child_into_parent,
-};
+use mehen_core::{LineIndex, MetricSpace, SpaceKind};
+use mehen_metrics::{HalsteadOperand, HalsteadOperator, State};
+use mehen_tree_sitter::{OpenSpaceRequest, WalkerCtx, WalkerHooks, node_span, run, text_of};
 use smol_str::SmolStr;
 use tree_sitter::Node;
 
 use crate::grammar::Go;
 
 /// Drive the walker over the parsed Go tree and return the populated
-/// `MetricSpace`. Mirrors `mehen_ruby::walker::walk_program` and the
-/// legacy `spaces::metrics<GoParser>` entry point.
+/// `MetricSpace`. Plugs Go classification into the shared
+/// [`mehen_tree_sitter::run`] scaffold.
 pub(crate) fn walk_program(root: Node<'_>, source: &[u8], line_index: &LineIndex) -> MetricSpace {
-    let unit_span = node_span(&root, line_index);
-
-    let mut unit_state = State::new();
-    unit_state.loc.set_span(
-        root.start_position().row as u32,
-        root.end_position().row as u32,
-        true,
-    );
-
-    let mut visitor = Visitor {
-        line_index,
-        source,
-        tree: MetricTreeBuilder::new(unit_span),
-        stack: vec![unit_state],
-        kinds: vec![SpaceKind::Unit],
-        cognitive: CognitiveContext::default(),
-    };
-    visitor.visit(root);
-
-    let mut unit_state = visitor.stack.pop().expect("walker stack underflow");
-    finalize_state(&mut unit_state);
-    apply_state_to(unit_state, visitor.tree.metrics_mut());
-    visitor.tree.finish()
+    let mut hooks = GoHooks;
+    run(&mut hooks, root, source, line_index)
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct CognitiveContext {
-    nesting: u32,
-    depth: u32,
-    lambda: u32,
-}
+struct GoHooks;
 
-struct Visitor<'a> {
-    line_index: &'a LineIndex,
-    source: &'a [u8],
-    tree: MetricTreeBuilder,
-    stack: Vec<State>,
-    kinds: Vec<SpaceKind>,
-    cognitive: CognitiveContext,
-}
-
-impl<'a> Visitor<'a> {
-    fn current(&mut self) -> &mut State {
-        self.stack.last_mut().expect("walker stack empty")
-    }
-
-    fn visit(&mut self, node: Node<'_>) {
-        // Detect space-open. Side effects on space open run before the
-        // per-node classification so the per-space accumulator the
-        // child observations land on is the *new* one.
-        let saved_cognitive = self.cognitive;
-        let opened = self.maybe_open_space(&node);
-        if opened {
-            self.on_space_enter();
-        }
-
-        // Per-node classification. The order does not matter for
-        // metric arithmetic, only for the cognitive `boolean_seq` /
-        // `nesting` state machine — which is bounded entirely by the
-        // single `match` arm below.
-        self.classify(&node);
-
-        // Recurse into children. Mirrors the legacy
-        // `cursor.goto_first_child + goto_next_sibling` walk.
-        let mut cursor = node.walk();
-        if cursor.goto_first_child() {
-            loop {
-                self.visit(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-
-        if opened {
-            self.close_space();
-            self.cognitive = saved_cognitive;
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Space management
-    // ---------------------------------------------------------------
-
-    fn maybe_open_space(&mut self, node: &Node<'_>) -> bool {
+impl WalkerHooks for GoHooks {
+    fn open_space(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) -> Option<OpenSpaceRequest> {
         match Go::from(node.kind_id()) {
             Go::FunctionDeclaration | Go::MethodDeclaration => {
                 let name = node
                     .child_by_field_name("name")
-                    .map(|n| text_of(&n, self.source).to_string());
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                    .map(|n| text_of(&n, ctx.source).to_string());
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
-                child.nom.record_function();
+                state.nom.record_function();
                 let argc = count_go_args(node);
-                child.nargs.record_function_args(argc);
-                self.tree.open(SpaceKind::Function, span, name);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Function);
-                true
+                state.nargs.record_function_args(argc);
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Function,
+                    name,
+                    span,
+                    state,
+                })
             }
             Go::FuncLiteral => {
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
-                child.nom.record_closure();
+                state.nom.record_closure();
                 let argc = count_go_args(node);
-                child.nargs.record_closure_args(argc);
-                self.tree.open(SpaceKind::Closure, span, None);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Closure);
-                true
+                state.nargs.record_closure_args(argc);
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Closure,
+                    name: None,
+                    span,
+                    state,
+                })
             }
-            _ => false,
+            _ => None,
         }
     }
 
-    fn on_space_enter(&mut self) {
-        let kind = self.kinds.last().expect("kinds stack empty");
+    fn on_space_enter(&mut self, ctx: &mut WalkerCtx<'_>, kind: SpaceKind) {
         match kind {
             SpaceKind::Function => {
                 // Legacy `Cognitive for GoCode`'s `FunctionDeclaration | MethodDeclaration`
                 // arm: reset nesting, bump function-depth when nested.
-                let nested_inside_function = self
-                    .kinds
-                    .iter()
-                    .rev()
-                    .skip(1)
+                let nested_inside_function = ctx
+                    .ancestor_kinds()
                     .any(|k| matches!(k, SpaceKind::Function));
-                self.cognitive.nesting = 0;
+                ctx.cognitive.nesting = 0;
                 if nested_inside_function {
-                    self.cognitive.depth = self.cognitive.depth.saturating_add(1);
+                    ctx.cognitive.depth = ctx.cognitive.depth.saturating_add(1);
                 }
             }
             SpaceKind::Closure => {
                 // Legacy `FuncLiteral` arm: bump lambda counter only;
                 // nesting/depth pass through unchanged.
-                self.cognitive.lambda = self.cognitive.lambda.saturating_add(1);
+                ctx.cognitive.lambda = ctx.cognitive.lambda.saturating_add(1);
             }
             _ => {}
         }
     }
 
-    fn close_space(&mut self) {
-        let closed_kind = self.kinds.pop().expect("kinds stack underflow");
-        let mut state = self.stack.pop().expect("walker stack underflow");
+    fn before_close(&mut self, state: &mut State, closed_kind: SpaceKind, _parent: SpaceKind) {
         if matches!(closed_kind, SpaceKind::Function) {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
-        finalize_state(&mut state);
-        apply_state_to(state.clone(), self.tree.metrics_mut());
-        if let Some(parent) = self.stack.last_mut() {
-            merge_child_into_parent(parent, &state);
-        }
-        self.tree.close();
     }
 
-    // ---------------------------------------------------------------
-    // Per-node classification
-    // ---------------------------------------------------------------
-
-    fn classify(&mut self, node: &Node<'_>) {
+    fn classify(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) {
         let kind = Go::from(node.kind_id());
 
         // Cyclomatic — legacy `Cyclomatic for GoCode`. `default_case`
@@ -249,209 +158,193 @@ impl<'a> Visitor<'a> {
         ) || (matches!(kind, Go::DefaultCase)
             && parent_kind(node) == Some(Go::SelectStatement));
         if is_decision {
-            self.current().cyclomatic.record_decision();
+            ctx.current().cyclomatic.record_decision();
         }
 
-        // Cognitive — legacy `Cognitive for GoCode`. Side effects on the
-        // boolean_seq state machine and on the cognitive context (which
-        // is per-recursion-frame, not per-space) live here.
-        self.classify_cognitive(node, kind);
-
-        // ABC — legacy `Abc for GoCode`.
-        self.classify_abc(node, kind);
+        classify_cognitive(ctx, node, kind);
+        classify_abc(ctx, node, kind);
 
         // NExit — legacy `Exit for GoCode`.
         if matches!(kind, Go::ReturnStatement) {
-            self.current().nexit.record_exit();
+            ctx.current().nexit.record_exit();
         }
 
-        // LOC — legacy `Loc for GoCode`.
-        self.classify_loc(node, kind);
-
-        // Halstead — legacy `Getter::get_op_type for GoCode`.
-        self.classify_halstead(node, kind);
+        classify_loc(ctx, node, kind);
+        classify_halstead(ctx, node, kind);
     }
+}
 
-    fn classify_cognitive(&mut self, node: &Node<'_>, kind: Go) {
-        match kind {
-            // The else-if form (`IfStatement` whose direct parent is
-            // also an `IfStatement`) is a no-op in legacy — the outer
-            // `if` already opened a nesting level and the connecting
-            // `else` keyword adds the flat `+1`.
-            Go::IfStatement if !is_else_if(node) => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
-            }
-            Go::IfStatement => {}
-            Go::ForStatement
-            | Go::ExpressionSwitchStatement
-            | Go::TypeSwitchStatement
-            | Go::SelectStatement => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
-            }
-            Go::Else => {
-                self.current().cognitive.increment_by_one();
-            }
-            Go::ExpressionStatement
-            | Go::SendStatement
-            | Go::ReceiveStatement
-            | Go::IncStatement
-            | Go::DecStatement
-            | Go::AssignmentStatement
-            | Go::ShortVarDeclaration
-            | Go::VarSpec
-            | Go::ConstSpec
-            | Go::ReturnStatement => {
-                self.current().cognitive.boolean_seq.reset();
-            }
-            // Legacy passes the literal node kind_id (the top-level
-            // `unary_expression` kind, not the operator child) into
-            // `boolean_seq.not_operator`. We forward a stable `"!"`
-            // marker — same effect because `eval_based_on_prev` only
-            // cares whether the recorded last_op equals the new
-            // boolean operator string.
-            Go::UnaryExpression if has_child_kind(node, Go::BANG) => {
-                self.current().cognitive.boolean_seq.not_operator("!");
-            }
-            Go::BinaryExpression => {
-                // Legacy `compute_booleans::<Go>`: walk the children;
-                // for each `&&` / `||` operator child, feed the
-                // sequence collapser. The actual punctuation is one of
-                // the binary expression's children.
-                for child in iter_children(node) {
-                    match Go::from(child.kind_id()) {
-                        Go::AMPAMP => self.current().cognitive.observe_boolean("&&"),
-                        Go::PIPEPIPE => self.current().cognitive.observe_boolean("||"),
-                        _ => {}
-                    }
+fn classify_cognitive(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Go) {
+    match kind {
+        // The else-if form (`IfStatement` whose direct parent is
+        // also an `IfStatement`) is a no-op in legacy — the outer
+        // `if` already opened a nesting level and the connecting
+        // `else` keyword adds the flat `+1`.
+        Go::IfStatement if !is_else_if(node) => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        Go::IfStatement => {}
+        Go::ForStatement
+        | Go::ExpressionSwitchStatement
+        | Go::TypeSwitchStatement
+        | Go::SelectStatement => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        Go::Else => {
+            ctx.current().cognitive.increment_by_one();
+        }
+        Go::ExpressionStatement
+        | Go::SendStatement
+        | Go::ReceiveStatement
+        | Go::IncStatement
+        | Go::DecStatement
+        | Go::AssignmentStatement
+        | Go::ShortVarDeclaration
+        | Go::VarSpec
+        | Go::ConstSpec
+        | Go::ReturnStatement => {
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        // Legacy passes the literal node kind_id (the top-level
+        // `unary_expression` kind, not the operator child) into
+        // `boolean_seq.not_operator`. We forward a stable `"!"`
+        // marker — same effect because `eval_based_on_prev` only
+        // cares whether the recorded last_op equals the new
+        // boolean operator string.
+        Go::UnaryExpression if has_child_kind(node, Go::BANG) => {
+            ctx.current().cognitive.boolean_seq.not_operator("!");
+        }
+        Go::BinaryExpression => {
+            // Legacy `compute_booleans::<Go>`: walk the children;
+            // for each `&&` / `||` operator child, feed the
+            // sequence collapser. The actual punctuation is one of
+            // the binary expression's children.
+            for child in iter_children(node) {
+                match Go::from(child.kind_id()) {
+                    Go::AMPAMP => ctx.current().cognitive.observe_boolean("&&"),
+                    Go::PIPEPIPE => ctx.current().cognitive.observe_boolean("||"),
+                    _ => {}
                 }
             }
-            _ => {}
+        }
+        _ => {}
+    }
+}
+
+fn classify_abc(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Go) {
+    match kind {
+        Go::AssignmentStatement | Go::ShortVarDeclaration => {
+            let count = go_assignment_target_count(node);
+            ctx.current().abc.assignments = ctx.current().abc.assignments.saturating_add(count);
+        }
+        Go::ReceiveStatement | Go::RangeClause if node.child_by_field_name("left").is_some() => {
+            let count = go_assignment_target_count(node);
+            ctx.current().abc.assignments = ctx.current().abc.assignments.saturating_add(count);
+        }
+        Go::IncStatement | Go::DecStatement => {
+            ctx.current().abc.record_assignment();
+        }
+        Go::ConstSpec => {
+            let count = go_spec_name_count(node);
+            ctx.current().abc.assignments = ctx.current().abc.assignments.saturating_add(count);
+        }
+        Go::VarSpec if has_child_kind(node, Go::EQ) => {
+            let count = go_spec_name_count(node);
+            ctx.current().abc.assignments = ctx.current().abc.assignments.saturating_add(count);
+        }
+        Go::CallExpression => {
+            ctx.current().abc.record_branch();
+        }
+        Go::IfStatement
+        | Go::ForStatement
+        | Go::ExpressionCase
+        | Go::DefaultCase
+        | Go::TypeCase
+        | Go::CommunicationCase
+        | Go::EQEQ
+        | Go::BANGEQ
+        | Go::LT
+        | Go::LTEQ
+        | Go::GT
+        | Go::GTEQ
+        | Go::AMPAMP
+        | Go::PIPEPIPE
+        | Go::BANG => {
+            ctx.current().abc.record_condition();
+        }
+        _ => {}
+    }
+}
+
+fn classify_loc(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Go) {
+    match kind {
+        Go::SourceFile => {}
+        Go::Comment => {
+            let start = node.start_position().row as u32;
+            let end = node.end_position().row as u32;
+            ctx.current().loc.observe_comment(start, end);
+        }
+        Go::ExpressionStatement
+        | Go::SendStatement
+        | Go::ReceiveStatement
+        | Go::IncStatement
+        | Go::DecStatement
+        | Go::AssignmentStatement
+        | Go::ShortVarDeclaration
+        | Go::ImportSpec
+        | Go::VarSpec
+        | Go::ConstSpec
+        | Go::TypeSpec
+        | Go::EmptyStatement
+        | Go::LabeledStatement
+        | Go::LabeledStatement2
+        | Go::GoStatement
+        | Go::DeferStatement
+        | Go::ReturnStatement
+        | Go::BreakStatement
+        | Go::ContinueStatement
+        | Go::GotoStatement
+        | Go::FallthroughStatement
+        | Go::IfStatement
+        | Go::ExpressionSwitchStatement
+        | Go::TypeSwitchStatement
+        | Go::SelectStatement
+        | Go::ForStatement => {
+            ctx.current().loc.observe_lloc();
+        }
+        _ => {
+            let start = node.start_position().row as u32;
+            ctx.current().loc.observe_code_line(start);
         }
     }
+}
 
-    fn classify_abc(&mut self, node: &Node<'_>, kind: Go) {
-        match kind {
-            Go::AssignmentStatement | Go::ShortVarDeclaration => {
-                let count = go_assignment_target_count(node);
-                self.current().abc.assignments =
-                    self.current().abc.assignments.saturating_add(count);
-            }
-            Go::ReceiveStatement | Go::RangeClause
-                if node.child_by_field_name("left").is_some() =>
-            {
-                let count = go_assignment_target_count(node);
-                self.current().abc.assignments =
-                    self.current().abc.assignments.saturating_add(count);
-            }
-            Go::IncStatement | Go::DecStatement => {
-                self.current().abc.record_assignment();
-            }
-            Go::ConstSpec => {
-                let count = go_spec_name_count(node);
-                self.current().abc.assignments =
-                    self.current().abc.assignments.saturating_add(count);
-            }
-            Go::VarSpec if has_child_kind(node, Go::EQ) => {
-                let count = go_spec_name_count(node);
-                self.current().abc.assignments =
-                    self.current().abc.assignments.saturating_add(count);
-            }
-            Go::CallExpression => {
-                self.current().abc.record_branch();
-            }
-            Go::IfStatement
-            | Go::ForStatement
-            | Go::ExpressionCase
-            | Go::DefaultCase
-            | Go::TypeCase
-            | Go::CommunicationCase
-            | Go::EQEQ
-            | Go::BANGEQ
-            | Go::LT
-            | Go::LTEQ
-            | Go::GT
-            | Go::GTEQ
-            | Go::AMPAMP
-            | Go::PIPEPIPE
-            | Go::BANG => {
-                self.current().abc.record_condition();
-            }
-            _ => {}
+fn classify_halstead(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Go) {
+    // Halstead routes to the *current* (innermost) space so nested
+    // function bodies carry their own counts; the close path's
+    // `merge_child_into_parent` rolls these up into the enclosing
+    // scope and the unit (set-union for `n1`/`n2`, sum for
+    // `N1`/`N2`).
+    match halstead_op_type(kind) {
+        HalsteadType::Operator => {
+            let kind_label: &'static str = kind.into();
+            ctx.current().halstead.observe_operator(HalsteadOperator {
+                kind: SmolStr::new(kind_label),
+                text: None,
+            });
         }
-    }
-
-    fn classify_loc(&mut self, node: &Node<'_>, kind: Go) {
-        match kind {
-            Go::SourceFile => {}
-            Go::Comment => {
-                let start = node.start_position().row as u32;
-                let end = node.end_position().row as u32;
-                self.current().loc.observe_comment(start, end);
-            }
-            Go::ExpressionStatement
-            | Go::SendStatement
-            | Go::ReceiveStatement
-            | Go::IncStatement
-            | Go::DecStatement
-            | Go::AssignmentStatement
-            | Go::ShortVarDeclaration
-            | Go::ImportSpec
-            | Go::VarSpec
-            | Go::ConstSpec
-            | Go::TypeSpec
-            | Go::EmptyStatement
-            | Go::LabeledStatement
-            | Go::LabeledStatement2
-            | Go::GoStatement
-            | Go::DeferStatement
-            | Go::ReturnStatement
-            | Go::BreakStatement
-            | Go::ContinueStatement
-            | Go::GotoStatement
-            | Go::FallthroughStatement
-            | Go::IfStatement
-            | Go::ExpressionSwitchStatement
-            | Go::TypeSwitchStatement
-            | Go::SelectStatement
-            | Go::ForStatement => {
-                self.current().loc.observe_lloc();
-            }
-            _ => {
-                let start = node.start_position().row as u32;
-                self.current().loc.observe_code_line(start);
-            }
+        HalsteadType::Operand => {
+            let text = text_of(node, ctx.source);
+            ctx.current().halstead.observe_operand(HalsteadOperand {
+                kind: SmolStr::new("Operand"),
+                text: Some(SmolStr::new(text)),
+            });
         }
-    }
-
-    fn classify_halstead(&mut self, node: &Node<'_>, kind: Go) {
-        // Halstead routes to the *current* (innermost) space so nested
-        // function bodies carry their own counts; the close path's
-        // `merge_child_into_parent` rolls these up into the enclosing
-        // scope and the unit (set-union for `n1`/`n2`, sum for
-        // `N1`/`N2`).
-        match halstead_op_type(kind) {
-            HalsteadType::Operator => {
-                let kind_label: &'static str = kind.into();
-                self.current().halstead.observe_operator(HalsteadOperator {
-                    kind: SmolStr::new(kind_label),
-                    text: None,
-                });
-            }
-            HalsteadType::Operand => {
-                let text = text_of(node, self.source);
-                self.current().halstead.observe_operand(HalsteadOperand {
-                    kind: SmolStr::new("Operand"),
-                    text: Some(SmolStr::new(text)),
-                });
-            }
-            HalsteadType::Unknown => {}
-        }
+        HalsteadType::Unknown => {}
     }
 }
 
@@ -657,24 +550,4 @@ fn iter_children<'tree>(node: &Node<'tree>) -> impl Iterator<Item = Node<'tree>>
         }
     }
     nodes.into_iter()
-}
-
-fn node_span(node: &Node<'_>, line_index: &LineIndex) -> SourceSpan {
-    let start_byte = node.start_byte() as u32;
-    let end_byte = node.end_byte() as u32;
-    SourceSpan {
-        start_byte,
-        end_byte,
-        start_line: line_index.line_at(start_byte),
-        end_line: line_index.line_at(end_byte.saturating_sub(1).max(start_byte)),
-    }
-}
-
-fn text_of<'src>(node: &Node<'_>, source: &'src [u8]) -> &'src str {
-    let start = node.start_byte();
-    let end = node.end_byte().min(source.len());
-    if start >= end {
-        return "";
-    }
-    core::str::from_utf8(&source[start..end]).unwrap_or("")
 }

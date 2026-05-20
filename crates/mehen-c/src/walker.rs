@@ -1,13 +1,10 @@
 //! Tree-sitter-c walker producing per-space metric output that matches
 //! the pre-1.0 `legacy::metrics::*::compute for CCode` arms exactly.
 //!
-//! The walker drives its own tree-sitter cursor recursion (rather than
-//! the generic `mehen-tree-sitter::walker::LanguageRules` plug-in) so it
-//! can do parent-aware classification — C's `is_else_if` predicate
-//! (an `if_statement` whose direct parent is the `else_clause`) and the
-//! `function_definition > function_declarator > parameter_list` walk
-//! for NArgs both inspect ancestor / descendant chains the generic
-//! plug-in cannot express.
+//! The walker plugs language-specific classification into the shared
+//! [`mehen_tree_sitter::WalkerHooks`] scaffold so the visit recursion,
+//! cognitive context save/restore, kinds-stack bookkeeping, and unit
+//! finalize stay byte-identical with the Go and Kotlin walkers.
 //!
 //! Metric coverage:
 //! - **Cyclomatic** (legacy `cyclomatic.rs:112-135`): one decision per
@@ -58,142 +55,67 @@
 //! - **MI**: derived in `mehen_metrics::state::apply_state_to` from
 //!   loc/cyclomatic/halstead — no C-specific logic.
 
-use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
-use mehen_metrics::{
-    HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to, finalize_state,
-    merge_child_into_parent,
-};
+use mehen_core::{LineIndex, MetricSpace, SpaceKind};
+use mehen_metrics::{HalsteadOperand, HalsteadOperator, State};
+use mehen_tree_sitter::{OpenSpaceRequest, WalkerCtx, WalkerHooks, node_span, run, text_of};
 use smol_str::SmolStr;
 use tree_sitter::Node;
 
 use crate::grammar::C;
 
 /// Drive the walker over the parsed C tree and return the populated
-/// `MetricSpace`. Mirrors `mehen_go::walker::walk_program`.
+/// `MetricSpace`. Plugs C classification into the shared
+/// [`mehen_tree_sitter::run`] scaffold.
 pub(crate) fn walk_program(root: Node<'_>, source: &[u8], line_index: &LineIndex) -> MetricSpace {
-    let unit_span = node_span(&root, line_index);
-
-    let mut unit_state = State::new();
-    unit_state.loc.set_span(
-        root.start_position().row as u32,
-        root.end_position().row as u32,
-        true,
-    );
-
-    let mut visitor = Visitor {
-        line_index,
-        source,
-        tree: MetricTreeBuilder::new(unit_span),
-        stack: vec![unit_state],
-        kinds: vec![SpaceKind::Unit],
-        cognitive: CognitiveContext::default(),
-    };
-    visitor.visit(root);
-
-    let mut unit_state = visitor.stack.pop().expect("walker stack underflow");
-    finalize_state(&mut unit_state);
-    apply_state_to(unit_state, visitor.tree.metrics_mut());
-    visitor.tree.finish()
+    let mut hooks = CHooks;
+    run(&mut hooks, root, source, line_index)
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct CognitiveContext {
-    nesting: u32,
-    depth: u32,
-    /// C has no closures; field kept for parity with the Go/Ruby walkers
-    /// so the `effective` arithmetic stays uniform.
-    lambda: u32,
-}
+struct CHooks;
 
-struct Visitor<'a> {
-    line_index: &'a LineIndex,
-    source: &'a [u8],
-    tree: MetricTreeBuilder,
-    stack: Vec<State>,
-    kinds: Vec<SpaceKind>,
-    cognitive: CognitiveContext,
-}
-
-impl<'a> Visitor<'a> {
-    fn current(&mut self) -> &mut State {
-        self.stack.last_mut().expect("walker stack empty")
-    }
-
-    fn visit(&mut self, node: Node<'_>) {
-        let saved_cognitive = self.cognitive;
-        let opened = self.maybe_open_space(&node);
-        if opened {
-            self.on_space_enter();
-        }
-
-        self.classify(&node);
-
-        let mut cursor = node.walk();
-        if cursor.goto_first_child() {
-            loop {
-                self.visit(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-
-        if opened {
-            self.close_space();
-            self.cognitive = saved_cognitive;
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Space management
-    // ---------------------------------------------------------------
-
-    fn maybe_open_space(&mut self, node: &Node<'_>) -> bool {
+impl WalkerHooks for CHooks {
+    fn open_space(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) -> Option<OpenSpaceRequest> {
         match C::from(node.kind_id()) {
             C::FunctionDefinition | C::FunctionDefinition2 => {
-                let name = function_name(node, self.source).map(|s| s.to_string());
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let name = function_name(node, ctx.source).map(|s| s.to_string());
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
-                child.nom.record_function();
-                let argc = count_c_args(node, self.source);
-                child.nargs.record_function_args(argc);
-                self.tree.open(SpaceKind::Function, span, name);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Function);
-                true
+                state.nom.record_function();
+                let argc = count_c_args(node, ctx.source);
+                state.nargs.record_function_args(argc);
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Function,
+                    name,
+                    span,
+                    state,
+                })
             }
-            _ => false,
+            _ => None,
         }
     }
 
-    fn on_space_enter(&mut self) {
-        let kind = self.kinds.last().expect("kinds stack empty");
+    fn on_space_enter(&mut self, ctx: &mut WalkerCtx<'_>, kind: SpaceKind) {
         if matches!(kind, SpaceKind::Function) {
             // Legacy `Cognitive for CCode`'s `FunctionDefinition |
             // FunctionDefinition2` arm: reset nesting; bump function
             // depth when nested. C nested-function syntax is GCC-only
             // and rare, but the depth bump is preserved for parity.
-            let nested_inside_function = self
-                .kinds
-                .iter()
-                .rev()
-                .skip(1)
+            let nested_inside_function = ctx
+                .ancestor_kinds()
                 .any(|k| matches!(k, SpaceKind::Function));
-            self.cognitive.nesting = 0;
+            ctx.cognitive.nesting = 0;
             if nested_inside_function {
-                self.cognitive.depth = self.cognitive.depth.saturating_add(1);
+                ctx.cognitive.depth = ctx.cognitive.depth.saturating_add(1);
             }
         }
     }
 
-    fn close_space(&mut self) {
-        let closed_kind = self.kinds.pop().expect("kinds stack underflow");
-        let mut state = self.stack.pop().expect("walker stack underflow");
+    fn before_close(&mut self, state: &mut State, closed_kind: SpaceKind, _parent: SpaceKind) {
         if matches!(closed_kind, SpaceKind::Function) {
             // Mirrors the legacy `wmc::Stats` close path. WMC is
             // class-aware; C has no classes, so this value is never
@@ -201,19 +123,9 @@ impl<'a> Visitor<'a> {
             // walker shape stays uniform with Go/Kotlin.
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
-        finalize_state(&mut state);
-        apply_state_to(state.clone(), self.tree.metrics_mut());
-        if let Some(parent) = self.stack.last_mut() {
-            merge_child_into_parent(parent, &state);
-        }
-        self.tree.close();
     }
 
-    // ---------------------------------------------------------------
-    // Per-node classification
-    // ---------------------------------------------------------------
-
-    fn classify(&mut self, node: &Node<'_>) {
+    fn classify(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) {
         let kind = C::from(node.kind_id());
 
         // Cyclomatic — legacy `Cyclomatic for CCode`.
@@ -228,196 +140,191 @@ impl<'a> Visitor<'a> {
                 | C::AMPAMP
                 | C::PIPEPIPE
         ) {
-            self.current().cyclomatic.record_decision();
+            ctx.current().cyclomatic.record_decision();
         }
 
-        self.classify_cognitive(node, kind);
-        self.classify_abc(node, kind);
+        classify_cognitive(ctx, node, kind);
+        classify_abc(ctx, node, kind);
 
         // NExit — legacy `Exit for CCode`. Only `return_statement`;
         // break/continue/goto are intra-function flow.
         if matches!(kind, C::ReturnStatement) {
-            self.current().nexit.record_exit();
+            ctx.current().nexit.record_exit();
         }
 
-        self.classify_loc(node, kind);
-        self.classify_halstead(node, kind);
+        classify_loc(ctx, node, kind);
+        classify_halstead(ctx, node, kind);
     }
+}
 
-    fn classify_cognitive(&mut self, node: &Node<'_>, kind: C) {
-        match kind {
-            // Outer `if`. `is_else_if` checks parent == ElseClause: when
-            // true, the structural +1 is paid by the surrounding `else
-            // clause` arm and only the boolean-seq reset stays here
-            // (defense-in-depth duplicate of the ElseClause reset).
-            C::IfStatement if !is_else_if(node) => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
-            }
-            C::IfStatement => {
-                self.current().cognitive.boolean_seq.reset();
-            }
-            C::ForStatement
-            | C::WhileStatement
-            | C::DoStatement
-            | C::SwitchStatement
-            | C::ConditionalExpression => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
-            }
-            C::ElseClause => {
-                self.current().cognitive.increment_by_one();
-                self.current().cognitive.boolean_seq.reset();
-            }
-            C::ExpressionStatement
-            | C::ExpressionStatement2
-            | C::ReturnStatement
-            | C::Declaration => {
-                self.current().cognitive.boolean_seq.reset();
-            }
-            C::BinaryExpression | C::BinaryExpression2 => {
-                // Legacy `compute_booleans::<C>(node, &AMPAMP, &PIPEPIPE)`:
-                // walk the children and feed each `&&`/`||` operator
-                // into the sequence collapser.
-                for child in iter_children(node) {
-                    match C::from(child.kind_id()) {
-                        C::AMPAMP => self.current().cognitive.observe_boolean("&&"),
-                        C::PIPEPIPE => self.current().cognitive.observe_boolean("||"),
-                        _ => {}
-                    }
+fn classify_cognitive(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: C) {
+    match kind {
+        // Outer `if`. `is_else_if` checks parent == ElseClause: when
+        // true, the structural +1 is paid by the surrounding `else
+        // clause` arm and only the boolean-seq reset stays here
+        // (defense-in-depth duplicate of the ElseClause reset).
+        C::IfStatement if !is_else_if(node) => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        C::IfStatement => {
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        C::ForStatement
+        | C::WhileStatement
+        | C::DoStatement
+        | C::SwitchStatement
+        | C::ConditionalExpression => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        C::ElseClause => {
+            ctx.current().cognitive.increment_by_one();
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        C::ExpressionStatement | C::ExpressionStatement2 | C::ReturnStatement | C::Declaration => {
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        C::BinaryExpression | C::BinaryExpression2 => {
+            // Legacy `compute_booleans::<C>(node, &AMPAMP, &PIPEPIPE)`:
+            // walk the children and feed each `&&`/`||` operator into
+            // the sequence collapser.
+            for child in iter_children(node) {
+                match C::from(child.kind_id()) {
+                    C::AMPAMP => ctx.current().cognitive.observe_boolean("&&"),
+                    C::PIPEPIPE => ctx.current().cognitive.observe_boolean("||"),
+                    _ => {}
                 }
             }
-            _ => {}
+        }
+        _ => {}
+    }
+}
+
+fn classify_abc(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: C) {
+    match kind {
+        C::AssignmentExpression | C::UpdateExpression => {
+            ctx.current().abc.record_assignment();
+        }
+        C::InitDeclarator if has_child_kind(node, C::EQ) => {
+            ctx.current().abc.record_assignment();
+        }
+        C::CallExpression | C::CallExpression2 => {
+            ctx.current().abc.record_branch();
+        }
+        C::IfStatement
+        | C::ElseClause
+        | C::CaseStatement
+        | C::ForStatement
+        | C::WhileStatement
+        | C::DoStatement
+        | C::ConditionalExpression
+        | C::EQEQ
+        | C::BANGEQ
+        | C::LT
+        | C::LTEQ
+        | C::GT
+        | C::GTEQ
+        | C::AMPAMP
+        | C::PIPEPIPE
+        | C::BANG => {
+            ctx.current().abc.record_condition();
+        }
+        _ => {}
+    }
+}
+
+fn classify_loc(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: C) {
+    match kind {
+        // Containers and string internals must not contribute their
+        // own physical line. Mirrors the legacy `Loc for CCode`'s
+        // explicit no-op arm.
+        C::TranslationUnit
+        | C::StringLiteral
+        | C::ConcatenatedString
+        | C::CharLiteral
+        | C::CompoundStatement
+        | C::StringContent
+        | C::EscapeSequence => {}
+        C::Comment => {
+            let start = node.start_position().row as u32;
+            let end = node.end_position().row as u32;
+            ctx.current().loc.observe_comment(start, end);
+        }
+        // LLOC kind set: 36 statement-shaped + preprocessor-container
+        // variants (legacy `loc.rs:583-616`). Each occurrence
+        // contributes one logical line.
+        C::Declaration
+        | C::TypeDefinition
+        | C::ExpressionStatement
+        | C::ExpressionStatement2
+        | C::IfStatement
+        | C::SwitchStatement
+        | C::CaseStatement
+        | C::WhileStatement
+        | C::DoStatement
+        | C::ForStatement
+        | C::ReturnStatement
+        | C::BreakStatement
+        | C::ContinueStatement
+        | C::GotoStatement
+        | C::LabeledStatement
+        | C::SehTryStatement
+        | C::SehLeaveStatement
+        | C::FunctionDefinition
+        | C::FunctionDefinition2
+        | C::PreprocInclude
+        | C::PreprocDef
+        | C::PreprocFunctionDef
+        | C::PreprocCall
+        | C::PreprocIf
+        | C::PreprocIf2
+        | C::PreprocIf3
+        | C::PreprocIf4
+        | C::PreprocIfdef
+        | C::PreprocIfdef2
+        | C::PreprocIfdef3
+        | C::PreprocIfdef4
+        | C::PreprocElse
+        | C::PreprocElse2
+        | C::PreprocElse3
+        | C::PreprocElse4
+        | C::PreprocElif
+        | C::PreprocElif2
+        | C::PreprocElif3
+        | C::PreprocElif4
+        | C::PreprocElifdef
+        | C::PreprocElifdef2
+        | C::PreprocElifdef3
+        | C::PreprocElifdef4 => {
+            ctx.current().loc.observe_lloc();
+        }
+        _ => {
+            let start = node.start_position().row as u32;
+            ctx.current().loc.observe_code_line(start);
         }
     }
+}
 
-    fn classify_abc(&mut self, node: &Node<'_>, kind: C) {
-        match kind {
-            C::AssignmentExpression | C::UpdateExpression => {
-                self.current().abc.record_assignment();
-            }
-            C::InitDeclarator if has_child_kind(node, C::EQ) => {
-                self.current().abc.record_assignment();
-            }
-            C::CallExpression | C::CallExpression2 => {
-                self.current().abc.record_branch();
-            }
-            C::IfStatement
-            | C::ElseClause
-            | C::CaseStatement
-            | C::ForStatement
-            | C::WhileStatement
-            | C::DoStatement
-            | C::ConditionalExpression
-            | C::EQEQ
-            | C::BANGEQ
-            | C::LT
-            | C::LTEQ
-            | C::GT
-            | C::GTEQ
-            | C::AMPAMP
-            | C::PIPEPIPE
-            | C::BANG => {
-                self.current().abc.record_condition();
-            }
-            _ => {}
+fn classify_halstead(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: C) {
+    match halstead_op_type(kind) {
+        HalsteadType::Operator => {
+            let kind_label: &'static str = kind.into();
+            ctx.current().halstead.observe_operator(HalsteadOperator {
+                kind: SmolStr::new(kind_label),
+                text: None,
+            });
         }
-    }
-
-    fn classify_loc(&mut self, node: &Node<'_>, kind: C) {
-        match kind {
-            // Containers and string internals must not contribute their
-            // own physical line. Mirrors the legacy `Loc for CCode`'s
-            // explicit no-op arm.
-            C::TranslationUnit
-            | C::StringLiteral
-            | C::ConcatenatedString
-            | C::CharLiteral
-            | C::CompoundStatement
-            | C::StringContent
-            | C::EscapeSequence => {}
-            C::Comment => {
-                let start = node.start_position().row as u32;
-                let end = node.end_position().row as u32;
-                self.current().loc.observe_comment(start, end);
-            }
-            // LLOC kind set: 36 statement-shaped + preprocessor-container
-            // variants (legacy `loc.rs:583-616`). Each occurrence
-            // contributes one logical line.
-            C::Declaration
-            | C::TypeDefinition
-            | C::ExpressionStatement
-            | C::ExpressionStatement2
-            | C::IfStatement
-            | C::SwitchStatement
-            | C::CaseStatement
-            | C::WhileStatement
-            | C::DoStatement
-            | C::ForStatement
-            | C::ReturnStatement
-            | C::BreakStatement
-            | C::ContinueStatement
-            | C::GotoStatement
-            | C::LabeledStatement
-            | C::SehTryStatement
-            | C::SehLeaveStatement
-            | C::FunctionDefinition
-            | C::FunctionDefinition2
-            | C::PreprocInclude
-            | C::PreprocDef
-            | C::PreprocFunctionDef
-            | C::PreprocCall
-            | C::PreprocIf
-            | C::PreprocIf2
-            | C::PreprocIf3
-            | C::PreprocIf4
-            | C::PreprocIfdef
-            | C::PreprocIfdef2
-            | C::PreprocIfdef3
-            | C::PreprocIfdef4
-            | C::PreprocElse
-            | C::PreprocElse2
-            | C::PreprocElse3
-            | C::PreprocElse4
-            | C::PreprocElif
-            | C::PreprocElif2
-            | C::PreprocElif3
-            | C::PreprocElif4
-            | C::PreprocElifdef
-            | C::PreprocElifdef2
-            | C::PreprocElifdef3
-            | C::PreprocElifdef4 => {
-                self.current().loc.observe_lloc();
-            }
-            _ => {
-                let start = node.start_position().row as u32;
-                self.current().loc.observe_code_line(start);
-            }
+        HalsteadType::Operand => {
+            let text = text_of(node, ctx.source);
+            ctx.current().halstead.observe_operand(HalsteadOperand {
+                kind: SmolStr::new("Operand"),
+                text: Some(SmolStr::new(text)),
+            });
         }
-    }
-
-    fn classify_halstead(&mut self, node: &Node<'_>, kind: C) {
-        match halstead_op_type(kind) {
-            HalsteadType::Operator => {
-                let kind_label: &'static str = kind.into();
-                self.current().halstead.observe_operator(HalsteadOperator {
-                    kind: SmolStr::new(kind_label),
-                    text: None,
-                });
-            }
-            HalsteadType::Operand => {
-                let text = text_of(node, self.source);
-                self.current().halstead.observe_operand(HalsteadOperand {
-                    kind: SmolStr::new("Operand"),
-                    text: Some(SmolStr::new(text)),
-                });
-            }
-            HalsteadType::Unknown => {}
-        }
+        HalsteadType::Unknown => {}
     }
 }
 
@@ -674,24 +581,4 @@ fn iter_children<'tree>(node: &Node<'tree>) -> impl Iterator<Item = Node<'tree>>
         }
     }
     nodes.into_iter()
-}
-
-fn node_span(node: &Node<'_>, line_index: &LineIndex) -> SourceSpan {
-    let start_byte = node.start_byte() as u32;
-    let end_byte = node.end_byte() as u32;
-    SourceSpan {
-        start_byte,
-        end_byte,
-        start_line: line_index.line_at(start_byte),
-        end_line: line_index.line_at(end_byte.saturating_sub(1).max(start_byte)),
-    }
-}
-
-fn text_of<'src>(node: &Node<'_>, source: &'src [u8]) -> &'src str {
-    let start = node.start_byte();
-    let end = node.end_byte().min(source.len());
-    if start >= end {
-        return "";
-    }
-    core::str::from_utf8(&source[start..end]).unwrap_or("")
 }

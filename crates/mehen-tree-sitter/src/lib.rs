@@ -21,11 +21,13 @@
 #![forbid(unsafe_code)]
 
 mod parser;
+mod scaffold;
 mod span;
 mod walker;
 
 pub use mehen_metrics::{State, apply_state_to};
 pub use parser::{TreeSitterError, TreeSitterParser, collect_recovered_errors};
+pub use scaffold::{CognitiveContext, OpenSpaceRequest, WalkerCtx, WalkerHooks, run};
 pub use span::{node_span, text_of};
 pub use walker::{
     CognitiveFact, LanguageRules, LocFact, MemberClassification, NodeFacts, ScopeOpen, WalkResult,

@@ -60,145 +60,64 @@
 //!   enum body, with public/non-public determined by explicit visibility
 //!   modifier (default = public).
 
-use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
-use mehen_metrics::{
-    ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
-};
+use mehen_core::{LineIndex, MetricSpace, SpaceKind};
+use mehen_metrics::{ContainerKind, HalsteadOperand, HalsteadOperator, State};
+use mehen_tree_sitter::{OpenSpaceRequest, WalkerCtx, WalkerHooks, node_span, run, text_of};
 use smol_str::SmolStr;
 use tree_sitter::Node;
 
 use crate::grammar::Kotlin;
 
 /// Drive the walker over the parsed Kotlin tree and return the populated
-/// `MetricSpace`. Crate-internal entry point — only
-/// `mehen_kotlin::KotlinAnalyzer::analyze` calls this.
+/// `MetricSpace`. Plugs Kotlin classification (incl. class-aware
+/// member routing and WMC container finalize) into the shared
+/// [`mehen_tree_sitter::run`] scaffold.
 pub(crate) fn walk_program(root: Node<'_>, source: &[u8], line_index: &LineIndex) -> MetricSpace {
-    let unit_span = node_span(&root, line_index);
-
-    let mut unit_state = State::new();
-    unit_state.loc.set_span(
-        root.start_position().row as u32,
-        root.end_position().row as u32,
-        true,
-    );
-
-    let mut visitor = Visitor {
-        line_index,
-        source,
-        tree: MetricTreeBuilder::new(unit_span),
-        stack: vec![unit_state],
-        kinds: vec![SpaceKind::Unit],
-        cognitive: CognitiveContext::default(),
-    };
-    visitor.visit(root);
-
-    let mut unit_state = visitor.stack.pop().expect("walker stack underflow");
-    finalize_state(&mut unit_state);
-    apply_state_to(unit_state, visitor.tree.metrics_mut());
-    visitor.tree.finish()
+    let mut hooks = KotlinHooks;
+    run(&mut hooks, root, source, line_index)
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct CognitiveContext {
-    nesting: u32,
-    depth: u32,
-    lambda: u32,
-}
+struct KotlinHooks;
 
-struct Visitor<'a> {
-    line_index: &'a LineIndex,
-    source: &'a [u8],
-    tree: MetricTreeBuilder,
-    stack: Vec<State>,
-    /// Parallel to `stack`: the SpaceKind of each frame so we can route
-    /// closing-method WMC contributions and choose the correct ABC /
-    /// NPA / NPM container without re-walking the AST.
-    kinds: Vec<SpaceKind>,
-    cognitive: CognitiveContext,
-}
-
-impl<'a> Visitor<'a> {
-    fn current(&mut self) -> &mut State {
-        self.stack.last_mut().expect("walker stack empty")
-    }
-
-    fn visit(&mut self, node: Node<'_>) {
-        // Save the inherited cognitive context so any nesting bumps
-        // applied by `classify` (or by `on_space_enter` for function
-        // entry) scope to this node's subtree only — siblings see the
-        // parent's pre-bump context. This mirrors how the legacy walker
-        // looked up `(nesting, depth, lambda)` from a per-node-id map
-        // keyed on the parent's id (`get_nesting_from_map`); when we
-        // leave a subtree, the next sibling reads from the parent
-        // again, not from the leaving subtree's bumped state.
-        let saved_cognitive = self.cognitive;
-
+impl WalkerHooks for KotlinHooks {
+    fn pre_open(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) {
         // NPA / NPM membership classification has to look at the
         // *enclosing* space's kind, not the soon-to-be-pushed one. Run
         // it before we open the function/method space so an inner
         // function's `kinds` stack still has the class on top.
-        self.classify_class_members(&node, Kotlin::from(node.kind_id()));
-
-        let opened = self.maybe_open_space(&node);
-        if opened {
-            self.on_space_enter();
-        }
-
-        // Per-node classification (everything except class membership,
-        // which already ran above).
-        self.classify(&node);
-
-        // Recurse into children.
-        let mut cursor = node.walk();
-        if cursor.goto_first_child() {
-            loop {
-                self.visit(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-
-        if opened {
-            self.close_space();
-        }
-        self.cognitive = saved_cognitive;
+        classify_class_members(ctx, node, Kotlin::from(node.kind_id()));
     }
 
-    // ---------------------------------------------------------------
-    // Space management
-    // ---------------------------------------------------------------
-
-    fn maybe_open_space(&mut self, node: &Node<'_>) -> bool {
-        let kind_id = node.kind_id();
-        let kind = Kotlin::from(kind_id);
+    fn open_space(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) -> Option<OpenSpaceRequest> {
+        let kind = Kotlin::from(node.kind_id());
         match kind {
             Kotlin::FunctionDeclaration
             | Kotlin::AnonymousFunction
             | Kotlin::SecondaryConstructor
             | Kotlin::Getter
             | Kotlin::Setter => {
-                let name = func_name(node, self.source);
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let name = func_name(node, ctx.source);
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
-                child.nom.record_function();
+                state.nom.record_function();
                 let argc = count_kotlin_args(node);
-                child.nargs.record_function_args(argc);
-                self.tree.open(SpaceKind::Function, span, name);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Function);
-                true
+                state.nargs.record_function_args(argc);
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Function,
+                    name,
+                    span,
+                    state,
+                })
             }
             Kotlin::LambdaLiteral => {
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
@@ -207,64 +126,69 @@ impl<'a> Visitor<'a> {
                 // `is_func(LambdaLiteral) = false`, so NOM/NArgs route to
                 // the closure dimension. The space itself is still
                 // SpaceKind::Function per legacy `get_space_kind`.
-                child.nom.record_closure();
+                state.nom.record_closure();
                 let argc = count_kotlin_args(node);
-                child.nargs.record_closure_args(argc);
-                self.tree.open(SpaceKind::Function, span, None);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Function);
-                true
+                state.nargs.record_closure_args(argc);
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Function,
+                    name: None,
+                    span,
+                    state,
+                })
             }
             Kotlin::ClassDeclaration => {
-                let name = func_name(node, self.source);
+                let name = func_name(node, ctx.source);
                 let space_kind = if has_child_kind(node, Kotlin::Interface) {
                     SpaceKind::Interface
                 } else {
                     SpaceKind::Class
                 };
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
                 if matches!(space_kind, SpaceKind::Interface) {
-                    child.npa.record_class_like();
-                    child.npm.record_class_like();
+                    state.npa.record_class_like();
+                    state.npm.record_class_like();
                 } else {
-                    child.npa.record_class_like();
-                    child.npm.record_class_like();
-                    child.wmc.record_class_like();
+                    state.npa.record_class_like();
+                    state.npm.record_class_like();
+                    state.wmc.record_class_like();
                 }
-                self.tree.open(space_kind.clone(), span, name);
-                self.stack.push(child);
-                self.kinds.push(space_kind);
-                true
+                Some(OpenSpaceRequest {
+                    kind: space_kind,
+                    name,
+                    span,
+                    state,
+                })
             }
             Kotlin::ObjectDeclaration | Kotlin::CompanionObject => {
-                let name = func_name(node, self.source);
-                let span = node_span(node, self.line_index);
-                let mut child = State::new();
-                child.loc.set_span(
+                let name = func_name(node, ctx.source);
+                let span = node_span(node, ctx.line_index);
+                let mut state = State::new();
+                state.loc.set_span(
                     node.start_position().row as u32,
                     node.end_position().row as u32,
                     false,
                 );
-                child.npa.record_class_like();
-                child.npm.record_class_like();
-                child.wmc.record_class_like();
-                self.tree.open(SpaceKind::Class, span, name);
-                self.stack.push(child);
-                self.kinds.push(SpaceKind::Class);
-                true
+                state.npa.record_class_like();
+                state.npm.record_class_like();
+                state.wmc.record_class_like();
+                Some(OpenSpaceRequest {
+                    kind: SpaceKind::Class,
+                    name,
+                    span,
+                    state,
+                })
             }
-            _ => false,
+            _ => None,
         }
     }
 
-    fn on_space_enter(&mut self) {
-        let kind = self.kinds.last().cloned().expect("kinds stack empty");
+    fn on_space_enter(&mut self, ctx: &mut WalkerCtx<'_>, kind: SpaceKind) {
         // Legacy `Cognitive for KotlinCode`'s
         // `FunctionDeclaration | AnonymousFunction | SecondaryConstructor`
         // arm: reset nesting / lambda, bump function-depth when nested
@@ -272,48 +196,43 @@ impl<'a> Visitor<'a> {
         // / CompanionObject open class-like spaces but don't carry
         // cognitive context themselves.
         if matches!(kind, SpaceKind::Function) {
-            let nested_inside_function = self
-                .kinds
-                .iter()
-                .rev()
-                .skip(1)
+            let nested_inside_function = ctx
+                .ancestor_kinds()
                 .any(|k| matches!(k, SpaceKind::Function));
-            self.cognitive.nesting = 0;
-            self.cognitive.lambda = 0;
+            ctx.cognitive.nesting = 0;
+            ctx.cognitive.lambda = 0;
             if nested_inside_function {
-                self.cognitive.depth = self.cognitive.depth.saturating_add(1);
+                ctx.cognitive.depth = ctx.cognitive.depth.saturating_add(1);
             }
         }
     }
 
-    fn close_space(&mut self) {
-        let closed_kind = self.kinds.pop().expect("kinds stack underflow");
-        let mut state = self.stack.pop().expect("walker stack underflow");
+    fn before_close(&mut self, state: &mut State, closed_kind: SpaceKind, _parent: SpaceKind) {
         if matches!(closed_kind, SpaceKind::Function) {
             state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
         }
-        finalize_state(&mut state);
-        apply_state_to(state.clone(), self.tree.metrics_mut());
-        if let Some(parent) = self.stack.last_mut() {
-            let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
-            merge_child_into_parent(parent, &state);
-            if matches!(closed_kind, SpaceKind::Function) {
-                let container = match parent_kind {
-                    SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
-                    SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
-                    _ => ContainerKind::Other,
-                };
-                state.wmc.finalize_method_into(container, &mut parent.wmc);
-            }
-        }
-        self.tree.close();
     }
 
-    // ---------------------------------------------------------------
-    // Per-node classification
-    // ---------------------------------------------------------------
+    fn after_close(
+        &mut self,
+        state: &State,
+        closed_kind: SpaceKind,
+        parent_state: &mut State,
+        parent_kind: SpaceKind,
+    ) {
+        if matches!(closed_kind, SpaceKind::Function) {
+            let container = match parent_kind {
+                SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
+                SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
+                _ => ContainerKind::Other,
+            };
+            state
+                .wmc
+                .finalize_method_into(container, &mut parent_state.wmc);
+        }
+    }
 
-    fn classify(&mut self, node: &Node<'_>) {
+    fn classify(&mut self, ctx: &mut WalkerCtx<'_>, node: &Node<'_>) {
         let kind = Kotlin::from(node.kind_id());
 
         // Cyclomatic — legacy `Cyclomatic for KotlinCode`. The decision
@@ -330,14 +249,11 @@ impl<'a> Visitor<'a> {
                 | Kotlin::AMPAMP
                 | Kotlin::PIPEPIPE
         ) {
-            self.current().cyclomatic.record_decision();
+            ctx.current().cyclomatic.record_decision();
         }
 
-        // Cognitive — legacy `Cognitive for KotlinCode`.
-        self.classify_cognitive(node, kind);
-
-        // ABC — legacy `Abc for KotlinCode`.
-        self.classify_abc(node, kind);
+        classify_cognitive(ctx, node, kind);
+        classify_abc(ctx, node, kind);
 
         // NExit — legacy `Exit for KotlinCode`. JumpExpression with
         // lead keyword `return` or `throw` (filters out
@@ -345,267 +261,262 @@ impl<'a> Visitor<'a> {
         if kind == Kotlin::JumpExpression {
             let lead_kind = node.child(0).map(|c| Kotlin::from(c.kind_id()));
             if matches!(lead_kind, Some(Kotlin::Return) | Some(Kotlin::Throw)) {
-                self.current().nexit.record_exit();
+                ctx.current().nexit.record_exit();
             }
         }
 
-        // LOC — legacy `Loc for KotlinCode`.
-        self.classify_loc(node, kind);
+        classify_loc(ctx, node, kind);
+        classify_halstead(ctx, node, kind);
+    }
+}
 
-        // Halstead — legacy `Getter::get_op_type for KotlinCode`.
-        self.classify_halstead(node, kind);
+fn classify_cognitive(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Kotlin) {
+    match kind {
+        // Nesting structures: `if` (not else-if), loops, `when`,
+        // `catch_block`. `try` itself does NOT bump nesting; only
+        // `catch_block` does.
+        Kotlin::IfExpression if !is_else_if(node) => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        Kotlin::IfExpression => {}
+        Kotlin::ForStatement
+        | Kotlin::WhileStatement
+        | Kotlin::DoWhileStatement
+        | Kotlin::WhenExpression
+        | Kotlin::CatchBlock => {
+            let effective = ctx.cognitive.nesting + ctx.cognitive.depth + ctx.cognitive.lambda;
+            ctx.current().cognitive.increase_nesting(effective);
+            ctx.cognitive.nesting = ctx.cognitive.nesting.saturating_add(1);
+        }
+        Kotlin::Else => {
+            // `else` (covers `else if`) adds +1 without nesting.
+            ctx.current().cognitive.increment_by_one();
+        }
+        // Label-qualified `break@label` / `continue@label` add +1
+        // without nesting — they break linear flow like a goto.
+        Kotlin::JumpExpression => {
+            let lead_kind = node.child(0).map(|c| Kotlin::from(c.kind_id()));
+            if matches!(lead_kind, Some(Kotlin::BreakAT) | Some(Kotlin::ContinueAT)) {
+                ctx.current().cognitive.increment_by_one();
+            }
+            // Statement-boundary boolean-sequence reset.
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        Kotlin::PropertyDeclaration | Kotlin::Assignment | Kotlin::CallExpression => {
+            ctx.current().cognitive.boolean_seq.reset();
+        }
+        Kotlin::PrefixExpression => {
+            // Legacy passes the PrefixExpression's kind_id as the
+            // not_id; any subsequent boolean operator will compare
+            // unequal and trigger a +1 — same effect with a stable
+            // string label.
+            ctx.current().cognitive.boolean_seq.not_operator("!");
+        }
+        Kotlin::ConjunctionExpression => {
+            // Legacy `compute_booleans::<Kotlin>(node, stats, &AMPAMP, &AMPAMP)`
+            // — every `&&` child of this conjunction folds into the
+            // sequence collapser. `compute_booleans` walks direct
+            // children only and only matches on AMPAMP.
+            for child in iter_children(node) {
+                if Kotlin::from(child.kind_id()) == Kotlin::AMPAMP {
+                    ctx.current().cognitive.observe_boolean("&&");
+                }
+            }
+        }
+        Kotlin::DisjunctionExpression => {
+            for child in iter_children(node) {
+                if Kotlin::from(child.kind_id()) == Kotlin::PIPEPIPE {
+                    ctx.current().cognitive.observe_boolean("||");
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn classify_abc(ctx: &mut WalkerCtx<'_>, _node: &Node<'_>, kind: Kotlin) {
+    match kind {
+        Kotlin::Assignment => {
+            ctx.current().abc.record_assignment();
+        }
+        Kotlin::PropertyDeclaration if has_child_kind(_node, Kotlin::EQ) => {
+            ctx.current().abc.record_assignment();
+        }
+        Kotlin::CallExpression => {
+            ctx.current().abc.record_branch();
+        }
+        Kotlin::IfExpression
+        | Kotlin::WhenEntry
+        | Kotlin::CatchBlock
+        | Kotlin::ForStatement
+        | Kotlin::WhileStatement
+        | Kotlin::DoWhileStatement
+        | Kotlin::EQEQ
+        | Kotlin::BANGEQ
+        | Kotlin::EQEQEQ
+        | Kotlin::BANGEQEQ
+        | Kotlin::LT
+        | Kotlin::LTEQ
+        | Kotlin::GT
+        | Kotlin::GTEQ
+        | Kotlin::AMPAMP
+        | Kotlin::PIPEPIPE
+        | Kotlin::QMARKCOLON
+        | Kotlin::QMARKDOT
+        | Kotlin::BANGBANG => {
+            ctx.current().abc.record_condition();
+        }
+        _ => {}
+    }
+}
+
+fn classify_class_members(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Kotlin) {
+    // Mirrors legacy `Npa for KotlinCode` / `Npm for KotlinCode`.
+    // We look at the immediate parent kind to decide whether the
+    // current node is a direct member of a class-like body.
+    let parent_kind = ctx.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
+    let in_class_like = matches!(
+        parent_kind,
+        SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
+    );
+
+    if !in_class_like {
+        return;
     }
 
-    fn classify_cognitive(&mut self, node: &Node<'_>, kind: Kotlin) {
-        match kind {
-            // Nesting structures: `if` (not else-if), loops, `when`,
-            // `catch_block`. `try` itself does NOT bump nesting; only
-            // `catch_block` does.
-            Kotlin::IfExpression if !is_else_if(node) => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
+    match kind {
+        Kotlin::PropertyDeclaration => {
+            let Some(parent) = node.parent() else {
+                return;
+            };
+            if !matches!(
+                Kotlin::from(parent.kind_id()),
+                Kotlin::ClassBody | Kotlin::EnumClassBody
+            ) {
+                return;
             }
-            Kotlin::IfExpression => {}
-            Kotlin::ForStatement
-            | Kotlin::WhileStatement
-            | Kotlin::DoWhileStatement
-            | Kotlin::WhenExpression
-            | Kotlin::CatchBlock => {
-                let effective =
-                    self.cognitive.nesting + self.cognitive.depth + self.cognitive.lambda;
-                self.current().cognitive.increase_nesting(effective);
-                self.cognitive.nesting = self.cognitive.nesting.saturating_add(1);
+            let Some(container) = kotlin_member_container(&parent) else {
+                return;
+            };
+            let public = kotlin_member_is_public(node, ctx.source);
+            let container_kind = match container {
+                SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
+                SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
+                _ => return,
+            };
+            ctx.current().npa.record_attribute(container_kind, public);
+        }
+        Kotlin::ClassParameter => {
+            // Constructor property: only `class C(val x: Int)` /
+            // `(var x: Int)` count as class attributes.
+            if !has_child_kind(node, Kotlin::BindingPatternKind) {
+                return;
             }
-            Kotlin::Else => {
-                // `else` (covers `else if`) adds +1 without nesting.
-                self.current().cognitive.increment_by_one();
+            let Some(container) = kotlin_constructor_param_container(node) else {
+                return;
+            };
+            let public = kotlin_member_is_public(node, ctx.source);
+            let container_kind = match container {
+                SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
+                SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
+                _ => return,
+            };
+            ctx.current().npa.record_attribute(container_kind, public);
+        }
+        Kotlin::FunctionDeclaration
+        | Kotlin::SecondaryConstructor
+        | Kotlin::Getter
+        | Kotlin::Setter => {
+            let Some(parent) = node.parent() else {
+                return;
+            };
+            if !matches!(
+                Kotlin::from(parent.kind_id()),
+                Kotlin::ClassBody | Kotlin::EnumClassBody
+            ) {
+                return;
             }
-            // Label-qualified `break@label` / `continue@label` add +1
-            // without nesting — they break linear flow like a goto.
-            Kotlin::JumpExpression => {
-                let lead_kind = node.child(0).map(|c| Kotlin::from(c.kind_id()));
-                if matches!(lead_kind, Some(Kotlin::BreakAT) | Some(Kotlin::ContinueAT)) {
-                    self.current().cognitive.increment_by_one();
-                }
-                // Statement-boundary boolean-sequence reset.
-                self.current().cognitive.boolean_seq.reset();
-            }
-            Kotlin::PropertyDeclaration | Kotlin::Assignment | Kotlin::CallExpression => {
-                self.current().cognitive.boolean_seq.reset();
-            }
-            Kotlin::PrefixExpression => {
-                // Legacy passes the PrefixExpression's kind_id as the
-                // not_id; any subsequent boolean operator will compare
-                // unequal and trigger a +1 — same effect with a stable
-                // string label.
-                self.current().cognitive.boolean_seq.not_operator("!");
-            }
-            Kotlin::ConjunctionExpression => {
-                // Legacy `compute_booleans::<Kotlin>(node, stats, &AMPAMP, &AMPAMP)`
-                // — every `&&` child of this conjunction folds into the
-                // sequence collapser. `compute_booleans` walks direct
-                // children only and only matches on AMPAMP.
-                for child in iter_children(node) {
-                    if Kotlin::from(child.kind_id()) == Kotlin::AMPAMP {
-                        self.current().cognitive.observe_boolean("&&");
-                    }
-                }
-            }
-            Kotlin::DisjunctionExpression => {
-                for child in iter_children(node) {
-                    if Kotlin::from(child.kind_id()) == Kotlin::PIPEPIPE {
-                        self.current().cognitive.observe_boolean("||");
-                    }
-                }
-            }
-            _ => {}
+            let Some(container) = kotlin_member_container(&parent) else {
+                return;
+            };
+            let public = if matches!(kind, Kotlin::Getter | Kotlin::Setter) {
+                kotlin_accessor_is_public(node, ctx.source)
+            } else {
+                kotlin_member_is_public(node, ctx.source)
+            };
+            let container_kind = match container {
+                SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
+                SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
+                _ => return,
+            };
+            ctx.current().npm.record_method(container_kind, public);
+        }
+        _ => {}
+    }
+}
+
+fn classify_loc(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Kotlin) {
+    match kind {
+        Kotlin::SourceFile | Kotlin::Statements | Kotlin::StringLiteral => {}
+        Kotlin::LineComment | Kotlin::MultilineComment => {
+            let start = node.start_position().row as u32;
+            let end = node.end_position().row as u32;
+            ctx.current().loc.observe_comment(start, end);
+        }
+        Kotlin::FunctionDeclaration
+        | Kotlin::ClassDeclaration
+        | Kotlin::ObjectDeclaration
+        | Kotlin::CompanionObject
+        | Kotlin::SecondaryConstructor
+        | Kotlin::PropertyDeclaration
+        | Kotlin::Getter
+        | Kotlin::Setter
+        | Kotlin::Assignment
+        | Kotlin::ForStatement
+        | Kotlin::WhileStatement
+        | Kotlin::DoWhileStatement
+        | Kotlin::IfExpression
+        | Kotlin::WhenExpression
+        | Kotlin::TryExpression
+        | Kotlin::JumpExpression => {
+            ctx.current().loc.observe_lloc();
+        }
+        Kotlin::CallExpression
+            if node.parent().is_some_and(|p| {
+                matches!(
+                    Kotlin::from(p.kind_id()),
+                    Kotlin::Statements | Kotlin::ControlStructureBody
+                )
+            }) =>
+        {
+            ctx.current().loc.observe_lloc();
+        }
+        _ => {
+            let row = node.start_position().row as u32;
+            ctx.current().loc.observe_code_line(row);
         }
     }
+}
 
-    fn classify_abc(&mut self, _node: &Node<'_>, kind: Kotlin) {
-        match kind {
-            Kotlin::Assignment => {
-                self.current().abc.record_assignment();
-            }
-            Kotlin::PropertyDeclaration if has_child_kind(_node, Kotlin::EQ) => {
-                self.current().abc.record_assignment();
-            }
-            Kotlin::CallExpression => {
-                self.current().abc.record_branch();
-            }
-            Kotlin::IfExpression
-            | Kotlin::WhenEntry
-            | Kotlin::CatchBlock
-            | Kotlin::ForStatement
-            | Kotlin::WhileStatement
-            | Kotlin::DoWhileStatement
-            | Kotlin::EQEQ
-            | Kotlin::BANGEQ
-            | Kotlin::EQEQEQ
-            | Kotlin::BANGEQEQ
-            | Kotlin::LT
-            | Kotlin::LTEQ
-            | Kotlin::GT
-            | Kotlin::GTEQ
-            | Kotlin::AMPAMP
-            | Kotlin::PIPEPIPE
-            | Kotlin::QMARKCOLON
-            | Kotlin::QMARKDOT
-            | Kotlin::BANGBANG => {
-                self.current().abc.record_condition();
-            }
-            _ => {}
+fn classify_halstead(ctx: &mut WalkerCtx<'_>, node: &Node<'_>, kind: Kotlin) {
+    match halstead_op_type(kind) {
+        HalsteadType::Operator => {
+            let label: &'static str = kind.into();
+            ctx.current().halstead.observe_operator(HalsteadOperator {
+                kind: SmolStr::new(label),
+                text: None,
+            });
         }
-    }
-
-    fn classify_class_members(&mut self, node: &Node<'_>, kind: Kotlin) {
-        // Mirrors legacy `Npa for KotlinCode` / `Npm for KotlinCode`.
-        // We look at the immediate parent kind to decide whether the
-        // current node is a direct member of a class-like body.
-        let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
-        let in_class_like = matches!(
-            parent_kind,
-            SpaceKind::Class | SpaceKind::Interface | SpaceKind::Impl | SpaceKind::Trait
-        );
-
-        if !in_class_like {
-            return;
+        HalsteadType::Operand => {
+            let text = text_of(node, ctx.source);
+            ctx.current().halstead.observe_operand(HalsteadOperand {
+                kind: SmolStr::new("Operand"),
+                text: Some(SmolStr::new(text)),
+            });
         }
-
-        match kind {
-            Kotlin::PropertyDeclaration => {
-                let Some(parent) = node.parent() else {
-                    return;
-                };
-                if !matches!(
-                    Kotlin::from(parent.kind_id()),
-                    Kotlin::ClassBody | Kotlin::EnumClassBody
-                ) {
-                    return;
-                }
-                let Some(container) = kotlin_member_container(&parent) else {
-                    return;
-                };
-                let public = kotlin_member_is_public(node, self.source);
-                let container_kind = match container {
-                    SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
-                    SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
-                    _ => return,
-                };
-                self.current().npa.record_attribute(container_kind, public);
-            }
-            Kotlin::ClassParameter => {
-                // Constructor property: only `class C(val x: Int)` /
-                // `(var x: Int)` count as class attributes.
-                if !has_child_kind(node, Kotlin::BindingPatternKind) {
-                    return;
-                }
-                let Some(container) = kotlin_constructor_param_container(node) else {
-                    return;
-                };
-                let public = kotlin_member_is_public(node, self.source);
-                let container_kind = match container {
-                    SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
-                    SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
-                    _ => return,
-                };
-                self.current().npa.record_attribute(container_kind, public);
-            }
-            Kotlin::FunctionDeclaration
-            | Kotlin::SecondaryConstructor
-            | Kotlin::Getter
-            | Kotlin::Setter => {
-                let Some(parent) = node.parent() else {
-                    return;
-                };
-                if !matches!(
-                    Kotlin::from(parent.kind_id()),
-                    Kotlin::ClassBody | Kotlin::EnumClassBody
-                ) {
-                    return;
-                }
-                let Some(container) = kotlin_member_container(&parent) else {
-                    return;
-                };
-                let public = if matches!(kind, Kotlin::Getter | Kotlin::Setter) {
-                    kotlin_accessor_is_public(node, self.source)
-                } else {
-                    kotlin_member_is_public(node, self.source)
-                };
-                let container_kind = match container {
-                    SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
-                    SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
-                    _ => return,
-                };
-                self.current().npm.record_method(container_kind, public);
-            }
-            _ => {}
-        }
-    }
-
-    fn classify_loc(&mut self, node: &Node<'_>, kind: Kotlin) {
-        match kind {
-            Kotlin::SourceFile | Kotlin::Statements | Kotlin::StringLiteral => {}
-            Kotlin::LineComment | Kotlin::MultilineComment => {
-                let start = node.start_position().row as u32;
-                let end = node.end_position().row as u32;
-                self.current().loc.observe_comment(start, end);
-            }
-            Kotlin::FunctionDeclaration
-            | Kotlin::ClassDeclaration
-            | Kotlin::ObjectDeclaration
-            | Kotlin::CompanionObject
-            | Kotlin::SecondaryConstructor
-            | Kotlin::PropertyDeclaration
-            | Kotlin::Getter
-            | Kotlin::Setter
-            | Kotlin::Assignment
-            | Kotlin::ForStatement
-            | Kotlin::WhileStatement
-            | Kotlin::DoWhileStatement
-            | Kotlin::IfExpression
-            | Kotlin::WhenExpression
-            | Kotlin::TryExpression
-            | Kotlin::JumpExpression => {
-                self.current().loc.observe_lloc();
-            }
-            Kotlin::CallExpression
-                if node.parent().is_some_and(|p| {
-                    matches!(
-                        Kotlin::from(p.kind_id()),
-                        Kotlin::Statements | Kotlin::ControlStructureBody
-                    )
-                }) =>
-            {
-                self.current().loc.observe_lloc();
-            }
-            _ => {
-                let row = node.start_position().row as u32;
-                self.current().loc.observe_code_line(row);
-            }
-        }
-    }
-
-    fn classify_halstead(&mut self, node: &Node<'_>, kind: Kotlin) {
-        match halstead_op_type(kind) {
-            HalsteadType::Operator => {
-                let label: &'static str = kind.into();
-                self.current().halstead.observe_operator(HalsteadOperator {
-                    kind: SmolStr::new(label),
-                    text: None,
-                });
-            }
-            HalsteadType::Operand => {
-                let text = text_of(node, self.source);
-                self.current().halstead.observe_operand(HalsteadOperand {
-                    kind: SmolStr::new("Operand"),
-                    text: Some(SmolStr::new(text)),
-                });
-            }
-            HalsteadType::Unknown => {}
-        }
+        HalsteadType::Unknown => {}
     }
 }
 
@@ -944,24 +855,4 @@ fn iter_children<'tree>(node: &Node<'tree>) -> impl Iterator<Item = Node<'tree>>
         }
     }
     nodes.into_iter()
-}
-
-fn node_span(node: &Node<'_>, line_index: &LineIndex) -> SourceSpan {
-    let start_byte = node.start_byte() as u32;
-    let end_byte = node.end_byte() as u32;
-    SourceSpan {
-        start_byte,
-        end_byte,
-        start_line: line_index.line_at(start_byte),
-        end_line: line_index.line_at(end_byte.saturating_sub(1).max(start_byte)),
-    }
-}
-
-fn text_of<'src>(node: &Node<'_>, source: &'src [u8]) -> &'src str {
-    let start = node.start_byte();
-    let end = node.end_byte().min(source.len());
-    if start >= end {
-        return "";
-    }
-    core::str::from_utf8(&source[start..end]).unwrap_or("")
 }
