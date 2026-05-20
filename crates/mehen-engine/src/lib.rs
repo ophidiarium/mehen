@@ -52,11 +52,22 @@ mod markdown_dispatch {
     /// Run the AnalyzerRegistry against a fence body. Every supported
     /// fence language now has a per-language analyzer crate, so this
     /// is the only dispatch path Markdown needs.
+    ///
+    /// The registry is shared across calls via a process-wide
+    /// `OnceLock`: `dispatch` is the `mehen_markdown::DispatchFn`
+    /// callback (a bare `fn` pointer that can't capture state), and
+    /// every fenced code block in a Markdown document drives this
+    /// function once. Without the cache each fence rebuilt the
+    /// per-language factory `Vec` from scratch — measurable overhead
+    /// on documents with hundreds of fences.
     pub(super) fn dispatch(lang: FenceLanguage, body: String) -> Option<EmbeddedFenceMetrics> {
+        use std::sync::OnceLock;
+
         use mehen_core::{AnalysisConfig, MetricKey, SourceFile, keys};
 
+        static REGISTRY: OnceLock<AnalyzerRegistry> = OnceLock::new();
         let language = language_for(lang);
-        let registry = AnalyzerRegistry::default_set();
+        let registry = REGISTRY.get_or_init(AnalyzerRegistry::default_set);
         let analyzer = registry.analyzer_for(language)?;
         let path = camino::Utf8PathBuf::try_from(synthetic_path(lang)).ok()?;
         let source = SourceFile::new(path, language, body);
