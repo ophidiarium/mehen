@@ -261,14 +261,29 @@ pub(crate) fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSp
 /// `["avg", "average"]` for the avg aggregator), returning the first
 /// hit. `0.0` if none match — keeps the behavior of a missing metric
 /// the same as a missing root-level key.
+///
+/// For each suffix the lookup tries the dotted form first
+/// (`<base>.<suffix>`) and falls back to the underscore form
+/// (`<base>_<suffix>`). The underscore form is what the shared
+/// publishers in `mehen-metrics::state` use for sub-bucket aggregates:
+/// `nom.functions_max`, `nom.closures_min`, `abc.assignments_average`,
+/// `npa.classes_average`, `npm.interfaces_average`, `nargs.functions_max`,
+/// etc. Without the fallback, selectors like `nom.functions.max` would
+/// silently read `0.0` even when the analyzer published the value,
+/// misordering top-offenders rankings and suppressing diff-threshold
+/// violations.
 fn suffixed_lookup(
     base: &MetricKey,
     suffixes: &[&str],
     lookup: &dyn Fn(&MetricKey) -> Option<f64>,
 ) -> f64 {
     for suffix in suffixes {
-        let key = MetricKey::new(format!("{base}.{suffix}"));
-        if let Some(v) = lookup(&key) {
+        let dotted = MetricKey::new(format!("{base}.{suffix}"));
+        if let Some(v) = lookup(&dotted) {
+            return v;
+        }
+        let underscored = MetricKey::new(format!("{base}_{suffix}"));
+        if let Some(v) = lookup(&underscored) {
             return v;
         }
     }
@@ -774,6 +789,52 @@ mod tests {
         // whole rank pass.
         let space = space_with_metrics(&[("loc.lloc", 100.0)]);
         assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 0.0);
+    }
+
+    #[test]
+    fn min_max_aggregators_resolve_underscore_subbucket_keys() {
+        // Regression: `mehen-metrics::state::publish_nom` writes
+        // `nom.functions_min`, `nom.functions_max`, `nom.closures_min`,
+        // `nom.closures_max` (underscore suffixes), and `publish_abc` /
+        // `publish_npa` / `publish_npm` / `publish_nargs` follow the
+        // same convention for their sub-bucket aggregates. Pre-fix the
+        // suffix lookup only tried the dotted form
+        // (`nom.functions.max`), so any selector targeting one of
+        // those buckets — `nom.functions.max`, `abc.assignments.min`,
+        // `npa.classes.average`, etc. — silently read 0.0. That
+        // misordered top-offenders rankings and suppressed
+        // diff-threshold violations whenever users gated on a
+        // sub-bucket aggregate.
+        let space = space_with_metrics(&[
+            ("nom.functions", 12.0),
+            ("nom.functions_min", 1.0),
+            ("nom.functions_max", 7.0),
+            ("nom.functions_average", 3.5),
+            ("nom.closures_max", 4.0),
+            ("abc.assignments_max", 9.0),
+            ("npa.classes_average", 2.25),
+            ("nargs.functions_max", 6.0),
+        ]);
+        assert_eq!(read_metric(&sel("nom.functions.min"), &space), 1.0);
+        assert_eq!(read_metric(&sel("nom.functions.max"), &space), 7.0);
+        assert_eq!(read_metric(&sel("nom.functions.avg"), &space), 3.5);
+        assert_eq!(read_metric(&sel("nom.closures.max"), &space), 4.0);
+        assert_eq!(read_metric(&sel("abc.assignments.min"), &space), 0.0);
+        assert_eq!(read_metric(&sel("abc.assignments.max"), &space), 9.0);
+        assert_eq!(read_metric(&sel("npa.classes.avg"), &space), 2.25);
+        assert_eq!(read_metric(&sel("nargs.functions.max"), &space), 6.0);
+    }
+
+    #[test]
+    fn dotted_form_takes_precedence_over_underscore() {
+        // If both forms exist, the dotted form wins — `cyclomatic.max`
+        // is the canonical convention; underscore is only a fallback
+        // for the sub-bucket families. This guards against a future
+        // analyzer bug where a publisher accidentally writes both
+        // forms with different values: the canonical key still drives
+        // ranking.
+        let space = space_with_metrics(&[("nom.functions.max", 11.0), ("nom.functions_max", 99.0)]);
+        assert_eq!(read_metric(&sel("nom.functions.max"), &space), 11.0);
     }
 
     #[test]
