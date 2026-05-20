@@ -93,3 +93,12 @@ jobs:
             AGENTS.md
             CLAUDE.md
             CHANGELOG.md
+          # `xtask/templates/grammar.rs` is an askama template — it
+          # has the `.rs` extension so language detection routes it
+          # through the Rust analyzer, but it carries `{{ c_name }}`
+          # and other template directives that don't parse as Rust.
+          # The analyzer reports `rust.syntax_error` diagnostics that
+          # flip `mehen diff`'s exit code to 1 (per plan §9.3), even
+          # when the JSON report is otherwise complete. Skip it.
+          exclude: |
+            xtask/templates/**
