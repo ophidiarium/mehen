@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use mehen_core::{
-    DiagnosticSeverity, DiffReport, MetricSet, MetricSpace, MetricsReport, ParseDiagnostic,
-    SpaceKind,
+    DiagnosticSeverity, DiffReport, Language, MetricKey, MetricSet, MetricSpace, MetricsReport,
+    ParseDiagnostic, SpaceKind,
 };
 
 use crate::metrics_json::{
@@ -39,8 +39,8 @@ pub fn render_metrics_markdown(report: &MetricsReport) -> String {
     let _ = writeln!(out, "- schema: `{}`", report.schema_version);
 
     write_diagnostics(&mut out, &report.diagnostics);
-    write_unit_metrics(&mut out, &report.root.metrics);
-    write_nested_spaces(&mut out, &report.root.spaces, 0);
+    write_unit_metrics(&mut out, &report.root.metrics, report.language);
+    write_nested_spaces(&mut out, &report.root.spaces, 0, report.language);
 
     out
 }
@@ -70,11 +70,25 @@ fn write_diagnostics(out: &mut String, diagnostics: &[ParseDiagnostic]) {
     }
 }
 
-fn write_unit_metrics(out: &mut String, metrics: &MetricSet) {
-    let families = MetricsFamilies::from_metrics(metrics);
+fn write_unit_metrics(out: &mut String, metrics: &MetricSet, language: Language) {
     let _ = writeln!(out);
     let _ = writeln!(out, "## Metrics");
 
+    if language == Language::Markdown {
+        // The Markdown analyzer publishes a different metric family
+        // (`markdown.*` keys covering documentation-specific
+        // dimensions: LOC ratios, prose size, links, visuals,
+        // maintainability, grounding, etc.). Pivoting through
+        // `MetricsFamilies` would emit all-zero source-code tables
+        // that don't reflect what the analyzer actually computed —
+        // misleading for the project's primary documentation-analysis
+        // use case. Render the Markdown family directly from the flat
+        // metric map.
+        write_markdown_metrics(out, metrics);
+        return;
+    }
+
+    let families = MetricsFamilies::from_metrics(metrics);
     write_cyclomatic(out, &families.cyclomatic);
     write_cognitive(out, &families.cognitive);
     write_loc(out, &families.loc);
@@ -88,7 +102,223 @@ fn write_unit_metrics(out: &mut String, metrics: &MetricSet) {
     write_wmc(out, &families.wmc);
 }
 
-fn write_nested_spaces(out: &mut String, spaces: &[MetricSpace], depth: usize) {
+/// Render the `markdown.*` metric family as Markdown tables.
+///
+/// One table per documented group (LOC, LOC ratios, size, complexity,
+/// Halstead, links, visuals, tables, maintainability, grounding,
+/// ai_era, review). Field declaration order matches the publishing
+/// order in `mehen_markdown::publish_markdown_metrics` so the rendered
+/// section reads in the same shape as the §23 export schema.
+fn write_markdown_metrics(out: &mut String, metrics: &MetricSet) {
+    write_markdown_group(
+        out,
+        "LOC",
+        &[
+            ("dloc", "markdown.loc.dloc"),
+            ("ploc", "markdown.loc.ploc"),
+            ("cloc", "markdown.loc.cloc"),
+            ("tloc", "markdown.loc.tloc"),
+            ("mloc", "markdown.loc.mloc"),
+            ("bloc", "markdown.loc.bloc"),
+            ("aloc", "markdown.loc.aloc"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "LOC ratios",
+        &[
+            (
+                "artifact_line_ratio",
+                "markdown.loc_ratios.artifact_line_ratio",
+            ),
+            ("code_line_ratio", "markdown.loc_ratios.code_line_ratio"),
+            ("table_line_ratio", "markdown.loc_ratios.table_line_ratio"),
+            ("math_line_ratio", "markdown.loc_ratios.math_line_ratio"),
+            ("blank_line_ratio", "markdown.loc_ratios.blank_line_ratio"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Size",
+        &[
+            ("words", "markdown.size.words"),
+            (
+                "effective_content_units",
+                "markdown.size.effective_content_units",
+            ),
+            ("sections", "markdown.size.sections"),
+            ("headings", "markdown.size.headings"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Complexity",
+        &[
+            (
+                "reading_path_complexity",
+                "markdown.complexity.reading_path_complexity",
+            ),
+            (
+                "reading_path_complexity_raw",
+                "markdown.complexity.reading_path_complexity_raw",
+            ),
+            (
+                "cognitive_complexity",
+                "markdown.complexity.cognitive_complexity",
+            ),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Halstead",
+        &[
+            ("operators_distinct", "markdown.halstead.operators_distinct"),
+            ("operators_total", "markdown.halstead.operators_total"),
+            ("operands_distinct", "markdown.halstead.operands_distinct"),
+            ("operands_total", "markdown.halstead.operands_total"),
+            ("vocabulary", "markdown.halstead.vocabulary"),
+            ("length", "markdown.halstead.length"),
+            ("volume", "markdown.halstead.volume"),
+            ("difficulty", "markdown.halstead.difficulty"),
+            ("effort", "markdown.halstead.effort"),
+            ("embedded_volume", "markdown.halstead.embedded_volume"),
+            ("total_volume", "markdown.halstead.total_volume"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Links",
+        &[
+            ("total", "markdown.links.total"),
+            ("broken", "markdown.links.broken"),
+            ("link_debt_score", "markdown.links.link_debt_score"),
+            (
+                "information_scent_score",
+                "markdown.links.information_scent_score",
+            ),
+            ("review_burden", "markdown.links.review_burden"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Visuals",
+        &[
+            ("images", "markdown.visuals.images"),
+            ("diagrams", "markdown.visuals.diagrams"),
+            (
+                "diagram_parse_error_count",
+                "markdown.visuals.diagram_parse_error_count",
+            ),
+            ("visual_net_effect", "markdown.visuals.visual_net_effect"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Tables",
+        &[
+            ("count", "markdown.tables.count"),
+            ("max_cells", "markdown.tables.max_cells"),
+            ("table_burden_score", "markdown.tables.table_burden_score"),
+            ("hard_warnings", "markdown.tables.hard_warnings"),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Maintainability",
+        &[
+            (
+                "documentation_maintainability_index",
+                "markdown.maintainability.documentation_maintainability_index",
+            ),
+            (
+                "section_balance_score",
+                "markdown.maintainability.section_balance_score",
+            ),
+            (
+                "good_scaffold_score",
+                "markdown.maintainability.good_scaffold_score",
+            ),
+            (
+                "artifact_debt_score",
+                "markdown.maintainability.artifact_debt_score",
+            ),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Grounding",
+        &[
+            (
+                "repository_grounding_score",
+                "markdown.grounding.repository_grounding_score",
+            ),
+            (
+                "evidence_coverage_score",
+                "markdown.grounding.evidence_coverage_score",
+            ),
+        ],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "AI era",
+        &[(
+            "filler_lazy_structure_risk",
+            "markdown.ai_era.filler_lazy_structure_risk",
+        )],
+        metrics,
+    );
+    write_markdown_group(
+        out,
+        "Review",
+        &[(
+            "review_criticality_index",
+            "markdown.review.review_criticality_index",
+        )],
+        metrics,
+    );
+}
+
+fn write_markdown_group(
+    out: &mut String,
+    title: &str,
+    columns: &[(&str, &str)],
+    metrics: &MetricSet,
+) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### {title}");
+    let _ = writeln!(out);
+    let header: String = columns
+        .iter()
+        .map(|(label, _)| format!("| {label} "))
+        .collect::<String>();
+    let _ = writeln!(out, "{header}|");
+    let separator: String = std::iter::repeat_n("|---:", columns.len()).collect();
+    let _ = writeln!(out, "{separator}|");
+    let row: String = columns
+        .iter()
+        .map(|(_, key)| format!("| {} ", fmt_metric(read_metric(metrics, key))))
+        .collect();
+    let _ = writeln!(out, "{row}|");
+}
+
+fn read_metric(metrics: &MetricSet, key: &str) -> f64 {
+    metrics
+        .get(&MetricKey::new(key))
+        .map(|v| v.as_f64())
+        .unwrap_or(0.0)
+}
+
+fn write_nested_spaces(out: &mut String, spaces: &[MetricSpace], depth: usize, language: Language) {
     if depth == 0 {
         // Print a section header only when at the top of the
         // recursion *and* there's something to show.
@@ -107,12 +337,19 @@ fn write_nested_spaces(out: &mut String, spaces: &[MetricSpace], depth: usize) {
         };
         let _ = writeln!(out);
         let _ = writeln!(out, "{header} {label}");
-        let families = MetricsFamilies::from_metrics(&space.metrics);
-        write_cyclomatic(out, &families.cyclomatic);
-        write_cognitive(out, &families.cognitive);
-        write_loc(out, &families.loc);
+        // The Markdown analyzer only publishes flat unit-level
+        // `markdown.*` metrics; nested spaces (sections, embedded
+        // code) carry no source-code roll-ups, so the Cyclomatic /
+        // Cognitive / LOC tables would all be zero. Skip them in
+        // that case rather than emit misleading numbers.
+        if language != Language::Markdown {
+            let families = MetricsFamilies::from_metrics(&space.metrics);
+            write_cyclomatic(out, &families.cyclomatic);
+            write_cognitive(out, &families.cognitive);
+            write_loc(out, &families.loc);
+        }
         if !space.spaces.is_empty() {
-            write_nested_spaces(out, &space.spaces, depth.saturating_add(1));
+            write_nested_spaces(out, &space.spaces, depth.saturating_add(1), language);
         }
     }
 }
@@ -443,6 +680,88 @@ mod tests {
         let report = report_with_metrics(&[("cyclomatic.sum", 1.0)]);
         let md = render_metrics_markdown(&report);
         assert!(!md.contains("## Diagnostics"));
+    }
+
+    #[test]
+    fn renders_markdown_family_when_language_is_markdown() {
+        // Regression: previously `write_unit_metrics` always pivoted
+        // through `MetricsFamilies`, which only reads source-code
+        // metric keys (`cyclomatic.*`, `loc.sloc`, `halstead.volume`,
+        // etc.). For `mehen metrics README.md --format markdown` the
+        // analyzer publishes `markdown.*` keys, so the pivot would
+        // emit all-zero source-code tables — misleading for the
+        // project's primary documentation-analysis use case.
+        let mut root = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        for (k, v) in &[
+            ("markdown.size.words", 1234.0),
+            ("markdown.size.headings", 8.0),
+            ("markdown.complexity.cognitive_complexity", 17.5),
+            (
+                "markdown.maintainability.documentation_maintainability_index",
+                88.25,
+            ),
+            ("markdown.links.broken", 2.0),
+            ("markdown.halstead.volume", 999.0),
+        ] {
+            root.metrics.insert(MetricKey::new(*k), *v);
+        }
+        let report = MetricsReport {
+            schema_version: "1.0".to_string(),
+            tool: "mehen".to_string(),
+            path: "README.md".into(),
+            language: Language::Markdown,
+            analysis_backend: AnalysisBackend::MarkdownLegacy,
+            diagnostics: Vec::new(),
+            root,
+        };
+        let md = render_metrics_markdown(&report);
+
+        // Markdown family sections must surface.
+        assert!(md.contains("### LOC"), "missing LOC section: {md}");
+        assert!(md.contains("### Size"), "missing Size section: {md}");
+        assert!(
+            md.contains("### Complexity"),
+            "missing Complexity section: {md}"
+        );
+        assert!(md.contains("### Halstead"), "missing Halstead section");
+        assert!(md.contains("### Links"), "missing Links section");
+        assert!(
+            md.contains("### Maintainability"),
+            "missing Maintainability section"
+        );
+
+        // The actual published values must render — not as zeros.
+        assert!(md.contains("| 1234 |"), "size.words 1234 missing: {md}");
+        assert!(md.contains("| 8 |"), "size.headings 8 missing: {md}");
+        assert!(
+            md.contains("17.5000"),
+            "cognitive_complexity 17.5 missing: {md}"
+        );
+        assert!(
+            md.contains("88.2500"),
+            "documentation_maintainability_index 88.25 missing: {md}"
+        );
+        assert!(md.contains("| 2 |"), "links.broken 2 missing: {md}");
+        assert!(md.contains("| 999 |"), "halstead.volume 999 missing: {md}");
+
+        // Source-code family tables must NOT appear for a Markdown
+        // report — they would all be zero and add noise.
+        assert!(
+            !md.contains("### Cyclomatic"),
+            "Cyclomatic table should be skipped for Markdown: {md}"
+        );
+        assert!(
+            !md.contains("### ABC"),
+            "ABC table should be skipped for Markdown: {md}"
+        );
+        assert!(
+            !md.contains("### NArgs"),
+            "NArgs table should be skipped for Markdown: {md}"
+        );
+        assert!(
+            !md.contains("### NPA"),
+            "NPA table should be skipped for Markdown: {md}"
+        );
     }
 
     #[test]
