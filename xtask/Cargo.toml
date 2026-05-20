@@ -1,0 +1,33 @@
+[package]
+name = "xtask"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — developer-only commands (snapshots, parity, tree-sitter generator) (internal)."
+publish = false
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+# Tree-sitter generator dependencies. xtask owns kind-enum codegen for
+# every per-language analyzer crate that walks a tree-sitter CST. Each
+# grammar pin must match the version the owning crate links against;
+# otherwise generated kind ordinals would drift from the runtime
+# language. The corresponding `mehen-<lang>/Cargo.toml` files keep their
+# own grammar dependency so the analyzer code links against the same
+# grammar at runtime.
+askama = "^0.16"
+tree-sitter = { workspace = true }
+tree-sitter-c = "=0.24.2"
+tree-sitter-go = { workspace = true }
+tree-sitter-kotlin = { workspace = true }
+tree-sitter-markdown-text = { workspace = true }
+
+[lints]
+workspace = true

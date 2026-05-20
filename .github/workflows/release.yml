@@ -243,7 +243,11 @@ jobs:
       - name: Run tests
         shell: bash
         if: matrix.platform.os != 'windows-11-arm'
-        run: cargo test --all
+        # `--workspace` (formerly `--all`) is required because
+        # `default-members` in the root `Cargo.toml` restricts
+        # root-level cargo commands to the `mehen` package; the
+        # release matrix needs the full per-language suite to run.
+        run: cargo test --workspace
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1

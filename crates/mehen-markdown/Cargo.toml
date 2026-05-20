@@ -1,0 +1,45 @@
+[package]
+name = "mehen-markdown"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — Markdown documentation metrics analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+num = { workspace = true }
+num-derive = { workspace = true }
+# Required transitively by `num_derive::FromPrimitive` in `grammar.rs`
+# — the derive expansion references `num_traits::FromPrimitive` by
+# absolute path. Keep as a direct dependency and silence cargo-machete.
+num-traits = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-markdown-text = { workspace = true }
+unicode-script = { workspace = true }
+unicode-segmentation = { workspace = true }
+
+[dev-dependencies]
+# Tests rely on `mehen-engine`'s `init_markdown` to register the
+# embedded-code fence dispatch (the legacy pre-1.0 metric analyzer
+# for Rust/Python/etc., now living under
+# `mehen_engine::legacy::*`). Phase-6+ replaces this with the
+# rewrite-plan §4.7 `LanguageDispatcher` once per-language analyzers
+# reach parity.
+mehen-engine = { workspace = true }
+
+camino = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["num-traits"]
+
+[lints]
+workspace = true

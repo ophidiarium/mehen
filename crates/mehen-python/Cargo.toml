@@ -1,0 +1,26 @@
+[package]
+name = "mehen-python"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — Python language analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
+ruff_python_parser = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_text_size = { workspace = true }
+smol_str = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+mehen-report = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

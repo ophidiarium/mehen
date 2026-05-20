@@ -1,0 +1,151 @@
+//! NPM tests for the tree-sitter-kotlin walker.
+
+use mehen_core::{AnalysisConfig, Language, LanguageAnalyzer, SourceFile};
+use mehen_kotlin::KotlinAnalyzer;
+
+fn analyze(source: &str) -> mehen_core::LanguageAnalysis {
+    let mut text = source.trim_end().trim_matches('\n').to_string();
+    text.push('\n');
+    let analyzer = KotlinAnalyzer::new();
+    let file = SourceFile::new("foo.kt".into(), Language::Kotlin, text);
+    analyzer.analyze(&file, &AnalysisConfig::default()).unwrap()
+}
+
+#[test]
+fn kotlin_npm_counts_visibility_modifiers() {
+    let a = analyze(
+        "class C {
+             fun a() {}
+             public fun b() {}
+             private fun c() {}
+             protected fun d() {}
+             internal fun e() {}
+         }",
+    );
+    let npm = mehen_report::metrics_json::npm(&a.root.metrics);
+    // public: a, b. non-public: c, d, e.
+    insta::assert_json_snapshot!(
+        npm,
+        @r#"
+    {
+      "classes": 2.0,
+      "interfaces": 0.0,
+      "class_methods": 5.0,
+      "interface_methods": 0.0,
+      "classes_average": 0.4,
+      "interfaces_average": null,
+      "total": 2.0,
+      "total_methods": 5.0,
+      "average": 0.4
+    }
+    "#
+    );
+}
+
+#[test]
+fn kotlin_npm_routes_interface_methods_to_interface_counters() {
+    // tree-sitter-kotlin parses `class` and `interface` into the same
+    // `class_declaration` node; only the leading keyword child
+    // distinguishes them. Interface methods must land in the
+    // interface_methods / interfaces counters, not class_methods /
+    // classes.
+    let a = analyze(
+        "interface Foo {
+             fun a()
+             fun b(): Int
+         }
+
+         class Bar {
+             fun c() {}
+             fun d() {}
+         }",
+    );
+    let npm = mehen_report::metrics_json::npm(&a.root.metrics);
+    insta::assert_json_snapshot!(
+        npm,
+        @r#"
+    {
+      "classes": 2.0,
+      "interfaces": 2.0,
+      "class_methods": 2.0,
+      "interface_methods": 2.0,
+      "classes_average": 1.0,
+      "interfaces_average": 1.0,
+      "total": 4.0,
+      "total_methods": 4.0,
+      "average": 1.0
+    }
+    "#
+    );
+}
+
+#[test]
+fn kotlin_npm_counts_secondary_constructors() {
+    let a = analyze(
+        "class C {
+             constructor()
+             private constructor(x: Int)
+             internal constructor(y: String)
+             fun visible() {}
+         }",
+    );
+    let npm = mehen_report::metrics_json::npm(&a.root.metrics);
+    // public: default-visible constructor and visible().
+    // non-public: private/internal secondary constructors.
+    insta::assert_json_snapshot!(
+        npm,
+        @r#"
+    {
+      "classes": 2.0,
+      "interfaces": 0.0,
+      "class_methods": 4.0,
+      "interface_methods": 0.0,
+      "classes_average": 0.5,
+      "interfaces_average": null,
+      "total": 2.0,
+      "total_methods": 4.0,
+      "average": 0.5
+    }
+    "#
+    );
+}
+
+#[test]
+fn kotlin_npm_counts_property_accessors() {
+    let a = analyze(
+        "class C {
+             var x: Int = 0
+                 get() = field
+                 private set(value) { field = value }
+
+             private var hidden: Int = 0
+                 get() = field
+                 set(value) { field = value }
+         }
+
+         interface I {
+             val y: Int
+                 get() = 1
+         }",
+    );
+    let npm = mehen_report::metrics_json::npm(&a.root.metrics);
+    // class C -> public getter + private setter, plus two private
+    // accessors inheriting from private property visibility.
+    // interface I -> public getter.
+    insta::assert_json_snapshot!(
+        npm,
+        @r#"
+    {
+      "classes": 1.0,
+      "interfaces": 1.0,
+      "class_methods": 4.0,
+      "interface_methods": 1.0,
+      "classes_average": 0.25,
+      "interfaces_average": 1.0,
+      "total": 2.0,
+      "total_methods": 5.0,
+      "average": 0.4
+    }
+    "#
+    );
+}

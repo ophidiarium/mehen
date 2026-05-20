@@ -1,0 +1,1174 @@
+//! `mehen top-offenders` orchestrator.
+//!
+//! Phase 5 implementation: walks the input paths, detects each file's
+//! language, runs analysis through the registry, and ranks the files by
+//! the requested metric selectors. Per the rewrite plan §2.4:
+//! deterministic sorted output, ties broken by subsequent selectors.
+
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use camino::Utf8PathBuf;
+use globset::{Glob, GlobSet, GlobSetBuilder};
+
+use mehen_core::{
+    AnalysisErrorRecord, DiffSide, Language, MetricKey, ParseDiagnostic, Polarity, SourceFile,
+};
+use mehen_metrics::{MetricSelector, SelectorAggregator};
+
+use crate::detection::detect_language;
+use crate::registry::AnalyzerRegistry;
+use mehen_core::{TopOffenderEntry, TopOffendersInput, TopOffendersReport};
+
+/// Run `mehen top-offenders` against `input.paths` and return a ranked
+/// report.
+pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
+    let registry = Arc::new(AnalyzerRegistry::default_set());
+    let mut entries: Vec<TopOffenderEntry> = Vec::new();
+    let mut analysis_errors: Vec<AnalysisErrorRecord> = Vec::new();
+    // Dedup files across roots. Without this, callers passing
+    // overlapping paths (`.` plus `src`, or a directory plus a file
+    // inside it) would rank the same file multiple times, crowding
+    // out other files once `max_results` is applied.
+    //
+    // The dedup key is the canonicalized absolute path so different
+    // string spellings of the same file (`./src/foo.py` from root
+    // `.` vs. `src/foo.py` from root `src`) collapse to one entry.
+    // When canonicalize fails (file removed mid-walk, broken
+    // symlink, …) we fall back to the as-walked path: still better
+    // than analyzing it twice.
+    let mut seen: HashSet<Utf8PathBuf> = HashSet::new();
+
+    for root in &input.paths {
+        for entry in walk_paths(root, &input.include, &input.exclude) {
+            let dedup_key = canonical_key(&entry);
+            if !seen.insert(dedup_key) {
+                continue;
+            }
+            let Some(language) = detect_language(entry.as_path()) else {
+                continue;
+            };
+            let Ok(text) = std::fs::read_to_string(entry.as_std_path()) else {
+                continue;
+            };
+            let Some(analyzer) = registry.analyzer_for(language) else {
+                // Language detected but no analyzer registered (the
+                // owning crate is feature-gated off in this build).
+                // Surface as a non-fatal `analysis_error` so callers
+                // can distinguish "no offenders" from "offenders
+                // silently skipped" — matching the diff path's
+                // `record_unavailable` (rewrite plan §3.5).
+                record_unavailable(&mut analysis_errors, &entry, language);
+                continue;
+            };
+            let source = SourceFile::new(entry.clone(), language, text);
+            let Ok(analysis) = analyzer.analyze(&source, &input.config) else {
+                continue;
+            };
+            // Migrated analyzers can return `Ok(...)` with a partial
+            // tree alongside an `Error`/`Fatal` diagnostic when the
+            // file doesn't parse cleanly. Per §9.3 those analyses are
+            // incomplete; surfacing them in the offender list as if
+            // they were measured would mislead CI/policy callers.
+            if crate::diff::has_blocking_diagnostic(&analysis.diagnostics) {
+                continue;
+            }
+
+            let scores: Vec<f64> = input
+                .selectors
+                .iter()
+                .map(|s| read_metric(s, &analysis.root))
+                .collect();
+
+            entries.push(TopOffenderEntry {
+                path: entry,
+                language,
+                scores,
+            });
+        }
+    }
+
+    let polarities: Vec<Polarity> = input.selectors.iter().map(default_polarity_for).collect();
+    entries.sort_by(|a, b| cmp_entries(a, b, &polarities));
+    if entries.len() > input.max_results {
+        entries.truncate(input.max_results);
+    }
+
+    TopOffendersReport {
+        schema_version: "1.0".to_string(),
+        selectors: input.selectors.iter().map(|s| s.to_string()).collect(),
+        entries,
+        analysis_errors,
+    }
+}
+
+/// Push an `engine.analyzer_unavailable` record for `path` so callers
+/// can tell that a file was skipped because the owning language crate
+/// is feature-gated off (mirroring the diff path's behavior).
+fn record_unavailable(
+    errors: &mut Vec<AnalysisErrorRecord>,
+    path: &Utf8PathBuf,
+    language: Language,
+) {
+    errors.push(AnalysisErrorRecord {
+        path: path.clone(),
+        // `top-offenders` has no base/head distinction; pick `Head`
+        // by convention so the JSON shape stays compatible with diff.
+        side: DiffSide::Head,
+        diagnostics: vec![ParseDiagnostic::warning(
+            "engine.analyzer_unavailable",
+            format!(
+                "no analyzer registered for `{}` in this build",
+                language.canonical()
+            ),
+        )],
+    });
+}
+
+/// Compute a stable dedup key for `path`. Resolves to the
+/// canonical absolute path (following symlinks) so different string
+/// spellings of the same file collapse. Falls back to the original
+/// path when canonicalize fails — better than silently treating two
+/// "different" un-canonicalize-able paths as the same file.
+fn canonical_key(path: &Utf8PathBuf) -> Utf8PathBuf {
+    match std::fs::canonicalize(path.as_std_path()) {
+        Ok(canon) => Utf8PathBuf::try_from(canon).unwrap_or_else(|_| path.clone()),
+        Err(_) => path.clone(),
+    }
+}
+
+fn walk_paths(root: &Utf8PathBuf, include: &[String], exclude: &[String]) -> Vec<Utf8PathBuf> {
+    if !root.exists() {
+        return Vec::new();
+    }
+    let include = build_globset(include);
+    let exclude = build_globset(exclude);
+    let mut out = Vec::new();
+    if root.is_file() {
+        if path_matches(root.as_path(), &include, &exclude) {
+            out.push(root.clone());
+        }
+        return out;
+    }
+    for entry in walkdir::WalkDir::new(root.as_std_path())
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file()
+            && let Ok(utf8) = Utf8PathBuf::try_from(entry.path().to_path_buf())
+            && path_matches(utf8.as_path(), &include, &exclude)
+        {
+            out.push(utf8);
+        }
+    }
+    out
+}
+
+/// Build a `GlobSet` from CLI-style patterns. Empty entries are
+/// dropped; invalid globs are silently skipped (matches
+/// `mehen-engine::concurrent_files::mk_globset`).
+fn build_globset(patterns: &[String]) -> GlobSet {
+    if patterns.is_empty() {
+        return GlobSet::empty();
+    }
+    let mut builder = GlobSetBuilder::new();
+    for p in patterns.iter().filter(|p| !p.is_empty()) {
+        if let Ok(glob) = Glob::new(p) {
+            builder.add(glob);
+        }
+    }
+    builder.build().unwrap_or_else(|_| GlobSet::empty())
+}
+
+/// Apply the standard include/exclude semantics: when `include` is
+/// non-empty, the path must match it; when `exclude` is non-empty, the
+/// path must not match it. Empty sets are treated as no-op.
+fn path_matches(path: &camino::Utf8Path, include: &GlobSet, exclude: &GlobSet) -> bool {
+    if !include.is_empty() && !include.is_match(path) {
+        return false;
+    }
+    if !exclude.is_empty() && exclude.is_match(path) {
+        return false;
+    }
+    true
+}
+
+/// Order entries from most concerning to least.
+///
+/// "Most concerning" depends on the metric's polarity. For
+/// `HigherIsWorse` metrics (cyclomatic, cognitive, halstead.volume,
+/// loc.*) a larger value is worse, so they sort descending. For
+/// `HigherIsBetter` metrics (mi.original, mi.sei, mi.visual_studio)
+/// a smaller value is worse, so they sort ascending.
+///
+/// Cascade through every selector so secondary keys break ties on
+/// the primary, tertiary keys break ties on the secondary, etc.
+/// Path tie-breaks last for determinism.
+fn cmp_entries(
+    a: &TopOffenderEntry,
+    b: &TopOffenderEntry,
+    polarities: &[Polarity],
+) -> std::cmp::Ordering {
+    for (i, polarity) in polarities.iter().enumerate() {
+        let av = a.scores.get(i).copied().unwrap_or(0.0);
+        let bv = b.scores.get(i).copied().unwrap_or(0.0);
+        let base = av.partial_cmp(&bv).unwrap_or(std::cmp::Ordering::Equal);
+        let ord = match polarity {
+            // Worst-first: larger value is more concerning, so a > b
+            // should put `a` first → reverse the natural ordering.
+            Polarity::HigherIsWorse => base.reverse(),
+            // Worst-first: smaller value is more concerning, so a < b
+            // should put `a` first → use the natural ordering.
+            Polarity::HigherIsBetter => base,
+        };
+        if ord != std::cmp::Ordering::Equal {
+            return ord;
+        }
+    }
+    a.path.cmp(&b.path)
+}
+
+/// Resolve a metric's "higher is worse / better" polarity from its
+/// key. Maintainability-index variants (`mi.*`) are higher-is-better;
+/// every other metric the engine publishes (cyclomatic, cognitive,
+/// loc.*, halstead.*, abc, nom, nargs, nexit, npa, npm, wmc) is
+/// higher-is-worse. This mirrors the legacy `KNOWN_METRICS` catalog
+/// and the rewrite plan §5.1 metric contract.
+fn default_polarity_for(selector: &MetricSelector) -> Polarity {
+    if selector.key.as_str().starts_with("mi.") || selector.key.as_str() == "mi" {
+        Polarity::HigherIsBetter
+    } else {
+        Polarity::HigherIsWorse
+    }
+}
+
+pub(crate) fn read_metric(selector: &MetricSelector, root: &mehen_core::MetricSpace) -> f64 {
+    let lookup = |key: &MetricKey| root.metrics.get(key).map(|v| v.as_f64());
+    match selector.aggregator {
+        SelectorAggregator::Root => lookup(&selector.key).unwrap_or(0.0),
+        SelectorAggregator::Sum => suffixed_lookup(&selector.key, &["sum"], &lookup),
+        SelectorAggregator::Min => suffixed_lookup(&selector.key, &["min"], &lookup),
+        SelectorAggregator::Max => suffixed_lookup(&selector.key, &["max"], &lookup),
+        // Per `mehen-metrics::state`, average is published as either
+        // `<key>.avg` (cyclomatic, loc.*) or `<key>.average`
+        // (cognitive, nom, nargs, nexit, npa, npm). Try the short form
+        // first to match the selector spelling, then fall back.
+        SelectorAggregator::Avg => suffixed_lookup(&selector.key, &["avg", "average"], &lookup),
+    }
+}
+
+/// Look the selector key up under each suffix in order (e.g.
+/// `["avg", "average"]` for the avg aggregator), returning the first
+/// hit. `0.0` if none match — keeps the behavior of a missing metric
+/// the same as a missing root-level key.
+///
+/// For each suffix the lookup tries the dotted form first
+/// (`<base>.<suffix>`) and falls back to the underscore form
+/// (`<base>_<suffix>`). The underscore form is what the shared
+/// publishers in `mehen-metrics::state` use for sub-bucket aggregates:
+/// `nom.functions_max`, `nom.closures_min`, `abc.assignments_average`,
+/// `npa.classes_average`, `npm.interfaces_average`, `nargs.functions_max`,
+/// etc. Without the fallback, selectors like `nom.functions.max` would
+/// silently read `0.0` even when the analyzer published the value,
+/// misordering top-offenders rankings and suppressing diff-threshold
+/// violations.
+fn suffixed_lookup(
+    base: &MetricKey,
+    suffixes: &[&str],
+    lookup: &dyn Fn(&MetricKey) -> Option<f64>,
+) -> f64 {
+    for suffix in suffixes {
+        let dotted = MetricKey::new(format!("{base}.{suffix}"));
+        if let Some(v) = lookup(&dotted) {
+            return v;
+        }
+        let underscored = MetricKey::new(format!("{base}_{suffix}"));
+        if let Some(v) = lookup(&underscored) {
+            return v;
+        }
+    }
+    0.0
+}
+
+// ── pre-1.0 CLI orchestrator (`mehen top-offenders`) ───────────────────
+//
+// Everything below drives the published `mehen top-offenders` subcommand
+// and was hoisted out of `legacy/top_offenders.rs` into this module so
+// the CLI shares the same module tree as the post-1.0 `rank_top_offenders`
+// entry point above. Names that overlap with the post-1.0 surface
+// (`MetricSelector`, `read_metric`) are imported under aliases.
+
+use std::cmp::Ordering;
+use std::io::Write;
+use std::path::PathBuf;
+use std::process;
+use std::sync::Mutex;
+use std::thread::available_parallelism;
+
+use crate::concurrent_files::{ConcurrentRunner, FilesData, mk_globset};
+use crate::metric_selector::{
+    MetricSelector as CliMetricSelector, Polarity as SelectorPolarity, parse_metric_selectors,
+    read_metric as read_selector_metric,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum TopOffendersFormat {
+    Markdown,
+    Json,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct TopOffendersOpts {
+    /// Metric to rank by. Repeatable; order matters — the first `--metric` is
+    /// the primary sort key, the next breaks ties, etc.
+    ///
+    /// Prefix with `+` to flip a metric to higher-is-better (best at top) or
+    /// `-` for lower-is-better. Without a prefix the metric's default polarity
+    /// is used. Known names: `cyclomatic`, `cognitive`, `nom.functions`,
+    /// `loc.lloc`, `mi.original`, `mi.sei`, `mi.visual_studio`,
+    /// `halstead.volume`, `abc`.
+    #[clap(
+        long = "metric",
+        short = 'M',
+        required = true,
+        num_args = 1,
+        allow_hyphen_values = true
+    )]
+    metrics: Vec<String>,
+
+    /// Maximum number of offenders to return.
+    #[clap(long, default_value_t = 10)]
+    max_results: usize,
+
+    /// Output format.
+    #[clap(long, short = 'O', value_enum, default_value_t = TopOffendersFormat::Markdown)]
+    output_format: TopOffendersFormat,
+
+    /// Glob to include files. Repeat the flag for multiple patterns.
+    #[clap(long, short = 'I', num_args = 1)]
+    include: Vec<String>,
+
+    /// Glob to exclude files. Repeat the flag for multiple patterns.
+    #[clap(long, short = 'X', num_args = 1)]
+    exclude: Vec<String>,
+
+    /// Number of parser jobs.
+    #[clap(long, short = 'j')]
+    num_jobs: Option<usize>,
+
+    /// Language type override (skip auto-detection).
+    #[clap(long, short)]
+    language_type: Option<String>,
+
+    /// One or more files or directories to analyze.
+    #[clap(required = true, num_args = 1..)]
+    paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct CliMetricValue {
+    name: &'static str,
+    label: &'static str,
+    value: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct FileOffender {
+    path: PathBuf,
+    metrics: Vec<CliMetricValue>,
+}
+
+struct TopOffendersCfg {
+    selectors: Vec<CliMetricSelector>,
+    language_override: Option<Language>,
+    registry: Arc<AnalyzerRegistry>,
+    results: Arc<Mutex<Vec<FileOffender>>>,
+}
+
+fn act_on_file(path: PathBuf, cfg: &TopOffendersCfg) -> std::io::Result<()> {
+    let utf8_path = match Utf8PathBuf::try_from(path.clone()) {
+        Ok(p) => p,
+        Err(_) => return Ok(()),
+    };
+
+    let language = match cfg.language_override {
+        Some(l) => l,
+        None => match detect_language(&utf8_path) {
+            Some(l) => l,
+            None => return Ok(()),
+        },
+    };
+
+    let analyzer = match cfg.registry.analyzer_for(language) {
+        Some(a) => a,
+        None => return Ok(()),
+    };
+
+    let text = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
+
+    let source = SourceFile::new(utf8_path, language, text);
+    let analysis = match analyzer.analyze(&source, &mehen_core::AnalysisConfig::default()) {
+        Ok(a) => a,
+        Err(_) => return Ok(()),
+    };
+
+    let metrics: Vec<CliMetricValue> = cfg
+        .selectors
+        .iter()
+        .map(|sel| CliMetricValue {
+            name: sel.name,
+            label: sel.label,
+            value: read_selector_metric(&analysis.root, sel),
+        })
+        .collect();
+
+    cfg.results
+        .lock()
+        .expect("top-offenders results mutex poisoned")
+        .push(FileOffender { path, metrics });
+
+    Ok(())
+}
+
+fn cmp_offenders(a: &FileOffender, b: &FileOffender, selectors: &[CliMetricSelector]) -> Ordering {
+    for (i, sel) in selectors.iter().enumerate() {
+        let av = a.metrics.get(i).map(|m| m.value).unwrap_or(0.0);
+        let bv = b.metrics.get(i).map(|m| m.value).unwrap_or(0.0);
+        let base = av.total_cmp(&bv);
+        let ord = match sel.polarity {
+            SelectorPolarity::LowerIsBetter => base.reverse(),
+            SelectorPolarity::HigherIsBetter => base,
+        };
+        if ord != Ordering::Equal {
+            return ord;
+        }
+    }
+    a.path.cmp(&b.path)
+}
+
+fn print_json_offenders(offenders: &[FileOffender]) {
+    let json =
+        serde_json::to_string_pretty(offenders).expect("offender list is always serializable");
+    writeln!(std::io::stdout().lock(), "{json}").expect("failed to write to stdout");
+}
+
+fn print_markdown_offenders(offenders: &[FileOffender], selectors: &[CliMetricSelector]) {
+    let mut out = String::new();
+
+    if offenders.is_empty() {
+        out.push_str("## Top Offenders\n\nNo matching files found.\n");
+        write!(std::io::stdout().lock(), "{out}").expect("failed to write to stdout");
+        return;
+    }
+
+    let metric_list = selectors
+        .iter()
+        .map(|s| s.name)
+        .collect::<Vec<_>>()
+        .join(", ");
+    out.push_str(&format!("## Top Offenders (by {metric_list})\n\n"));
+
+    out.push_str("| File |");
+    for sel in selectors {
+        out.push_str(&format!(" {} |", sel.label));
+    }
+    out.push('\n');
+
+    out.push_str("|---|");
+    for _ in selectors {
+        out.push_str("---:|");
+    }
+    out.push('\n');
+
+    for o in offenders {
+        out.push_str(&format!("| {} |", o.path.display()));
+        for mv in &o.metrics {
+            out.push_str(&format!(" {} |", format_value(mv.value)));
+        }
+        out.push('\n');
+    }
+
+    write!(std::io::stdout().lock(), "{out}").expect("failed to write to stdout");
+}
+
+fn format_value(v: f64) -> String {
+    if v.is_nan() {
+        "NaN".to_string()
+    } else if v == v.trunc() && v.abs() < 1e18 {
+        format!("{}", v as i64)
+    } else {
+        format!("{:.2}", v)
+    }
+}
+
+fn resolve_num_jobs(requested: Option<usize>, available: Option<usize>) -> usize {
+    requested.unwrap_or_else(|| available.unwrap_or(2))
+}
+
+/// Resolve a `--language` CLI override (e.g. `ps1`, `python`) to the
+/// `Language` enum. The legacy spelling is accepted via the
+/// `language_aliases()` table in `mehen-core`.
+fn parse_language_override(raw: &str) -> Option<Language> {
+    raw.parse::<Language>().ok()
+}
+
+pub fn run_top_offenders(opts: TopOffendersOpts) {
+    let selectors = parse_metric_selectors(&opts.metrics);
+    if selectors.is_empty() {
+        log::error!("No valid metrics selected. See `mehen top-offenders --help`.");
+        process::exit(1);
+    }
+
+    let language_override = match opts.language_type.as_deref().filter(|s| !s.is_empty()) {
+        Some(raw) => match parse_language_override(raw) {
+            Some(language) => Some(language),
+            None => {
+                log::error!("Unknown language type '{raw}'.");
+                process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let num_jobs = resolve_num_jobs(
+        opts.num_jobs,
+        available_parallelism().ok().map(|threads| threads.get()),
+    );
+
+    let include = mk_globset(opts.include);
+    let exclude = mk_globset(opts.exclude);
+
+    let results: Arc<Mutex<Vec<FileOffender>>> = Arc::new(Mutex::new(Vec::new()));
+    let registry = Arc::new(AnalyzerRegistry::default_set());
+
+    let cfg = TopOffendersCfg {
+        selectors: selectors.clone(),
+        language_override,
+        registry,
+        results: results.clone(),
+    };
+
+    let files_data = FilesData {
+        include,
+        exclude,
+        paths: opts.paths,
+    };
+
+    if let Err(e) = ConcurrentRunner::new(num_jobs, act_on_file).run(cfg, files_data) {
+        log::error!("{e}");
+        process::exit(1);
+    }
+
+    let mut offenders = Arc::try_unwrap(results)
+        .expect("results Arc still has outstanding references")
+        .into_inner()
+        .expect("results mutex poisoned");
+
+    offenders.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+    offenders.truncate(opts.max_results);
+
+    match opts.output_format {
+        TopOffendersFormat::Json => print_json_offenders(&offenders),
+        TopOffendersFormat::Markdown => print_markdown_offenders(&offenders, &selectors),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mehen_core::Language;
+
+    fn entry(path: &str, scores: &[f64]) -> TopOffenderEntry {
+        TopOffenderEntry {
+            path: Utf8PathBuf::from(path),
+            language: Language::Rust,
+            scores: scores.to_vec(),
+        }
+    }
+
+    const HIW2: &[Polarity] = &[Polarity::HigherIsWorse, Polarity::HigherIsWorse];
+    const HIW3: &[Polarity] = &[
+        Polarity::HigherIsWorse,
+        Polarity::HigherIsWorse,
+        Polarity::HigherIsWorse,
+    ];
+
+    #[test]
+    fn primary_score_ranks_first() {
+        let mut xs = [entry("a.rs", &[10.0, 0.0]), entry("b.rs", &[20.0, 0.0])];
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
+        assert_eq!(xs[0].path, "b.rs");
+        assert_eq!(xs[1].path, "a.rs");
+    }
+
+    #[test]
+    fn secondary_selector_breaks_ties_on_primary() {
+        // All three files tie on primary `loc.lloc = 100.0`. The
+        // secondary `cognitive` selector must determine the order;
+        // the file with the highest cognitive score is most
+        // concerning.
+        let mut xs = [
+            entry("a.rs", &[100.0, 5.0]),
+            entry("b.rs", &[100.0, 30.0]),
+            entry("c.rs", &[100.0, 12.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
+        assert_eq!(xs[0].path, "b.rs");
+        assert_eq!(xs[1].path, "c.rs");
+        assert_eq!(xs[2].path, "a.rs");
+    }
+
+    #[test]
+    fn tertiary_selector_breaks_ties_on_secondary() {
+        let mut xs = [
+            entry("a.rs", &[10.0, 5.0, 1.0]),
+            entry("b.rs", &[10.0, 5.0, 9.0]),
+            entry("c.rs", &[10.0, 5.0, 4.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW3));
+        assert_eq!(xs[0].path, "b.rs");
+        assert_eq!(xs[1].path, "c.rs");
+        assert_eq!(xs[2].path, "a.rs");
+    }
+
+    #[test]
+    fn fully_tied_falls_through_to_path() {
+        let mut xs = [
+            entry("zzz.rs", &[42.0, 7.0]),
+            entry("aaa.rs", &[42.0, 7.0]),
+            entry("mmm.rs", &[42.0, 7.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
+        assert_eq!(xs[0].path, "aaa.rs");
+        assert_eq!(xs[1].path, "mmm.rs");
+        assert_eq!(xs[2].path, "zzz.rs");
+    }
+
+    #[test]
+    fn nan_score_is_treated_as_equal() {
+        let mut xs = [
+            entry("a.rs", &[f64::NAN, 5.0]),
+            entry("b.rs", &[f64::NAN, 30.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, HIW2));
+        // NaN primaries compare equal; secondary breaks the tie.
+        assert_eq!(xs[0].path, "b.rs");
+        assert_eq!(xs[1].path, "a.rs");
+    }
+
+    #[test]
+    fn higher_is_better_metric_sorts_smallest_first() {
+        // For maintainability index a low value is the worst offender,
+        // so `bad.rs` (mi = 10) must rank above `good.rs` (mi = 120).
+        let mut xs = [
+            entry("good.rs", &[120.0]),
+            entry("bad.rs", &[10.0]),
+            entry("mid.rs", &[60.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, &[Polarity::HigherIsBetter]));
+        assert_eq!(xs[0].path, "bad.rs");
+        assert_eq!(xs[1].path, "mid.rs");
+        assert_eq!(xs[2].path, "good.rs");
+    }
+
+    #[test]
+    fn mixed_polarities_sort_each_axis_independently() {
+        // Primary loc.lloc (lower-is-worse): 200 > 10, so high-LOC
+        // files rank first. Secondary mi (higher-is-worse): when LOC
+        // ties, the file with the *lower* mi should rank first.
+        let mut xs = [
+            entry("low_loc_high_mi.rs", &[10.0, 120.0]),
+            entry("high_loc_high_mi.rs", &[200.0, 120.0]),
+            entry("high_loc_low_mi.rs", &[200.0, 30.0]),
+        ];
+        xs.sort_by(|a, b| cmp_entries(a, b, &[Polarity::HigherIsWorse, Polarity::HigherIsBetter]));
+        assert_eq!(xs[0].path, "high_loc_low_mi.rs");
+        assert_eq!(xs[1].path, "high_loc_high_mi.rs");
+        assert_eq!(xs[2].path, "low_loc_high_mi.rs");
+    }
+
+    #[test]
+    fn default_polarity_treats_mi_variants_as_higher_is_better() {
+        for s in ["mi.original", "mi.sei", "mi.visual_studio", "mi"] {
+            assert_eq!(
+                default_polarity_for(&sel(s)),
+                Polarity::HigherIsBetter,
+                "selector {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn default_polarity_treats_other_metrics_as_higher_is_worse() {
+        for s in [
+            "cyclomatic",
+            "cognitive",
+            "loc.lloc",
+            "halstead.volume",
+            "abc",
+            "nom.functions",
+        ] {
+            assert_eq!(
+                default_polarity_for(&sel(s)),
+                Polarity::HigherIsWorse,
+                "selector {s}",
+            );
+        }
+    }
+
+    fn space_with_metrics(pairs: &[(&str, f64)]) -> mehen_core::MetricSpace {
+        use mehen_core::{MetricSpace, SourceSpan, SpaceId, SpaceKind};
+        let mut space = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        for (k, v) in pairs {
+            space.metrics.insert(MetricKey::new(*k), *v);
+        }
+        space
+    }
+
+    fn sel(s: &str) -> MetricSelector {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn root_aggregator_reads_bare_key() {
+        let space = space_with_metrics(&[("loc.lloc", 42.0), ("loc.lloc.max", 999.0)]);
+        assert_eq!(read_metric(&sel("loc.lloc"), &space), 42.0);
+    }
+
+    #[test]
+    fn sum_aggregator_reads_sum_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("cyclomatic", 1.0),
+            ("cyclomatic.sum", 17.0),
+            ("cyclomatic.max", 9.0),
+        ]);
+        assert_eq!(read_metric(&sel("cyclomatic.sum"), &space), 17.0);
+    }
+
+    #[test]
+    fn min_aggregator_reads_min_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("loc.lloc", 100.0),
+            ("loc.lloc.min", 3.0),
+            ("loc.lloc.max", 50.0),
+        ]);
+        assert_eq!(read_metric(&sel("loc.lloc.min"), &space), 3.0);
+    }
+
+    #[test]
+    fn max_aggregator_reads_max_suffixed_key() {
+        let space = space_with_metrics(&[
+            ("loc.lloc", 100.0),
+            ("loc.lloc.min", 3.0),
+            ("loc.lloc.max", 50.0),
+        ]);
+        assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 50.0);
+    }
+
+    #[test]
+    fn avg_aggregator_prefers_avg_then_average() {
+        // `cyclomatic` publishes `.avg`; `cognitive` publishes
+        // `.average`. The aggregator must locate either spelling so
+        // selectors written `cognitive.avg` still resolve to the
+        // analyzer's `cognitive.average` value.
+        let cyclomatic = space_with_metrics(&[("cyclomatic.avg", 2.5)]);
+        assert_eq!(read_metric(&sel("cyclomatic.avg"), &cyclomatic), 2.5);
+
+        let cognitive = space_with_metrics(&[("cognitive.average", 3.5)]);
+        assert_eq!(read_metric(&sel("cognitive.avg"), &cognitive), 3.5);
+    }
+
+    #[test]
+    fn missing_aggregated_key_falls_back_to_zero() {
+        // When the analyzer didn't publish the requested aggregation,
+        // matches the existing root-key contract: 0.0 instead of
+        // panicking, so a single missing metric doesn't break the
+        // whole rank pass.
+        let space = space_with_metrics(&[("loc.lloc", 100.0)]);
+        assert_eq!(read_metric(&sel("loc.lloc.max"), &space), 0.0);
+    }
+
+    #[test]
+    fn min_max_aggregators_resolve_underscore_subbucket_keys() {
+        // Regression: `mehen-metrics::state::publish_nom` writes
+        // `nom.functions_min`, `nom.functions_max`, `nom.closures_min`,
+        // `nom.closures_max` (underscore suffixes), and `publish_abc` /
+        // `publish_npa` / `publish_npm` / `publish_nargs` follow the
+        // same convention for their sub-bucket aggregates. Pre-fix the
+        // suffix lookup only tried the dotted form
+        // (`nom.functions.max`), so any selector targeting one of
+        // those buckets — `nom.functions.max`, `abc.assignments.min`,
+        // `npa.classes.average`, etc. — silently read 0.0. That
+        // misordered top-offenders rankings and suppressed
+        // diff-threshold violations whenever users gated on a
+        // sub-bucket aggregate.
+        let space = space_with_metrics(&[
+            ("nom.functions", 12.0),
+            ("nom.functions_min", 1.0),
+            ("nom.functions_max", 7.0),
+            ("nom.functions_average", 3.5),
+            ("nom.closures_max", 4.0),
+            ("abc.assignments_max", 9.0),
+            ("npa.classes_average", 2.25),
+            ("nargs.functions_max", 6.0),
+        ]);
+        assert_eq!(read_metric(&sel("nom.functions.min"), &space), 1.0);
+        assert_eq!(read_metric(&sel("nom.functions.max"), &space), 7.0);
+        assert_eq!(read_metric(&sel("nom.functions.avg"), &space), 3.5);
+        assert_eq!(read_metric(&sel("nom.closures.max"), &space), 4.0);
+        assert_eq!(read_metric(&sel("abc.assignments.min"), &space), 0.0);
+        assert_eq!(read_metric(&sel("abc.assignments.max"), &space), 9.0);
+        assert_eq!(read_metric(&sel("npa.classes.avg"), &space), 2.25);
+        assert_eq!(read_metric(&sel("nargs.functions.max"), &space), 6.0);
+    }
+
+    #[test]
+    fn dotted_form_takes_precedence_over_underscore() {
+        // If both forms exist, the dotted form wins — `cyclomatic.max`
+        // is the canonical convention; underscore is only a fallback
+        // for the sub-bucket families. This guards against a future
+        // analyzer bug where a publisher accidentally writes both
+        // forms with different values: the canonical key still drives
+        // ranking.
+        let space = space_with_metrics(&[("nom.functions.max", 11.0), ("nom.functions_max", 99.0)]);
+        assert_eq!(read_metric(&sel("nom.functions.max"), &space), 11.0);
+    }
+
+    #[test]
+    fn rank_top_offenders_skips_files_with_blocking_diagnostics() {
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Valid Python file: should appear in the offender list.
+        std::fs::write(
+            dir.path().join("ok.py"),
+            "def f():\n    if True:\n        return 1\n",
+        )
+        .unwrap();
+        // Syntax error: ruff returns Ok(LanguageAnalysis) with an
+        // Error-severity diagnostic and a partial tree. Pre-fix this
+        // file would be ranked alongside ok.py with bogus partial
+        // metrics; post-fix it must be skipped.
+        std::fs::write(dir.path().join("broken.py"), "def f(:\n    return 1\n").unwrap();
+
+        let input = TopOffendersInput {
+            paths: vec![Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec![sel("loc.lloc")],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        let paths: Vec<&str> = report
+            .entries
+            .iter()
+            .map(|e| e.path.file_name().unwrap_or(""))
+            .collect();
+        assert!(
+            paths.contains(&"ok.py"),
+            "expected ok.py in entries, got {paths:?}"
+        );
+        assert!(
+            !paths.contains(&"broken.py"),
+            "broken.py should be skipped due to blocking diagnostic, got {paths:?}"
+        );
+    }
+
+    #[test]
+    fn rank_top_offenders_dedupes_overlapping_roots() {
+        // Regression: when callers pass overlapping roots (a directory
+        // plus a child directory, or a directory plus an explicit file
+        // inside it), `rank_top_offenders` previously analyzed and
+        // pushed each matching file once per root, crowding out other
+        // files at `max_results` truncation. Post-fix the dedup set
+        // collapses every spelling of the same canonical path to one
+        // entry.
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("a.py"), "x = 1\n").unwrap();
+        std::fs::write(sub.join("b.py"), "y = 2\n").unwrap();
+
+        let outer = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let inner = Utf8PathBuf::from_path_buf(sub.clone()).unwrap();
+        let explicit_file = Utf8PathBuf::from_path_buf(sub.join("a.py")).unwrap();
+
+        let input = TopOffendersInput {
+            // Overlapping inputs: root + child directory + explicit
+            // file inside the child. Without dedup, `a.py` appears
+            // three times in `entries`.
+            paths: vec![outer, inner, explicit_file],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec![sel("loc.lloc")],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        let names: Vec<&str> = report
+            .entries
+            .iter()
+            .map(|e| e.path.file_name().unwrap_or(""))
+            .collect();
+
+        let a_count = names.iter().filter(|n| **n == "a.py").count();
+        let b_count = names.iter().filter(|n| **n == "b.py").count();
+        assert_eq!(
+            a_count, 1,
+            "a.py must be ranked exactly once, got {names:?}"
+        );
+        assert_eq!(
+            b_count, 1,
+            "b.py must be ranked exactly once, got {names:?}"
+        );
+        assert_eq!(
+            report.entries.len(),
+            2,
+            "expected 2 unique offenders across overlapping roots, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_applies_exclude_patterns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let kept = dir.path().join("kept.py");
+        let skipped = dir.path().join("skipped.py");
+        std::fs::write(&kept, "x = 1\n").unwrap();
+        std::fs::write(&skipped, "x = 1\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &[], &["**/skipped.py".to_string()]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"kept.py"), "expected kept.py in {names:?}");
+        assert!(
+            !names.contains(&"skipped.py"),
+            "skipped.py should be excluded, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_applies_include_patterns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let py = dir.path().join("a.py");
+        let rs = dir.path().join("a.rs");
+        std::fs::write(&py, "x = 1\n").unwrap();
+        std::fs::write(&rs, "fn main() {}\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &["**/*.py".to_string()], &[]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"a.py"), "expected a.py in {names:?}");
+        assert!(
+            !names.contains(&"a.rs"),
+            "a.rs should not be included, got {names:?}"
+        );
+    }
+
+    #[test]
+    fn walk_paths_empty_filters_keep_all_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.py"), "x = 1\n").unwrap();
+        std::fs::write(dir.path().join("b.rs"), "fn main() {}\n").unwrap();
+
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let result = walk_paths(&root, &[], &[]);
+        let names: Vec<&str> = result.iter().filter_map(|p| p.file_name()).collect();
+        assert!(names.contains(&"a.py"));
+        assert!(names.contains(&"b.rs"));
+    }
+
+    #[test]
+    fn walk_paths_filters_a_single_file_root() {
+        // When `root` itself is a file, the include/exclude patterns
+        // still apply: an excluded file must not appear in the list.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("vendored.py");
+        std::fs::write(&path, "x = 1\n").unwrap();
+        let root = Utf8PathBuf::from_path_buf(path).unwrap();
+        let result = walk_paths(&root, &[], &["**/vendored.py".to_string()]);
+        assert!(
+            result.is_empty(),
+            "single-file root must respect exclude, got {result:?}"
+        );
+    }
+
+    // ── pre-1.0 CLI orchestrator tests ─────────────────────────────────
+
+    fn cli_selector(name: &'static str, polarity: SelectorPolarity) -> CliMetricSelector {
+        CliMetricSelector {
+            name,
+            label: name,
+            polarity,
+        }
+    }
+
+    fn offender(path: &str, values: &[(&'static str, f64)]) -> FileOffender {
+        FileOffender {
+            path: PathBuf::from(path),
+            metrics: values
+                .iter()
+                .map(|(n, v)| CliMetricValue {
+                    name: n,
+                    label: n,
+                    value: *v,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn cli_lower_is_better_puts_largest_value_first() {
+        let selectors = [cli_selector("loc.lloc", SelectorPolarity::LowerIsBetter)];
+        let mut xs = [
+            offender("small.rs", &[("loc.lloc", 10.0)]),
+            offender("huge.rs", &[("loc.lloc", 1000.0)]),
+            offender("medium.rs", &[("loc.lloc", 100.0)]),
+        ];
+        xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+        assert_eq!(xs[0].path, PathBuf::from("huge.rs"));
+        assert_eq!(xs[1].path, PathBuf::from("medium.rs"));
+        assert_eq!(xs[2].path, PathBuf::from("small.rs"));
+    }
+
+    #[test]
+    fn cli_higher_is_better_puts_smallest_value_first() {
+        let selectors = [cli_selector(
+            "mi.visual_studio",
+            SelectorPolarity::HigherIsBetter,
+        )];
+        let mut xs = [
+            offender("good.rs", &[("mi", 120.0)]),
+            offender("bad.rs", &[("mi", 10.0)]),
+            offender("mid.rs", &[("mi", 60.0)]),
+        ];
+        xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+        assert_eq!(xs[0].path, PathBuf::from("bad.rs"));
+        assert_eq!(xs[1].path, PathBuf::from("mid.rs"));
+        assert_eq!(xs[2].path, PathBuf::from("good.rs"));
+    }
+
+    #[test]
+    fn cli_ties_on_primary_metric_fall_through_to_secondary() {
+        let selectors = [
+            cli_selector("loc.lloc", SelectorPolarity::LowerIsBetter),
+            cli_selector("cognitive", SelectorPolarity::LowerIsBetter),
+        ];
+        let mut xs = [
+            offender("a.rs", &[("loc.lloc", 100.0), ("cognitive", 5.0)]),
+            offender("b.rs", &[("loc.lloc", 100.0), ("cognitive", 30.0)]),
+            offender("c.rs", &[("loc.lloc", 50.0), ("cognitive", 999.0)]),
+        ];
+        xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+        assert_eq!(xs[0].path, PathBuf::from("b.rs"));
+        assert_eq!(xs[1].path, PathBuf::from("a.rs"));
+        assert_eq!(xs[2].path, PathBuf::from("c.rs"));
+    }
+
+    #[test]
+    fn cli_all_tied_breaks_by_path_for_determinism() {
+        let selectors = [cli_selector("loc.lloc", SelectorPolarity::LowerIsBetter)];
+        let mut xs = [
+            offender("zzz.rs", &[("loc.lloc", 42.0)]),
+            offender("aaa.rs", &[("loc.lloc", 42.0)]),
+            offender("mmm.rs", &[("loc.lloc", 42.0)]),
+        ];
+        xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+        assert_eq!(xs[0].path, PathBuf::from("aaa.rs"));
+        assert_eq!(xs[1].path, PathBuf::from("mmm.rs"));
+        assert_eq!(xs[2].path, PathBuf::from("zzz.rs"));
+    }
+
+    #[test]
+    fn cli_mixed_polarities_sort_each_axis_independently() {
+        let selectors = [
+            cli_selector("loc.lloc", SelectorPolarity::LowerIsBetter),
+            cli_selector("mi.visual_studio", SelectorPolarity::HigherIsBetter),
+        ];
+        let mut xs = [
+            offender("low_loc_high_mi.rs", &[("loc", 10.0), ("mi", 120.0)]),
+            offender("high_loc_high_mi.rs", &[("loc", 200.0), ("mi", 120.0)]),
+            offender("high_loc_low_mi.rs", &[("loc", 200.0), ("mi", 30.0)]),
+        ];
+        xs.sort_by(|a, b| cmp_offenders(a, b, &selectors));
+        assert_eq!(xs[0].path, PathBuf::from("high_loc_low_mi.rs"));
+        assert_eq!(xs[1].path, PathBuf::from("high_loc_high_mi.rs"));
+        assert_eq!(xs[2].path, PathBuf::from("low_loc_high_mi.rs"));
+    }
+
+    #[test]
+    fn cli_format_value_renders_integers_without_decimals() {
+        assert_eq!(format_value(42.0), "42");
+        assert_eq!(format_value(0.0), "0");
+        assert_eq!(format_value(1.5), "1.50");
+        assert_eq!(format_value(100.567), "100.57");
+    }
+
+    #[test]
+    fn cli_explicit_num_jobs_is_not_predecremented() {
+        assert_eq!(resolve_num_jobs(Some(8), Some(16)), 8);
+    }
+
+    #[test]
+    fn cli_num_jobs_falls_back_to_conservative_thread_count() {
+        assert_eq!(resolve_num_jobs(None, None), 2);
+    }
+
+    #[test]
+    fn record_unavailable_emits_warning_record() {
+        // Regression: when language detection succeeds but no analyzer
+        // is registered (feature-gated build), the file must surface
+        // as a non-fatal `analysis_error` so callers can tell that an
+        // offender was silently dropped, instead of believing the
+        // ranking is complete. Mirrors `mehen-engine::diff`'s
+        // `record_unavailable`.
+        let mut errors: Vec<AnalysisErrorRecord> = Vec::new();
+        record_unavailable(
+            &mut errors,
+            &Utf8PathBuf::from("src/main.kt"),
+            Language::Kotlin,
+        );
+        assert_eq!(errors.len(), 1);
+        let rec = &errors[0];
+        assert_eq!(rec.path, Utf8PathBuf::from("src/main.kt"));
+        assert_eq!(rec.side, DiffSide::Head);
+        assert_eq!(rec.diagnostics.len(), 1);
+        assert_eq!(rec.diagnostics[0].code, "engine.analyzer_unavailable");
+        assert!(
+            rec.diagnostics[0].message.contains("kotlin"),
+            "message must name the unavailable language; got: {}",
+            rec.diagnostics[0].message
+        );
+        assert_eq!(
+            rec.diagnostics[0].severity,
+            mehen_core::DiagnosticSeverity::Warning,
+            "unavailable analyzer is non-fatal"
+        );
+    }
+
+    #[test]
+    fn rank_top_offenders_includes_empty_analysis_errors_when_clean() {
+        // A clean run with all analyzers available produces an
+        // `analysis_errors` field — even when empty — so JSON
+        // consumers can rely on its presence.
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("ok.py"), "x = 1\n").unwrap();
+        let input = TopOffendersInput {
+            paths: vec![Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec!["loc.lloc".parse().unwrap()],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        assert!(report.analysis_errors.is_empty());
+    }
+}

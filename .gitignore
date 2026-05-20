@@ -6,3 +6,5 @@ __pycache__/
 *.egg-info/
 dist/
 .mypy_cache/
+.claude/worktrees/
+.claude/setting.local.json

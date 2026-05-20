@@ -1,0 +1,34 @@
+[package]
+name = "mehen"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Compute and report code metrics."
+publish = false
+
+# `name = "mehen"` makes both the package and the (auto-generated)
+# binary share the name. `[[bin]]` is omitted on purpose so cargo
+# treats `src/main.rs` as the package's default binary target — that
+# keeps `cargo run -p mehen` and `cargo build --bin mehen` both
+# working without duplicate-target errors.
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-engine = { workspace = true }
+mehen-report = { workspace = true }
+
+camino = { workspace = true }
+clap = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

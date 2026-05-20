@@ -1,0 +1,20 @@
+---
+source: crates/mehen-typescript/tests/parity.rs
+expression: h
+---
+{
+  "n1": 10.0,
+  "N1": 38.0,
+  "n2": 22.0,
+  "N2": 36.0,
+  "length": 74.0,
+  "estimated_program_length": 131.32677655889415,
+  "purity_ratio": 1.7746861697147858,
+  "vocabulary": 32.0,
+  "volume": 370.0,
+  "difficulty": 8.181818181818182,
+  "level": 0.12222222222222222,
+  "effort": 3027.272727272727,
+  "time": 168.18181818181816,
+  "bugs": 0.06975571225277694
+}

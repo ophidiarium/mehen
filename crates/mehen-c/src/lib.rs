@@ -1,0 +1,80 @@
+//! `mehen-c` — C language analyzer.
+//!
+//! Drives a C-specific tree-sitter walker (`walker::walk_program`) that
+//! mirrors every legacy `legacy::metrics::*::compute for CCode` arm
+//! byte-identically. See `walker.rs` for the per-metric coverage notes.
+
+#![forbid(unsafe_code)]
+
+mod grammar;
+mod walker;
+
+use mehen_core::{
+    AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, ParseDiagnostic,
+    Result, SourceFile, SourceSpan, byte_offset_clamped,
+};
+use mehen_tree_sitter::{TreeSitterParser, collect_recovered_errors, empty_space};
+
+pub struct CAnalyzer;
+
+impl CAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for CAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LanguageAnalyzer for CAnalyzer {
+    fn language(&self) -> Language {
+        Language::C
+    }
+
+    fn backend(&self) -> AnalysisBackend {
+        AnalysisBackend::TreeSitter
+    }
+
+    fn analyze(&self, source: &SourceFile, _config: &AnalysisConfig) -> Result<LanguageAnalysis> {
+        let parser = match TreeSitterParser::new(
+            tree_sitter_c::LANGUAGE.into(),
+            source.text.clone().into_bytes(),
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                let span = SourceSpan {
+                    start_byte: 0,
+                    end_byte: byte_offset_clamped(source.text.len()),
+                    start_line: 1,
+                    end_line: source.line_index.line_count(),
+                };
+                return Ok(LanguageAnalysis {
+                    language: Language::C,
+                    backend: AnalysisBackend::TreeSitter,
+                    diagnostics: vec![ParseDiagnostic::fatal(
+                        "c.parse_error",
+                        format!("tree-sitter-c failed: {e}"),
+                    )],
+                    root: empty_space(span),
+                    contributions: Vec::new(),
+                });
+            }
+        };
+
+        let root = walker::walk_program(parser.root(), parser.source(), &source.line_index);
+        // Tree-sitter recovers from syntax errors by inserting ERROR /
+        // missing nodes; surface them as `error` diagnostics so the
+        // metric output can't masquerade as clean (plan §9.3).
+        let diagnostics = collect_recovered_errors(parser.root(), "c.syntax_error", 16);
+        Ok(LanguageAnalysis {
+            language: Language::C,
+            backend: AnalysisBackend::TreeSitter,
+            diagnostics,
+            root,
+            contributions: Vec::new(),
+        })
+    }
+}

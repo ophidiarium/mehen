@@ -1,0 +1,27 @@
+[package]
+name = "mehen-powershell"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — PowerShell language analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
+mehen-tree-sitter = { workspace = true }
+smol_str = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-pwsh = { workspace = true }
+
+[dev-dependencies]
+# Tests render the per-metric JSON family object so snapshots match the
+# documented `mehen metrics --format json` schema (plan §9.1).
+mehen-report = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

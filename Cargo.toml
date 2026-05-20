@@ -1,16 +1,65 @@
-[package]
-name = "mehen"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-repository.workspace = true
-readme = "README.md"
-keywords = ["metrics"]
-description = "Tool to compute and export code metrics"
-license.workspace = true
+[workspace]
+resolver = "2"
+members = [
+    "crates/mehen-core",
+    "crates/mehen-metrics",
+    "crates/mehen-tree-sitter",
+    "crates/mehen-markdown",
+    "crates/mehen-python",
+    "crates/mehen-typescript",
+    "crates/mehen-php",
+    "crates/mehen-ruby",
+    "crates/mehen-rust",
+    "crates/mehen-go",
+    "crates/mehen-c",
+    "crates/mehen-kotlin",
+    "crates/mehen-powershell",
+    "crates/mehen-engine",
+    "crates/mehen-git",
+    "crates/mehen-report",
+    "crates/mehen-cli",
+    "xtask",
+]
+# `cargo run` / `cargo build` (with no `-p`) target the `mehen`
+# package in `crates/mehen-cli/`. The xtask binary is reached via
+# `cargo xtask …` (per `.cargo/config.toml`).
+default-members = ["crates/mehen-cli"]
 
-[dependencies]
+[workspace.lints.rust]
+# Catch `pub` items in internal crates that are never re-exported across
+# crate boundaries — they should be `pub(crate)` so dead-code detection
+# stays effective. Members opt in with `[lints] workspace = true`.
+unreachable_pub = "warn"
+
+[workspace.package]
+version = "0.7.0"
+authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
+edition = "2024"
+rust-version = "1.95.0"
+repository = "https://github.com/ophidiarium/mehen"
+license = "MPL-2.0"
+
+[workspace.dependencies]
+# Internal crates (path-only, never published)
+mehen-core = { path = "crates/mehen-core" }
+mehen-metrics = { path = "crates/mehen-metrics" }
+mehen-tree-sitter = { path = "crates/mehen-tree-sitter" }
+mehen-markdown = { path = "crates/mehen-markdown" }
+mehen-python = { path = "crates/mehen-python" }
+mehen-typescript = { path = "crates/mehen-typescript" }
+mehen-php = { path = "crates/mehen-php" }
+mehen-ruby = { path = "crates/mehen-ruby" }
+mehen-rust = { path = "crates/mehen-rust" }
+mehen-go = { path = "crates/mehen-go" }
+mehen-c = { path = "crates/mehen-c" }
+mehen-kotlin = { path = "crates/mehen-kotlin" }
+mehen-powershell = { path = "crates/mehen-powershell" }
+mehen-engine = { path = "crates/mehen-engine" }
+mehen-git = { path = "crates/mehen-git" }
+mehen-report = { path = "crates/mehen-report" }
+
+# Shared third-party deps with pinned versions
+camino = { version = "^1.1", features = ["serde1"] }
 clap = { version = "^4.6", features = ["derive"] }
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 env_logger = "^0.11"
@@ -26,41 +75,95 @@ serde = { version = "^1.0", features = ["derive"] }
 serde_cbor = "^0.11"
 serde_json = "^1.0"
 serde_norway = "^0.9"
+smol_str = { version = "^0.3", features = ["serde"] }
 toml = "^1.1"
 walkdir = "^2.3"
 gix = { version = "^0.83", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
 
 tree-sitter = "=0.26.8"
-tree-sitter-typescript = "=0.23.2"
-tree-sitter-python = "=0.25.0"
-tree-sitter-rust = "=0.24.2"
+
+# Oxc — replaces tree-sitter-typescript for the JS/TS/JSX/TSX analyzer
+# (`crates/mehen-typescript`). Pinned to the same patch revision so all
+# Oxc crates stay in sync; mismatched versions panic at AST type level.
+oxc_allocator = "=0.131.0"
+oxc_ast = "=0.131.0"
+oxc_ast_visit = "=0.131.0"
+oxc_parser = "=0.131.0"
+oxc_span = "=0.131.0"
+oxc_syntax = "=0.131.0"
+
+# Ruff — replaces tree-sitter-python for the Python analyzer
+# (`crates/mehen-python`). Per the rewrite plan §6.2, Ruff's parser /
+# AST / text-size crates are unpublished upstream (`publish = false` in
+# their Cargo.toml), so we pin a tagged git revision. All Ruff crates
+# must stay in lockstep so derive macros and AST types align across the
+# workspace; bump them as a group through `cargo xtask update-ruff`
+# once that helper lands.
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
+ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.15.13" }
+
+# ra_ap_syntax — replaces tree-sitter-rust for the Rust analyzer
+# (`crates/mehen-rust`). Per the rewrite plan §6.1 we promote rust-analyzer's
+# parser/syntax stack from "later" to "now" because it exposes the richer
+# AST that tree-sitter cannot represent (typed expressions, op_kind,
+# let-chains, etc.) without forcing the workspace onto nightly via
+# rustc_private. Pinned to a specific 0.0.x release because rust-analyzer
+# auto-publishes weekly and breaking changes at the AST level are not
+# semver-tracked. Bump deliberately.
+ra_ap_syntax = "=0.0.333"
+
+# Mago — replaces tree-sitter-php for the PHP analyzer
+# (`crates/mehen-php`). Per the rewrite plan §6.4 we move from a
+# concrete-syntax tree to Mago's typed PHP AST so attributes,
+# promoted properties, enum cases, hooked properties, match
+# expressions, and PHP keyword case-insensitivity are first-class.
+# Mago is published on crates.io and stays in lockstep across the
+# `mago-syntax` / `mago-database` / `mago-span` / `mago-php-version`
+# crates; bump them as a group.
+mago-syntax = "=1.27.1"
+mago-syntax-core = "=1.27.1"
+mago-database = "=1.27.1"
+mago-span = "=1.27.1"
+mago-php-version = "=1.27.1"
+bumpalo = "^3.16"
+
+# ruby-prism — replaces tree-sitter-ruby for the Ruby analyzer
+# (`crates/mehen-ruby`). Per the rewrite plan §6.5 we move to Ruby's
+# canonical Prism parser so modifier forms (`x if y`, `expr rescue`),
+# pattern matching (`case…in`), endless methods, safe navigation (`&.`),
+# numbered block parameters, and all the Ruby-3-era syntax the
+# tree-sitter grammar lags on become first-class.
+#
+# License audit (plan §6.5): `ruby-prism` (MIT, Ian Ker-Seymer / Steve
+# Loveless / Kevin Newton), `ruby-prism-sys` (MIT), and the bundled
+# upstream Prism C parser (MIT, Shopify Inc.) are all permissive — no
+# copyleft conflict with mehen's licensing.
+#
+# Build prerequisites (plan §6.5 — "Windows CI/release jobs must
+# install the required native toolchain"): `ruby-prism-sys` invokes
+# `bindgen 0.72` unconditionally and compiles vendored Prism C via
+# `cc`, so every release target needs `libclang` and a C toolchain
+# at build time. Linux/macOS GitHub-hosted runners have these
+# preinstalled; Windows runners need `LIBCLANG_PATH` (e.g.
+# `choco install llvm`); musl builds need `clang-dev`. The release
+# binary path means end users do not need any of this — only people
+# building `mehen` from source.
+ruby-prism = "=1.9.0"
+
 tree-sitter-go = "=0.25.0"
-tree-sitter-ruby = "=0.23.1"
+# `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
+# now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
 tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
 tree-sitter-pwsh = "=0.38.0"
-tree-sitter-c = "=0.24.2"
-tree-sitter-php = "=0.24.2"
-tree-sitter-markdown-text = { version = "=0.2.1", optional = true }
-unicode-script = { version = "^0.5", optional = true }
-unicode-segmentation = { version = "^1.12", optional = true }
+# `tree-sitter-c` removed from the workspace pin in this phase —
+# `mehen-c` is the sole consumer and now pins the version inline.
+# `tree-sitter-php` was removed in Phase 8 — PHP now flows through
+# `mehen-php` (mago-syntax) per plan §6.4.
+tree-sitter-markdown-text = "=0.2.1"
+unicode-script = "^0.5"
+unicode-segmentation = "^1.12"
 
-[features]
-default = ["markdown"]
-markdown = ["dep:tree-sitter-markdown-text", "dep:unicode-script", "dep:unicode-segmentation"]
-# Tier 1/2 placeholders per §37.1. OFF by default; not wired yet — reserved
-# so the crate compiles with or without them and future phases can flip them
-# on without a feature-name churn.
-syllables-cmu = []
-japanese-jlpt = []
-japanese-morph = []
-japanese-unidic = []
-lexical-diversity = []
-lingua = []
-
-[package.metadata.cargo-machete]
-ignored = ["num-traits", "tree-sitter-go", "tree-sitter-python", "tree-sitter-rust", "tree-sitter-ruby", "tree-sitter-kotlin", "tree-sitter-pwsh", "tree-sitter-c", "tree-sitter-php", "tree-sitter-markdown-text", "unicode-script", "unicode-segmentation"]
-
-[dev-dependencies]
 insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }
 pretty_assertions = "^1.3"
 tempfile = "^3"
@@ -70,17 +173,6 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
-
-[workspace]
-exclude = ["enums"]
-
-[workspace.package]
-version = "0.7.0"
-authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
-edition = "2024"
-rust-version = "1.93.1"
-repository = "https://github.com/ophidiarium/mehen"
-license = "MPL-2.0"
 
 [profile.release]
 opt-level = 3

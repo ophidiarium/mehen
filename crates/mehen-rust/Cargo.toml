@@ -1,0 +1,24 @@
+[package]
+name = "mehen-rust"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — Rust language analyzer (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-metrics = { workspace = true }
+ra_ap_syntax = { workspace = true }
+smol_str = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+mehen-report = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

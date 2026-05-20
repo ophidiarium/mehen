@@ -1,46 +1,50 @@
 # Update grammars
 
-Each programming language needs to be parsed in order to extract its syntax and semantic: the so-called grammar of a language.
-In `mehen`, we use [tree-sitter](https://github.com/tree-sitter) as parsing library since it provides a set of distinct grammars for each of our
-supported programming languages. Grammars change over time and may have bugs, so they need to be updated periodically.
+Each tree-sitter-backed language in `mehen` is parsed via a pinned `tree-sitter-<lang>` crate. Grammars change over time and need periodic updates — both for bug fixes and to keep up with new syntax.
 
 Grammars can be updated on **Linux** and **macOS** natively, or on **Windows** using **WSL**.
 
-## Updating Grammars
+## Currently supported tree-sitter grammars
 
-Mehen uses **third-party grammars** published on `crates.io` and maintained by external developers.
+The pin lives in `xtask/Cargo.toml` (consumed by the kind-enum generator) and in the owning `crates/mehen-<lang>/Cargo.toml` (consumed by the analyzer at runtime). Most grammars are routed through `[workspace.dependencies]` in the root `Cargo.toml` and referenced as `{ workspace = true }` from both call sites; some, like `tree-sitter-c`, are inline-pinned because only one analyzer consumes them.
 
-### Current Supported Grammars
+- `tree-sitter-c` — used by `mehen-c`
+- `tree-sitter-go` — used by `mehen-go`
+- `tree-sitter-kotlin-sg` — used by `mehen-kotlin`
+- `tree-sitter-markdown-text` — used by `mehen-markdown`
+- `tree-sitter-pwsh` — used by `mehen-powershell`
 
-- `tree-sitter-go` = "=0.25.0"
-- `tree-sitter-python` = "=0.25.0"
-- `tree-sitter-ruby` = "=0.23.1"
-- `tree-sitter-rust` = "=0.24.2"
-- `tree-sitter-typescript` = "=0.23.2"
+Other languages (Python, TS/JS/JSX/TSX, PHP, Ruby, Rust) flow through richer parsers (Ruff, Oxc, Mago, Prism, `ra_ap_syntax`) — they have no `grammar.rs` and need no kind-enum regeneration.
 
-### Update Process
+## Update process
 
-1. Update the grammar version in both `Cargo.toml` and `enums/Cargo.toml`:
+1. Bump the grammar version in **all** places it's pinned. For workspace-routed grammars, that's just the line in root `Cargo.toml` `[workspace.dependencies]`. For inline-pinned grammars, both `xtask/Cargo.toml` and the owning `crates/mehen-<lang>/Cargo.toml`:
 
-```toml
-tree-sitter-go = "=x.xx.x"
-```
+   ```toml
+   tree-sitter-c = "=x.xx.x"
+   ```
 
-2. Run the grammar regeneration script:
+2. Regenerate the kind enums:
 
-```bash
-./recreate-grammars.sh
-```
+   ```bash
+   cargo xtask tree-sitter generate --all
+   ```
 
-This script regenerates all language enum files in `src/languages/`.
+   This rewrites every `crates/mehen-<lang>/src/grammar.rs` from the pinned grammar's `node-kind` table. CI runs `cargo xtask tree-sitter check-generated` to ensure pinned-grammar bumps without a regenerate are caught at PR time.
 
-3. Fix any failing tests or compilation errors introduced by grammar changes.
+3. Fix any failing analyzer code or tests introduced by the grammar change. New node kinds may appear (and need handling), and existing node kinds may be renamed or restructured.
 
-4. Test thoroughly:
+4. Run the validation suite:
 
-```bash
-cargo test --workspace
-cargo clippy --workspace -- -D warnings
-```
+   ```bash
+   cargo nextest run --all-features
+   cargo insta test --all-features --check --unreferenced reject \
+       --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+   cargo clippy --all-targets --all-features --locked
+   ```
 
-5. Commit your changes and create a pull request.
+5. Commit and open a pull request.
+
+## Automation
+
+Dependabot raises grammar bump PRs automatically. The `regenerate-grammars` workflow detects those PRs (branch name contains `tree-sitter`) and runs `cargo xtask tree-sitter generate --all` plus the test suite, then commits the regenerated files back to the PR branch. Reviewers should still verify analyzer code still handles any renamed kinds.
