@@ -59,9 +59,20 @@ impl AnalyzerRegistry {
     }
 
     /// Default registry assembling every analyzer enabled by feature flags.
+    ///
+    /// Also registers the Markdown embedded-code dispatcher
+    /// (idempotent — backed by `OnceLock` inside `mehen-markdown`).
+    /// Without this, library callers that use
+    /// `analyze_metrics`/`analyze_diff`/`rank_top_offenders` directly
+    /// would receive `0.0` for every fenced-code complexity term —
+    /// `embedded_code::analyze_fence` returns zero whenever no
+    /// dispatch function is set, and only the CLI binary used to call
+    /// `init_markdown()`. See PR #95 review and the
+    /// `default_set_initializes_markdown_dispatch` test below.
     pub fn default_set() -> Self {
         let mut registry = Self::new();
         register_default_analyzers(&mut registry);
+        crate::init_markdown();
         registry
     }
 }
@@ -130,5 +141,59 @@ fn register_default_analyzers(registry: &mut AnalyzerRegistry) {
         let _ = registry.register(Language::Markdown, || {
             Box::new(mehen_markdown::MarkdownAnalyzer::new())
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mehen_core::{AnalysisConfig, MetricKey, SourceFile};
+
+    /// Library callers (anyone using `analyze_metrics`/`analyze_diff`/
+    /// `rank_top_offenders` directly without invoking
+    /// `mehen_engine::init_markdown` first) must still get real
+    /// embedded-fence metrics. `default_set` now wires the Markdown
+    /// dispatcher itself; without that fix, the assertion below
+    /// regresses to `0.0`.
+    #[test]
+    #[cfg(all(feature = "lang-python", feature = "lang-c"))]
+    fn default_set_initializes_markdown_dispatch() {
+        let registry = AnalyzerRegistry::default_set();
+        let analyzer = registry
+            .analyzer_for(Language::Markdown)
+            .expect("Markdown analyzer registered");
+
+        // Markdown source with one fenced Python block and one
+        // fenced C block. Both languages have analyzers in the
+        // registry, so the Markdown embedded-code dispatcher should
+        // route the bodies through them and surface a non-zero
+        // Halstead-derived `embedded_volume`.
+        let source = "# Heading\n\n\
+                      Text before code.\n\n\
+                      ```python\n\
+                      def add(a, b):\n    \
+                          return a + b\n\
+                      ```\n\n\
+                      ```c\n\
+                      int add(int a, int b) { return a + b; }\n\
+                      ```\n";
+        let file = SourceFile::new("doc.md".into(), Language::Markdown, source.to_string());
+        let analysis = analyzer
+            .analyze(&file, &AnalysisConfig::default())
+            .expect("Markdown analysis succeeds");
+        let key = MetricKey::new("markdown.halstead.embedded_volume");
+        let value = analysis
+            .root
+            .metrics
+            .get(&key)
+            .map(|v| v.as_f64())
+            .unwrap_or(0.0);
+        assert!(
+            value > 0.0,
+            "library callers using AnalyzerRegistry::default_set() must see \
+             non-zero embedded fence metrics; got embedded_volume={value} \
+             — did register_default_analyzers() forget to register the \
+             Markdown dispatcher? See PR #95 review."
+        );
     }
 }
