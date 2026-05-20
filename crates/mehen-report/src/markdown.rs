@@ -1,15 +1,344 @@
-use mehen_core::{DiffReport, MetricsReport};
+use std::fmt::Write;
 
-/// Phase 1 placeholder for the single-file Markdown renderer. Phase 5 wires
-/// real layout — heading, per-space tables, diagnostics callout — once the
-/// language analyzers fill in the metric set.
+use mehen_core::{
+    DiagnosticSeverity, DiffReport, MetricSet, MetricSpace, MetricsReport, ParseDiagnostic,
+    SpaceKind,
+};
+
+use crate::metrics_json::{
+    Abc, Cognitive, Cyclomatic, Halstead, Loc, MetricsFamilies, Nargs, Nexits, Nom, Npa, Npm, Wmc,
+};
+
+/// Render a single-file metrics report as Markdown.
+///
+/// The output is structured for both human consumption (running
+/// `mehen metrics file --format markdown` from a terminal) and for
+/// CI artefacts (a docs build that wants to diff metric counts as
+/// stable text). The same family object the JSON renderer publishes
+/// drives the metric tables here, so JSON and Markdown stay in lock
+/// step.
+///
+/// Layout:
+/// 1. Title + file metadata block.
+/// 2. Diagnostics callout (only emitted when at least one
+///    diagnostic exists; severity is shown inline).
+/// 3. Per-family metric tables (cyclomatic, cognitive, LOC,
+///    Halstead, ABC, NArgs, NOM, NExits, NPA, NPM, WMC) — every
+///    family is rendered, even when its scalar values are all
+///    zero, so the absence of a bucket doesn't have to be inferred.
+/// 4. Per-space breakdown for nested function / closure / class /
+///    interface / impl / trait / enum spaces beneath the unit. Pure
+///    "Unknown" or empty trees collapse to a single "no nested
+///    spaces" line.
 pub fn render_metrics_markdown(report: &MetricsReport) -> String {
-    format!(
-        "# {}\n\n- language: `{}`\n- backend: `{}`\n",
-        report.path,
-        report.language,
-        report.analysis_backend.label()
-    )
+    let mut out = String::new();
+    let _ = writeln!(out, "# {}", report.path);
+    let _ = writeln!(out);
+    let _ = writeln!(out, "- language: `{}`", report.language);
+    let _ = writeln!(out, "- backend: `{}`", report.analysis_backend.label());
+    let _ = writeln!(out, "- schema: `{}`", report.schema_version);
+
+    write_diagnostics(&mut out, &report.diagnostics);
+    write_unit_metrics(&mut out, &report.root.metrics);
+    write_nested_spaces(&mut out, &report.root.spaces, 0);
+
+    out
+}
+
+fn write_diagnostics(out: &mut String, diagnostics: &[ParseDiagnostic]) {
+    if diagnostics.is_empty() {
+        return;
+    }
+    let _ = writeln!(out);
+    let _ = writeln!(out, "## Diagnostics");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| severity | code | message |");
+    let _ = writeln!(out, "|---|---|---|");
+    for d in diagnostics {
+        let severity = match d.severity {
+            DiagnosticSeverity::Warning => "warning",
+            DiagnosticSeverity::Error => "error",
+            DiagnosticSeverity::Fatal => "fatal",
+        };
+        let _ = writeln!(
+            out,
+            "| {} | `{}` | {} |",
+            severity,
+            d.code,
+            escape_table_cell(&d.message),
+        );
+    }
+}
+
+fn write_unit_metrics(out: &mut String, metrics: &MetricSet) {
+    let families = MetricsFamilies::from_metrics(metrics);
+    let _ = writeln!(out);
+    let _ = writeln!(out, "## Metrics");
+
+    write_cyclomatic(out, &families.cyclomatic);
+    write_cognitive(out, &families.cognitive);
+    write_loc(out, &families.loc);
+    write_halstead(out, &families.halstead);
+    write_abc(out, &families.abc);
+    write_nargs(out, &families.nargs);
+    write_nom(out, &families.nom);
+    write_nexits(out, &families.nexits);
+    write_npa(out, &families.npa);
+    write_npm(out, &families.npm);
+    write_wmc(out, &families.wmc);
+}
+
+fn write_nested_spaces(out: &mut String, spaces: &[MetricSpace], depth: usize) {
+    if depth == 0 {
+        // Print a section header only when at the top of the
+        // recursion *and* there's something to show.
+        if spaces.is_empty() {
+            return;
+        }
+        let _ = writeln!(out);
+        let _ = writeln!(out, "## Spaces");
+    }
+    for space in spaces {
+        let header = "#".repeat(depth.saturating_add(3));
+        let label = match (&space.kind, &space.name) {
+            (SpaceKind::Unit, _) => "unit".to_string(),
+            (kind, Some(name)) => format!("{} `{}`", space_kind_label(kind), name),
+            (kind, None) => format!("{} (anonymous)", space_kind_label(kind)),
+        };
+        let _ = writeln!(out);
+        let _ = writeln!(out, "{header} {label}");
+        let families = MetricsFamilies::from_metrics(&space.metrics);
+        write_cyclomatic(out, &families.cyclomatic);
+        write_cognitive(out, &families.cognitive);
+        write_loc(out, &families.loc);
+        if !space.spaces.is_empty() {
+            write_nested_spaces(out, &space.spaces, depth.saturating_add(1));
+        }
+    }
+}
+
+fn space_kind_label(kind: &SpaceKind) -> &'static str {
+    match kind {
+        SpaceKind::Unit => "unit",
+        SpaceKind::Function => "function",
+        SpaceKind::Closure => "closure",
+        SpaceKind::Class => "class",
+        SpaceKind::Interface => "interface",
+        SpaceKind::Trait => "trait",
+        SpaceKind::Impl => "impl",
+        SpaceKind::Enum => "enum",
+        SpaceKind::Custom(_) => "custom",
+    }
+}
+
+// --- Per-family helpers --------------------------------------------
+
+fn write_cyclomatic(out: &mut String, m: &Cyclomatic) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### Cyclomatic");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| sum | average | min | max |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        fmt_metric(m.sum),
+        fmt_metric(m.average),
+        fmt_metric(m.min),
+        fmt_metric(m.max),
+    );
+}
+
+fn write_cognitive(out: &mut String, m: &Cognitive) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### Cognitive");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| sum | average | min | max |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        fmt_metric(m.sum),
+        fmt_metric(m.average),
+        fmt_metric(m.min),
+        fmt_metric(m.max),
+    );
+}
+
+fn write_loc(out: &mut String, m: &Loc) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### LOC");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| sloc | ploc | lloc | cloc | blank |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} | {} |",
+        fmt_metric(m.sloc),
+        fmt_metric(m.ploc),
+        fmt_metric(m.lloc),
+        fmt_metric(m.cloc),
+        fmt_metric(m.blank),
+    );
+}
+
+fn write_halstead(out: &mut String, m: &Halstead) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### Halstead");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| n1 | N1 | n2 | N2 | volume | difficulty | effort |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} | {} | {} | {} |",
+        fmt_metric(m.n1),
+        fmt_metric(m.big_n1),
+        fmt_metric(m.n2),
+        fmt_metric(m.big_n2),
+        fmt_metric(m.volume),
+        fmt_metric(m.difficulty),
+        fmt_metric(m.effort),
+    );
+}
+
+fn write_abc(out: &mut String, m: &Abc) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### ABC");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| assignments | branches | conditions | magnitude |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        fmt_metric(m.assignments),
+        fmt_metric(m.branches),
+        fmt_metric(m.conditions),
+        fmt_metric(m.magnitude),
+    );
+}
+
+fn write_nargs(out: &mut String, m: &Nargs) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### NArgs");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "| total_functions | total_closures | average | total |"
+    );
+    let _ = writeln!(out, "|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        fmt_metric(m.total_functions),
+        fmt_metric(m.total_closures),
+        fmt_metric(m.average),
+        fmt_metric(m.total),
+    );
+}
+
+fn write_nom(out: &mut String, m: &Nom) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### NOM");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| functions | closures | total |");
+    let _ = writeln!(out, "|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} |",
+        fmt_metric(m.functions),
+        fmt_metric(m.closures),
+        fmt_metric(m.total),
+    );
+}
+
+fn write_nexits(out: &mut String, m: &Nexits) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### NExits");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| sum | average | min | max |");
+    let _ = writeln!(out, "|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        fmt_metric(m.sum),
+        fmt_metric(m.average),
+        fmt_metric(m.min),
+        fmt_metric(m.max),
+    );
+}
+
+fn write_npa(out: &mut String, m: &Npa) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### NPA");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "| classes | interfaces | class_attributes | interface_attributes | total |"
+    );
+    let _ = writeln!(out, "|---:|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} | {} |",
+        fmt_metric(m.classes),
+        fmt_metric(m.interfaces),
+        fmt_metric(m.class_attributes),
+        fmt_metric(m.interface_attributes),
+        fmt_metric(m.total),
+    );
+}
+
+fn write_npm(out: &mut String, m: &Npm) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### NPM");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "| classes | interfaces | class_methods | interface_methods | total |"
+    );
+    let _ = writeln!(out, "|---:|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} | {} | {} |",
+        fmt_metric(m.classes),
+        fmt_metric(m.interfaces),
+        fmt_metric(m.class_methods),
+        fmt_metric(m.interface_methods),
+        fmt_metric(m.total),
+    );
+}
+
+fn write_wmc(out: &mut String, m: &Wmc) {
+    let _ = writeln!(out);
+    let _ = writeln!(out, "### WMC");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| classes | interfaces | total |");
+    let _ = writeln!(out, "|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "| {} | {} | {} |",
+        fmt_metric(m.classes),
+        fmt_metric(m.interfaces),
+        fmt_metric(m.total),
+    );
+}
+
+/// Render an integer-valued metric as an integer when its
+/// fractional component is zero (the common case for counts), and
+/// as a 4-decimal float otherwise (for averages / ratios). NaN
+/// surfaces as `nan` so a corrupt analyzer doesn't silently produce
+/// `0` output.
+fn fmt_metric(value: f64) -> String {
+    if value.is_nan() {
+        return "nan".to_string();
+    }
+    if value.fract() == 0.0 && value.is_finite() {
+        return format!("{}", value as i64);
+    }
+    format!("{value:.4}")
+}
+
+fn escape_table_cell(s: &str) -> String {
+    s.replace('|', r"\|").replace('\n', " ")
 }
 
 /// Phase 1 placeholder for the GitHub Markdown diff comment. Phase 4 ports
@@ -21,4 +350,124 @@ pub fn render_diff_github_markdown(report: &DiffReport) -> String {
         "<!-- mehen-schema:1 -->\n<!-- mehen-source -->\n\n_base: `{}`_  _head: `{}`_\n",
         report.base, report.head
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mehen_core::{
+        AnalysisBackend, Language, MetricKey, MetricSpace, ParseDiagnostic, SourceSpan, SpaceId,
+        SpaceKind,
+    };
+
+    fn report_with_metrics(pairs: &[(&str, f64)]) -> MetricsReport {
+        let mut root = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        for (k, v) in pairs {
+            root.metrics.insert(MetricKey::new(*k), *v);
+        }
+        MetricsReport {
+            schema_version: "1.0".to_string(),
+            tool: "mehen".to_string(),
+            path: "foo.py".into(),
+            language: Language::Python,
+            analysis_backend: AnalysisBackend::PythonRuff,
+            diagnostics: Vec::new(),
+            root,
+        }
+    }
+
+    #[test]
+    fn renders_metric_values_not_just_metadata() {
+        // Regression: prior implementation emitted only path / language /
+        // backend, dropping every metric value the analyzer published.
+        // Anyone calling `mehen metrics ... --format markdown` would see
+        // numbers vanish from CI artefacts and docs builds.
+        let report = report_with_metrics(&[
+            ("cyclomatic.sum", 7.0),
+            ("loc.sloc", 42.0),
+            ("loc.lloc", 30.0),
+            ("halstead.volume", 123.5),
+        ]);
+        let md = render_metrics_markdown(&report);
+
+        // File metadata is still there.
+        assert!(md.contains("# foo.py"));
+        assert!(md.contains("- language: `python`"));
+
+        // The actual metric numbers must surface.
+        assert!(
+            md.contains("## Metrics"),
+            "missing Metrics section in output:\n{md}"
+        );
+        assert!(
+            md.contains("### Cyclomatic"),
+            "missing Cyclomatic table in output:\n{md}"
+        );
+        assert!(md.contains("| 7 |"), "cyclomatic.sum 7 not rendered:\n{md}");
+        assert!(md.contains("### LOC"), "missing LOC table");
+        assert!(
+            md.contains("| 42 | 0 | 30 | 0 | 0 |"),
+            "LOC row not rendered:\n{md}"
+        );
+        assert!(
+            md.contains("### Halstead"),
+            "missing Halstead table in output:\n{md}"
+        );
+        assert!(
+            md.contains("123.5000"),
+            "halstead.volume 123.5 not rendered:\n{md}"
+        );
+    }
+
+    #[test]
+    fn emits_diagnostics_section_when_present() {
+        let mut report = report_with_metrics(&[]);
+        report.diagnostics.push(ParseDiagnostic::error(
+            "python.parse_error",
+            "unexpected EOF while parsing",
+        ));
+        report.diagnostics.push(ParseDiagnostic::warning(
+            "python.style",
+            "long line | with pipe",
+        ));
+        let md = render_metrics_markdown(&report);
+        assert!(md.contains("## Diagnostics"));
+        assert!(md.contains("| error | `python.parse_error` | unexpected EOF while parsing |"));
+        // Pipe characters in messages must be escaped so they don't
+        // break the table layout.
+        assert!(md.contains(r"long line \| with pipe"));
+    }
+
+    #[test]
+    fn skips_diagnostics_section_when_empty() {
+        let report = report_with_metrics(&[("cyclomatic.sum", 1.0)]);
+        let md = render_metrics_markdown(&report);
+        assert!(!md.contains("## Diagnostics"));
+    }
+
+    #[test]
+    fn includes_nested_spaces_when_present() {
+        let mut root = MetricSpace::new(SpaceId(0), SpaceKind::Unit, SourceSpan::empty());
+        root.metrics.insert(MetricKey::new("cyclomatic.sum"), 5.0);
+        let mut child = MetricSpace::new(SpaceId(1), SpaceKind::Function, SourceSpan::empty());
+        child.name = Some("foo".to_string());
+        child.metrics.insert(MetricKey::new("cyclomatic.sum"), 2.0);
+        root.spaces.push(child);
+        let report = MetricsReport {
+            schema_version: "1.0".to_string(),
+            tool: "mehen".to_string(),
+            path: "foo.py".into(),
+            language: Language::Python,
+            analysis_backend: AnalysisBackend::PythonRuff,
+            diagnostics: Vec::new(),
+            root,
+        };
+        let md = render_metrics_markdown(&report);
+        assert!(md.contains("## Spaces"));
+        assert!(md.contains("function `foo`"));
+        // The nested space's cyclomatic.sum should appear in its
+        // own table.
+        let space_section = md.split("## Spaces").nth(1).expect("Spaces section");
+        assert!(space_section.contains("| 2 |"));
+    }
 }
