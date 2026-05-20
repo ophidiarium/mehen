@@ -34,4 +34,8 @@ Issues        = "https://github.com/ophidiarium/mehen/issues"
 [tool.maturin]
 bindings      = "bin"
 python-source = "python"
-manifest-path = "Cargo.toml"
+# Point at the `mehen` package's manifest. The repo root's
+# `Cargo.toml` is a virtual workspace (no `[package]`/no binary
+# target), so giving maturin the workspace manifest produces no
+# packageable wheel.
+manifest-path = "crates/mehen-cli/Cargo.toml"

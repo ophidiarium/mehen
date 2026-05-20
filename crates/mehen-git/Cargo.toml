@@ -1,0 +1,16 @@
+[package]
+name = "mehen-git"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — git/repository operations and changed-file detection (internal)."
+publish = false
+
+[dependencies]
+gix = { workspace = true }
+
+[lints]
+workspace = true

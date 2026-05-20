@@ -1,0 +1,26 @@
+[package]
+name = "mehen-report"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Mehen 1.0 — report rendering (JSON, GitHub Markdown, single-file Markdown) (internal)."
+publish = false
+
+[dependencies]
+mehen-core = { workspace = true }
+mehen-markdown = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["docs-diff"]
+# Enables the Markdown documentation-diff renderer ported from the
+# pre-1.0 `src/diff_markdown.rs` per plan §8.1. Off when the consumer
+# doesn't need the `mehen-markdown` types in scope.
+docs-diff = ["dep:mehen-markdown"]
+
+[lints]
+workspace = true

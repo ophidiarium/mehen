@@ -9,10 +9,3 @@ updates:
       tree-sitter:
         patterns:
           - "tree-sitter*"
-  - package-ecosystem: cargo
-    directory: "/enums"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 99
-    ignore:
-      - dependency-name: "tree-sitter*"

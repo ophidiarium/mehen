@@ -185,6 +185,11 @@ function prepareMehen() {
 
   if (method === "cargo") {
     const actionPath = process.env.GITHUB_ACTION_PATH || process.cwd();
+    // The repo root is a virtual workspace manifest (no `[package]`),
+    // so `cargo install --path <root>` fails with "found a virtual
+    // manifest … instead of a package manifest". `cargo install
+    // --path <member>` works against the `mehen` package's directory.
+    const cratePath = path.join(actionPath, "crates", "mehen-cli");
     const root = path.join(
       process.env.RUNNER_TEMP || os.tmpdir(),
       "mehen-action-cli",
@@ -196,7 +201,7 @@ function prepareMehen() {
       fs.rmSync(root, { recursive: true, force: true });
       runCommand(
         "cargo",
-        ["install", "--path", actionPath, "--locked", "--root", root],
+        ["install", "--path", cratePath, "--locked", "--root", root],
         {
           cwd: actionPath,
           stdio: "inherit",
