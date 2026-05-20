@@ -128,9 +128,9 @@ jobs:
             echo "## Copy/Paste Detection"
             echo ""
             if [ "${DUP_COUNT:-0}" = "0" ]; then
-              echo "No duplications found in ${CHANGED_COUNT} changed Rust file(s) (threshold: ${CPD_TOKENS} tokens)."
+              echo "🟢 No duplications found in ${CHANGED_COUNT} changed Rust file(s) (threshold: ${CPD_TOKENS} tokens)."
             else
-              echo "Found **${DUP_COUNT}** duplication(s) across ${CHANGED_COUNT} changed Rust file(s) (threshold: ${CPD_TOKENS} tokens)."
+              echo "🔴 Found **${DUP_COUNT}** duplication(s) across ${CHANGED_COUNT} changed Rust file(s) (threshold: ${CPD_TOKENS} tokens)."
               echo ""
               echo "<details>"
               echo "<summary>Show duplications</summary>"
