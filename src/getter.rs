@@ -15,7 +15,7 @@ pub(crate) trait Getter {
     }
 
     fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
-        // we're in a function or in a class
+        // We're inside a function or a class.
         if let Some(name) = node.child_by_field_name("name") {
             let code = &code[name.start_byte()..name.end_byte()];
             std::str::from_utf8(code).ok()
