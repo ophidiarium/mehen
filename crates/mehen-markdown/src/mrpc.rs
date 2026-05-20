@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 
 use crate::grammar::Markdown;
 use crate::legacy_node::Node;
+use crate::tree_helpers::{count_table_cells, fence_content_line_count, has_scheme};
 
 /// Per-edge weights from §7.3.
 mod weights {
@@ -649,27 +650,6 @@ fn classify_link(dest: &str) -> LinkClass {
     }
 }
 
-fn has_scheme(dest: &str) -> bool {
-    if let Some(colon) = dest.find(':') {
-        let scheme = &dest[..colon];
-        // RFC 3986 scheme: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
-        let chars: Vec<char> = scheme.chars().collect();
-        if chars.is_empty() {
-            return false;
-        }
-        if !chars[0].is_ascii_alphabetic() {
-            return false;
-        }
-        for c in &chars[1..] {
-            if !(c.is_ascii_alphanumeric() || *c == '+' || *c == '-' || *c == '.') {
-                return false;
-            }
-        }
-        return true;
-    }
-    false
-}
-
 fn extract_domain(dest: &str) -> Option<String> {
     let rest = match dest.find("://") {
         Some(pos) => &dest[pos + 3..],
@@ -717,40 +697,6 @@ fn normalize_relative_path(dest: &str) -> String {
     } else {
         dest.to_string()
     }
-}
-
-fn node_line_span(node: &Node<'_>) -> usize {
-    let start = node.start_row();
-    let (end_row, end_col) = node.end_position();
-    let mut end = end_row;
-    if end > start && end_col == 0 {
-        end -= 1;
-    }
-    end.saturating_sub(start) + 1
-}
-
-/// Line count of just the content inside a `fenced_code_block` — excludes
-/// the opening/closing fence markers. For `indented_code_block` the whole
-/// node IS content, so we fall back to `node_line_span`.
-fn fence_content_line_count(node: &Node<'_>) -> usize {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::IndentedCodeBlock) {
-        return node_line_span(node);
-    }
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return 0;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            return node_line_span(&child);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    0
 }
 
 /// GFM slug builder: lowercases the source text of a heading, strips
@@ -893,36 +839,6 @@ fn find_language_inside<'a>(node: &Node<'a>) -> Option<Node<'a>> {
         }
     }
     None
-}
-
-fn count_table_cells(node: &Node<'_>) -> usize {
-    let mut total = 0usize;
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            let child = cursor.node();
-            if matches!(
-                child.kind_id().into(),
-                Markdown::PipeTableHeader | Markdown::PipeTableRow
-            ) {
-                let mut c2 = child.cursor();
-                if c2.goto_first_child() {
-                    loop {
-                        if matches!(c2.node().kind_id().into(), Markdown::PipeTableCell) {
-                            total += 1;
-                        }
-                        if !c2.goto_next_sibling() {
-                            break;
-                        }
-                    }
-                }
-            }
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-    total
 }
 
 /// Extract the URL from an `autolink` node. Autolinks wrap the URL in

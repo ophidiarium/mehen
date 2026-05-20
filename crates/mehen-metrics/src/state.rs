@@ -22,11 +22,12 @@
 //!   language crate.
 //! - the parser-side walking strategy (tree-sitter cursor vs Oxc visitor).
 
-use mehen_core::{MetricKey, MetricSet};
+use mehen_core::{MetricKey, MetricSet, SpaceKind};
 
 use crate::{
-    AbcStats, CognitiveStats, CyclomaticStats, HalsteadBuilder, HalsteadStats, LocStats, MiStats,
-    NargsStats, NexitStats, NomStats, NpaStats, NpmStats, WmcStats, keys,
+    AbcStats, CognitiveStats, ContainerKind, CyclomaticStats, HalsteadBuilder, HalsteadStats,
+    LocStats, MetricTreeBuilder, MiStats, NargsStats, NexitStats, NomStats, NpaStats, NpmStats,
+    SpaceRangeTracker, WmcStats, keys,
 };
 
 /// Per-space accumulator state. Analyzers push one of these for the
@@ -51,6 +52,85 @@ impl State {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Initialize a fresh `State` for an opened space, applying the
+    /// kind-specific bookkeeping every walker performs:
+    ///
+    /// - `Function` records a function in `nom`.
+    /// - `Closure` records a closure in `nom`.
+    /// - `Class` / `Impl` record a class-like in `npa`/`npm`/`wmc`.
+    /// - `Interface` / `Trait` record a class-like in `npa`/`npm` only.
+    /// - Other kinds (`Unit`, `Enum`, `Custom`) do nothing.
+    ///
+    /// Callers still set their own LOC span — each walker has its own
+    /// `LineIndex` access pattern (Ruff `TextRange`, Oxc `Span`,
+    /// tree-sitter byte offsets) so we keep span resolution at the
+    /// call site.
+    pub fn for_opened_space(kind: SpaceKind) -> Self {
+        let mut child = Self::new();
+        match kind {
+            SpaceKind::Function => child.nom.record_function(),
+            SpaceKind::Closure => child.nom.record_closure(),
+            SpaceKind::Class | SpaceKind::Impl => {
+                child.npa.record_class_like();
+                child.npm.record_class_like();
+                child.wmc.record_class_like();
+            }
+            SpaceKind::Interface | SpaceKind::Trait => {
+                child.npa.record_class_like();
+                child.npm.record_class_like();
+            }
+            _ => {}
+        }
+        child
+    }
+}
+
+/// Close a space: pop its `State` and `SpaceKind` from the walker's
+/// stacks, finalize, stash the AST-side LOC + cyclomatic snapshots
+/// for the post-AST Halstead overlay, publish the per-space `MetricSet`,
+/// merge the rolled-up bounds into the parent, and close the
+/// `MetricTreeBuilder`.
+///
+/// This is byte-identical across the Python, TypeScript, Ruby, Rust,
+/// PHP, Go, C, and Kotlin walkers — they all carry the same four state
+/// buckets (`stack`, `kinds`, `tree`, `halstead_routing`) and run the
+/// same finalize → record_close → apply → merge → close sequence.
+/// CPD flagged a 30-line / 130-token cluster across them; pulling the
+/// shared logic here means a fix or feature lands once instead of
+/// eight times.
+///
+/// Panics on stack underflow (unbalanced open/close — the same way the
+/// per-walker copies did).
+pub fn close_space(
+    stack: &mut Vec<State>,
+    kinds: &mut Vec<SpaceKind>,
+    tree: &mut MetricTreeBuilder,
+    halstead_routing: &mut SpaceRangeTracker,
+) {
+    let closed_kind = kinds.pop().expect("kinds underflow");
+    let mut state = stack.pop().expect("stack underflow");
+    if matches!(closed_kind, SpaceKind::Function) {
+        state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
+    }
+    finalize_state(&mut state);
+    if let Some(space_id) = tree.current_id() {
+        halstead_routing.record_close(space_id, &state.loc, &state.cyclomatic);
+    }
+    apply_state_to(state.clone(), tree.metrics_mut());
+    if let Some(parent) = stack.last_mut() {
+        let parent_kind = kinds.last().cloned().unwrap_or(SpaceKind::Unit);
+        merge_child_into_parent(parent, &state);
+        if matches!(closed_kind, SpaceKind::Function) {
+            let container = match parent_kind {
+                SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
+                SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
+                _ => ContainerKind::Other,
+            };
+            state.wmc.finalize_method_into(container, &mut parent.wmc);
+        }
+    }
+    tree.close();
 }
 
 /// Snapshot the per-space "current" values into rolled-up
@@ -237,7 +317,20 @@ fn publish_cognitive(stats: &CognitiveStats, target: &mut MetricSet) {
     );
 }
 
-fn publish_halstead(stats: &HalsteadStats, target: &mut MetricSet) {
+/// Publish the full Halstead key set (`halstead.volume`,
+/// `halstead.difficulty`, `halstead.effort`, `halstead.{n1,N1,n2,N2}`,
+/// `halstead.{length,vocabulary,level,time,bugs,…}`) onto a
+/// `MetricSet`.
+///
+/// Visibility is `pub(crate)` because the post-AST token-routing
+/// overlay in `crate::halstead_routing` needs to rewrite the same
+/// keys when Pattern B walkers (Python, TypeScript, Rust, PHP) emit
+/// Halstead in a separate pass after `apply_state_to` has already
+/// run. Both call sites must publish identical keys with identical
+/// formulas; otherwise the per-space JSON Halstead numbers drift
+/// from the unit-level rollup. Funneling them through the same
+/// helper makes that drift impossible.
+pub(crate) fn publish_halstead(stats: &HalsteadStats, target: &mut MetricSet) {
     target.insert(MetricKey::new(keys::HALSTEAD_VOLUME), stats.volume());
     target.insert(
         MetricKey::new(keys::HALSTEAD_DIFFICULTY),

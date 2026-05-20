@@ -25,6 +25,7 @@ use std::collections::BTreeMap;
 
 use crate::grammar::Markdown;
 use crate::legacy_node::Node;
+use crate::tree_helpers::fence_language_tag;
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -356,42 +357,7 @@ impl Ctx<'_, '_> {
 }
 
 fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::InfoString) {
-            let mut c2 = child.cursor();
-            if c2.goto_first_child() {
-                loop {
-                    let inner = c2.node();
-                    if matches!(inner.kind_id().into(), Markdown::Language) {
-                        let bytes = source.as_bytes();
-                        let start = inner.start_byte();
-                        let end = inner.end_byte();
-                        if end <= bytes.len() && start < end {
-                            let tag = std::str::from_utf8(&bytes[start..end])
-                                .ok()?
-                                .trim()
-                                .to_ascii_lowercase();
-                            if !tag.is_empty() {
-                                return Some(tag);
-                            }
-                        }
-                    }
-                    if !c2.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
+    fence_language_tag(node, source, true)
 }
 
 fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {

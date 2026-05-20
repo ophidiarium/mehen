@@ -64,7 +64,7 @@
 use mehen_core::{LineIndex, MetricSpace, SourceSpan, SpaceKind};
 use mehen_metrics::{
     ContainerKind, HalsteadOperand, HalsteadOperator, MetricTreeBuilder, State, apply_state_to,
-    finalize_state, merge_child_into_parent,
+    close_space, finalize_state,
 };
 use ruby_prism::{
     AndNode, BeginNode, BlockNode, BreakNode, CallNode, CallOperatorWriteNode, CaseMatchNode,
@@ -226,7 +226,7 @@ impl<'a> Visitor<'a> {
         end_byte: u32,
         name: Option<String>,
     ) {
-        let mut child = State::new();
+        let mut child = State::for_opened_space(kind.clone());
         let start_row = self.line_index.line_at(start_byte).saturating_sub(1);
         let end_row = self
             .line_index
@@ -234,24 +234,6 @@ impl<'a> Visitor<'a> {
             .saturating_sub(1);
         child.loc.set_span(start_row, end_row, false);
 
-        match kind {
-            SpaceKind::Function => {
-                child.nom.record_function();
-            }
-            SpaceKind::Closure => {
-                child.nom.record_closure();
-            }
-            SpaceKind::Class | SpaceKind::Impl => {
-                child.npa.record_class_like();
-                child.npm.record_class_like();
-                child.wmc.record_class_like();
-            }
-            SpaceKind::Interface | SpaceKind::Trait => {
-                child.npa.record_class_like();
-                child.npm.record_class_like();
-            }
-            _ => {}
-        }
         let span = SourceSpan {
             start_byte,
             end_byte,
@@ -266,32 +248,12 @@ impl<'a> Visitor<'a> {
     }
 
     fn close_space(&mut self) {
-        let closed_kind = self.kinds.pop().expect("kinds underflow");
-        let mut state = self.stack.pop().expect("stack underflow");
-        if matches!(closed_kind, SpaceKind::Function) {
-            state.wmc.set_cyclomatic(state.cyclomatic.cyclomatic + 1);
-        }
-        finalize_state(&mut state);
-        // Stash MI inputs for the post-AST overlay before
-        // `apply_state_to` consumes them.
-        if let Some(space_id) = self.tree.current_id() {
-            self.halstead_routing
-                .record_close(space_id, &state.loc, &state.cyclomatic);
-        }
-        apply_state_to(state.clone(), self.tree.metrics_mut());
-        if let Some(parent) = self.stack.last_mut() {
-            let parent_kind = self.kinds.last().cloned().unwrap_or(SpaceKind::Unit);
-            merge_child_into_parent(parent, &state);
-            if matches!(closed_kind, SpaceKind::Function) {
-                let container = match parent_kind {
-                    SpaceKind::Class | SpaceKind::Impl => ContainerKind::Class,
-                    SpaceKind::Interface | SpaceKind::Trait => ContainerKind::Interface,
-                    _ => ContainerKind::Other,
-                };
-                state.wmc.finalize_method_into(container, &mut parent.wmc);
-            }
-        }
-        self.tree.close();
+        close_space(
+            &mut self.stack,
+            &mut self.kinds,
+            &mut self.tree,
+            &mut self.halstead_routing,
+        );
     }
 
     /// Record an "actionable" statement at this node's start line.

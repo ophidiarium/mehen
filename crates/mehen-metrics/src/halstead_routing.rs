@@ -52,6 +52,7 @@ use crate::halstead_builder::{HalsteadBuilder, HalsteadOperand, HalsteadOperator
 use crate::keys;
 use crate::loc::LocStats;
 use crate::mi::MiStats;
+use crate::state::publish_halstead;
 
 /// Tracks every space opened during the AST walk so a post-AST token
 /// sweep can route each operator/operand event to the deepest enclosing
@@ -318,7 +319,7 @@ fn overlay(space: &mut MetricSpace, by_space: &HashMap<SpaceId, OverlayInputs>) 
         // is what makes per-space JSON entries non-zero.
         if token_halstead_observed {
             let halstead = HalsteadStats::from_counts(counts);
-            write_halstead_keys(&halstead, &mut space.metrics);
+            publish_halstead(&halstead, &mut space.metrics);
             // MI re-computation depends on Halstead volume — only
             // recompute when Halstead actually changed; otherwise the
             // MI keys written by `apply_state_to` at AST close are
@@ -356,64 +357,6 @@ fn write_loc_token_keys(stats: &LocStats, target: &mut MetricSet) {
     target.insert(MetricKey::new(keys::LOC_SLOC), stats.sloc() as i64);
     target.insert(MetricKey::new(keys::LOC_BLANK), stats.blank() as i64);
     target.insert(MetricKey::new(keys::LOC), stats.sloc() as i64);
-}
-
-fn write_halstead_keys(stats: &HalsteadStats, target: &mut MetricSet) {
-    target.insert(MetricKey::new(keys::HALSTEAD_VOLUME), stats.volume());
-    target.insert(
-        MetricKey::new(keys::HALSTEAD_DIFFICULTY),
-        stats.difficulty(),
-    );
-    target.insert(MetricKey::new(keys::HALSTEAD_EFFORT), stats.effort());
-    target.insert(
-        MetricKey::new(keys::HALSTEAD_VOCABULARY),
-        stats.vocabulary(),
-    );
-    target.insert(MetricKey::new(keys::HALSTEAD_LENGTH), stats.length());
-    target.insert(
-        MetricKey::new(format!("{}.n1", keys::HALSTEAD)),
-        stats.u_operators as i64,
-    );
-    target.insert(
-        MetricKey::new(format!("{}.N1", keys::HALSTEAD)),
-        stats.operators as i64,
-    );
-    target.insert(
-        MetricKey::new(format!("{}.n2", keys::HALSTEAD)),
-        stats.u_operands as i64,
-    );
-    target.insert(
-        MetricKey::new(format!("{}.N2", keys::HALSTEAD)),
-        stats.operands as i64,
-    );
-    target.insert(
-        MetricKey::new(format!("{}.length", keys::HALSTEAD)),
-        stats.length(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.estimated_program_length", keys::HALSTEAD)),
-        stats.estimated_program_length(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.purity_ratio", keys::HALSTEAD)),
-        stats.purity_ratio(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.vocabulary", keys::HALSTEAD)),
-        stats.vocabulary(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.level", keys::HALSTEAD)),
-        stats.level(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.time", keys::HALSTEAD)),
-        stats.time(),
-    );
-    target.insert(
-        MetricKey::new(format!("{}.bugs", keys::HALSTEAD)),
-        stats.bugs(),
-    );
 }
 
 #[cfg(test)]

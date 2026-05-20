@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use crate::grammar::Markdown;
 use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
+use crate::tree_helpers::{find_first, node_text};
 use crate::types::{LinkClass, LinkRecord, Links, Section};
 
 /// Entry point. Walks the tree, classifies every link/image/autolink/footnote
@@ -540,30 +541,6 @@ fn collect_footnote_labels_rec(node: &Node<'_>, source: &str, out: &mut HashSet<
             }
         }
     }
-}
-
-fn find_first<'a>(node: &Node<'a>, target: Markdown) -> Option<Node<'a>> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        let child_kind: Markdown = child.kind_id().into();
-        if child_kind == target {
-            return Some(child);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn node_text(node: &Node<'_>, source: &str) -> String {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    String::from_utf8_lossy(&source.as_bytes()[start..end]).into_owned()
 }
 
 fn text_inside_label(label: &Node<'_>, source: &str) -> Option<String> {

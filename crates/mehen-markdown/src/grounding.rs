@@ -25,6 +25,7 @@ use std::path::Path;
 use crate::grammar::Markdown;
 use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
+use crate::tree_helpers::node_text;
 use crate::types::{ArtifactKind, ArtifactRecord, LinkClass, LinkRecord, Section, TableRecord};
 
 /// Inputs collected from the AST walk that feed both §15 and §17.6 /
@@ -508,12 +509,6 @@ fn is_command_shell(lang: &str) -> bool {
         lang.trim().to_ascii_lowercase().as_str(),
         "bash" | "sh" | "shell" | "zsh"
     )
-}
-
-fn node_text(node: &Node<'_>, source: &str) -> String {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    String::from_utf8_lossy(&source.as_bytes()[start..end]).into_owned()
 }
 
 /// Count per-section evidence anchors per §16.1. An anchor is:

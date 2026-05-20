@@ -45,6 +45,7 @@ mod rci;
 mod section_balance;
 mod sections;
 mod tables;
+mod tree_helpers;
 pub mod types;
 mod visuals;
 mod words;

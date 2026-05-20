@@ -15,6 +15,10 @@
 
 use crate::grammar::Markdown;
 use crate::legacy_node::Node;
+use crate::tree_helpers::{
+    count_table_cells, fence_content_line_count, fence_language_tag, find_link_dest,
+    find_link_label, has_scheme as is_external, node_line_span,
+};
 
 /// §8 aggregate: positive weight before credit, credit amount used, final
 /// MCC. Only `mcc` is exported to the public record; `positive` and
@@ -474,28 +478,6 @@ fn bounded_size(size: f64, useful_hi: f64, severe_hi: f64) -> f64 {
     1.0 - saturate(size, useful_hi, severe_hi)
 }
 
-fn is_external(dest: &str) -> bool {
-    // An external link has an explicit URL scheme (RFC 3986: ALPHA
-    // followed by ALPHA / DIGIT / "+" / "-" / ".").
-    if let Some(colon) = dest.find(':') {
-        let scheme = &dest[..colon];
-        let chars: Vec<char> = scheme.chars().collect();
-        if chars.is_empty() {
-            return false;
-        }
-        if !chars[0].is_ascii_alphabetic() {
-            return false;
-        }
-        for c in &chars[1..] {
-            if !(c.is_ascii_alphanumeric() || *c == '+' || *c == '-' || *c == '.') {
-                return false;
-            }
-        }
-        return true;
-    }
-    false
-}
-
 fn saturate(x: f64, lo: f64, hi: f64) -> f64 {
     if hi <= lo {
         return 0.0;
@@ -674,36 +656,6 @@ fn count_inline_links(node: &Node<'_>) -> u64 {
     total
 }
 
-fn count_table_cells(node: &Node<'_>) -> usize {
-    let mut total = 0usize;
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            let child = cursor.node();
-            if matches!(
-                child.kind_id().into(),
-                Markdown::PipeTableHeader | Markdown::PipeTableRow
-            ) {
-                let mut c2 = child.cursor();
-                if c2.goto_first_child() {
-                    loop {
-                        if matches!(c2.node().kind_id().into(), Markdown::PipeTableCell) {
-                            total += 1;
-                        }
-                        if !c2.goto_next_sibling() {
-                            break;
-                        }
-                    }
-                }
-            }
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-    total
-}
-
 fn pipe_table_has_header(node: &Node<'_>) -> bool {
     let mut cursor = node.cursor();
     if !cursor.goto_first_child() {
@@ -720,135 +672,10 @@ fn pipe_table_has_header(node: &Node<'_>) -> bool {
     false
 }
 
-fn node_line_span(node: &Node<'_>) -> usize {
-    let start = node.start_row();
-    let (end_row, end_col) = node.end_position();
-    let mut end = end_row;
-    if end > start && end_col == 0 {
-        end -= 1;
-    }
-    end.saturating_sub(start) + 1
-}
-
-/// Content-only line count inside a fenced code block. Indented code blocks
-/// have no delimiters so their content equals their span.
-fn fence_content_line_count(node: &Node<'_>) -> usize {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::IndentedCodeBlock) {
-        return node_line_span(node);
-    }
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return 0;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            return node_line_span(&child);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    0
-}
-
+/// Reads the language tag from a fenced code block's `info_string`,
+/// lowercased so `Rust`/`rust` collapse to one identifier.
 fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        let kind: Markdown = child.kind_id().into();
-        if matches!(kind, Markdown::InfoString) {
-            let mut c2 = child.cursor();
-            if c2.goto_first_child() {
-                loop {
-                    let inner = c2.node();
-                    if matches!(inner.kind_id().into(), Markdown::Language) {
-                        let bytes = source.as_bytes();
-                        let start = inner.start_byte();
-                        let end = inner.end_byte();
-                        if end <= bytes.len() && start < end {
-                            let tag = std::str::from_utf8(&bytes[start..end])
-                                .ok()?
-                                .trim()
-                                .to_ascii_lowercase();
-                            if !tag.is_empty() {
-                                return Some(tag);
-                            }
-                        }
-                    }
-                    if !c2.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn find_link_dest(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut stack = vec![*node];
-    while let Some(n) = stack.pop() {
-        if matches!(
-            n.kind_id().into(),
-            Markdown::LinkDestination | Markdown::LinkDestinationParenthesis
-        ) {
-            let bytes = source.as_bytes();
-            let start = n.start_byte();
-            let end = n.end_byte();
-            if end <= bytes.len() && start < end {
-                let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
-                return Some(
-                    text.trim_start_matches('<')
-                        .trim_end_matches('>')
-                        .to_string(),
-                );
-            }
-        }
-        let mut cursor = n.cursor();
-        if cursor.goto_first_child() {
-            loop {
-                stack.push(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-    }
-    None
-}
-
-fn find_link_label(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut stack = vec![*node];
-    while let Some(n) = stack.pop() {
-        if matches!(n.kind_id().into(), Markdown::LinkLabel) {
-            let bytes = source.as_bytes();
-            let start = n.start_byte();
-            let end = n.end_byte();
-            if end <= bytes.len() && start < end {
-                return std::str::from_utf8(&bytes[start..end])
-                    .ok()
-                    .map(|s| s.to_string());
-            }
-        }
-        let mut cursor = n.cursor();
-        if cursor.goto_first_child() {
-            loop {
-                stack.push(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-    }
-    None
+    fence_language_tag(node, source, true)
 }
 
 #[cfg(test)]

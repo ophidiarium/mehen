@@ -21,6 +21,7 @@ use crate::grammar::Markdown;
 use crate::legacy_node::Node;
 use crate::mathops::sat;
 use crate::nearby::{BlockSpan, has_prose_within};
+use crate::tree_helpers::{find_first, node_text};
 
 /// Per-fence summary used to populate ArtifactRecord rows and Phase D's
 /// filler / grounding pipelines.
@@ -149,28 +150,4 @@ fn code_body_stats(node: &Node<'_>, source: &str) -> (u64, f64) {
         .saturating_sub(1)
         .min(line_lengths.len() - 1);
     (loc, line_lengths[idx] as f64)
-}
-
-fn find_first<'a>(node: &Node<'a>, target: Markdown) -> Option<Node<'a>> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        let kind: Markdown = child.kind_id().into();
-        if kind == target {
-            return Some(child);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn node_text(node: &Node<'_>, source: &str) -> String {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    String::from_utf8_lossy(&source.as_bytes()[start..end]).into_owned()
 }

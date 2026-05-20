@@ -14,6 +14,7 @@ use crate::grammar::Markdown;
 use crate::legacy_node::Node;
 use crate::mathops::{clamp01, normalize_zero, sat};
 use crate::nearby::{BlockSpan, has_prose_within};
+use crate::tree_helpers::{find_first, node_text};
 use crate::types::{DiagramRecord, ImageRecord, Visuals};
 
 /// Combined visual analysis output.
@@ -255,30 +256,6 @@ fn aggregate_visuals(images: &[ImageRecord], diagrams: &[DiagramRecord], words: 
     let image_total: f64 = images.iter().map(|i| i.image_complexity).sum();
     v.visual_net_effect = normalize_zero(diagram_total + image_total - 2.0 * scaffold_sum);
     v
-}
-
-fn find_first<'a>(node: &Node<'a>, target: Markdown) -> Option<Node<'a>> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        let kind: Markdown = child.kind_id().into();
-        if kind == target {
-            return Some(child);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn node_text(node: &Node<'_>, source: &str) -> String {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    String::from_utf8_lossy(&source.as_bytes()[start..end]).into_owned()
 }
 
 fn is_absolute_url(s: &str) -> bool {
