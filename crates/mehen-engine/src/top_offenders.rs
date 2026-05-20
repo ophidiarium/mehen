@@ -11,7 +11,9 @@ use std::sync::Arc;
 use camino::Utf8PathBuf;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use mehen_core::{Language, MetricKey, Polarity, SourceFile};
+use mehen_core::{
+    AnalysisErrorRecord, DiffSide, Language, MetricKey, ParseDiagnostic, Polarity, SourceFile,
+};
 use mehen_metrics::{MetricSelector, SelectorAggregator};
 
 use crate::detection::detect_language;
@@ -23,6 +25,7 @@ use mehen_core::{TopOffenderEntry, TopOffendersInput, TopOffendersReport};
 pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
     let registry = Arc::new(AnalyzerRegistry::default_set());
     let mut entries: Vec<TopOffenderEntry> = Vec::new();
+    let mut analysis_errors: Vec<AnalysisErrorRecord> = Vec::new();
     // Dedup files across roots. Without this, callers passing
     // overlapping paths (`.` plus `src`, or a directory plus a file
     // inside it) would rank the same file multiple times, crowding
@@ -49,6 +52,13 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
                 continue;
             };
             let Some(analyzer) = registry.analyzer_for(language) else {
+                // Language detected but no analyzer registered (the
+                // owning crate is feature-gated off in this build).
+                // Surface as a non-fatal `analysis_error` so callers
+                // can distinguish "no offenders" from "offenders
+                // silently skipped" — matching the diff path's
+                // `record_unavailable` (rewrite plan §3.5).
+                record_unavailable(&mut analysis_errors, &entry, language);
                 continue;
             };
             let source = SourceFile::new(entry.clone(), language, text);
@@ -88,7 +98,31 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
         schema_version: "1.0".to_string(),
         selectors: input.selectors.iter().map(|s| s.to_string()).collect(),
         entries,
+        analysis_errors,
     }
+}
+
+/// Push an `engine.analyzer_unavailable` record for `path` so callers
+/// can tell that a file was skipped because the owning language crate
+/// is feature-gated off (mirroring the diff path's behavior).
+fn record_unavailable(
+    errors: &mut Vec<AnalysisErrorRecord>,
+    path: &Utf8PathBuf,
+    language: Language,
+) {
+    errors.push(AnalysisErrorRecord {
+        path: path.clone(),
+        // `top-offenders` has no base/head distinction; pick `Head`
+        // by convention so the JSON shape stays compatible with diff.
+        side: DiffSide::Head,
+        diagnostics: vec![ParseDiagnostic::warning(
+            "engine.analyzer_unavailable",
+            format!(
+                "no analyzer registered for `{}` in this build",
+                language.canonical()
+            ),
+        )],
+    });
 }
 
 /// Compute a stable dedup key for `path`. Resolves to the
@@ -1022,5 +1056,58 @@ mod tests {
     #[test]
     fn cli_num_jobs_falls_back_to_conservative_thread_count() {
         assert_eq!(resolve_num_jobs(None, None), 2);
+    }
+
+    #[test]
+    fn record_unavailable_emits_warning_record() {
+        // Regression: when language detection succeeds but no analyzer
+        // is registered (feature-gated build), the file must surface
+        // as a non-fatal `analysis_error` so callers can tell that an
+        // offender was silently dropped, instead of believing the
+        // ranking is complete. Mirrors `mehen-engine::diff`'s
+        // `record_unavailable`.
+        let mut errors: Vec<AnalysisErrorRecord> = Vec::new();
+        record_unavailable(
+            &mut errors,
+            &Utf8PathBuf::from("src/main.kt"),
+            Language::Kotlin,
+        );
+        assert_eq!(errors.len(), 1);
+        let rec = &errors[0];
+        assert_eq!(rec.path, Utf8PathBuf::from("src/main.kt"));
+        assert_eq!(rec.side, DiffSide::Head);
+        assert_eq!(rec.diagnostics.len(), 1);
+        assert_eq!(rec.diagnostics[0].code, "engine.analyzer_unavailable");
+        assert!(
+            rec.diagnostics[0].message.contains("kotlin"),
+            "message must name the unavailable language; got: {}",
+            rec.diagnostics[0].message
+        );
+        assert_eq!(
+            rec.diagnostics[0].severity,
+            mehen_core::DiagnosticSeverity::Warning,
+            "unavailable analyzer is non-fatal"
+        );
+    }
+
+    #[test]
+    fn rank_top_offenders_includes_empty_analysis_errors_when_clean() {
+        // A clean run with all analyzers available produces an
+        // `analysis_errors` field — even when empty — so JSON
+        // consumers can rely on its presence.
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("ok.py"), "x = 1\n").unwrap();
+        let input = TopOffendersInput {
+            paths: vec![Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec!["loc.lloc".parse().unwrap()],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        assert!(report.analysis_errors.is_empty());
     }
 }

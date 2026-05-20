@@ -118,6 +118,15 @@ pub struct TopOffendersReport {
     pub schema_version: String,
     pub selectors: Vec<String>,
     pub entries: Vec<TopOffenderEntry>,
+    /// Files dropped from the ranking with a non-fatal reason —
+    /// e.g. the language was detected but no analyzer is registered
+    /// (feature-gated build), or the analyzer returned a blocking
+    /// diagnostic. Mirrors [`DiffReport::analysis_errors`] so callers
+    /// can distinguish "no offenders" from "offenders silently
+    /// skipped" (rewrite plan §3.5). `side` carries no real meaning
+    /// here and is set to `Head` by convention.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub analysis_errors: Vec<AnalysisErrorRecord>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
