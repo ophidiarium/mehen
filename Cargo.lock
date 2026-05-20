@@ -3878,9 +3878,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.26.8"
+version = "0.26.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "887bd495d0582c5e3e0d8ece2233666169fa56a9644d172fc22ad179ab2d0538"
+checksum = "4dab76d0b724ba557954125188cf0633a1ca43199ced82d95c7b9c32cc3de1f3"
 dependencies = [
  "cc",
  "regex",
@@ -3938,9 +3938,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-pwsh"
-version = "0.38.0"
+version = "0.38.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9bde9b178dbe1aa9f9f756cf2a2090a427a453b287af30225811727b4af74d2"
+checksum = "a77c21a16f9f436a8030280f764e0691941b93d94fbd5b4f9421f8a69ec67193"
 dependencies = [
  "cc",
  "tree-sitter-language",
