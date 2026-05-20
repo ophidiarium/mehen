@@ -89,7 +89,7 @@ oxc_allocator = "=0.131.0"
 oxc_ast = "=0.131.0"
 oxc_ast_visit = "=0.131.0"
 oxc_parser = "=0.131.0"
-oxc_span = "=0.131.0"
+oxc_span = "=0.132.0"
 oxc_syntax = "=0.131.0"
 
 # Ruff — replaces tree-sitter-python for the Python analyzer
