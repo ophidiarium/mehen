@@ -2032,9 +2032,9 @@ dependencies = [
 
 [[package]]
 name = "mago-php-version"
-version = "1.27.1"
+version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44ecc9975d4d17e9891839869827c8b268d48c6fae77dae6d8d8453feacd6fa4"
+checksum = "51a1ec54d5a1db03492bdde44d4378fed50e5e467e368d5d633bc84cda6127a2"
 dependencies = [
  "schemars",
  "serde",
