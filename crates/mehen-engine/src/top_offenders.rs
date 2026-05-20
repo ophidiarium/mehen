@@ -5,6 +5,7 @@
 //! the requested metric selectors. Per the rewrite plan §2.4:
 //! deterministic sorted output, ties broken by subsequent selectors.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
@@ -22,9 +23,25 @@ use mehen_core::{TopOffenderEntry, TopOffendersInput, TopOffendersReport};
 pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
     let registry = Arc::new(AnalyzerRegistry::default_set());
     let mut entries: Vec<TopOffenderEntry> = Vec::new();
+    // Dedup files across roots. Without this, callers passing
+    // overlapping paths (`.` plus `src`, or a directory plus a file
+    // inside it) would rank the same file multiple times, crowding
+    // out other files once `max_results` is applied.
+    //
+    // The dedup key is the canonicalized absolute path so different
+    // string spellings of the same file (`./src/foo.py` from root
+    // `.` vs. `src/foo.py` from root `src`) collapse to one entry.
+    // When canonicalize fails (file removed mid-walk, broken
+    // symlink, …) we fall back to the as-walked path: still better
+    // than analyzing it twice.
+    let mut seen: HashSet<Utf8PathBuf> = HashSet::new();
 
     for root in &input.paths {
         for entry in walk_paths(root, &input.include, &input.exclude) {
+            let dedup_key = canonical_key(&entry);
+            if !seen.insert(dedup_key) {
+                continue;
+            }
             let Some(language) = detect_language(entry.as_path()) else {
                 continue;
             };
@@ -71,6 +88,18 @@ pub fn rank_top_offenders(input: TopOffendersInput) -> TopOffendersReport {
         schema_version: "1.0".to_string(),
         selectors: input.selectors.iter().map(|s| s.to_string()).collect(),
         entries,
+    }
+}
+
+/// Compute a stable dedup key for `path`. Resolves to the
+/// canonical absolute path (following symlinks) so different string
+/// spellings of the same file collapse. Falls back to the original
+/// path when canonicalize fails — better than silently treating two
+/// "different" un-canonicalize-able paths as the same file.
+fn canonical_key(path: &Utf8PathBuf) -> Utf8PathBuf {
+    match std::fs::canonicalize(path.as_std_path()) {
+        Ok(canon) => Utf8PathBuf::try_from(canon).unwrap_or_else(|_| path.clone()),
+        Err(_) => path.clone(),
     }
 }
 
@@ -465,6 +494,62 @@ mod tests {
         assert!(
             !paths.contains(&"broken.py"),
             "broken.py should be skipped due to blocking diagnostic, got {paths:?}"
+        );
+    }
+
+    #[test]
+    fn rank_top_offenders_dedupes_overlapping_roots() {
+        // Regression: when callers pass overlapping roots (a directory
+        // plus a child directory, or a directory plus an explicit file
+        // inside it), `rank_top_offenders` previously analyzed and
+        // pushed each matching file once per root, crowding out other
+        // files at `max_results` truncation. Post-fix the dedup set
+        // collapses every spelling of the same canonical path to one
+        // entry.
+        use mehen_core::{AnalysisConfig, TopOffendersInput};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("a.py"), "x = 1\n").unwrap();
+        std::fs::write(sub.join("b.py"), "y = 2\n").unwrap();
+
+        let outer = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        let inner = Utf8PathBuf::from_path_buf(sub.clone()).unwrap();
+        let explicit_file = Utf8PathBuf::from_path_buf(sub.join("a.py")).unwrap();
+
+        let input = TopOffendersInput {
+            // Overlapping inputs: root + child directory + explicit
+            // file inside the child. Without dedup, `a.py` appears
+            // three times in `entries`.
+            paths: vec![outer, inner, explicit_file],
+            include: Vec::new(),
+            exclude: Vec::new(),
+            selectors: vec![sel("loc.lloc")],
+            max_results: 10,
+            config: AnalysisConfig::default(),
+        };
+        let report = rank_top_offenders(input);
+        let names: Vec<&str> = report
+            .entries
+            .iter()
+            .map(|e| e.path.file_name().unwrap_or(""))
+            .collect();
+
+        let a_count = names.iter().filter(|n| **n == "a.py").count();
+        let b_count = names.iter().filter(|n| **n == "b.py").count();
+        assert_eq!(
+            a_count, 1,
+            "a.py must be ranked exactly once, got {names:?}"
+        );
+        assert_eq!(
+            b_count, 1,
+            "b.py must be ranked exactly once, got {names:?}"
+        );
+        assert_eq!(
+            report.entries.len(),
+            2,
+            "expected 2 unique offenders across overlapping roots, got {names:?}"
         );
     }
 
