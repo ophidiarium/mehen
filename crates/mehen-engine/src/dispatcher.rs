@@ -66,4 +66,29 @@ mod tests {
             other => panic!("expected Internal, got {other:?}"),
         }
     }
+
+    #[test]
+    fn default_config_does_not_trip_depth_guard_on_first_dispatch() {
+        // Regression for PR #95 review: when `AnalysisConfig` derived
+        // `Default`, `max_dispatch_depth` was `0` and the very first
+        // dispatch hit `dispatch_depth (0) >= max_dispatch_depth (0)`.
+        // The manual `Default` impl on `AnalysisConfig` now reserves a
+        // realistic depth budget, so callers using `default()` should
+        // sail past the depth check and only fail (in this test setup)
+        // because the empty registry has no analyzer registered.
+        let registry = AnalyzerRegistry::new();
+        let dispatcher = EngineDispatcher::new(&registry);
+
+        let source = SourceFile::new("x.md".into(), mehen_core::Language::Markdown, String::new());
+        let config = AnalysisConfig::default();
+
+        let err = dispatcher.analyze(source, &config).unwrap_err();
+        match err {
+            AnalysisError::AnalyzerUnavailable(_) => {}
+            other => panic!(
+                "expected AnalyzerUnavailable (depth guard should not fire on first \
+                 dispatch with default config), got {other:?}"
+            ),
+        }
+    }
 }
