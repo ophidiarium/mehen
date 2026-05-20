@@ -85,7 +85,7 @@ tree-sitter = "=0.26.8"
 # Oxc — replaces tree-sitter-typescript for the JS/TS/JSX/TSX analyzer
 # (`crates/mehen-typescript`). Pinned to the same patch revision so all
 # Oxc crates stay in sync; mismatched versions panic at AST type level.
-oxc_allocator = "=0.131.0"
+oxc_allocator = "=0.132.0"
 oxc_ast = "=0.131.0"
 oxc_ast_visit = "=0.131.0"
 oxc_parser = "=0.131.0"
