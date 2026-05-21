@@ -12,3 +12,6 @@ updates:
       oxc:
         patterns:
           - "oxc_*"
+      mago:
+        patterns:
+          - "mago-*"
