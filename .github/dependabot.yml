@@ -9,3 +9,6 @@ updates:
       tree-sitter:
         patterns:
           - "tree-sitter*"
+      oxc:
+        patterns:
+          - "oxc_*"
