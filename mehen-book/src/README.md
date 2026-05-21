@@ -24,4 +24,4 @@ packed for you.
 ## License
 
 **mehen** is released under the
-<a href="https://www.mozilla.org/MPL/2.0/" target="_blank">Mozilla Public License v2.0</a>.
+<a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank">GNU Affero General Public License v3.0</a>.

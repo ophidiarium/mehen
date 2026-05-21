@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Vowel-group syllable counter (§31.11).
 //!
 //! Pure heuristic — no dictionary, no features — matching the Tier 0

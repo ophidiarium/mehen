@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Section Balance Score per §20.
 //!
 //! ```text

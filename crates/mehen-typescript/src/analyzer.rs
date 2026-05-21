@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Oxc-backed analyzer entry points for TypeScript / JavaScript / TSX / JSX.
 //!
 //! The four `LanguageAnalyzer` impls all funnel into a single

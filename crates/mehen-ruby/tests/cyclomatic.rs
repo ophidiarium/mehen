@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Cyclomatic complexity tests for the Phase 9 ruby-prism walker.
 //!
 //! Every legacy `check_metrics::<RubyParser>` cyclomatic test from

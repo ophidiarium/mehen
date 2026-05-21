@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-go` — Go language analyzer.
 //!
 //! Phase-3 reorganization complete: the analyzer owns its tree-sitter

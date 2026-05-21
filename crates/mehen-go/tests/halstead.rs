@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Halstead tests for the Go walker.
 //!
 //! Every legacy `check_metrics::<GoParser>` Halstead test from

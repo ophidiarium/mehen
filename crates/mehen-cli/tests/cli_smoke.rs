@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Smoke tests for the 1.0 `mehen` CLI.
 //!
 //! Replaces the pre-1.0 `tests/cli_smoke.rs`. The pre-1.0 commands

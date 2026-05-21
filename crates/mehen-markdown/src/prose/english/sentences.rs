@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! English sentence segmentation (§31.12).
 //!
 //! UAX #29 boundaries via `unicode-segmentation`, post-processed to:

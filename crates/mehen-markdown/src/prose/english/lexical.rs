@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! English lexical diversity and sentence/word moments (§32).
 //!
 //! Tier 0 scope: MATTR₅₀, hapax ratio, dis-legomena ratio, lexical density

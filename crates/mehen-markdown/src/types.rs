@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Public-shaped metric types exported by the Markdown analyzer.
 //!
 //! The field layout mirrors §23 of

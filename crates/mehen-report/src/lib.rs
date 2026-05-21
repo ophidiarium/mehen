@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-report` — rendering and serialization.
 //!
 //! Phase 1 scope: render shapes that downstream callers can rely on while

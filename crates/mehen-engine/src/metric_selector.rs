@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Shared metric selection primitives used by `diff` and `top-offenders`.
 //!
 //! A *selector* is a known metric name (e.g. `loc.lloc`) bundled with a

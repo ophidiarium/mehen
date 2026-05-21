@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Halstead tests for the Phase 8 mago-syntax-backed walker.
 //!
 //! The legacy tree-sitter PHP suite carried no Halstead snapshot

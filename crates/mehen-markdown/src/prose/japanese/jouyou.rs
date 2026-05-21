@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Jōyō grade proxy (§35.2).
 //!
 //! Bundled list: `data/jouyou_kanji.txt` maps each Jōyō kanji to a grade

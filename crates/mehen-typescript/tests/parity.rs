@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Parity snapshots for the Oxc-backed TS/JS/TSX/JSX analyzer.
 //!
 //! Each test reproduces a legacy `crates/mehen-engine/src/legacy/metrics/*.rs`

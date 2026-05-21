@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Block-level language detection (§30).
 //!
 //! Tier 0 uses a zero-dependency Unicode-script block-ratio heuristic:

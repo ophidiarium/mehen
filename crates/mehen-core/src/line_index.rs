@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 use serde::{Deserialize, Serialize};
 
 /// Maps byte offsets to 1-based line numbers within a source file.

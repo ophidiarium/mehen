@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Markdown Halstead metrics per §9.
 //!
 //! Walks the AST once and classifies each leaf / inline / block node as

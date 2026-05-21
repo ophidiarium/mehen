@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Link classification, debt, and scent metrics per §11.
 //!
 //! This module walks the AST for every `link`, `image`, `autolink`,

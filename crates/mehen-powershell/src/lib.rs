@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-powershell` — PowerShell language analyzer.
 //!
 //! Phase 3 implementation: walks tree-sitter-pwsh with PowerShell-specific

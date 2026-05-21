@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-markdown` — Markdown documentation metrics analyzer.
 //!
 //! Per the rewrite plan §4.7 / §6.6 / §8.1, the pre-1.0

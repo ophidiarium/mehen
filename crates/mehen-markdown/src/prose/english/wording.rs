@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! English wording and style heuristics (§33).
 //!
 //! Produces per-document density metrics and the §33.11 Wording Quality

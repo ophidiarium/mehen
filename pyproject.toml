@@ -14,7 +14,7 @@ dependencies = []
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

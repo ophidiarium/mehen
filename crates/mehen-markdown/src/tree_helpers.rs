@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Tree-sitter walking helpers shared across the per-metric analyzers.
 //!
 //! The Markdown crate has many sibling analyzers (`mcc`, `mrpc`,

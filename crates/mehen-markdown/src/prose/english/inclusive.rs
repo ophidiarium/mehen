@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Inclusive-language flags (§33.12) — alex / retext-equality style.
 //!
 //! The bundled data file `inclusive_flags.txt` carries one entry per line:

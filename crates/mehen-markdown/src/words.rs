@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Narrative word counter `W` (§4) with anti-gaming defenses (§37.5).
 //!
 //! Counts `word_token`, `numeric_token`, `identifier_like_token`, and

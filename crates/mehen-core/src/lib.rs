@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-core` — parser-neutral domain types and analyzer traits.
 //!
 //! This crate is the contract layer between language analyzers and the

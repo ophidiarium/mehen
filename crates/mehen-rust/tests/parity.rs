@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Parity / improvement snapshots for the ra_ap_syntax-backed Rust
 //! analyzer. Each test reproduces a Rust syntactic construct where
 //! ra_ap_syntax's typed AST gives a strictly better answer than the

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Documentation Maintainability Index (DMI) per §10.
 //!
 //! After Phase D ships, every §10.1 term is wired:

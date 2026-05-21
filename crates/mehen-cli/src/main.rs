@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen` — 1.0 CLI binary.
 //!
 //! `metrics` runs through the new architecture (mehen-engine + per-language

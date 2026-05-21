@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Native diagram parsers used by §12.2 Diagram Complexity.
 //!
 //! Mermaid is parsed structurally (nodes, edges, connected components,

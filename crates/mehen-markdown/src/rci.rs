@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Review Criticality Index (RCI) per §18.
 //!
 //! RCI answers: "Should I review this document carefully?" A small document

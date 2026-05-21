@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Line classification for the Markdown LOC family (§5).
 //!
 //! Each physical line of the source is assigned to exactly one class:

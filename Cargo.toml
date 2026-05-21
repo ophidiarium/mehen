@@ -37,7 +37,7 @@ authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
 edition = "2024"
 rust-version = "1.95.0"
 repository = "https://github.com/ophidiarium/mehen"
-license = "MPL-2.0"
+license = "AGPL-3.0-only"
 
 [workspace.dependencies]
 # Internal crates (path-only, never published)

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! ra_ap_syntax-based walker that produces a populated `MetricSpace`.
 //!
 //! Mirrors the per-space `State` accumulator pattern used by

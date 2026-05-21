@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! JTF (Japan Translation Federation) Japanese Style Guide conformance
 //! (§36.5). Tier-0 rules 1, 3, 5, 7, 8, 11 are mechanically checkable.
 //!

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! NArgs tests, ported from
 //! `crates/mehen-engine/src/legacy/metrics/nargs.rs::tests` per the
 //! same `functions_min`/`closures_min` correction documented for

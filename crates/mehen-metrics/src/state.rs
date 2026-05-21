@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Per-space accumulator state and metric publishing helpers.
 //!
 //! This module owns the *generic* metric bookkeeping that every language

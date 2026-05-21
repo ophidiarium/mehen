@@ -232,4 +232,4 @@ Contributions are welcome via issues and pull requests:
 
 ## License
 
-`mehen` is released under the [Mozilla Public License v2.0](https://www.mozilla.org/MPL/2.0/).
+`mehen` is released under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).

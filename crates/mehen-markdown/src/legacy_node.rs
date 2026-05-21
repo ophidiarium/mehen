@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `Node`/`Cursor` wrapper used internally by the Markdown analyzer.
 //!
 //! Ported from the pre-1.0 `src/node.rs` with the macro-generated

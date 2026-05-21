@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Shared scaffolding for per-language tree-sitter walkers.
 //!
 //! Every per-language walker (Go, C, Kotlin, …) shares the same shape:

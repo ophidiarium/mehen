@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Exit code contract for the 1.0 CLI (rewrite plan §4.1).
 
 #[derive(Debug, Clone, Copy)]

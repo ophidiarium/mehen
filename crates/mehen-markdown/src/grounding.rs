@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Repository Grounding Score (§15) and Evidence Coverage Score (§16).
 //!
 //! Grounding captures how strongly a Markdown document ties back to concrete

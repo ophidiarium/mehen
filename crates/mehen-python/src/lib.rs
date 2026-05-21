@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-python` — Python language analyzer.
 //!
 //! Phase 6 implementation: Ruff-backed analyzer (`ruff_python_parser` +

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! ABC metric tests for the Go walker.
 //!
 //! Every legacy `check_metrics::<GoParser>` ABC test from

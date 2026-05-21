@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-git` — git/repository operations and changed-file detection.
 //!
 //! Per rewrite plan §8.1, this is the home of the pre-1.0 `src/git.rs`

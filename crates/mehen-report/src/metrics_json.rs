@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Per-metric JSON renderer.
 //!
 //! Per the rewrite plan §9.1, `mehen metrics --format json` emits a

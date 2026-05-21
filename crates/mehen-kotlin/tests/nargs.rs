@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! NArgs tests for the tree-sitter-kotlin walker.
 
 use mehen_core::{AnalysisConfig, Language, LanguageAnalyzer, SourceFile};

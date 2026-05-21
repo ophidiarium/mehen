@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Visual and diagram metrics per §12.
 //!
 //! Visuals are either images (`image` or `image_block`) or diagrams (fenced

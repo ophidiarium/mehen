@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Ruby Prism AST walker that produces a populated `MetricSpace`.
 //!
 //! Recursion is driven by ruby-prism's

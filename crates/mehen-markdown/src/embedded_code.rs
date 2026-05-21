@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! §9.4 embedded-code adjustment.
 //!
 //! For every supported fenced code block — `rust`, `ts`/`tsx`, `py`, `go`,

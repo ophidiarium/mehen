@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Japanese prose pipeline (§§34–36).
 //!
 //! Tier-0 only. Works on concatenated block text. Sub-modules:

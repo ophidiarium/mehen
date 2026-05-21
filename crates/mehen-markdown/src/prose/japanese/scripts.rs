@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Japanese Unicode-script classification and script-run statistics
 //! (§§34.1–34.4).
 //!

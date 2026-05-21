@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Template-catalog linter covering §39.5.2 / §39.5.3 at test time.
 //!
 //! Complements `scripts/check_pr_template_catalog.sh`: both run the same

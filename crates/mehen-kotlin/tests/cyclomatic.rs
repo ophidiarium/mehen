@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Cyclomatic complexity tests for the tree-sitter-kotlin walker.
 //!
 //! Every legacy `check_metrics::<KotlinParser>` cyclomatic test from

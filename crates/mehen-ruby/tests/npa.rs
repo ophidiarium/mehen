@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! NPA tests for the Phase 9 ruby-prism walker.
 
 use mehen_core::{AnalysisConfig, Language, LanguageAnalyzer, SourceFile};

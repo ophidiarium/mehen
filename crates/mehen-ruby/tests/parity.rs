@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Ruby-specific tests for the Phase 9 ruby-prism walker — exercises
 //! Ruby idioms the legacy tree-sitter walker handled incompletely or
 //! had no fixture for. Per the rewrite plan §6.5 the prism migration

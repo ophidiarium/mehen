@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Markdown Cognitive Complexity (MCC) per §8.
 //!
 //! Walks the AST, accumulates per-element base weights from §8.1, applies the

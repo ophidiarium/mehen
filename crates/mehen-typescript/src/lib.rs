@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-typescript` — TypeScript, JavaScript, TSX, and JSX analyzer.
 //!
 //! Phase 7 implementation: Oxc-backed analyzer (`oxc_parser` +

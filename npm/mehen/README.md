@@ -106,4 +106,4 @@ Requires Node.js >= 18.
 
 ## License
 
-[MPL-2.0](https://www.mozilla.org/MPL/2.0/)
+[AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html)

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Table burden and scaffolding metrics per §13.
 //!
 //! For each `pipe_table` node we compute dimensions (rows, cols, cells),

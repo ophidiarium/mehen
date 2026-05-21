@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Golden-output snapshot tests for the Markdown PR-comment section (§39.9).
 //!
 //! Each test fixture exercises one of the §39 paths documented in the

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Language-aware prose metric layer (§§29–38).
 //!
 //! This module adds a *separate* top-level `prose` section to the Markdown

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Derived section tree per §3.4.
 //!
 //! The tree-sitter-markdown-text grammar produces a natively nested `section`

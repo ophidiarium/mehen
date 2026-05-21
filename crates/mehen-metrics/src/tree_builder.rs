@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 use mehen_core::{MetricSet, MetricSpace, SourceSpan, SpaceId, SpaceKind};
 
 /// Helper that assembles a `MetricSpace` tree with stable, monotonically

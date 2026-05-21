@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Parity / divergence snapshots for the Ruff-backed Python analyzer.
 //!
 //! Each test reproduces a relevant pre-1.0 `mehen-engine::legacy`

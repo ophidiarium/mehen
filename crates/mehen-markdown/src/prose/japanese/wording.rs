@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Japanese wording heuristics (§§36.1–36.7).
 //!
 //! Tier-0: all checks run off static lists and regex-free substring matches

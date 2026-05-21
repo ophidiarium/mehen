@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Shared §4 helpers used across Phase C modules.
 //!
 //! `clamp01` and `sat` appear in nearly every formula from §§11–19; rather

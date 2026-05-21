@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! English prose pipeline (§§31–33).
 //!
 //! Works on a concatenated-across-blocks plain-text string, post-stripping.

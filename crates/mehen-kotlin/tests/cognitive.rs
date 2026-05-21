@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Cognitive complexity tests for the tree-sitter-kotlin walker.
 //!
 //! Ports the legacy `kotlin_*` cognitive tests from

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen-ruby` — Ruby language analyzer.
 //!
 //! Phase 9 implementation: ruby-prism-backed walker. Replaces the

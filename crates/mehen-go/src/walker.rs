@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Tree-sitter-go walker producing per-space metric output that matches
 //! the pre-1.0 `legacy::metrics::*::compute for GoCode` arms exactly.
 //!

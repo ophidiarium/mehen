@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! ABC tests for the C walker.
 //!
 //! Every legacy `check_metrics::<CParser>` ABC test from

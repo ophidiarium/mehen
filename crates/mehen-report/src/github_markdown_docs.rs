@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Markdown Documentation Metrics section for the `mehen diff` sticky PR
 //! comment, §39 of `docs/mehen_markdown_metrics_research_foundation.md`.
 //!

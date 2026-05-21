@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Filler / Lazy Structure Risk per §17.
 //!
 //! Each sub-score below matches the research-foundation formula exactly.

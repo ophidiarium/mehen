@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Block-level neighborhood lookups shared by tables, visuals, and code.
 //!
 //! Several §§11–14 formulas ask whether a prose block explains or

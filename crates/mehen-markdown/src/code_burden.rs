@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Per-fence code burden per §14.1.
 //!
 //! For each `fenced_code_block`, we compute:

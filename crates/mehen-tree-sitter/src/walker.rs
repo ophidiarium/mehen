@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Reusable walker scaffolding for tree-sitter-backed analyzers.
 //!
 //! Each language analyzer crate plugs its decision/operator/operand rules

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! PowerShell NArgs tests, ported from
 //! `src/metrics/nargs.rs::tests` per rewrite plan §8.2.
 //!

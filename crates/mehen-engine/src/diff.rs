@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! `mehen diff` orchestrator.
 //!
 //! Walks `mehen-git`'s changed-file list, analyzes each file at base and

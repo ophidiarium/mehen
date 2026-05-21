@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
+
 //! Line-based Mermaid parser covering `graph`, `flowchart`, `stateDiagram`,
 //! and `sequenceDiagram` shapes. This is intentionally narrow: §12.2 only
 //! needs node/edge/connected-component/cycle counts, not semantic fidelity.
