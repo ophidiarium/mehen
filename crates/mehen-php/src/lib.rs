@@ -61,7 +61,8 @@ impl LanguageAnalyzer for PhpAnalyzer {
         // accumulator pattern already guarantees.
         let arena = Bump::new();
         let file_id = FileId::zero();
-        let program = mago_syntax::parser::parse_file_content(&arena, file_id, &source.text);
+        let program =
+            mago_syntax::parser::parse_file_content(&arena, file_id, source.text.as_bytes());
 
         // Recovered Mago syntax errors are surfaced as `error` (not
         // `warning`) so the diagnostic contract (plan §9.3) treats the

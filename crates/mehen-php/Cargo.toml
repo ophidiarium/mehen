@@ -12,11 +12,17 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
-mago-syntax = { workspace = true }
-mago-syntax-core = { workspace = true }
-mago-database = { workspace = true }
-mago-span = { workspace = true }
-bumpalo = { workspace = true }
+# `mago-*` and `bumpalo` are pinned here (not in
+# `[workspace.dependencies]`) because `mehen-php` is the only consumer.
+# All four mago crates ship in lockstep — bump them together. PHP
+# keyword case-insensitivity, promoted properties, hooked properties,
+# match, attributes, etc. are first-class in mago's typed AST.
+# `bumpalo` is the arena allocator mago's parser writes into.
+mago-syntax = "=1.28.0"
+mago-syntax-core = "=1.28.0"
+mago-database = "=1.28.0"
+mago-span = "=1.28.0"
+bumpalo = "^3.16"
 smol_str = { workspace = true }
 
 [dev-dependencies]

@@ -248,9 +248,9 @@ impl<'a> Visitor<'a> {
                 Err(_) => continue,
             };
             // Mago tokens carry only `start: Position` and the literal
-            // `value: &str`; the end offset is start + value's byte
-            // length (which is what `Position` arithmetic does on every
-            // other code path in mago-syntax).
+            // `value: &[u8]` (raw source bytes); the end offset is
+            // start + value length, which is what `Position`
+            // arithmetic does on every other code path in mago-syntax.
             let s = token.start.offset;
             let e = s + token.value.len() as u32;
             match classify_token(token.kind) {
@@ -266,13 +266,14 @@ impl<'a> Visitor<'a> {
                     );
                 }
                 TokenClass::Operand(kind) => {
+                    let text = String::from_utf8_lossy(token.value);
                     self.halstead_routing.observe_operand(
                         s,
                         e,
                         &mut self.stack[0].halstead,
                         HalsteadOperand {
                             kind: SmolStr::new(kind),
-                            text: Some(SmolStr::new(token.value)),
+                            text: Some(SmolStr::new(text.as_ref())),
                         },
                     );
                 }
@@ -734,6 +735,17 @@ fn php_modifiers_are_public(
     })
 }
 
+/// Mago 1.28 switched identifier and token `value` fields from
+/// `&str` to `&[u8]` (PHP source bytes are not guaranteed UTF-8 in
+/// the literal-string lexer state). Identifiers themselves must be
+/// PHP-valid (ASCII letters / digits / `_` / `\\`), so a lossy
+/// conversion is exact in practice; for arbitrary token bytes we
+/// accept the U+FFFD replacement on the rare invalid sequence
+/// rather than failing the analysis.
+fn bytes_to_string(value: &[u8]) -> String {
+    String::from_utf8_lossy(value).into_owned()
+}
+
 /// PHP method names are case-insensitive — `__construct`, `__CONSTRUCT`,
 /// and `__Construct` are all the constructor.
 fn is_constructor(name: &str) -> bool {
@@ -760,7 +772,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
         ctx.current().loc.observe_lloc();
 
         ctx.enter_function_like(SpaceKind::Function);
-        let name = function.name.value.to_string();
+        let name = bytes_to_string(function.name.value);
         ctx.open_space(SpaceKind::Function, function.span(), Some(name));
 
         let argc = function.parameter_list.parameters.iter().count() as u32;
@@ -779,7 +791,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
 
         ctx.record_method(method);
 
-        let name = method.name.value.to_string();
+        let name = bytes_to_string(method.name.value);
         let constructor = is_constructor(&name);
 
         // Attribute promoted constructor properties NOW (before we
@@ -856,7 +868,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
         // Class declaration is itself an LLOC line on its enclosing
         // space (legacy `ClassDeclaration`).
         ctx.current().loc.observe_lloc();
-        let name = class.name.value.to_string();
+        let name = bytes_to_string(class.name.value);
         ctx.open_space(SpaceKind::Class, class.span(), Some(name));
     }
     fn walk_out_class(&self, _class: &Class<'arena>, ctx: &mut Visitor<'_>) {
@@ -865,7 +877,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
 
     fn walk_in_interface(&self, interface: &Interface<'arena>, ctx: &mut Visitor<'_>) {
         ctx.current().loc.observe_lloc();
-        let name = interface.name.value.to_string();
+        let name = bytes_to_string(interface.name.value);
         ctx.open_space(SpaceKind::Interface, interface.span(), Some(name));
     }
     fn walk_out_interface(&self, _i: &Interface<'arena>, ctx: &mut Visitor<'_>) {
@@ -874,7 +886,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
 
     fn walk_in_trait(&self, t: &Trait<'arena>, ctx: &mut Visitor<'_>) {
         ctx.current().loc.observe_lloc();
-        let name = t.name.value.to_string();
+        let name = bytes_to_string(t.name.value);
         ctx.open_space(SpaceKind::Trait, t.span(), Some(name));
     }
     fn walk_out_trait(&self, _t: &Trait<'arena>, ctx: &mut Visitor<'_>) {
@@ -883,7 +895,7 @@ impl<'arena> Walker<'_, 'arena, Visitor<'_>> for MehenPhpWalker {
 
     fn walk_in_enum(&self, e: &Enum<'arena>, ctx: &mut Visitor<'_>) {
         ctx.current().loc.observe_lloc();
-        let name = e.name.value.to_string();
+        let name = bytes_to_string(e.name.value);
         ctx.open_space(SpaceKind::Enum, e.span(), Some(name));
     }
     fn walk_out_enum(&self, _e: &Enum<'arena>, ctx: &mut Visitor<'_>) {
