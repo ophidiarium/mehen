@@ -1,0 +1,18 @@
+[package]
+name = "enums"
+version = "0.0.1"
+authors = ["Konstantin Vyatkin <tino@vtkn.io>"]
+edition = "2024"
+
+[dependencies]
+clap = { version = "^4.0", features = ["derive"] }
+askama = "^0.14"
+
+tree-sitter = "=0.25.3"
+tree-sitter-typescript = "=0.23.2"
+tree-sitter-python = "=0.23.6"
+tree-sitter-rust = "=0.23.2"
+tree-sitter-go = "=0.23.4"
+
+[profile.release]
+strip = "debuginfo"
