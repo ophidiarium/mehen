@@ -12,9 +12,15 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
-ruff_python_parser = { workspace = true }
-ruff_python_ast = { workspace = true }
-ruff_text_size = { workspace = true }
+# Ruff — replaces tree-sitter-python for this analyzer. Pinned here
+# (not in `[workspace.dependencies]`) because `mehen-python` is the
+# only consumer. Ruff's parser / AST / text-size crates are
+# unpublished upstream (`publish = false`), so we pin a tagged git
+# revision. All three crates must stay in lockstep so derive macros
+# and AST types align — bump them together.
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.15.14" }
+ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.15.14" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.15.14" }
 smol_str = { workspace = true }
 
 [dev-dependencies]
