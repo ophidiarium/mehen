@@ -48,16 +48,20 @@ fi
 ## Snapshot Tests (`insta`)
 `insta` is heavily used in metric tests.
 
+Always pass `--workspace`. Without it, `cargo insta` only runs tests
+from the default-member (`mehen-cli`) and reports every other crate's
+snapshots as `unreferenced`, making `--unreferenced reject` falsely fail.
+
 Check snapshots (CI-style):
 
 ```bash
-cargo insta test --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+cargo insta test --workspace --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
 ```
 
 Update snapshots intentionally:
 
 ```bash
-cargo insta test --all-features --review --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+cargo insta test --workspace --all-features --review --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
 ```
 
 ## Language/Grammar Changes
