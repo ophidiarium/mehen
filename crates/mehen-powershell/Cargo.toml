@@ -15,7 +15,9 @@ mehen-metrics = { workspace = true }
 mehen-tree-sitter = { workspace = true }
 smol_str = { workspace = true }
 tree-sitter = { workspace = true }
-tree-sitter-pwsh = { workspace = true }
+# `tree-sitter-pwsh` is pinned here (not in `[workspace.dependencies]`)
+# because `mehen-powershell` is the only consumer.
+tree-sitter-pwsh = "=0.38.1"
 
 [dev-dependencies]
 # Tests render the per-metric JSON family object so snapshots match the

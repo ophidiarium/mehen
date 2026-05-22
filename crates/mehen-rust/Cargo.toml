@@ -12,7 +12,16 @@ publish = false
 [dependencies]
 mehen-core = { workspace = true }
 mehen-metrics = { workspace = true }
-ra_ap_syntax = { workspace = true }
+# `ra_ap_syntax` — replaces tree-sitter-rust for this analyzer. Pinned
+# here (not in `[workspace.dependencies]`) because `mehen-rust` is the
+# only consumer. Per the rewrite plan §6.1 we promote rust-analyzer's
+# parser/syntax stack from "later" to "now" because it exposes the richer
+# AST that tree-sitter cannot represent (typed expressions, op_kind,
+# let-chains, etc.) without forcing the workspace onto nightly via
+# rustc_private. Pinned to a specific 0.0.x release because rust-analyzer
+# auto-publishes weekly and breaking changes at the AST level are not
+# semver-tracked. Bump deliberately.
+ra_ap_syntax = "=0.0.333"
 smol_str = { workspace = true }
 
 [dev-dependencies]

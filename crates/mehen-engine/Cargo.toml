@@ -30,13 +30,17 @@ mehen-powershell = { workspace = true, optional = true }
 
 camino = { workspace = true }
 clap = { workspace = true }
-crossbeam = { workspace = true }
-globset = { workspace = true }
+# `crossbeam`, `globset`, and `walkdir` are pinned here (not in
+# `[workspace.dependencies]`) because `mehen-engine` is the only consumer
+# — concurrency, ignore-pattern matching, and recursive directory walks
+# are engine-only concerns.
+crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
+globset = "^0.4"
+walkdir = "^2.3"
 gix = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-walkdir = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
