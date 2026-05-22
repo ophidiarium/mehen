@@ -58,83 +58,30 @@ mehen-engine = { path = "crates/mehen-engine" }
 mehen-git = { path = "crates/mehen-git" }
 mehen-report = { path = "crates/mehen-report" }
 
-# Shared third-party deps with pinned versions
+# Shared third-party deps with pinned versions. Single-consumer deps
+# (e.g. `oxc_*`, `ra_ap_syntax`, `ruby-prism`, `crossbeam`, `env_logger`,
+# `globset`, `regex`, `walkdir`, `tree-sitter-pwsh`, `unicode-*`) are
+# pinned inline in their consuming crate's `Cargo.toml` instead of here.
 camino = { version = "^1.1", features = ["serde1"] }
 clap = { version = "^4.6", features = ["derive"] }
-crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
-env_logger = "^0.11"
-globset = "^0.4"
 log = "^0.4"
 num = "^0.4"
 num-derive = "^0.4"
-num-format = "^0.4"
 num-traits = "^0.2"
-owo-colors = "^4"
-regex = "^1.7"
 serde = { version = "^1.0", features = ["derive"] }
-serde_cbor = "^0.11"
 serde_json = "^1.0"
-serde_norway = "^0.9"
 smol_str = { version = "^0.3", features = ["serde"] }
-toml = "^1.1"
-walkdir = "^2.3"
 gix = { version = "^0.83", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
 
 tree-sitter = "=0.26.9"
-
-# Oxc — replaces tree-sitter-typescript for the JS/TS/JSX/TSX analyzer
-# (`crates/mehen-typescript`). Pinned to the same patch revision so all
-# Oxc crates stay in sync; mismatched versions panic at AST type level.
-oxc_allocator = "=0.132.0"
-oxc_ast = "=0.132.0"
-oxc_ast_visit = "=0.132.0"
-oxc_parser = "=0.132.0"
-oxc_span = "=0.132.0"
-oxc_syntax = "=0.132.0"
-
-# ra_ap_syntax — replaces tree-sitter-rust for the Rust analyzer
-# (`crates/mehen-rust`). Per the rewrite plan §6.1 we promote rust-analyzer's
-# parser/syntax stack from "later" to "now" because it exposes the richer
-# AST that tree-sitter cannot represent (typed expressions, op_kind,
-# let-chains, etc.) without forcing the workspace onto nightly via
-# rustc_private. Pinned to a specific 0.0.x release because rust-analyzer
-# auto-publishes weekly and breaking changes at the AST level are not
-# semver-tracked. Bump deliberately.
-ra_ap_syntax = "=0.0.333"
-
-# ruby-prism — replaces tree-sitter-ruby for the Ruby analyzer
-# (`crates/mehen-ruby`). Per the rewrite plan §6.5 we move to Ruby's
-# canonical Prism parser so modifier forms (`x if y`, `expr rescue`),
-# pattern matching (`case…in`), endless methods, safe navigation (`&.`),
-# numbered block parameters, and all the Ruby-3-era syntax the
-# tree-sitter grammar lags on become first-class.
-#
-# License audit (plan §6.5): `ruby-prism` (MIT, Ian Ker-Seymer / Steve
-# Loveless / Kevin Newton), `ruby-prism-sys` (MIT), and the bundled
-# upstream Prism C parser (MIT, Shopify Inc.) are all permissive — no
-# copyleft conflict with mehen's licensing.
-#
-# Build prerequisites (plan §6.5 — "Windows CI/release jobs must
-# install the required native toolchain"): `ruby-prism-sys` invokes
-# `bindgen 0.72` unconditionally and compiles vendored Prism C via
-# `cc`, so every release target needs `libclang` and a C toolchain
-# at build time. Linux/macOS GitHub-hosted runners have these
-# preinstalled; Windows runners need `LIBCLANG_PATH` (e.g.
-# `choco install llvm`); musl builds need `clang-dev`. The release
-# binary path means end users do not need any of this — only people
-# building `mehen` from source.
-ruby-prism = "=1.9.0"
-
-tree-sitter-go = "=0.25.0"
-# `tree-sitter-ruby` was removed in this phase (Phase 9 Prism) — Ruby
-# now flows through `mehen-ruby` (ruby-prism) per plan §6.5.
-tree-sitter-kotlin = { package = "tree-sitter-kotlin-sg", version = "=0.4.0" }
-tree-sitter-pwsh = "=0.38.1"
-# `tree-sitter-c` removed from the workspace pin in this phase —
-# `mehen-c` is the sole consumer and now pins the version inline.
-tree-sitter-markdown-text = "=0.2.1"
-unicode-script = "^0.5"
-unicode-segmentation = "^1.12"
+# Per-language grammars (`tree-sitter-c`, `tree-sitter-go`,
+# `tree-sitter-kotlin`, `tree-sitter-markdown-text`, `tree-sitter-pwsh`)
+# are pinned inline in their consuming analyzer crate. xtask reaches
+# each grammar through the analyzer's `__grammar_language()` accessor
+# instead of pinning grammars itself, so the kind-enum generator and
+# the runtime parser always link the same revision.
+# `tree-sitter-ruby` was removed in Phase 9 (Prism) — Ruby now flows
+# through `mehen-ruby` (ruby-prism) per plan §6.5.
 
 insta = { version = "1.47.2", features = ["yaml", "json", "redactions"] }
 pretty_assertions = "^1.3"

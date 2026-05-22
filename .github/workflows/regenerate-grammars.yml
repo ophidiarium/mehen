@@ -38,26 +38,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Sync inline tree-sitter pins to xtask and per-crate Cargo.toml
-        run: |
-          # Most grammar pins live in root [workspace.dependencies] and
-          # are referenced as `{ workspace = true }` from xtask and the
-          # owning per-language crate, so dependabot's root-Cargo.toml
-          # bump is enough. The exception is `tree-sitter-c`, which is
-          # inline-pinned in both `xtask/Cargo.toml` and
-          # `crates/mehen-c/Cargo.toml` to keep the workspace-pin set
-          # tight (only `mehen-c` consumes it). When dependabot bumps
-          # the inline pin in either of those, mirror it into the other
-          # so the kind-enum generator and analyzer link the same
-          # grammar version.
-          for pkg in tree-sitter-c; do
-            line=$(grep -h "^${pkg} = " xtask/Cargo.toml crates/mehen-c/Cargo.toml | head -n 1)
-            if [ -n "$line" ]; then
-              sed -i "s|^${pkg} = .*|${line}|" xtask/Cargo.toml crates/mehen-c/Cargo.toml
-            fi
-          done
-          echo "Inline pins after sync:"
-          grep -H "^tree-sitter-c" xtask/Cargo.toml crates/mehen-c/Cargo.toml
+      # No pin-sync step: each tree-sitter grammar is pinned exactly
+      # once, in its owning analyzer crate's `Cargo.toml`. xtask reaches
+      # the grammar through that crate's `__grammar_language()` accessor,
+      # so dependabot's bump in `crates/mehen-<lang>/Cargo.toml`
+      # propagates to the kind-enum generator automatically.
 
       - name: Set up Rust toolchain
         run: rustup show

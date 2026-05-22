@@ -4397,11 +4397,11 @@ version = "0.7.0"
 dependencies = [
  "askama",
  "clap",
+ "mehen-c",
+ "mehen-go",
+ "mehen-kotlin",
+ "mehen-markdown",
  "tree-sitter",
- "tree-sitter-c",
- "tree-sitter-go",
- "tree-sitter-kotlin-sg",
- "tree-sitter-markdown-text",
 ]
 
 [[package]]
