@@ -18,6 +18,15 @@ use mehen_core::{
 };
 use mehen_tree_sitter::{TreeSitterParser, collect_recovered_errors, empty_space};
 
+/// Tree-sitter `Language` accessor for `xtask tree-sitter generate`.
+///
+/// Exposed so the kind-enum generator reaches the grammar through this
+/// crate instead of pinning `tree-sitter-kotlin` itself.
+#[doc(hidden)]
+pub fn __grammar_language() -> tree_sitter::Language {
+    tree_sitter_kotlin::LANGUAGE.into()
+}
+
 pub struct KotlinAnalyzer;
 
 impl KotlinAnalyzer {

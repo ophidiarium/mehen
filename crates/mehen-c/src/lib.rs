@@ -18,6 +18,17 @@ use mehen_core::{
 };
 use mehen_tree_sitter::{TreeSitterParser, collect_recovered_errors, empty_space};
 
+/// Tree-sitter `Language` accessor for `xtask tree-sitter generate`.
+///
+/// Exposed so the kind-enum generator reaches the grammar through this
+/// crate instead of pinning `tree-sitter-c` itself, which kept xtask's
+/// pin and the analyzer's pin in lockstep by hand. With this accessor,
+/// the analyzer's pin is the single source of truth.
+#[doc(hidden)]
+pub fn __grammar_language() -> tree_sitter::Language {
+    tree_sitter_c::LANGUAGE.into()
+}
+
 pub struct CAnalyzer;
 
 impl CAnalyzer {

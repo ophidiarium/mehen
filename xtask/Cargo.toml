@@ -15,19 +15,19 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
-# Tree-sitter generator dependencies. xtask owns kind-enum codegen for
-# every per-language analyzer crate that walks a tree-sitter CST. Each
-# grammar pin must match the version the owning crate links against;
-# otherwise generated kind ordinals would drift from the runtime
-# language. The corresponding `mehen-<lang>/Cargo.toml` files keep their
-# own grammar dependency so the analyzer code links against the same
-# grammar at runtime.
 askama = "^0.16"
 tree-sitter = { workspace = true }
-tree-sitter-c = "=0.24.2"
-tree-sitter-go = { workspace = true }
-tree-sitter-kotlin = { workspace = true }
-tree-sitter-markdown-text = { workspace = true }
+# Kind-enum codegen reaches each grammar through the owning analyzer
+# crate's `__grammar_language()` accessor (see
+# `xtask/src/tree_sitter.rs::TARGETS`). The analyzer's grammar pin is
+# the single source of truth, so xtask deliberately does NOT depend on
+# `tree-sitter-c`, `tree-sitter-go`, `tree-sitter-kotlin`, or
+# `tree-sitter-markdown-text` directly — that keeps the codegen and
+# the runtime parser locked to the same revision by construction.
+mehen-c = { workspace = true }
+mehen-go = { workspace = true }
+mehen-kotlin = { workspace = true }
+mehen-markdown = { workspace = true }
 
 [lints]
 workspace = true

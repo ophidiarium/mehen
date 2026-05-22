@@ -7,10 +7,13 @@
 //! check-generated` regenerates every grammar to a tempdir and exits
 //! non-zero if the result diverges from what's checked in.
 //!
-//! The grammar pins live in `xtask/Cargo.toml` and must stay aligned
-//! with the per-language crate's own grammar pin — otherwise the
-//! ordinals in the generated enum would drift from the grammar the
-//! analyzer links at runtime.
+//! Each entry in [`TARGETS`] reaches its grammar through the analyzer
+//! crate's `__grammar_language()` accessor (see e.g.
+//! `mehen_go::__grammar_language`). That makes the analyzer crate the
+//! sole owner of the grammar pin: dependabot bumping
+//! `tree-sitter-go = "=0.25.x"` in `crates/mehen-go/Cargo.toml`
+//! propagates to xtask through the `mehen-go` path dep, so kind
+//! ordinals always match the grammar the analyzer links at runtime.
 //!
 //! The generator itself is a small askama template (see
 //! `xtask/templates/grammar.rs`); the heavy lifting is the kind-name
@@ -48,25 +51,25 @@ pub(crate) const TARGETS: &[GeneratorTarget] = &[
         slug: "c",
         enum_name: "C",
         crate_dir: "crates/mehen-c/src",
-        language: || tree_sitter_c::LANGUAGE.into(),
+        language: mehen_c::__grammar_language,
     },
     GeneratorTarget {
         slug: "go",
         enum_name: "Go",
         crate_dir: "crates/mehen-go/src",
-        language: || tree_sitter_go::LANGUAGE.into(),
+        language: mehen_go::__grammar_language,
     },
     GeneratorTarget {
         slug: "kotlin",
         enum_name: "Kotlin",
         crate_dir: "crates/mehen-kotlin/src",
-        language: || tree_sitter_kotlin::LANGUAGE.into(),
+        language: mehen_kotlin::__grammar_language,
     },
     GeneratorTarget {
         slug: "markdown",
         enum_name: "Markdown",
         crate_dir: "crates/mehen-markdown/src",
-        language: || tree_sitter_markdown_text::LANGUAGE.into(),
+        language: mehen_markdown::__grammar_language,
     },
 ];
 

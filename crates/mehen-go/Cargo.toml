@@ -21,7 +21,12 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 smol_str = { workspace = true }
 tree-sitter = { workspace = true }
-tree-sitter-go = { workspace = true }
+# `tree-sitter-go` is pinned here (not in `[workspace.dependencies]`)
+# because `mehen-go` is the sole consumer. xtask reaches the grammar
+# through `__grammar_language()` exported from this crate, so the
+# kind-enum generator and the analyzer parser are guaranteed to link
+# the same revision.
+tree-sitter-go = "=0.25.0"
 
 [dev-dependencies]
 insta = { workspace = true }

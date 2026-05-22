@@ -56,6 +56,15 @@ mod words;
 pub use analyzer::analyze_markdown;
 pub use embedded_code::{EmbeddedFenceMetrics, FenceLanguage, set_legacy_dispatch};
 
+/// Tree-sitter `Language` accessor for `xtask tree-sitter generate`.
+///
+/// Exposed so the kind-enum generator reaches the grammar through this
+/// crate instead of pinning `tree-sitter-markdown-text` itself.
+#[doc(hidden)]
+pub fn __grammar_language() -> tree_sitter::Language {
+    tree_sitter_markdown_text::LANGUAGE.into()
+}
+
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricKey,
     MetricSet, MetricSpace, SourceFile, SourceSpan, SpaceId, SpaceKind, byte_offset_clamped,
