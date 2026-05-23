@@ -74,15 +74,15 @@ complexity:
   halstead:
     operators_distinct: 6
     operators_total: 39
-    operands_distinct: 79
-    operands_total: 94
-    vocabulary: 85
-    length: 133
-    volume: 852.4489945063143
-    difficulty: 3.5696202531645564
-    effort: 3042.9191955795013
+    operands_distinct: 78
+    operands_total: 93
+    vocabulary: 84
+    length: 132
+    volume: 843.7858998067965
+    difficulty: 3.5769230769230766
+    effort: 3018.157257001233
     embedded_volume: 0
-    total_volume: 852.4489945063143
+    total_volume: 843.7858998067965
 links:
   total: 14
   internal: 2

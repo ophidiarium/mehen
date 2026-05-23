@@ -29,6 +29,7 @@ use std::collections::BTreeMap;
 use crate::document::MarkdownDocument;
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
+use crate::tree_helpers::find_resolved_link_dest;
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -196,12 +197,20 @@ impl Ctx<'_, '_, '_> {
 
             // Link / image wrappers — each whole `Link` is one operator
             // occurrence for `[…](…)`. Inner LinkLabel prose descends as
-            // operand text; the LinkDestination descends as an operand path.
+            // operand text; destination operands are resolved here so
+            // reference-style links use the definition target instead of the
+            // local reference key.
             Link => {
                 self.bump_op(OperatorKind::LinkOp);
+                if let Some(dest) = find_resolved_link_dest(node, self.source, self.document) {
+                    self.bump_operand(dest);
+                }
             }
             Image => {
                 self.bump_op(OperatorKind::ImageOp);
+                if let Some(dest) = find_resolved_link_dest(node, self.source, self.document) {
+                    self.bump_operand(dest);
+                }
             }
 
             // Code fences: record the language tag as the operator's
@@ -294,10 +303,20 @@ impl Ctx<'_, '_, '_> {
                 self.push_text_operand(node);
             }
 
-            // Link destinations — operand (URL).
-            LinkDestination | LinkDestinationParenthesis | Uri => {
+            // Link definitions are plumbing for reference-style links. The
+            // rendered link use owns the semantic destination operand.
+            LinkReferenceDefinition => {
+                descend = false;
+            }
+
+            // Link destinations are handled at the `Link` / `Image` wrapper
+            // so reference-style links can resolve semantically. Autolink
+            // URIs have no wrapper destination, so keep counting those here.
+            LinkDestination | LinkDestinationParenthesis => {
+                descend = false;
+            }
+            Uri => {
                 self.push_text_operand(node);
-                // Don't descend further into URL text.
                 descend = false;
             }
 
@@ -398,10 +417,41 @@ fn sha_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn compute(src: &str) -> Halstead {
         let (tree, document) = crate::syntax_tree::parse_with_document(src);
         compute_halstead(&tree.root(), &document, src)
+    }
+
+    fn operand_counts(src: &str) -> BTreeMap<String, u64> {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        let mut operator_counts = BTreeMap::new();
+        let mut operand_counts = BTreeMap::new();
+        let mut state = Ctx {
+            operator_counts: &mut operator_counts,
+            operand_counts: &mut operand_counts,
+            source: src,
+            document: &document,
+        };
+        state.walk(&tree.root());
+        operand_counts
+    }
+
+    fn assert_halstead_close(a: &Halstead, b: &Halstead) {
+        assert_eq!(a.operators_distinct, b.operators_distinct);
+        assert_eq!(a.operators_total, b.operators_total);
+        assert_eq!(a.operands_distinct, b.operands_distinct);
+        assert_eq!(a.operands_total, b.operands_total);
+        assert_eq!(a.vocabulary, b.vocabulary);
+        assert_eq!(a.length, b.length);
+        assert!((a.volume - b.volume).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!((a.difficulty - b.difficulty).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!((a.effort - b.effort).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!(
+            (a.total_volume - b.total_volume).abs() < 1e-9,
+            "{a:?} != {b:?}"
+        );
     }
 
     #[test]
@@ -441,5 +491,43 @@ mod tests {
         assert!(h.operators_distinct >= 3);
         // The URL is one operand; `See` and `here` are word operands.
         assert!(h.operands_distinct >= 3);
+    }
+
+    #[test]
+    fn reference_style_link_destinations_match_inline_halstead() {
+        let inline = "# H\n\nSee [docs](https://example.com).\n";
+        let cases = [
+            "# H\n\nSee [docs][api].\n\n[api]: https://example.com\n",
+            "# H\n\nSee [docs][].\n\n[docs]: https://example.com\n",
+            "# H\n\nSee [docs].\n\n[docs]: https://example.com\n",
+        ];
+
+        let expected = compute(inline);
+        for reference in cases {
+            let actual = compute(reference);
+            assert_halstead_close(&expected, &actual);
+        }
+
+        let full_reference_operands = operand_counts(cases[0]);
+        assert_eq!(full_reference_operands.get("https://example.com"), Some(&1));
+        assert!(
+            !full_reference_operands.contains_key("api"),
+            "reference key leaked into Halstead operands: {full_reference_operands:?}"
+        );
+    }
+
+    #[test]
+    fn reference_style_image_destinations_match_inline_halstead() {
+        let inline = "# H\n\n![diagram](https://example.com/diagram.png)\n";
+        let reference = "# H\n\n![diagram][asset]\n\n[asset]: https://example.com/diagram.png\n";
+
+        assert_halstead_close(&compute(inline), &compute(reference));
+
+        let operands = operand_counts(reference);
+        assert_eq!(operands.get("https://example.com/diagram.png"), Some(&1));
+        assert!(
+            !operands.contains_key("asset"),
+            "image reference key leaked into Halstead operands: {operands:?}"
+        );
     }
 }
