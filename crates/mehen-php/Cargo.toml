@@ -22,7 +22,7 @@ mago-syntax = "=1.28.0"
 mago-syntax-core = "=1.28.0"
 mago-database = "=1.28.0"
 mago-span = "=1.28.0"
-bumpalo = "^3.16"
+bumpalo = "^3.20"
 smol_str = { workspace = true }
 
 [dev-dependencies]
