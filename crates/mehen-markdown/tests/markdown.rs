@@ -16,14 +16,12 @@ use std::path::PathBuf;
 use mehen_markdown::analyze_markdown;
 use mehen_markdown::diagrams;
 
-/// Register the legacy embedded-code dispatch once per test process.
+/// Register the embedded-code dispatch once per test process.
 ///
 /// Tests that exercise fenced-code metrics need a real
 /// `volume`/`cognitive_sum`/`sloc` for each fence body. The dispatch
 /// callback is registered globally via `OnceLock`, so multiple `init`
-/// calls are idempotent. Phase-6+ replaces the legacy bridge with the
-/// rewrite-plan §4.7 `LanguageDispatcher` driven by the new
-/// per-language analyzer crates.
+/// calls are idempotent.
 fn ensure_dispatch() {
     mehen_engine::init_markdown();
 }

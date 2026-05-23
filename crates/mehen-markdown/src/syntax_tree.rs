@@ -10,10 +10,14 @@
 use std::ops::Range;
 
 use pulldown_cmark::{
-    Alignment, BlockQuoteKind, BrokenLink, CodeBlockKind, CowStr, Event, HeadingLevel, LinkType,
-    MetadataBlockKind, Options, Parser, Tag, TagEnd,
+    Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, LinkType, MetadataBlockKind,
+    Parser, Tag, TagEnd,
 };
 
+use crate::document::{
+    DocumentBuilder, MarkdownDocument, ReferenceDefinition, line_starts, markdown_options,
+    preserve_broken_reference_link, reference_definitions_from_source, row_at,
+};
 use crate::grammar::Markdown;
 
 #[derive(Debug)]
@@ -32,13 +36,6 @@ struct NodeData {
     end_col: usize,
     children: Vec<usize>,
     fields: Vec<(&'static str, usize)>,
-}
-
-struct RefDefData {
-    label: String,
-    dest: String,
-    title: Option<String>,
-    span: Range<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -146,8 +143,13 @@ impl<'a> Cursor<'a> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn parse(source: &str) -> Tree {
-    Builder::new(source).parse()
+    parse_with_document(source).0
+}
+
+pub(crate) fn parse_with_document(source: &str) -> (Tree, MarkdownDocument) {
+    Builder::new(source).parse_with_document()
 }
 
 struct Builder<'a> {
@@ -171,44 +173,27 @@ impl<'a> Builder<'a> {
         builder
     }
 
-    fn parse(mut self) -> Tree {
-        let options = Options::ENABLE_TABLES
-            | Options::ENABLE_FOOTNOTES
-            | Options::ENABLE_STRIKETHROUGH
-            | Options::ENABLE_TASKLISTS
-            | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-            | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
-            | Options::ENABLE_MATH
-            | Options::ENABLE_GFM
-            | Options::ENABLE_WIKILINKS;
-
+    fn parse_with_document(mut self) -> (Tree, MarkdownDocument) {
+        let reference_definitions = reference_definitions_from_source(self.source);
+        let mut document = DocumentBuilder::new(self.source, reference_definitions.clone());
         let parser = Parser::new_with_broken_link_callback(
             self.source,
-            options,
+            markdown_options(),
             Some(preserve_broken_reference_link),
         );
         let offset_iter = parser.into_offset_iter();
-        let refdefs: Vec<RefDefData> = offset_iter
-            .reference_definitions()
-            .iter()
-            .map(|(label, def)| RefDefData {
-                label: label.to_string(),
-                dest: def.dest.to_string(),
-                title: def.title.as_ref().map(ToString::to_string),
-                span: def.span.clone(),
-            })
-            .collect();
 
         for (event, range) in offset_iter {
+            document.handle_event(event.clone(), range.clone());
             self.handle_event(event, range);
         }
 
-        self.add_reference_definitions(refdefs);
+        self.add_reference_definitions(reference_definitions);
         self.recompute_empty_spans();
         self.wrap_sections();
         self.recompute_all_spans();
 
-        Tree { nodes: self.nodes }
+        (Tree { nodes: self.nodes }, document.finish())
     }
 
     fn handle_event(&mut self, event: Event<'a>, range: Range<usize>) {
@@ -639,31 +624,13 @@ impl<'a> Builder<'a> {
         self.add_child_to(parent, kind, range);
     }
 
-    fn add_reference_definitions(&mut self, refdefs: Vec<RefDefData>) {
+    fn add_reference_definitions(&mut self, refdefs: Vec<ReferenceDefinition>) {
         for def in refdefs {
             let node = self.add_child_to(0, Markdown::LinkReferenceDefinition, def.span.clone());
-            if let Some(label_range) =
-                find_label_definition_range(self.source, &def.span, &def.label)
-            {
-                self.add_child_to(node, Markdown::LinkLabel, label_range);
-            }
-            let dest_range = if !def.dest.is_empty() {
-                find_reference_definition_destination_range(self.source, &def.span, &def.dest)
-            } else {
-                None
-            };
-            if let Some(dest_range) = dest_range.clone() {
-                self.add_child_to(node, Markdown::LinkDestination, dest_range);
-            }
-            if let Some(title) = def.title.as_ref()
-                && let Some(title_range) = find_reference_definition_title_range(
-                    self.source,
-                    &def.span,
-                    title,
-                    dest_range.as_ref(),
-                )
-            {
-                self.add_child_to(node, Markdown::LinkTitle, title_range);
+            self.add_child_to(node, Markdown::LinkLabel, def.label_span);
+            self.add_child_to(node, Markdown::LinkDestination, def.destination_span);
+            if let Some(title_span) = def.title_span {
+                self.add_child_to(node, Markdown::LinkTitle, title_span);
             }
         }
     }
@@ -837,23 +804,9 @@ impl<'a> Builder<'a> {
 
     fn position(&self, byte: usize) -> (usize, usize) {
         let byte = byte.min(self.source.len());
-        let row = match self.line_starts.binary_search(&byte) {
-            Ok(row) => row,
-            Err(0) => 0,
-            Err(row) => row - 1,
-        };
+        let row = row_at(&self.line_starts, self.source.len(), byte);
         (row, byte.saturating_sub(self.line_starts[row]))
     }
-}
-
-fn line_starts(source: &str) -> Vec<usize> {
-    let mut out = vec![0];
-    for (idx, byte) in source.bytes().enumerate() {
-        if byte == b'\n' {
-            out.push(idx + 1);
-        }
-    }
-    out
 }
 
 fn clamp_range(range: Range<usize>, len: usize) -> Range<usize> {
@@ -868,10 +821,6 @@ fn empty_at(byte: usize) -> Range<usize> {
 
 fn first_byte(byte: usize) -> Range<usize> {
     byte..byte.saturating_add(1)
-}
-
-fn preserve_broken_reference_link<'a>(_link: BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a>)> {
-    Some(("".into(), "".into()))
 }
 
 fn heading_kinds(
@@ -1035,19 +984,6 @@ fn find_footnote_label_range(
     find_in_range(source, range, &format!("[^{label}]"))
 }
 
-fn find_label_definition_range(
-    source: &str,
-    range: &Range<usize>,
-    label: &str,
-) -> Option<Range<usize>> {
-    find_in_range(source, range, &format!("[{label}]")).or_else(|| {
-        let slice = source.get(range.clone())?;
-        let open = slice.find('[')?;
-        let close = slice[open..].find(']')?;
-        Some(range.start + open..range.start + open + close + 1)
-    })
-}
-
 fn find_link_destination_range(
     source: &str,
     range: &Range<usize>,
@@ -1104,33 +1040,6 @@ fn trim_byte_range(source: &str, range: Range<usize>) -> Option<Range<usize>> {
     let end_offset = slice.trim_end().len();
     let trimmed = range.start + start_offset..range.start + end_offset;
     (trimmed.start < trimmed.end).then_some(trimmed)
-}
-
-fn find_reference_definition_destination_range(
-    source: &str,
-    range: &Range<usize>,
-    destination: &str,
-) -> Option<Range<usize>> {
-    let search_range = reference_definition_payload_range(source, range)?;
-    find_in_range(source, &search_range, destination)
-}
-
-fn find_reference_definition_title_range(
-    source: &str,
-    range: &Range<usize>,
-    title: &str,
-    destination: Option<&Range<usize>>,
-) -> Option<Range<usize>> {
-    let search_range = destination
-        .map(|dest| dest.end..range.end)
-        .or_else(|| reference_definition_payload_range(source, range))?;
-    find_in_range(source, &search_range, title)
-}
-
-fn reference_definition_payload_range(source: &str, range: &Range<usize>) -> Option<Range<usize>> {
-    let slice = source.get(range.clone())?;
-    let label_end = slice.find("]:")? + 2;
-    Some(range.start + label_end..range.end)
 }
 
 fn inline_code_content_range(source: &str, range: &Range<usize>, text: &str) -> Range<usize> {
@@ -1330,6 +1239,48 @@ mod tests {
         assert_eq!(node_text(&tree, source, destination), "foo");
         assert_eq!(tree.nodes[title].start_byte, 12);
         assert_eq!(node_text(&tree, source, title), "foo");
+    }
+
+    #[test]
+    fn duplicate_reference_definitions_are_preserved() {
+        let source = "[dup]: /one\n[dup]: /two\n";
+        let tree = parse(source);
+        let destinations = tree
+            .nodes
+            .iter()
+            .filter(|node| node.kind == Markdown::LinkDestination)
+            .map(|node| &source[node.start_byte..node.end_byte])
+            .collect::<Vec<_>>();
+
+        assert_eq!(destinations, vec!["/one", "/two"]);
+    }
+
+    #[test]
+    fn reference_definition_label_allows_escaped_closing_bracket() {
+        let source = "[foo\\]]: /url\n";
+        let tree = parse(source);
+        let label = first_node(&tree, Markdown::LinkLabel);
+        let destination = first_node(&tree, Markdown::LinkDestination);
+
+        assert_eq!(node_text(&tree, source, label), "[foo\\]]");
+        assert_eq!(node_text(&tree, source, destination), "/url");
+    }
+
+    #[test]
+    fn footnote_definition_is_not_link_reference_definition() {
+        let source = "[^1]: footnote text\n";
+        let tree = parse(source);
+
+        assert!(
+            tree.nodes
+                .iter()
+                .all(|node| node.kind != Markdown::LinkReferenceDefinition)
+        );
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|node| node.kind == Markdown::FootnoteDefinition)
+        );
     }
 
     #[test]

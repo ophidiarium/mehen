@@ -13,12 +13,10 @@
 //!                 + 0.10 * loc_c
 //! ```
 //!
-//! The dispatch is decoupled from this crate via [`set_legacy_dispatch`]:
+//! The dispatch is decoupled from this crate via [`set_embedded_dispatch`]:
 //! the markdown crate doesn't depend on the per-language analyzers
-//! directly. The legacy `mehen` library (during the v1 transition) and
-//! the `mehen-engine` registry (post-transition, plan §4.7
-//! `LanguageDispatcher` seam) both supply a callback that maps a
-//! fence-language code + body to numeric volume/cognitive/sloc.
+//! directly. `mehen-engine` supplies a callback that maps a fence-language
+//! code + body to numeric volume/cognitive/sloc.
 
 use std::sync::OnceLock;
 
@@ -44,7 +42,7 @@ pub enum FenceLanguage {
 }
 
 /// Metrics extracted from one fenced code block. Returned by the
-/// dispatch callback registered through [`set_legacy_dispatch`].
+/// dispatch callback registered through [`set_embedded_dispatch`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EmbeddedFenceMetrics {
     pub volume: f64,
@@ -58,12 +56,9 @@ static DISPATCH: OnceLock<DispatchFn> = OnceLock::new();
 
 /// Register the embedded-code dispatch callback.
 ///
-/// Called by `mehen::init_markdown` (the legacy library) at startup so
-/// the physically-moved markdown analyzer can still drive
-/// `langs::get_function_spaces` for fence bodies. The post-transition
-/// `mehen-engine` will register a `LanguageDispatcher`-backed callback
-/// here instead.
-pub fn set_legacy_dispatch(f: DispatchFn) {
+/// Called by `mehen_engine::init_markdown` at startup so the Markdown
+/// analyzer can drive the language registry for fence bodies.
+pub fn set_embedded_dispatch(f: DispatchFn) {
     let _ = DISPATCH.set(f);
 }
 

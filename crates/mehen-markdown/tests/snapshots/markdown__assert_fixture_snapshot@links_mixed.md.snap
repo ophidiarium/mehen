@@ -1,6 +1,5 @@
 ---
 source: crates/mehen-markdown/tests/markdown.rs
-assertion_line: 49
 ---
 path: "<fixture_path>"
 loc:
@@ -77,8 +76,8 @@ complexity:
 links:
   total: 13
   internal: 2
-  relative: 5
-  external: 5
+  relative: 4
+  external: 6
   external_vendor: 1
   scholarly: 1
   issue_pr: 1
@@ -88,8 +87,8 @@ links:
   bare_url: 1
   broken: 3
   link_debt_score: 0.7536538461538462
-  information_scent_score: 0.4507692307692308
-  review_burden: 17.6
+  information_scent_score: 0.5038461538461538
+  review_burden: 17.8
 link_records:
   - line: 3
     class: internal
@@ -157,17 +156,17 @@ link_records:
   - line: 15
     class: reference_definition
     destination: ""
-    text: abc-ref
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 15
-    class: reference_definition
-    destination: ""
     text: nope
     is_image: false
     is_bare_url: false
     resolved: false
+  - line: 15
+    class: external
+    destination: "https://example.org"
+    text: abc
+    is_image: false
+    is_bare_url: false
+    resolved: ~
   - line: 17
     class: footnote
     destination: "1"
@@ -204,15 +203,15 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 82.01197802197802
+  documentation_maintainability_index: 82.22016483516484
   section_balance_score: 0.85
-  good_scaffold_score: 0.11761538461538462
+  good_scaffold_score: 0.12557692307692309
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0.10714285714285714
   evidence_coverage_score: 0.4230769230769231
 ai_era:
-  filler_lazy_structure_risk: 0.4671428571428572
+  filler_lazy_structure_risk: 0.45642857142857146
   labels:
     - low-artifact-density
     - low-repository-grounding

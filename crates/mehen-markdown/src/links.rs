@@ -3,12 +3,12 @@
 
 //! Link classification, debt, and scent metrics per §11.
 //!
-//! This module walks the AST for every `link`, `image`, `autolink`,
-//! `footnote_reference`, and `link_reference_definition` node, classifies
-//! them per §11.1, and computes the aggregate scores in §11.2–§11.4. Internal
-//! anchors are resolved against the heading slug table (GFM rules) derived
-//! directly from source bytes, and relative paths are resolved against the
-//! filesystem (scanning relative to the directory of the source file).
+//! This module classifies pulldown-cmark document facts for every link,
+//! image, autolink, footnote reference, and link reference definition. It
+//! computes the aggregate scores in §11.2-§11.4. Internal anchors are resolved
+//! against a GFM-style heading slug table, and relative paths are resolved
+//! against the filesystem (scanning relative to the directory of the source
+//! file).
 //! External URLs are never checked on the network by default — they are
 //! tagged `unchecked` (`resolved = None`) and a future `--link-check` flag
 //! will wire up active probing.
@@ -16,32 +16,58 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::grammar::Markdown;
+use crate::document::{LinkUse, LinkUseKind, MarkdownDocument, normalize_reference_label};
 use crate::mathops::{clamp01, sat};
-use crate::syntax_tree::Node;
-use crate::tree_helpers::{find_first, node_text};
 use crate::types::{LinkClass, LinkRecord, Links, Section};
 
-/// Entry point. Walks the tree, classifies every link/image/autolink/footnote
-/// node, resolves anchors + relative paths, and returns a deterministic
-/// record vector plus the aggregate Links struct.
+/// Entry point. Classifies every link/image/autolink/footnote fact, resolves
+/// anchors + relative paths, and returns a deterministic record vector plus
+/// the aggregate Links struct.
 pub(crate) fn analyze_links(
-    root: &Node<'_>,
-    source: &str,
+    document: &MarkdownDocument,
     file_path: &Path,
     sections: &[Section],
     same_repo_prefixes: &[String],
 ) -> (Vec<LinkRecord>, Links) {
-    let anchors = collect_anchor_slugs(root, source);
-    let footnote_labels = collect_footnote_labels(root, source);
+    let anchors = collect_anchor_slugs(document);
+    let footnote_labels = collect_footnote_labels(document);
     let base_dir = file_path
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let definition_labels = collect_reference_definition_labels(root, source);
     let mut records: Vec<LinkRecord> = Vec::new();
-    collect_links(root, source, &mut records);
+    let definitions = document.reference_definition_labels();
+
+    for definition in &document.reference_definitions {
+        records.push(LinkRecord {
+            line: definition.line,
+            class: LinkClass::ReferenceDefinition,
+            destination: definition.destination.clone(),
+            text: definition.label.clone(),
+            is_image: false,
+            is_bare_url: false,
+            resolved: None,
+        });
+    }
+
+    for link in &document.links {
+        if let Some(record) = classify_link_or_image(link) {
+            records.push(record);
+        }
+    }
+
+    for footnote in &document.footnote_references {
+        records.push(LinkRecord {
+            line: footnote.line,
+            class: LinkClass::Footnote,
+            destination: footnote.label.clone(),
+            text: format!("[^{}]", footnote.label),
+            is_image: false,
+            is_bare_url: false,
+            resolved: None,
+        });
+    }
 
     // Resolve internal anchors + relative paths + reference shortcuts.
     for r in records.iter_mut() {
@@ -51,10 +77,14 @@ pub(crate) fn analyze_links(
                 r.resolved = Some(anchors.contains(&slug));
             }
             LinkClass::Relative => {
-                let (path_part, fragment) = split_fragment(&r.destination);
-                let file_ok = resolve_relative(&base_dir, path_part);
-                let fragment_ok = fragment_ok_same_file(fragment, &anchors, path_part);
-                r.resolved = Some(file_ok && fragment_ok);
+                if r.destination.trim().is_empty() {
+                    r.resolved = Some(false);
+                } else {
+                    let (path_part, fragment) = split_fragment(&r.destination);
+                    let file_ok = resolve_relative(&base_dir, path_part);
+                    let fragment_ok = fragment_ok_same_file(fragment, &anchors, path_part);
+                    r.resolved = Some(file_ok && fragment_ok);
+                }
             }
             LinkClass::AbsoluteSameRepo
             | LinkClass::External
@@ -71,12 +101,12 @@ pub(crate) fn analyze_links(
             }
         }
 
-        // If this is a reference-style link (shortcut or collapsed `[abc]`)
-        // that we classified as ReferenceDefinition because we couldn't see
-        // a destination on the link itself, re-classify based on whether
-        // the label matches a known definition.
+        // If this is an unresolved reference-style use (`[abc]`, `[abc][]`,
+        // or `[visible][abc]`), pulldown called our broken-link callback and
+        // left the destination empty. Resolve it against the known reference
+        // labels so the record explicitly says whether the reference exists.
         if r.class == LinkClass::ReferenceDefinition && !r.is_bare_url && r.destination.is_empty() {
-            let resolved = definition_labels.contains(&r.text.to_lowercase());
+            let resolved = definitions.contains_key(normalize_reference_label(&r.text).as_str());
             r.resolved = Some(resolved);
         }
 
@@ -103,186 +133,42 @@ pub(crate) fn analyze_links(
     (records, aggregate)
 }
 
-fn collect_reference_definition_labels(root: &Node<'_>, source: &str) -> HashSet<String> {
-    let mut labels = HashSet::new();
-    collect_reference_definition_labels_rec(root, source, &mut labels);
-    labels
-}
+fn classify_link_or_image(link: &LinkUse) -> Option<LinkRecord> {
+    let (class, destination, text) =
+        if link.kind.is_reference_style() && link.destination.is_empty() {
+            let reference = link
+                .reference_label
+                .as_deref()
+                .filter(|label| !label.is_empty())
+                .unwrap_or_else(|| link.text.trim());
+            (
+                LinkClass::ReferenceDefinition,
+                String::new(),
+                reference.to_string(),
+            )
+        } else {
+            let destination = link.destination.clone();
+            let class = match link.kind {
+                LinkUseKind::Email => LinkClass::External,
+                _ => classify_destination(&destination),
+            };
+            (class, destination, link.text.clone())
+        };
 
-fn collect_reference_definition_labels_rec(
-    node: &Node<'_>,
-    source: &str,
-    labels: &mut HashSet<String>,
-) {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::LinkReferenceDefinition) {
-        if let Some(label) = find_first(node, Markdown::LinkLabel)
-            .and_then(|label| text_inside_label(&label, source))
-        {
-            labels.insert(label.to_lowercase());
-        }
-        return;
-    }
-
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            collect_reference_definition_labels_rec(&cursor.node(), source, labels);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-}
-
-fn collect_links(node: &Node<'_>, source: &str, records: &mut Vec<LinkRecord>) {
-    use Markdown::*;
-    let kind: Markdown = node.kind_id().into();
-    match kind {
-        Link | Image | ImageBlock => {
-            let is_image = matches!(kind, Image | ImageBlock);
-            if let Some(record) = classify_link_or_image(node, source, is_image) {
-                records.push(record);
-            }
-            // Don't recurse — nested link labels would otherwise be
-            // double-counted. Reference-style shortcuts like `[abc][def]`
-            // surface as two Link nodes the grammar already splits for us.
-            return;
-        }
-        Autolink => {
-            if let Some(record) = classify_autolink(node, source) {
-                records.push(record);
-            }
-            return;
-        }
-        FootnoteReference => {
-            if let Some(record) = classify_footnote_reference(node, source) {
-                records.push(record);
-            }
-            return;
-        }
-        LinkReferenceDefinition => {
-            if let Some(record) = classify_reference_definition(node, source) {
-                records.push(record);
-            }
-            return;
-        }
-        _ => {}
-    }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            collect_links(&cursor.node(), source, records);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-}
-
-fn classify_link_or_image(node: &Node<'_>, source: &str, is_image: bool) -> Option<LinkRecord> {
-    let line = (node.start_row() as u64) + 1;
-    let label = find_first(node, Markdown::LinkLabel).and_then(|n| text_inside_label(&n, source));
-    let destination = find_first(node, Markdown::LinkDestination).map(|n| node_text(&n, source));
-    let (class, dest, text) = if is_full_reference_style_link(node, source)
-        && let Some(reference_key) = destination.as_ref().map(|dest| dest.trim().to_string())
-    {
-        (LinkClass::ReferenceDefinition, String::new(), reference_key)
-    } else if let Some(dest) = destination {
-        let text = label.clone().unwrap_or_default();
-        (classify_destination(&dest), dest, text)
-    } else if let Some(label_text) = label.clone() {
-        // Shortcut / collapsed reference: `[abc]` or `[abc][]`. The label
-        // doubles as the reference key. Resolution happens against the
-        // definition table in `analyze_links`.
-        (LinkClass::ReferenceDefinition, String::new(), label_text)
-    } else {
+    if destination.is_empty() && text.is_empty() {
         return None;
-    };
+    }
 
-    let is_bare_url = !text.is_empty() && text.trim() == dest.trim() && looks_like_url(&dest);
+    let is_bare_url = matches!(link.kind, LinkUseKind::Autolink | LinkUseKind::Email)
+        || (!text.is_empty() && text.trim() == destination.trim() && looks_like_url(&destination));
 
     Some(LinkRecord {
-        line,
+        line: link.line,
         class,
-        destination: dest,
-        text,
-        is_image,
-        is_bare_url,
-        resolved: None,
-    })
-}
-
-fn is_full_reference_style_link(node: &Node<'_>, source: &str) -> bool {
-    let text = node_text(node, source);
-    let Some(close) = text.rfind(']') else {
-        return false;
-    };
-    let Some(open) = text[..close].rfind('[') else {
-        return false;
-    };
-    open > 0 && text[..open].ends_with(']') && !text[open + 1..close].trim().is_empty()
-}
-
-fn classify_autolink(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
-    let line = (node.start_row() as u64) + 1;
-    let uri = find_first(node, Markdown::Uri)
-        .or_else(|| find_first(node, Markdown::Email))
-        .map(|n| node_text(&n, source))?;
-    let class = if uri.contains('@') && !uri.starts_with("mailto:") {
-        LinkClass::External
-    } else {
-        classify_destination(&uri)
-    };
-    Some(LinkRecord {
-        line,
-        class,
-        destination: uri.clone(),
-        text: uri,
-        is_image: false,
-        is_bare_url: true,
-        resolved: None,
-    })
-}
-
-fn classify_footnote_reference(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
-    let line = (node.start_row() as u64) + 1;
-    let raw_label =
-        find_first(node, Markdown::FootnoteReferenceLabel).map(|n| node_text(&n, source))?;
-    let label = normalize_footnote_label(&raw_label);
-    Some(LinkRecord {
-        line,
-        class: LinkClass::Footnote,
-        destination: label.clone(),
-        text: format!("[^{label}]"),
-        is_image: false,
-        is_bare_url: false,
-        resolved: None,
-    })
-}
-
-fn normalize_footnote_label(label: &str) -> String {
-    label
-        .trim()
-        .trim_start_matches("[^")
-        .trim_start_matches('^')
-        .trim_end_matches(']')
-        .trim()
-        .to_string()
-}
-
-fn classify_reference_definition(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
-    let line = (node.start_row() as u64) + 1;
-    let label =
-        find_first(node, Markdown::LinkLabel).and_then(|n| text_inside_label(&n, source))?;
-    let destination = find_first(node, Markdown::LinkDestination).map(|n| node_text(&n, source))?;
-    Some(LinkRecord {
-        line,
-        class: LinkClass::ReferenceDefinition,
         destination,
-        text: label,
-        is_image: false,
-        is_bare_url: false,
+        text,
+        is_image: link.is_image,
+        is_bare_url,
         resolved: None,
     })
 }
@@ -493,35 +379,15 @@ fn slugify_fragment(s: &str) -> String {
     slugify(s.trim_start_matches('#'))
 }
 
-/// Walk every heading in the document and compute its slug from the heading
-/// text bytes in the source. This is independent of the Phase-A section
-/// tree, which does not currently extract heading text.
-fn collect_anchor_slugs(root: &Node<'_>, source: &str) -> HashSet<String> {
+/// Compute GitHub-style anchor slugs from pulldown heading text.
+fn collect_anchor_slugs(document: &MarkdownDocument) -> HashSet<String> {
     let mut out: HashSet<String> = HashSet::new();
-    collect_heading_slugs(root, source, &mut out);
-    out
-}
-
-fn collect_heading_slugs(node: &Node<'_>, source: &str, out: &mut HashSet<String>) {
-    use Markdown::*;
-    let kind: Markdown = node.kind_id().into();
-    let is_heading = matches!(
-        kind,
-        AtxHeading
-            | AtxHeading2
-            | AtxHeading3
-            | AtxHeading4
-            | AtxHeading5
-            | AtxHeading6
-            | SetextHeading
-            | SetextHeading2
-    );
-    if is_heading && let Some(text) = heading_text(node, source) {
+    for heading in &document.headings {
         // GitHub-style de-duplication: the first heading with a given slug
         // keeps the bare slug; subsequent headings get `-1`, `-2`, etc.
         // appended. Anchor links like `#intro-1` in a doc with two
         // `## Intro` headings should resolve to the second one.
-        let base = slugify(&text);
+        let base = slugify(&heading.text);
         if out.insert(base.clone()) {
             // first occurrence
         } else {
@@ -533,79 +399,15 @@ fn collect_heading_slugs(node: &Node<'_>, source: &str, out: &mut HashSet<String
             }
         }
     }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            collect_heading_slugs(&cursor.node(), source, out);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-}
-
-fn heading_text(heading: &Node<'_>, source: &str) -> Option<String> {
-    // Walk the heading's children, strip the leading `#*` / underline markers,
-    // and concatenate word-like token text. This is an approximation that
-    // works well enough for slugification in Phase C.
-    let start = heading.start_byte();
-    let end = heading.end_byte();
-    let raw = &source.as_bytes()[start..end];
-    let s = String::from_utf8_lossy(raw);
-    let trimmed = s.trim();
-    // Strip setext underline rows ("===", "---") if present.
-    let line = trimmed.lines().next().unwrap_or("").trim();
-    // Drop leading `#` markers and any trailing `#` markers per CommonMark.
-    let text = line.trim_start_matches('#').trim();
-    let text = text.trim_end_matches('#').trim();
-    if text.is_empty() {
-        None
-    } else {
-        Some(text.to_string())
-    }
-}
-
-fn collect_footnote_labels(root: &Node<'_>, source: &str) -> HashSet<String> {
-    let mut out: HashSet<String> = HashSet::new();
-    collect_footnote_labels_rec(root, source, &mut out);
     out
 }
 
-fn collect_footnote_labels_rec(node: &Node<'_>, source: &str, out: &mut HashSet<String>) {
-    use Markdown::*;
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, FootnoteDefinition)
-        && let Some(label) = find_first(node, FootnoteLabel)
-    {
-        let text = node_text(&label, source);
-        out.insert(normalize_footnote_label(&text));
-        return;
-    }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            collect_footnote_labels_rec(&cursor.node(), source, out);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-}
-
-fn text_inside_label(label: &Node<'_>, source: &str) -> Option<String> {
-    let s = node_text(label, source);
-    let trimmed = s
-        .trim()
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .trim_start_matches('^')
-        .trim()
-        .to_string();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
+fn collect_footnote_labels(document: &MarkdownDocument) -> HashSet<String> {
+    document
+        .footnote_definitions
+        .iter()
+        .map(|definition| definition.label.clone())
+        .collect()
 }
 
 fn aggregate_links(records: &[LinkRecord], sections: &[Section]) -> Links {
@@ -848,9 +650,8 @@ mod tests {
         // heading slugs. Anchor collection must match so `#intro-1` on
         // a doc with two `## Intro` headings resolves cleanly.
         let src = "## Intro\n\nfirst\n\n## Intro\n\nsecond\n\n## Intro\n\nthird\n";
-        let tree = crate::syntax_tree::parse(src);
-        let root = tree.root();
-        let slugs = collect_anchor_slugs(&root, src);
+        let document = crate::document::parse_document(src);
+        let slugs = collect_anchor_slugs(&document);
         assert!(slugs.contains("intro"), "base slug present");
         assert!(slugs.contains("intro-1"), "second occurrence gets -1");
         assert!(slugs.contains("intro-2"), "third occurrence gets -2");
@@ -861,9 +662,8 @@ mod tests {
     #[test]
     fn unresolved_reference_link_does_not_resolve_against_itself() {
         let src = "See [missing][nope].\n";
-        let tree = crate::syntax_tree::parse(src);
-        let root = tree.root();
-        let (records, _) = analyze_links(&root, src, Path::new("README.md"), &[], &[]);
+        let document = crate::document::parse_document(src);
+        let (records, _) = analyze_links(&document, Path::new("README.md"), &[], &[]);
 
         let missing = records
             .iter()
@@ -873,18 +673,74 @@ mod tests {
     }
 
     #[test]
-    fn full_reference_link_resolves_with_reference_key_not_visible_text() {
-        let src = "See [visible][ref].\n\n[ref]: docs.md\n";
-        let tree = crate::syntax_tree::parse(src);
-        let root = tree.root();
-        let (records, aggregate) = analyze_links(&root, src, Path::new("README.md"), &[], &[]);
+    fn empty_inline_link_is_unresolved() {
+        let src = "See [placeholder]().\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        let placeholder = records
+            .iter()
+            .find(|record| record.text == "placeholder")
+            .expect("empty inline link record");
+        assert_eq!(placeholder.class, LinkClass::Relative);
+        assert_eq!(placeholder.resolved, Some(false));
+        assert_eq!(aggregate.broken, 1);
+    }
+
+    #[test]
+    fn autolinks_are_bare_links() {
+        let src = "See <https://example.com> and <team@example.com>.\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        assert_eq!(records.len(), 2);
+        assert!(records.iter().all(|record| record.is_bare_url));
+        assert_eq!(aggregate.bare_url, 2);
+    }
+
+    #[test]
+    fn duplicate_reference_definitions_are_counted() {
+        let src = "[dup]: /one\n[dup]: /two\n";
+        let document = crate::document::parse_document(src);
+        let (records, _) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        let destinations = records
+            .iter()
+            .filter(|record| record.class == LinkClass::ReferenceDefinition)
+            .map(|record| record.destination.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(destinations, vec!["/one", "/two"]);
+    }
+
+    #[test]
+    fn escaped_reference_label_resolves() {
+        let src = "# Target\n\n[foo\\]]: #target\n\nSee [visible][foo\\]].\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
 
         let link_use = records
             .iter()
-            .find(|record| record.line == 1)
+            .find(|record| record.text == "visible")
+            .expect("escaped-label reference use");
+        assert_eq!(link_use.class, LinkClass::Internal);
+        assert_eq!(link_use.destination, "#target");
+        assert_eq!(link_use.resolved, Some(true));
+        assert_eq!(aggregate.broken, 0);
+    }
+
+    #[test]
+    fn full_reference_link_resolves_with_reference_key_not_visible_text() {
+        let src = "# Target\n\nSee [visible][ref].\n\n[ref]: #target\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        let link_use = records
+            .iter()
+            .find(|record| record.line == 3)
             .expect("reference link use");
-        assert_eq!(link_use.class, LinkClass::ReferenceDefinition);
-        assert_eq!(link_use.text, "ref");
+        assert_eq!(link_use.class, LinkClass::Internal);
+        assert_eq!(link_use.destination, "#target");
+        assert_eq!(link_use.text, "visible");
         assert_eq!(link_use.resolved, Some(true));
         assert_eq!(aggregate.broken, 0);
     }

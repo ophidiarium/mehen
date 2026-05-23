@@ -153,28 +153,28 @@ link_records:
   - line: 5
     class: relative
     destination: "../README.md"
-    text: "`ophidiarium/mehen`"
+    text: ophidiarium/mehen
     is_image: false
     is_bare_url: false
     resolved: false
   - line: 27
     class: relative
     destination: "../README.md"
-    text: "`migrations/0018_docs_index.sql`"
+    text: migrations/0018_docs_index.sql
     is_image: false
     is_bare_url: false
     resolved: false
   - line: 79
     class: relative
     destination: "../docs/mehen_markdown_metrics_research_foundation.md"
-    text: "`docs/mehen_markdown_metrics_research_foundation.md`"
+    text: docs/mehen_markdown_metrics_research_foundation.md
     is_image: false
     is_bare_url: false
     resolved: false
   - line: 101
     class: relative
     destination: "../README.md"
-    text: "`config/defaults.yaml`"
+    text: config/defaults.yaml
     is_image: false
     is_bare_url: false
     resolved: false

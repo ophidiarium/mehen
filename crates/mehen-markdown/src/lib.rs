@@ -9,15 +9,13 @@
 //! signature so existing fixtures and snapshot tests pass without
 //! modification.
 //!
-//! The internal syntax tree is built from pulldown-cmark events, then mapped
-//! into the existing `grammar::Markdown` kind enum used by the metric passes.
+//! Markdown parsing is centered on pulldown-cmark events. Metric passes that
+//! need document semantics consume `document`; passes that need nested byte
+//! spans use the compact structural tree fed by the same event stream.
 //!
-//! Embedded-code analysis used to dispatch through
-//! `crate::langs::get_function_spaces`. To avoid pulling that
-//! macro-driven machinery into this crate, the legacy `mehen` library
-//! supplies the embedded callback through
-//! [`set_legacy_dispatch`]; a follow-up phase wires the
-//! plan §4.7 `LanguageDispatcher` seam.
+//! Embedded-code analysis is supplied by `mehen-engine` through
+//! [`set_embedded_dispatch`], keeping this crate focused on Markdown
+//! metrics instead of depending on each source-language analyzer crate.
 
 #![allow(clippy::upper_case_acronyms)]
 
@@ -26,6 +24,7 @@ mod artifact_debt;
 mod code_burden;
 pub mod diagrams;
 mod dmi;
+mod document;
 mod ecu;
 mod embedded_code;
 mod evidence;
@@ -53,7 +52,7 @@ mod visuals;
 mod words;
 
 pub use analyzer::analyze_markdown;
-pub use embedded_code::{EmbeddedFenceMetrics, FenceLanguage, set_legacy_dispatch};
+pub use embedded_code::{EmbeddedFenceMetrics, FenceLanguage, set_embedded_dispatch};
 
 use mehen_core::{
     AnalysisBackend, AnalysisConfig, Language, LanguageAnalysis, LanguageAnalyzer, MetricKey,

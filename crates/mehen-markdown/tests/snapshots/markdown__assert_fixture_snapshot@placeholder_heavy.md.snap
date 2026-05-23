@@ -1,6 +1,5 @@
 ---
 source: crates/mehen-markdown/tests/markdown.rs
-assertion_line: 49
 ---
 path: "<fixture_path>"
 loc:
@@ -148,7 +147,7 @@ links:
   bare_url: 0
   broken: 7
   link_debt_score: 0.45
-  information_scent_score: 0.2571428571428571
+  information_scent_score: 0.3
   review_burden: 23.1
 link_records:
   - line: 15
@@ -194,7 +193,7 @@ link_records:
     is_bare_url: false
     resolved: false
   - line: 58
-    class: reference_definition
+    class: relative
     destination: ""
     text: another placeholder
     is_image: false
@@ -215,28 +214,27 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 82.92571428571428
+  documentation_maintainability_index: 83.46999999999998
   section_balance_score: 0.85
-  good_scaffold_score: 0.03857142857142857
+  good_scaffold_score: 0.045
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0
 ai_era:
-  filler_lazy_structure_risk: 0.7300000000000001
+  filler_lazy_structure_risk: 0.6900000000000001
   labels:
-    - hollow-references
     - large-unanchored-prose
     - low-artifact-density
     - low-repository-grounding
     - placeholder-heavy
     - specificity-scarcity
   top_contributors:
-    - - hollow-references
-      - 1
     - - large-unanchored-prose
       - 1
     - - low-artifact-density
+      - 1
+    - - low-repository-grounding
       - 1
 review:
   review_criticality_index: 10.864285714285716
