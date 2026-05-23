@@ -414,9 +414,10 @@ fn compute_per_section_anchors(
                 matches!(l.resolved, Some(true))
             }
             LinkClass::IssuePr => true,
-            LinkClass::AbsoluteSameRepo | LinkClass::Footnote | LinkClass::ReferenceDefinition => {
-                false
-            }
+            LinkClass::AbsoluteSameRepo
+            | LinkClass::Footnote
+            | LinkClass::UnresolvedReferenceUse
+            | LinkClass::ReferenceDefinition => false,
         };
         if !is_anchor {
             continue;

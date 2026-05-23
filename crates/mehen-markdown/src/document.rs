@@ -12,11 +12,9 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-#[cfg(test)]
-use pulldown_cmark::Parser;
 use pulldown_cmark::{
     BrokenLink, CodeBlockKind as PulldownCodeBlockKind, CowStr, Event, HeadingLevel, LinkType,
-    Options, Tag, TagEnd,
+    Options, Parser, Tag, TagEnd,
 };
 
 use crate::source_text::normalize_line_endings;
@@ -212,29 +210,26 @@ pub(crate) fn is_diagram_language(lang: &str) -> bool {
 
 pub(crate) fn reference_definitions_from_source(source: &str) -> Vec<ReferenceDefinition> {
     let line_starts = line_starts(source);
+    let source_blocks = SourceBlockSpans::collect(source);
     let mut definitions = Vec::new();
     let mut cursor = 0;
-    let mut fence: Option<Fence> = None;
 
     while cursor < source.len() {
         let line = next_line_range(source, cursor);
         let line_without_eol = trim_line_ending(source, line.clone());
+        let Some(content_start) = definition_content_start(source, &line_without_eol) else {
+            cursor = line.end;
+            continue;
+        };
 
-        if let Some(active) = fence {
-            if closing_fence(source, &line_without_eol, active) {
-                fence = None;
-            }
+        if source_blocks.suppresses_reference_definition(content_start) {
             cursor = line.end;
             continue;
         }
 
-        if let Some(opening) = opening_fence(source, &line_without_eol) {
-            fence = Some(opening);
-            cursor = line.end;
-            continue;
-        }
-
-        if let Some(definition) = parse_reference_definition_at(source, line.start, &line_starts) {
+        if let Some(definition) =
+            parse_reference_definition_at(source, line.start, content_start, &line_starts)
+        {
             cursor = next_line_start_after(source, definition.span.end);
             definitions.push(definition);
         } else {
@@ -245,10 +240,156 @@ pub(crate) fn reference_definitions_from_source(source: &str) -> Vec<ReferenceDe
     definitions
 }
 
-#[derive(Clone, Copy)]
-struct Fence {
-    marker: u8,
-    len: usize,
+#[derive(Default)]
+struct SourceBlockSpans {
+    code_or_html: Vec<Range<usize>>,
+    paragraphs: Vec<Range<usize>>,
+}
+
+impl SourceBlockSpans {
+    fn collect(source: &str) -> Self {
+        let mut spans = SourceBlockSpans::default();
+        let mut paragraph: Option<Range<usize>> = None;
+        let mut code_block: Option<Range<usize>> = None;
+        let mut html_block: Option<Range<usize>> = None;
+
+        let parser = Parser::new_with_broken_link_callback(
+            source,
+            markdown_options(),
+            Some(preserve_broken_reference_link),
+        );
+
+        for (event, range) in parser.into_offset_iter() {
+            match event {
+                Event::Start(Tag::Paragraph) => paragraph = Some(range),
+                Event::End(TagEnd::Paragraph) => {
+                    push_open_span(&mut spans.paragraphs, paragraph.take(), range)
+                }
+                Event::Start(Tag::CodeBlock(_)) => code_block = Some(range),
+                Event::End(TagEnd::CodeBlock) => {
+                    push_open_span(&mut spans.code_or_html, code_block.take(), range)
+                }
+                Event::Start(Tag::HtmlBlock) => html_block = Some(range),
+                Event::End(TagEnd::HtmlBlock) => {
+                    push_open_span(&mut spans.code_or_html, html_block.take(), range)
+                }
+                Event::Html(_) => {
+                    if let Some(active) = html_block.as_mut() {
+                        active.end = active.end.max(range.end);
+                    } else {
+                        spans.code_or_html.push(range);
+                    }
+                }
+                Event::Text(_)
+                | Event::Code(_)
+                | Event::InlineMath(_)
+                | Event::DisplayMath(_)
+                | Event::InlineHtml(_)
+                | Event::FootnoteReference(_)
+                | Event::SoftBreak
+                | Event::HardBreak
+                | Event::Rule
+                | Event::TaskListMarker(_) => {
+                    if let Some(active) = paragraph.as_mut() {
+                        active.end = active.end.max(range.end);
+                    }
+                    if let Some(active) = code_block.as_mut() {
+                        active.end = active.end.max(range.end);
+                    }
+                    if let Some(active) = html_block.as_mut() {
+                        active.end = active.end.max(range.end);
+                    }
+                }
+                Event::Start(_) | Event::End(_) => {}
+            }
+        }
+
+        spans
+    }
+
+    fn suppresses_reference_definition(&self, byte: usize) -> bool {
+        self.code_or_html
+            .iter()
+            .any(|span| contains_byte(span, byte))
+            || self.paragraphs.iter().any(|span| contains_byte(span, byte))
+    }
+}
+
+fn push_open_span(target: &mut Vec<Range<usize>>, open: Option<Range<usize>>, end: Range<usize>) {
+    if let Some(mut span) = open {
+        span.end = span.end.max(end.end);
+        if span.start < span.end {
+            target.push(span);
+        }
+    }
+}
+
+fn contains_byte(span: &Range<usize>, byte: usize) -> bool {
+    span.start <= byte && byte < span.end
+}
+
+fn definition_content_start(source: &str, range: &Range<usize>) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut cursor = range.start;
+    cursor = skip_spaces_up_to(source, cursor, range.end, 3).0;
+
+    loop {
+        if cursor >= range.end {
+            return Some(cursor);
+        }
+
+        if bytes[cursor] == b'>' {
+            cursor += 1;
+            if cursor < range.end && matches!(bytes[cursor], b' ' | b'\t') {
+                cursor += 1;
+            }
+            cursor = skip_spaces_up_to(source, cursor, range.end, 3).0;
+            continue;
+        }
+
+        if let Some(after_marker) = list_marker_content_start(source, cursor, range.end) {
+            cursor = skip_spaces_up_to(source, after_marker, range.end, 3).0;
+            continue;
+        }
+
+        break;
+    }
+
+    Some(cursor)
+}
+
+fn list_marker_content_start(source: &str, cursor: usize, end: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let marker_end = match bytes.get(cursor)? {
+        b'-' | b'+' | b'*' => cursor + 1,
+        byte if byte.is_ascii_digit() => {
+            let mut cursor = cursor;
+            let mut digits = 0;
+            while cursor < end && bytes[cursor].is_ascii_digit() && digits < 9 {
+                cursor += 1;
+                digits += 1;
+            }
+            if digits == 0 || !matches!(bytes.get(cursor), Some(b'.' | b')')) {
+                return None;
+            }
+            cursor + 1
+        }
+        _ => return None,
+    };
+    if !matches!(bytes.get(marker_end), Some(b' ' | b'\t')) {
+        return None;
+    }
+    Some(skip_spaces(source, marker_end))
+}
+
+fn skip_spaces_up_to(source: &str, mut cursor: usize, end: usize, limit: usize) -> (usize, usize) {
+    let bytes = source.as_bytes();
+    let mut spaces = 0;
+    while cursor < end && bytes[cursor] == b' ' && spaces < limit {
+        cursor += 1;
+        spaces += 1;
+    }
+    (cursor, spaces)
 }
 
 fn next_line_range(source: &str, start: usize) -> Range<usize> {
@@ -280,62 +421,16 @@ fn trim_line_ending(source: &str, range: Range<usize>) -> Range<usize> {
     range.start..end
 }
 
-fn opening_fence(source: &str, range: &Range<usize>) -> Option<Fence> {
-    let marker_start = line_content_start(source, range)?;
-    let bytes = source.as_bytes();
-    let marker = *bytes.get(marker_start)?;
-    if marker != b'`' && marker != b'~' {
-        return None;
-    }
-    let len = bytes[marker_start..range.end]
-        .iter()
-        .take_while(|byte| **byte == marker)
-        .count();
-    (len >= 3).then_some(Fence { marker, len })
-}
-
-fn closing_fence(source: &str, range: &Range<usize>, fence: Fence) -> bool {
-    let Some(marker_start) = line_content_start(source, range) else {
-        return false;
-    };
-    let bytes = source.as_bytes();
-    let len = bytes[marker_start..range.end]
-        .iter()
-        .take_while(|byte| **byte == fence.marker)
-        .count();
-    if len < fence.len {
-        return false;
-    }
-    bytes[marker_start + len..range.end]
-        .iter()
-        .all(|byte| matches!(*byte, b' ' | b'\t'))
-}
-
-fn line_content_start(source: &str, range: &Range<usize>) -> Option<usize> {
-    let bytes = source.as_bytes();
-    let mut cursor = range.start;
-    let mut spaces = 0;
-    while cursor < range.end && bytes[cursor] == b' ' && spaces < 4 {
-        cursor += 1;
-        spaces += 1;
-    }
-    (spaces <= 3).then_some(cursor)
-}
-
 fn parse_reference_definition_at(
     source: &str,
     line_start: usize,
+    content_start: usize,
     line_starts: &[usize],
 ) -> Option<ReferenceDefinition> {
     let bytes = source.as_bytes();
     let source_len = source.len();
-    let mut cursor = line_start;
-    let mut spaces = 0;
-    while cursor < source_len && bytes[cursor] == b' ' && spaces < 4 {
-        cursor += 1;
-        spaces += 1;
-    }
-    if spaces > 3 || bytes.get(cursor) != Some(&b'[') {
+    let mut cursor = content_start;
+    if bytes.get(cursor) != Some(&b'[') {
         return None;
     }
 
@@ -362,6 +457,8 @@ fn parse_reference_definition_at(
     {
         title_span = Some(parsed_title_span);
         span_end = after_title;
+    } else if !only_blank_until_line_end(source, cursor) {
+        return None;
     }
 
     Some(ReferenceDefinition {
@@ -381,7 +478,6 @@ fn parse_link_label(source: &str, start: usize) -> Option<(Range<usize>, String,
         return None;
     }
     let mut cursor = start + 1;
-    let mut depth = 1usize;
     let content_start = cursor;
     while cursor < source.len() {
         match bytes[cursor] {
@@ -391,21 +487,14 @@ fn parse_link_label(source: &str, start: usize) -> Option<(Range<usize>, String,
                     cursor += 1;
                 }
             }
-            b'[' => {
-                depth += 1;
-                cursor += 1;
-            }
+            b'[' => return None,
             b']' => {
-                depth -= 1;
-                if depth == 0 {
-                    let raw = &source[content_start..cursor];
-                    let label = unescape_markdown(raw);
-                    if label.trim().is_empty() {
-                        return None;
-                    }
-                    return Some((start..cursor + 1, label, cursor + 1));
+                let raw = &source[content_start..cursor];
+                let label = unescape_markdown(raw);
+                if label.trim().is_empty() {
+                    return None;
                 }
-                cursor += 1;
+                return Some((start..cursor + 1, label, cursor + 1));
             }
             _ => cursor += 1,
         }
@@ -472,6 +561,7 @@ fn parse_link_destination(source: &str, start: usize) -> Option<(Range<usize>, S
                     let destination = unescape_markdown(&source[inner.clone()]);
                     return Some((inner, destination, cursor + 1));
                 }
+                b'<' => return None,
                 b'\n' | b'\r' => return None,
                 _ => cursor += 1,
             }
@@ -567,6 +657,63 @@ fn unescape_markdown(text: &str) -> String {
         out.push('\\');
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn definitions(source: &str) -> Vec<ReferenceDefinition> {
+        reference_definitions_from_source(source)
+    }
+
+    fn labels(source: &str) -> Vec<String> {
+        definitions(source)
+            .into_iter()
+            .map(|definition| definition.label)
+            .collect()
+    }
+
+    #[test]
+    fn reference_definition_cannot_interrupt_paragraph() {
+        assert!(definitions("Foo\n[bar]: /baz\n").is_empty());
+    }
+
+    #[test]
+    fn reference_definitions_inside_block_containers_are_recognized() {
+        let source = "> [quoted]: /quote\n\n- [listed]: /list\n";
+
+        assert_eq!(labels(source), vec!["quoted", "listed"]);
+    }
+
+    #[test]
+    fn malformed_reference_definition_with_trailing_text_is_rejected() {
+        assert!(definitions("[foo]: /url oops\n").is_empty());
+    }
+
+    #[test]
+    fn html_blocks_suppress_reference_definition_scanning() {
+        let source = "<script>\n[foo]: /url\n</script>\n";
+
+        assert!(definitions(source).is_empty());
+    }
+
+    #[test]
+    fn container_scoped_fenced_code_suppresses_reference_definitions() {
+        let source = "> ```\n> [fake]: /url\n> ```\n";
+
+        assert!(definitions(source).is_empty());
+    }
+
+    #[test]
+    fn reference_label_rejects_nested_brackets() {
+        assert!(definitions("[a[b]]: /url\n").is_empty());
+    }
+
+    #[test]
+    fn angle_destination_rejects_unescaped_lt() {
+        assert!(definitions("[id]: <a<b>\n").is_empty());
+    }
 }
 
 pub(crate) struct DocumentBuilder<'a> {

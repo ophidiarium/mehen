@@ -96,18 +96,14 @@ pub(crate) fn analyze_links(
             LinkClass::Footnote => {
                 r.resolved = Some(footnote_labels.contains(&r.destination));
             }
+            LinkClass::UnresolvedReferenceUse => {
+                let resolved =
+                    definitions.contains_key(normalize_reference_label(&r.text).as_str());
+                r.resolved = Some(resolved);
+            }
             LinkClass::ReferenceDefinition => {
                 r.resolved = None;
             }
-        }
-
-        // If this is an unresolved reference-style use (`[abc]`, `[abc][]`,
-        // or `[visible][abc]`), pulldown called our broken-link callback and
-        // left the destination empty. Resolve it against the known reference
-        // labels so the record explicitly says whether the reference exists.
-        if r.class == LinkClass::ReferenceDefinition && !r.is_bare_url && r.destination.is_empty() {
-            let resolved = definitions.contains_key(normalize_reference_label(&r.text).as_str());
-            r.resolved = Some(resolved);
         }
 
         // Promote plain `External` URLs that point back at the same repo.
@@ -142,7 +138,7 @@ fn classify_link_or_image(link: &LinkUse) -> Option<LinkRecord> {
                 .filter(|label| !label.is_empty())
                 .unwrap_or_else(|| link.text.trim());
             (
-                LinkClass::ReferenceDefinition,
+                LinkClass::UnresolvedReferenceUse,
                 String::new(),
                 reference.to_string(),
             )
@@ -434,21 +430,14 @@ fn aggregate_links(records: &[LinkRecord], sections: &[Section]) -> Links {
                 links.absolute_same_repo += 1;
             }
             LinkClass::Footnote => links.footnote += 1,
+            LinkClass::UnresolvedReferenceUse => {
+                links.relative += 1;
+            }
             LinkClass::ReferenceDefinition => {
                 // Reference definitions are anchors for the reference-style
                 // `[abc]` links, not outbound links of their own. They are
                 // tracked via `records` for shortcut resolution but not in
                 // the `total`/`broken` aggregates.
-                if r.destination.is_empty() {
-                    // This is a shortcut/collapsed use of an undefined ref,
-                    // so it still counts toward the total as a relative-ish
-                    // broken link.
-                    links.relative += 1;
-                    links.total += 1;
-                    if matches!(r.resolved, Some(false)) {
-                        links.broken += 1;
-                    }
-                }
                 continue;
             }
         }
@@ -496,7 +485,10 @@ fn aggregate_links(records: &[LinkRecord], sections: &[Section]) -> Links {
         records
             .iter()
             .filter(|r| {
-                !matches!(r.class, LinkClass::ReferenceDefinition) && is_descriptive_text(&r.text)
+                !matches!(
+                    r.class,
+                    LinkClass::ReferenceDefinition | LinkClass::UnresolvedReferenceUse
+                ) && is_descriptive_text(&r.text)
             })
             .count() as f64
             / links.total as f64
@@ -669,7 +661,24 @@ mod tests {
             .iter()
             .find(|record| record.text == "nope")
             .expect("nope reference link record");
+        assert_eq!(missing.class, LinkClass::UnresolvedReferenceUse);
         assert_eq!(missing.resolved, Some(false));
+    }
+
+    #[test]
+    fn unresolved_reference_image_counts_as_image_and_broken() {
+        let src = "![alt][missing]\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        let image = records
+            .iter()
+            .find(|record| record.is_image)
+            .expect("unresolved reference image record");
+        assert_eq!(image.class, LinkClass::UnresolvedReferenceUse);
+        assert_eq!(image.resolved, Some(false));
+        assert_eq!(aggregate.image, 1);
+        assert_eq!(aggregate.broken, 1);
     }
 
     #[test]

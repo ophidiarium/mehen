@@ -154,7 +154,7 @@ link_records:
     is_bare_url: false
     resolved: ~
   - line: 15
-    class: reference_definition
+    class: unresolved_reference_use
     destination: ""
     text: nope
     is_image: false
@@ -203,7 +203,7 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 82.22016483516484
+  documentation_maintainability_index: 82.28016483516484
   section_balance_score: 0.85
   good_scaffold_score: 0.12557692307692309
   artifact_debt_score: 0
@@ -211,7 +211,7 @@ grounding:
   repository_grounding_score: 0.10714285714285714
   evidence_coverage_score: 0.4230769230769231
 ai_era:
-  filler_lazy_structure_risk: 0.45642857142857146
+  filler_lazy_structure_risk: 0.45142857142857146
   labels:
     - low-artifact-density
     - low-repository-grounding

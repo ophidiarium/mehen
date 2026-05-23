@@ -626,13 +626,34 @@ impl<'a> Builder<'a> {
 
     fn add_reference_definitions(&mut self, refdefs: Vec<ReferenceDefinition>) {
         for def in refdefs {
-            let node = self.add_child_to(0, Markdown::LinkReferenceDefinition, def.span.clone());
+            let parent_span = def.label_span.start..def.span.end;
+            let parent = self.reference_definition_parent(&parent_span);
+            let node =
+                self.add_child_to(parent, Markdown::LinkReferenceDefinition, def.span.clone());
             self.add_child_to(node, Markdown::LinkLabel, def.label_span);
             self.add_child_to(node, Markdown::LinkDestination, def.destination_span);
             if let Some(title_span) = def.title_span {
                 self.add_child_to(node, Markdown::LinkTitle, title_span);
             }
         }
+    }
+
+    fn reference_definition_parent(&self, span: &Range<usize>) -> usize {
+        let mut best = 0;
+        let mut best_width = usize::MAX;
+        for (idx, node) in self.nodes.iter().enumerate().skip(1) {
+            if !is_reference_definition_container(node.kind) {
+                continue;
+            }
+            if node.start_byte <= span.start && span.end <= node.end_byte {
+                let width = node.end_byte.saturating_sub(node.start_byte);
+                if width <= best_width {
+                    best = idx;
+                    best_width = width;
+                }
+            }
+        }
+        best
     }
 
     fn wrap_sections(&mut self) {
@@ -1175,6 +1196,29 @@ fn punctuation_kind(ch: char) -> Option<Markdown> {
     })
 }
 
+fn is_reference_definition_container(kind: Markdown) -> bool {
+    matches!(
+        kind,
+        Markdown::BlockQuote
+            | Markdown::PlainBlockQuote
+            | Markdown::Callout
+            | Markdown::List
+            | Markdown::ListItem
+            | Markdown::ListItem2
+            | Markdown::ListItem3
+            | Markdown::ListItem4
+            | Markdown::ListItem5
+            | Markdown::TaskListItem
+            | Markdown::TaskListItem2
+            | Markdown::TaskListItem3
+            | Markdown::TaskListItem4
+            | Markdown::TaskListItem5
+            | Markdown::ListItemContent
+            | Markdown::TaskListItemContent
+            | Markdown::FootnoteDefinition
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1189,6 +1233,18 @@ mod tests {
             .iter()
             .position(|node| node.kind == kind)
             .unwrap_or_else(|| panic!("missing {kind:?}"))
+    }
+
+    fn has_child(tree: &Tree, parent: usize, child: usize) -> bool {
+        tree.nodes[parent].children.contains(&child)
+    }
+
+    fn has_descendant(tree: &Tree, parent: usize, child: usize) -> bool {
+        tree.nodes[parent]
+            .children
+            .iter()
+            .copied()
+            .any(|idx| idx == child || has_descendant(tree, idx, child))
     }
 
     #[test]
@@ -1253,6 +1309,26 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(destinations, vec!["/one", "/two"]);
+    }
+
+    #[test]
+    fn reference_definition_inside_blockquote_keeps_container_parent() {
+        let source = "> [ref]: /url\n";
+        let tree = parse(source);
+        let blockquote = first_node(&tree, Markdown::BlockQuote);
+        let refdef = first_node(&tree, Markdown::LinkReferenceDefinition);
+
+        assert!(has_child(&tree, blockquote, refdef));
+    }
+
+    #[test]
+    fn reference_definition_inside_list_item_keeps_container_parent() {
+        let source = "- [ref]: /url\n";
+        let tree = parse(source);
+        let item = first_node(&tree, Markdown::ListItem);
+        let refdef = first_node(&tree, Markdown::LinkReferenceDefinition);
+
+        assert!(has_descendant(&tree, item, refdef));
     }
 
     #[test]
