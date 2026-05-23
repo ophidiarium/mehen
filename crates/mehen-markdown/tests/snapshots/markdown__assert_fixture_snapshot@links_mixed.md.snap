@@ -60,7 +60,7 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 5
-  cognitive_complexity: 5.8389999999999995
+  cognitive_complexity: 6.138999999999999
   halstead:
     operators_distinct: 7
     operators_total: 32
@@ -225,7 +225,7 @@ ai_era:
     - - low-repository-grounding
       - 0.8928571428571429
 review:
-  review_criticality_index: 14.152410714285713
+  review_criticality_index: 14.500625
 artifacts: []
 prose:
   language_detection:

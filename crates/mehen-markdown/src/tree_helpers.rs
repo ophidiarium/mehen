@@ -16,6 +16,7 @@
 //! the cursor — that keeps each call site free to use the helper
 //! without holding a `TreeCursor` open across other work.
 
+use crate::document::{MarkdownDocument, normalize_reference_label};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
 
@@ -228,6 +229,65 @@ pub(crate) fn find_link_dest(node: &Node<'_>, source: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Find a link destination and resolve reference-style links through the
+/// document's reference definitions. Inline links keep their literal payload;
+/// `[text][id]`, `[id][]`, and shortcut `[id]` use the destination from
+/// `[id]: ...` when one exists.
+pub(crate) fn find_resolved_link_dest(
+    node: &Node<'_>,
+    source: &str,
+    document: &MarkdownDocument,
+) -> Option<String> {
+    if let Some(dest) = find_link_dest(node, source) {
+        if is_full_reference_link(node, source)
+            && let Some(resolved) = reference_definition_destination(document, &dest)
+        {
+            return Some(resolved);
+        }
+        return Some(dest);
+    }
+
+    if is_inline_link(node, source) {
+        return None;
+    }
+
+    find_link_label(node, source)
+        .as_deref()
+        .and_then(|label| reference_definition_destination(document, label))
+}
+
+fn reference_definition_destination(document: &MarkdownDocument, label: &str) -> Option<String> {
+    let label = normalize_reference_label(label);
+    document
+        .reference_definitions
+        .iter()
+        .find(|definition| definition.label == label)
+        .map(|definition| definition.destination.clone())
+}
+
+fn is_inline_link(node: &Node<'_>, source: &str) -> bool {
+    source
+        .get(node.start_byte()..node.end_byte())
+        .is_some_and(|text| text.contains("]("))
+}
+
+fn is_full_reference_link(node: &Node<'_>, source: &str) -> bool {
+    let Some(text) = source.get(node.start_byte()..node.end_byte()) else {
+        return false;
+    };
+    if text.contains("](") {
+        return false;
+    }
+    let Some(close) = text.rfind(']') else {
+        return false;
+    };
+    let before_close = &text[..close];
+    let Some(open) = before_close.rfind('[') else {
+        return false;
+    };
+    open > 0 && before_close[..open].ends_with(']')
 }
 
 /// Find a `link_label` inside `node` and return its raw text.

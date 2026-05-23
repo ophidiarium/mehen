@@ -70,7 +70,7 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 7
-  cognitive_complexity: 7.099999999999999
+  cognitive_complexity: 7.399999999999999
   halstead:
     operators_distinct: 6
     operators_total: 39
@@ -241,7 +241,7 @@ ai_era:
     - - specificity-scarcity
       - 0.9166666666666666
 review:
-  review_criticality_index: 15.665714285714285
+  review_criticality_index: 16.013928571428572
 artifacts: []
 prose:
   language_detection:
