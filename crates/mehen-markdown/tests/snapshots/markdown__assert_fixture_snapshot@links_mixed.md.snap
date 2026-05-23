@@ -1,5 +1,6 @@
 ---
 source: crates/mehen-markdown/tests/markdown.rs
+assertion_line: 49
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +18,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.41379310344827586
 size:
-  words: 45
-  effective_content_units: 0.1875
+  words: 44
+  effective_content_units: 0.18333333333333332
   sections: 3
   headings: 3
 ecu_inputs:
@@ -37,7 +38,7 @@ sections:
     child_section_ids:
       - 1
       - 2
-    word_count: 39
+    word_count: 38
     block_count: 7
   - section_id: 1
     heading_level: 2
@@ -60,23 +61,23 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 5
-  cognitive_complexity: 5.5889999999999995
+  cognitive_complexity: 5.8389999999999995
   halstead:
-    operators_distinct: 8
-    operators_total: 35
-    operands_distinct: 52
-    operands_total: 62
-    vocabulary: 60
-    length: 97
-    volume: 572.9683877740263
-    difficulty: 4.769230769230769
-    effort: 2732.618464768433
+    operators_distinct: 7
+    operators_total: 32
+    operands_distinct: 51
+    operands_total: 61
+    vocabulary: 58
+    length: 93
+    volume: 544.7922325468642
+    difficulty: 4.186274509803922
+    effort: 2280.649836250108
     embedded_volume: 0
-    total_volume: 572.9683877740263
+    total_volume: 544.7922325468642
 links:
-  total: 12
+  total: 13
   internal: 2
-  relative: 4
+  relative: 5
   external: 5
   external_vendor: 1
   scholarly: 1
@@ -85,10 +86,10 @@ links:
   image: 0
   footnote: 1
   bare_url: 1
-  broken: 2
-  link_debt_score: 0.7450000000000001
-  information_scent_score: 0.5
-  review_burden: 14.3
+  broken: 4
+  link_debt_score: 0.7536538461538462
+  information_scent_score: 0.4507692307692308
+  review_burden: 20.1
 link_records:
   - line: 3
     class: internal
@@ -159,7 +160,14 @@ link_records:
     text: abc
     is_image: false
     is_bare_url: false
-    resolved: true
+    resolved: false
+  - line: 15
+    class: reference_definition
+    destination: ""
+    text: missing
+    is_image: false
+    is_bare_url: false
+    resolved: false
   - line: 17
     class: footnote
     destination: "1"
@@ -196,15 +204,15 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 82.34428571428572
+  documentation_maintainability_index: 82.01197802197802
   section_balance_score: 0.85
-  good_scaffold_score: 0.125
+  good_scaffold_score: 0.11761538461538462
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0.10714285714285714
   evidence_coverage_score: 0.4230769230769231
 ai_era:
-  filler_lazy_structure_risk: 0.4571428571428572
+  filler_lazy_structure_risk: 0.4671428571428572
   labels:
     - low-artifact-density
     - low-repository-grounding
@@ -218,7 +226,7 @@ ai_era:
     - - low-repository-grounding
       - 0.8928571428571429
 review:
-  review_criticality_index: 13.862232142857142
+  review_criticality_index: 14.152410714285713
 artifacts: []
 prose:
   language_detection:

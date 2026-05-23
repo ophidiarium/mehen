@@ -10,8 +10,8 @@
 use std::ops::Range;
 
 use pulldown_cmark::{
-    Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, LinkType, MetadataBlockKind,
-    Options, Parser, Tag, TagEnd,
+    Alignment, BlockQuoteKind, BrokenLink, CodeBlockKind, CowStr, Event, HeadingLevel, LinkType,
+    MetadataBlockKind, Options, Parser, Tag, TagEnd,
 };
 
 use crate::grammar::Markdown;
@@ -182,7 +182,11 @@ impl<'a> Builder<'a> {
             | Options::ENABLE_GFM
             | Options::ENABLE_WIKILINKS;
 
-        let parser = Parser::new_ext(self.source, options);
+        let parser = Parser::new_with_broken_link_callback(
+            self.source,
+            options,
+            Some(preserve_broken_reference_link),
+        );
         let offset_iter = parser.into_offset_iter();
         let refdefs: Vec<RefDefData> = offset_iter
             .reference_definitions()
@@ -212,7 +216,7 @@ impl<'a> Builder<'a> {
             Event::Start(tag) => self.start_tag(tag, range),
             Event::End(tag) => self.end_tag(tag),
             Event::Text(_) => self.add_text(range),
-            Event::Code(_) => self.add_inline_code(range),
+            Event::Code(text) => self.add_inline_code(range, &text),
             Event::InlineMath(_) => self.add_math_inline(range),
             Event::DisplayMath(_) => self.add_math_block(range),
             Event::Html(_) => self.add_html(range, false),
@@ -369,16 +373,11 @@ impl<'a> Builder<'a> {
         let node = self.add_child(node_kind, range.clone());
         self.add_child_to(node, Markdown::BlockQuoteMarker, first_byte(range.start));
         if let Some(kind) = kind {
-            let marker =
-                callout_type_range(self.source, &range).unwrap_or_else(|| first_byte(range.start));
-            self.add_child_to(
-                node,
-                Markdown::CalloutMarkerOpen,
-                marker.start..marker.start + 1,
-            );
-            self.add_child_to(node, Markdown::CalloutType, marker);
-            let close = range.start.saturating_add(1).min(range.end);
-            self.add_child_to(node, Markdown::CalloutMarkerClose, close..close);
+            if let Some(marker) = callout_marker_ranges(self.source, &range) {
+                self.add_child_to(node, Markdown::CalloutMarkerOpen, marker.open);
+                self.add_child_to(node, Markdown::CalloutType, marker.callout_type);
+                self.add_child_to(node, Markdown::CalloutMarkerClose, marker.close);
+            }
             let _ = kind;
         }
         self.stack.push(node);
@@ -494,7 +493,7 @@ impl<'a> Builder<'a> {
             },
             range.clone(),
         );
-        if matches!(
+        let dest_range = if matches!(
             link_type,
             LinkType::Inline
                 | LinkType::ReferenceUnknown
@@ -502,12 +501,17 @@ impl<'a> Builder<'a> {
                 | LinkType::ShortcutUnknown
                 | LinkType::WikiLink { .. }
         ) && !dest_url.is_empty()
-            && let Some(dest_range) = find_in_range(self.source, &range, dest_url)
         {
+            find_link_destination_range(self.source, &range, dest_url)
+        } else {
+            None
+        };
+        if let Some(dest_range) = dest_range.clone() {
             self.add_child_to(node, Markdown::LinkDestination, dest_range);
         }
         if !title.is_empty()
-            && let Some(title_range) = find_in_range(self.source, &range, title)
+            && let Some(title_range) =
+                find_link_title_range(self.source, &range, title, dest_range.as_ref())
         {
             self.add_child_to(node, Markdown::LinkTitle, title_range);
         }
@@ -533,9 +537,10 @@ impl<'a> Builder<'a> {
         self.tokenize_text(range);
     }
 
-    fn add_inline_code(&mut self, range: Range<usize>) {
+    fn add_inline_code(&mut self, range: Range<usize>, text: &str) {
         let node = self.add_child(Markdown::InlineCode, range.clone());
-        self.add_child_to(node, Markdown::InlineCodeContent, range);
+        let content = inline_code_content_range(self.source, &range, text);
+        self.add_child_to(node, Markdown::InlineCodeContent, content);
     }
 
     fn add_math_inline(&mut self, range: Range<usize>) {
@@ -652,13 +657,21 @@ impl<'a> Builder<'a> {
             {
                 self.add_child_to(node, Markdown::LinkLabel, label_range);
             }
-            if !def.dest.is_empty()
-                && let Some(dest_range) = find_in_range(self.source, &def.span, &def.dest)
-            {
+            let dest_range = if !def.dest.is_empty() {
+                find_reference_definition_destination_range(self.source, &def.span, &def.dest)
+            } else {
+                None
+            };
+            if let Some(dest_range) = dest_range.clone() {
                 self.add_child_to(node, Markdown::LinkDestination, dest_range);
             }
             if let Some(title) = def.title.as_ref()
-                && let Some(title_range) = find_in_range(self.source, &def.span, title)
+                && let Some(title_range) = find_reference_definition_title_range(
+                    self.source,
+                    &def.span,
+                    title,
+                    dest_range.as_ref(),
+                )
             {
                 self.add_child_to(node, Markdown::LinkTitle, title_range);
             }
@@ -818,13 +831,17 @@ impl<'a> Builder<'a> {
     }
 
     fn pop_one_of(&mut self, kinds: &[Markdown]) {
-        while self.stack.len() > 1 {
-            let idx = *self.stack.last().unwrap();
-            if kinds.contains(&self.nodes[idx].kind) {
-                self.stack.pop();
-                return;
-            }
+        let Some(idx) = self.stack.last().copied() else {
+            return;
+        };
+        let actual = self.nodes[idx].kind;
+        if kinds.contains(&actual) {
             self.stack.pop();
+        } else {
+            debug_assert!(
+                self.stack.len() <= 1,
+                "unexpected markdown builder stack top: expected one of {kinds:?}, got {actual:?}"
+            );
         }
     }
 
@@ -863,6 +880,10 @@ fn first_byte(byte: usize) -> Range<usize> {
     byte..byte.saturating_add(1)
 }
 
+fn preserve_broken_reference_link<'a>(_link: BrokenLink<'a>) -> Option<(CowStr<'a>, CowStr<'a>)> {
+    Some(("".into(), "".into()))
+}
+
 fn heading_kinds(
     level: HeadingLevel,
     source: &str,
@@ -887,11 +908,13 @@ fn is_setext_heading(source: &str, range: &Range<usize>) -> bool {
         return false;
     };
     let mut non_empty = slice.lines().filter(|line| !line.trim().is_empty());
-    let _first = non_empty.next();
-    let Some(second) = non_empty.next() else {
+    let Some(_first) = non_empty.next() else {
         return false;
     };
-    let trimmed = second.trim();
+    let Some(last) = non_empty.next_back() else {
+        return false;
+    };
+    let trimmed = last.trim();
     !trimmed.is_empty() && trimmed.chars().all(|c| c == '=' || c == '-')
 }
 
@@ -987,6 +1010,24 @@ fn callout_type_range(source: &str, range: &Range<usize>) -> Option<Range<usize>
     Some(start..end)
 }
 
+struct CalloutMarkerRanges {
+    open: Range<usize>,
+    callout_type: Range<usize>,
+    close: Range<usize>,
+}
+
+fn callout_marker_ranges(source: &str, range: &Range<usize>) -> Option<CalloutMarkerRanges> {
+    let callout_type = callout_type_range(source, range)?;
+    let open_start = callout_type.start.checked_sub(2)?;
+    let close_start = callout_type.end.min(range.end);
+    let close_end = close_start.saturating_add(1).min(range.end);
+    Some(CalloutMarkerRanges {
+        open: open_start..callout_type.start,
+        callout_type,
+        close: close_start..close_end,
+    })
+}
+
 fn visible_autolink_range(source: &str, range: &Range<usize>, dest: &str) -> Option<Range<usize>> {
     let slice = source.get(range.clone())?;
     let inner = slice.trim().trim_start_matches('<').trim_end_matches('>');
@@ -1015,6 +1056,73 @@ fn find_label_definition_range(
         let close = slice[open..].find(']')?;
         Some(range.start + open..range.start + open + close + 1)
     })
+}
+
+fn find_link_destination_range(
+    source: &str,
+    range: &Range<usize>,
+    destination: &str,
+) -> Option<Range<usize>> {
+    let search_range = inline_link_payload_range(source, range).unwrap_or_else(|| range.clone());
+    find_in_range(source, &search_range, destination)
+}
+
+fn find_link_title_range(
+    source: &str,
+    range: &Range<usize>,
+    title: &str,
+    destination: Option<&Range<usize>>,
+) -> Option<Range<usize>> {
+    let search_range = destination
+        .map(|dest| dest.end..range.end)
+        .or_else(|| inline_link_payload_range(source, range))
+        .unwrap_or_else(|| range.clone());
+    find_in_range(source, &search_range, title)
+}
+
+fn inline_link_payload_range(source: &str, range: &Range<usize>) -> Option<Range<usize>> {
+    let slice = source.get(range.clone())?;
+    let payload_start = slice.find("](")? + 2;
+    Some(range.start + payload_start..range.end)
+}
+
+fn find_reference_definition_destination_range(
+    source: &str,
+    range: &Range<usize>,
+    destination: &str,
+) -> Option<Range<usize>> {
+    let search_range = reference_definition_payload_range(source, range)?;
+    find_in_range(source, &search_range, destination)
+}
+
+fn find_reference_definition_title_range(
+    source: &str,
+    range: &Range<usize>,
+    title: &str,
+    destination: Option<&Range<usize>>,
+) -> Option<Range<usize>> {
+    let search_range = destination
+        .map(|dest| dest.end..range.end)
+        .or_else(|| reference_definition_payload_range(source, range))?;
+    find_in_range(source, &search_range, title)
+}
+
+fn reference_definition_payload_range(source: &str, range: &Range<usize>) -> Option<Range<usize>> {
+    let slice = source.get(range.clone())?;
+    let label_end = slice.find("]:")? + 2;
+    Some(range.start + label_end..range.end)
+}
+
+fn inline_code_content_range(source: &str, range: &Range<usize>, text: &str) -> Range<usize> {
+    let Some(slice) = source.get(range.clone()) else {
+        return range.clone();
+    };
+    let opening = slice.bytes().take_while(|byte| *byte == b'`').count();
+    let closing = slice.bytes().rev().take_while(|byte| *byte == b'`').count();
+    let inner_start = range.start.saturating_add(opening).min(range.end);
+    let inner_end = range.end.saturating_sub(closing).max(inner_start);
+    let inner = inner_start..inner_end;
+    find_in_range(source, &inner, text).unwrap_or(inner)
 }
 
 fn find_in_range(source: &str, range: &Range<usize>, needle: &str) -> Option<Range<usize>> {
@@ -1136,4 +1244,96 @@ fn punctuation_kind(ch: char) -> Option<Markdown> {
         '=' | '+' | '-' | '*' | '/' | '|' | '&' | '^' | '%' | '~' => Markdown::OperatorLike,
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node_text<'a>(tree: &Tree, source: &'a str, idx: usize) -> &'a str {
+        let node = &tree.nodes[idx];
+        &source[node.start_byte..node.end_byte]
+    }
+
+    fn first_node(tree: &Tree, kind: Markdown) -> usize {
+        tree.nodes
+            .iter()
+            .position(|node| node.kind == kind)
+            .unwrap_or_else(|| panic!("missing {kind:?}"))
+    }
+
+    #[test]
+    fn unknown_reference_link_is_preserved_as_link_node() {
+        let source = "See [missing][nope].";
+        let tree = parse(source);
+        let link = first_node(&tree, Markdown::Link);
+        let label = tree.nodes[link]
+            .children
+            .iter()
+            .copied()
+            .find(|idx| tree.nodes[*idx].kind == Markdown::LinkLabel)
+            .expect("link label");
+
+        assert_eq!(node_text(&tree, source, label), "missing");
+    }
+
+    #[test]
+    fn inline_link_destination_uses_payload_match_not_label_match() {
+        let source = "[foo](foo \"foo\")";
+        let tree = parse(source);
+        let destination = first_node(&tree, Markdown::LinkDestination);
+        let title = first_node(&tree, Markdown::LinkTitle);
+
+        assert_eq!(tree.nodes[destination].start_byte, 6);
+        assert_eq!(node_text(&tree, source, destination), "foo");
+        assert_eq!(tree.nodes[title].start_byte, 11);
+        assert_eq!(node_text(&tree, source, title), "foo");
+    }
+
+    #[test]
+    fn reference_definition_destination_uses_payload_match_not_label_match() {
+        let source = "[foo]: foo \"foo\"\n";
+        let tree = parse(source);
+        let destination = first_node(&tree, Markdown::LinkDestination);
+        let title = first_node(&tree, Markdown::LinkTitle);
+
+        assert_eq!(tree.nodes[destination].start_byte, 7);
+        assert_eq!(node_text(&tree, source, destination), "foo");
+        assert_eq!(tree.nodes[title].start_byte, 12);
+        assert_eq!(node_text(&tree, source, title), "foo");
+    }
+
+    #[test]
+    fn inline_code_content_excludes_backtick_delimiters() {
+        let source = "Use `foo` now.";
+        let tree = parse(source);
+        let content = first_node(&tree, Markdown::InlineCodeContent);
+
+        assert_eq!(node_text(&tree, source, content), "foo");
+    }
+
+    #[test]
+    fn callout_marker_ranges_match_legacy_tokens() {
+        let source = "> [!NOTE]\n> text\n";
+        let tree = parse(source);
+        let open = first_node(&tree, Markdown::CalloutMarkerOpen);
+        let callout_type = first_node(&tree, Markdown::CalloutType);
+        let close = first_node(&tree, Markdown::CalloutMarkerClose);
+
+        assert_eq!(node_text(&tree, source, open), "[!");
+        assert_eq!(node_text(&tree, source, callout_type), "NOTE");
+        assert_eq!(node_text(&tree, source, close), "]");
+    }
+
+    #[test]
+    fn multiline_setext_heading_uses_setext_kind() {
+        let source = "Foo\nbar\n---\n";
+        let tree = parse(source);
+
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|node| node.kind == Markdown::SetextHeading2)
+        );
+    }
 }

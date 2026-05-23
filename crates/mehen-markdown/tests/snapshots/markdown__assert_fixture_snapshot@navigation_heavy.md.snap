@@ -1,5 +1,6 @@
 ---
 source: crates/mehen-markdown/tests/markdown.rs
+assertion_line: 49
 ---
 path: "<fixture_path>"
 loc:
@@ -95,10 +96,10 @@ links:
   image: 0
   footnote: 2
   bare_url: 0
-  broken: 5
+  broken: 6
   link_debt_score: 0.55
   information_scent_score: 0.4785714285714286
-  review_burden: 22.9
+  review_burden: 25.4
 link_records:
   - line: 9
     class: internal
@@ -148,7 +149,7 @@ link_records:
     text: API reference
     is_image: false
     is_bare_url: false
-    resolved: true
+    resolved: false
   - line: 20
     class: relative
     destination: "./quickstart.md"

@@ -220,7 +220,8 @@ fn has_nested_prose_block(node: &Node<'_>) -> bool {
         return false;
     }
     loop {
-        let kind: Markdown = cursor.node().kind_id().into();
+        let child = cursor.node();
+        let kind: Markdown = child.kind_id().into();
         if matches!(
             kind,
             Markdown::Paragraph
@@ -236,6 +237,9 @@ fn has_nested_prose_block(node: &Node<'_>) -> bool {
                 | Markdown::PlainBlockQuote
                 | Markdown::Callout
         ) {
+            return true;
+        }
+        if has_nested_prose_block(&child) {
             return true;
         }
         if !cursor.goto_next_sibling() {

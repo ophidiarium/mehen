@@ -39,16 +39,9 @@ pub(crate) fn analyze_links(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
 
+    let definition_labels = collect_reference_definition_labels(root, source);
     let mut records: Vec<LinkRecord> = Vec::new();
     collect_links(root, source, &mut records);
-
-    // Collect reference-definition labels so shortcut/collapsed links can be
-    // resolved.
-    let definition_labels: HashSet<String> = records
-        .iter()
-        .filter(|r| r.class == LinkClass::ReferenceDefinition)
-        .map(|r| r.text.to_lowercase())
-        .collect();
 
     // Resolve internal anchors + relative paths + reference shortcuts.
     for r in records.iter_mut() {
@@ -108,6 +101,38 @@ pub(crate) fn analyze_links(
 
     let aggregate = aggregate_links(&records, sections);
     (records, aggregate)
+}
+
+fn collect_reference_definition_labels(root: &Node<'_>, source: &str) -> HashSet<String> {
+    let mut labels = HashSet::new();
+    collect_reference_definition_labels_rec(root, source, &mut labels);
+    labels
+}
+
+fn collect_reference_definition_labels_rec(
+    node: &Node<'_>,
+    source: &str,
+    labels: &mut HashSet<String>,
+) {
+    let kind: Markdown = node.kind_id().into();
+    if matches!(kind, Markdown::LinkReferenceDefinition) {
+        if let Some(label) = find_first(node, Markdown::LinkLabel)
+            .and_then(|label| text_inside_label(&label, source))
+        {
+            labels.insert(label.to_lowercase());
+        }
+        return;
+    }
+
+    let mut cursor = node.cursor();
+    if cursor.goto_first_child() {
+        loop {
+            collect_reference_definition_labels_rec(&cursor.node(), source, labels);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
 }
 
 fn collect_links(node: &Node<'_>, source: &str, records: &mut Vec<LinkRecord>) {
@@ -816,5 +841,19 @@ mod tests {
         assert!(slugs.contains("intro-2"), "third occurrence gets -2");
         // `-3` should NOT be generated unless there's a fourth heading.
         assert!(!slugs.contains("intro-3"));
+    }
+
+    #[test]
+    fn unresolved_reference_link_does_not_resolve_against_itself() {
+        let src = "See [missing][nope].\n";
+        let tree = crate::syntax_tree::parse(src);
+        let root = tree.root();
+        let (records, _) = analyze_links(&root, src, Path::new("README.md"), &[], &[]);
+
+        let missing = records
+            .iter()
+            .find(|record| record.text == "missing")
+            .expect("missing reference link record");
+        assert_eq!(missing.resolved, Some(false));
     }
 }

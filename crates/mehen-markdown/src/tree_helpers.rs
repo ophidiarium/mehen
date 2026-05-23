@@ -125,12 +125,18 @@ pub(crate) fn opens_prose_context(kind: Markdown, context: ProseContext) -> bool
             | CalloutHeaderParagraph
             | ListItemContent
             | TaskListItemContent
-    ) || (context.include_heading_content
-        && matches!(kind, AtxHeadingContent | SetextHeading | SetextHeading2))
+    ) || (context.include_heading_content && matches!(kind, AtxHeadingContent))
         || (context.include_heading_blocks
             && matches!(
                 kind,
-                AtxHeading | AtxHeading2 | AtxHeading3 | AtxHeading4 | AtxHeading5 | AtxHeading6
+                AtxHeading
+                    | AtxHeading2
+                    | AtxHeading3
+                    | AtxHeading4
+                    | AtxHeading5
+                    | AtxHeading6
+                    | SetextHeading
+                    | SetextHeading2
             ))
         || (context.include_link_labels && matches!(kind, LinkLabel | FootnoteLabel))
         || (context.include_tables

@@ -1,5 +1,6 @@
 ---
 source: crates/mehen-markdown/tests/markdown.rs
+assertion_line: 49
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +18,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.23076923076923078
 size:
-  words: 35
-  effective_content_units: 0.14583333333333334
+  words: 34
+  effective_content_units: 0.14166666666666666
   sections: 2
   headings: 2
 ecu_inputs:
@@ -36,7 +37,7 @@ sections:
     parent_section_id: ~
     child_section_ids:
       - 1
-    word_count: 26
+    word_count: 25
     block_count: 6
   - section_id: 1
     heading_level: 2
@@ -50,23 +51,23 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 2
-  cognitive_complexity: 4.199
+  cognitive_complexity: 4.494
   halstead:
-    operators_distinct: 8
-    operators_total: 20
-    operands_distinct: 41
-    operands_total: 45
-    vocabulary: 49
-    length: 65
-    volume: 364.95613986748856
-    difficulty: 4.390243902439025
-    effort: 1602.2464677109256
+    operators_distinct: 7
+    operators_total: 17
+    operands_distinct: 40
+    operands_total: 44
+    vocabulary: 47
+    length: 61
+    volume: 338.8299199523359
+    difficulty: 3.8500000000000005
+    effort: 1304.4951918164934
     embedded_volume: 0
-    total_volume: 364.95613986748856
+    total_volume: 338.8299199523359
 links:
-  total: 3
+  total: 4
   internal: 1
-  relative: 1
+  relative: 2
   external: 1
   external_vendor: 0
   scholarly: 0
@@ -75,10 +76,10 @@ links:
   image: 0
   footnote: 0
   bare_url: 0
-  broken: 2
+  broken: 3
   link_debt_score: 0.65
-  information_scent_score: 0.19999999999999998
-  review_burden: 7.1
+  information_scent_score: 0.15
+  review_burden: 10.4
 link_records:
   - line: 6
     class: relative
@@ -91,6 +92,13 @@ link_records:
     class: internal
     destination: "#nowhere"
     text: Missing anchor
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 8
+    class: reference_definition
+    destination: ""
+    text: Stale reference
     is_image: false
     is_bare_url: false
     resolved: false
@@ -116,18 +124,20 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 83.08571428571429
+  documentation_maintainability_index: 82.75659663865545
   section_balance_score: 0.85
-  good_scaffold_score: 0.029999999999999995
+  good_scaffold_score: 0.0225
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0.23076923076923078
 ai_era:
-  filler_lazy_structure_risk: 0.44285714285714284
+  filler_lazy_structure_risk: 0.46403361344537813
   labels:
+    - hollow-references
     - low-artifact-density
     - low-repository-grounding
+    - placeholder-heavy
     - specificity-scarcity
   top_contributors:
     - - low-artifact-density
@@ -135,9 +145,9 @@ ai_era:
     - - low-repository-grounding
       - 1
     - - specificity-scarcity
-      - 0.7738095238095238
+      - 0.7598039215686274
 review:
-  review_criticality_index: 6.624732142857143
+  review_criticality_index: 9.323392857142856
 artifacts: []
 prose:
   language_detection:
