@@ -21,10 +21,10 @@
 //! parser-error / cognitive / halstead terms stay zero until Phase B lands.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::sat;
 use crate::nearby::{BlockSpan, has_prose_within};
-use crate::tree_helpers::{find_first, node_text};
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{fence_content_text, find_first, node_text};
 
 /// Per-fence summary used to populate ArtifactRecord rows and Phase D's
 /// filler / grounding pipelines.
@@ -133,12 +133,9 @@ fn build(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option<CodeFenc
 }
 
 fn code_body_stats(node: &Node<'_>, source: &str) -> (u64, f64) {
-    let Some(content) = find_first(node, Markdown::CodeFenceContent) else {
+    let Some(body) = fence_content_text(node, source) else {
         return (0, 0.0);
     };
-    let start = content.start_byte();
-    let end = content.end_byte();
-    let body = &source[start..end];
     let mut line_lengths: Vec<usize> = Vec::new();
     for line in body.lines() {
         line_lengths.push(line.chars().count());

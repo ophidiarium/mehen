@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.15789473684210525
 size:
-  words: 25
-  effective_content_units: 5.854166666666666
+  words: 24
+  effective_content_units: 5.849999999999999
   sections: 1
   headings: 1
 ecu_inputs:
@@ -35,7 +35,7 @@ sections:
     end_line: 19
     parent_section_id: ~
     child_section_ids: []
-    word_count: 25
+    word_count: 24
     block_count: 3
 complexity:
   reading_path_complexity: 2
@@ -43,16 +43,16 @@ complexity:
   cognitive_complexity: 2.5312500000000004
   halstead:
     operators_distinct: 8
-    operators_total: 13
+    operators_total: 9
     operands_distinct: 29
-    operands_total: 32
+    operands_total: 31
     vocabulary: 37
-    length: 45
-    volume: 234.42540145330275
-    difficulty: 4.413793103448276
-    effort: 1034.7052202076811
+    length: 40
+    volume: 208.378134625158
+    difficulty: 4.275862068965517
+    effort: 890.9961618455031
     embedded_volume: 0
-    total_volume: 234.42540145330275
+    total_volume: 208.378134625158
 links:
   total: 0
   internal: 0
@@ -75,7 +75,7 @@ visuals:
   diagram_nodes_total: 2
   diagram_edges_total: 3
   diagram_cycles_total: 0
-  visual_scaffold_score: 0.9759000729485331
+  visual_scaffold_score: 0.9768308314557045
   visual_net_effect: 0.4500000000000002
 tables:
   count: 0
@@ -86,22 +86,22 @@ tables:
 maintainability:
   documentation_maintainability_index: 100
   section_balance_score: 0.85
-  good_scaffold_score: 0.44397501823713326
+  good_scaffold_score: 0.44420770786392616
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0.19
   evidence_coverage_score: 1
 ai_era:
-  filler_lazy_structure_risk: 0.2295
+  filler_lazy_structure_risk: 0.2245
   labels:
     - low-repository-grounding
   top_contributors:
     - - low-repository-grounding
       - 0.81
-    - - specificity-scarcity
-      - 0.25
     - - lazy-sectioning
       - 0.24999999999999994
+    - - specificity-scarcity
+      - 0.20833333333333326
 review:
   review_criticality_index: 12.22
 artifacts:

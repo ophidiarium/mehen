@@ -25,13 +25,10 @@ regex = "^1.7"
 unicode-script = "^0.5"
 unicode-segmentation = "^1.12"
 serde = { workspace = true }
-tree-sitter = { workspace = true }
-# `tree-sitter-markdown-text` is pinned here (not in
-# `[workspace.dependencies]`) because `mehen-markdown` is the sole
-# consumer. xtask reaches the grammar through `__grammar_language()`
-# exported from this crate, so the kind-enum generator and the
-# analyzer parser are guaranteed to link the same revision.
-tree-sitter-markdown-text = "=0.2.1"
+# `pulldown-cmark` is the Markdown parser backend. Default features are
+# disabled because the analyzer consumes parser events and byte offsets
+# directly; it never renders HTML.
+pulldown-cmark = { version = "=0.13.4", default-features = false }
 
 [dev-dependencies]
 # Tests rely on `mehen-engine`'s `init_markdown` to register the
@@ -45,6 +42,7 @@ mehen-engine = { workspace = true }
 camino = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [package.metadata.cargo-machete]

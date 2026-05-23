@@ -1,6 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
-assertion_line: 33
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -18,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.3448275862068966
 size:
-  words: 202
-  effective_content_units: 0.8416666666666667
+  words: 217
+  effective_content_units: 0.9041666666666667
   sections: 9
   headings: 9
 ecu_inputs:
@@ -48,16 +47,16 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 6
-    end_line: 17
+    end_line: 16
     parent_section_id: 0
     child_section_ids: []
-    word_count: 42
+    word_count: 49
     block_count: 6
   - section_id: 2
     heading_level: 2
     heading_text: ~
     start_line: 18
-    end_line: 26
+    end_line: 25
     parent_section_id: 0
     child_section_ids: []
     word_count: 50
@@ -66,7 +65,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 27
-    end_line: 31
+    end_line: 30
     parent_section_id: 0
     child_section_ids: []
     word_count: 12
@@ -75,16 +74,16 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 32
-    end_line: 38
+    end_line: 37
     parent_section_id: 0
     child_section_ids: []
-    word_count: 23
+    word_count: 27
     block_count: 2
   - section_id: 5
     heading_level: 2
     heading_text: ~
     start_line: 39
-    end_line: 51
+    end_line: 50
     parent_section_id: 0
     child_section_ids:
       - 6
@@ -95,7 +94,7 @@ sections:
     heading_level: 3
     heading_text: ~
     start_line: 44
-    end_line: 47
+    end_line: 46
     parent_section_id: 5
     child_section_ids: []
     word_count: 8
@@ -104,7 +103,7 @@ sections:
     heading_level: 3
     heading_text: ~
     start_line: 48
-    end_line: 51
+    end_line: 50
     parent_section_id: 5
     child_section_ids: []
     word_count: 9
@@ -116,7 +115,7 @@ sections:
     end_line: 58
     parent_section_id: 0
     child_section_ids: []
-    word_count: 18
+    word_count: 22
     block_count: 6
 complexity:
   reading_path_complexity: 1
@@ -125,15 +124,15 @@ complexity:
   halstead:
     operators_distinct: 8
     operators_total: 67
-    operands_distinct: 144
-    operands_total: 225
-    vocabulary: 152
-    length: 292
-    volume: 2116.3948339255267
-    difficulty: 6.25
-    effort: 13227.467712034542
+    operands_distinct: 152
+    operands_total: 240
+    vocabulary: 160
+    length: 307
+    volume: 2247.83192513042
+    difficulty: 6.315789473684211
+    effort: 14196.833211350022
     embedded_volume: 0
-    total_volume: 2116.3948339255267
+    total_volume: 2247.83192513042
 links:
   total: 7
   internal: 0

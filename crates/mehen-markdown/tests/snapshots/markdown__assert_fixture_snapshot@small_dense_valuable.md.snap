@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.2805755395683453
 size:
-  words: 247
-  effective_content_units: 16.479166666666664
+  words: 280
+  effective_content_units: 16.616666666666664
   sections: 9
   headings: 9
 ecu_inputs:
@@ -43,13 +43,13 @@ sections:
       - 6
       - 7
       - 8
-    word_count: 33
+    word_count: 32
     block_count: 1
   - section_id: 1
     heading_level: 2
     heading_text: ~
     start_line: 8
-    end_line: 24
+    end_line: 23
     parent_section_id: 0
     child_section_ids: []
     word_count: 28
@@ -58,16 +58,16 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 25
-    end_line: 42
+    end_line: 41
     parent_section_id: 0
     child_section_ids: []
-    word_count: 34
+    word_count: 33
     block_count: 5
   - section_id: 3
     heading_level: 2
     heading_text: ~
     start_line: 43
-    end_line: 56
+    end_line: 55
     parent_section_id: 0
     child_section_ids: []
     word_count: 35
@@ -76,7 +76,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 57
-    end_line: 70
+    end_line: 69
     parent_section_id: 0
     child_section_ids: []
     word_count: 16
@@ -85,10 +85,10 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 71
-    end_line: 81
+    end_line: 80
     parent_section_id: 0
     child_section_ids: []
-    word_count: 19
+    word_count: 18
     block_count: 3
   - section_id: 6
     heading_level: 2
@@ -97,16 +97,16 @@ sections:
     end_line: 109
     parent_section_id: 0
     child_section_ids: []
-    word_count: 53
+    word_count: 52
     block_count: 9
   - section_id: 7
     heading_level: 2
     heading_text: ~
     start_line: 110
-    end_line: 131
+    end_line: 130
     parent_section_id: 0
     child_section_ids: []
-    word_count: 29
+    word_count: 54
     block_count: 5
   - section_id: 8
     heading_level: 2
@@ -115,28 +115,28 @@ sections:
     end_line: 139
     parent_section_id: 0
     child_section_ids: []
-    word_count: 0
+    word_count: 12
     block_count: 1
 complexity:
   reading_path_complexity: 1
-  reading_path_complexity_raw: 10
-  cognitive_complexity: 12.901249999999997
+  reading_path_complexity_raw: 12
+  cognitive_complexity: 13.651249999999997
   halstead:
     operators_distinct: 14
-    operators_total: 134
-    operands_distinct: 210
-    operands_total: 307
-    vocabulary: 224
-    length: 441
-    volume: 3443.0435206274033
-    difficulty: 10.233333333333333
-    effort: 35233.81202775376
+    operators_total: 132
+    operands_distinct: 256
+    operands_total: 363
+    vocabulary: 270
+    length: 495
+    volume: 3998.023720540162
+    difficulty: 9.92578125
+    effort: 39683.50888239278
     embedded_volume: 0
-    total_volume: 3443.0435206274033
+    total_volume: 3998.023720540162
 links:
-  total: 0
+  total: 4
   internal: 0
-  relative: 0
+  relative: 4
   external: 0
   external_vendor: 0
   scholarly: 0
@@ -145,10 +145,39 @@ links:
   image: 0
   footnote: 0
   bare_url: 0
-  broken: 0
-  link_debt_score: 0
-  information_scent_score: 0
-  review_burden: 0
+  broken: 4
+  link_debt_score: 0.45
+  information_scent_score: 0.3
+  review_burden: 13.2
+link_records:
+  - line: 5
+    class: relative
+    destination: "../README.md"
+    text: "`ophidiarium/mehen`"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 27
+    class: relative
+    destination: "../README.md"
+    text: "`migrations/0018_docs_index.sql`"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 79
+    class: relative
+    destination: "../docs/mehen_markdown_metrics_research_foundation.md"
+    text: "`docs/mehen_markdown_metrics_research_foundation.md`"
+    is_image: false
+    is_bare_url: false
+    resolved: false
+  - line: 101
+    class: relative
+    destination: "../README.md"
+    text: "`config/defaults.yaml`"
+    is_image: false
+    is_bare_url: false
+    resolved: false
 visuals:
   images: 0
   diagrams: 0
@@ -164,26 +193,26 @@ tables:
   table_scaffold_score: 1
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 99.9910030392779
+  documentation_maintainability_index: 92.90783337218346
   section_balance_score: 0.85
-  good_scaffold_score: 0.4
+  good_scaffold_score: 0.445
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0.2
   evidence_coverage_score: 0.6666666666666667
 ai_era:
-  filler_lazy_structure_risk: 0.16425101214574903
+  filler_lazy_structure_risk: 0.16000000000000003
   labels:
     - low-repository-grounding
   top_contributors:
     - - low-repository-grounding
       - 0.8
-    - - specificity-scarcity
-      - 0.03542510121457498
     - - hollow-references
       - 0
+    - - large-unanchored-prose
+      - 0
 review:
-  review_criticality_index: 19.431808035714283
+  review_criticality_index: 26.802343750000002
 artifacts:
   - id: 0
     kind: code
@@ -407,33 +436,33 @@ prose:
         language: en
   english:
     readability:
-      flesch_reading_ease: 59.518
-      flesch_kincaid_grade: 6.529
-      gunning_fog: 7.236
-      smog: 8.499
-      ari: 5.958
-      coleman_liau: 9.764
-      dale_chall_new: 10.858
+      flesch_reading_ease: 62.228
+      flesch_kincaid_grade: 6.238
+      gunning_fog: 7.314
+      smog: 8.623
+      ari: 5.74
+      coleman_liau: 9.518
+      dale_chall_new: 10.709
       dale_chall_list: ngsl-1.2
-      forcast: 11.4
-      lix: 34.267
-      rix: 1.767
+      forcast: 11.3
+      lix: 33.641
+      rix: 1.8
       ensemble_grade_band:
-        - 5.958
-        - 9.764
+        - 5.74
+        - 9.518
     lexical:
-      mattr_50: 0.798
-      hapax_ratio: 0.735
-      dis_ratio: 0.169
-      lexical_density: 0.676
-      avg_sentence_words: 6.326
+      mattr_50: 0.792
+      hapax_ratio: 0.736
+      dis_ratio: 0.172
+      lexical_density: 0.67
+      avg_sentence_words: 6.675
       p90_sentence_words: 12
       max_sentence_words: 21
-      stddev_sentence_words: 4.285
-      avg_word_chars: 5.261
-      p90_word_chars: 9
-      sentence_count: 43
-      words_total: 272
+      stddev_sentence_words: 4.692
+      avg_word_chars: 5.075
+      p90_word_chars: 8
+      sentence_count: 40
+      words_total: 267
     wording:
       passive_ratio: 0
       hedge_density: 0.007
@@ -455,8 +484,8 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: false
-    words_counted: 272
-    sentences_counted: 43
+    words_counted: 267
+    sentences_counted: 40
     blocks_stripped:
       - code
       - table

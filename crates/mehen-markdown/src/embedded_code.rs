@@ -23,7 +23,8 @@
 use std::sync::OnceLock;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{fence_content_text, fence_language_tag};
 
 /// Languages a fenced code block can declare. Mirrors the pre-1.0
 /// `LANG` enum, but kept local to this crate so we don't depend on
@@ -78,9 +79,9 @@ pub(crate) fn embedded_volume(root: &Node<'_>, source: &str) -> f64 {
 fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
     let kind: Markdown = node.kind_id().into();
     if matches!(kind, Markdown::FencedCodeBlock) {
-        let info = fence_info_tag(node, source);
+        let info = fence_language_tag(node, source, false);
         let lang = info.as_deref().and_then(map_fence_to_lang);
-        if let (Some(lang), Some(mut body)) = (lang, fenced_code_content(node, source)) {
+        if let (Some(lang), Some(mut body)) = (lang, fence_content_text(node, source)) {
             if matches!(lang, FenceLanguage::Php) {
                 let leading = body.trim_start();
                 if !leading.starts_with("<?php") && !leading.starts_with("<?=") {
@@ -147,83 +148,4 @@ fn map_fence_to_lang(info: &str) -> Option<FenceLanguage> {
         "php" => FenceLanguage::Php,
         _ => return None,
     })
-}
-
-fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::InfoString) {
-            let mut c2 = child.cursor();
-            if c2.goto_first_child() {
-                loop {
-                    let inner = c2.node();
-                    if matches!(inner.kind_id().into(), Markdown::Language) {
-                        let bytes = source.as_bytes();
-                        let start = inner.start_byte();
-                        let end = inner.end_byte();
-                        if end <= bytes.len() && start < end {
-                            let tag = std::str::from_utf8(&bytes[start..end])
-                                .ok()?
-                                .trim()
-                                .to_string();
-                            if !tag.is_empty() {
-                                return Some(tag);
-                            }
-                        }
-                    }
-                    if !c2.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-            // Fallback: take the entire info string text and split by ws.
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start < end {
-                let raw = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
-                if !raw.is_empty() {
-                    return Some(raw.to_string());
-                }
-            }
-            return None;
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    let mut out = String::new();
-    let mut found = false;
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start < end {
-                let chunk = std::str::from_utf8(&bytes[start..end]).ok()?;
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(chunk);
-                found = true;
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    if found { Some(out) } else { None }
 }

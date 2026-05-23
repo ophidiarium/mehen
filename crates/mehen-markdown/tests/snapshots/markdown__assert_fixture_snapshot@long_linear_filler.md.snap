@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.1390728476821192
 size:
-  words: 2666
-  effective_content_units: 11.108333333333333
+  words: 2664
+  effective_content_units: 11.1
   sections: 7
   headings: 7
 ecu_inputs:
@@ -41,13 +41,13 @@ sections:
       - 4
       - 5
       - 6
-    word_count: 126
+    word_count: 125
     block_count: 2
   - section_id: 1
     heading_level: 2
     heading_text: ~
     start_line: 17
-    end_line: 52
+    end_line: 51
     parent_section_id: 0
     child_section_ids: []
     word_count: 307
@@ -56,16 +56,16 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 53
-    end_line: 101
+    end_line: 100
     parent_section_id: 0
     child_section_ids: []
-    word_count: 456
+    word_count: 455
     block_count: 6
   - section_id: 3
     heading_level: 2
     heading_text: ~
     start_line: 102
-    end_line: 160
+    end_line: 159
     parent_section_id: 0
     child_section_ids: []
     word_count: 522
@@ -74,7 +74,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 161
-    end_line: 214
+    end_line: 213
     parent_section_id: 0
     child_section_ids: []
     word_count: 476
@@ -83,7 +83,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 215
-    end_line: 240
+    end_line: 239
     parent_section_id: 0
     child_section_ids: []
     word_count: 225
@@ -102,17 +102,17 @@ complexity:
   reading_path_complexity_raw: 6
   cognitive_complexity: 0.2
   halstead:
-    operators_distinct: 5
-    operators_total: 140
-    operands_distinct: 719
-    operands_total: 2677
+    operators_distinct: 4
+    operators_total: 138
+    operands_distinct: 720
+    operands_total: 2675
     vocabulary: 724
-    length: 2817
-    volume: 26761.06586391339
-    difficulty: 9.308066759388039
-    effort: 249093.78761368617
+    length: 2813
+    volume: 26723.066480365058
+    difficulty: 7.430555555555555
+    effort: 198567.23009715704
     embedded_volume: 0
-    total_volume: 26761.06586391339
+    total_volume: 26723.066480365058
 links:
   total: 0
   internal: 0
@@ -144,7 +144,7 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 85.703462799402
+  documentation_maintainability_index: 85.70773749059775
   section_balance_score: 1
   good_scaffold_score: 0
   artifact_debt_score: 0
@@ -152,7 +152,7 @@ grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0
 ai_era:
-  filler_lazy_structure_risk: 0.7210765191297824
+  filler_lazy_structure_risk: 0.7210247747747748
   labels:
     - large-unanchored-prose
     - low-artifact-density

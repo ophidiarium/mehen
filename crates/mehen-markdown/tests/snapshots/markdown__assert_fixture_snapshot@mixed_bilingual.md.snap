@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.375
 size:
-  words: 84
-  effective_content_units: 0.35
+  words: 82
+  effective_content_units: 0.3416666666666667
   sections: 4
   headings: 4
 ecu_inputs:
@@ -44,16 +44,16 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 5
-    end_line: 13
+    end_line: 12
     parent_section_id: 0
     child_section_ids: []
-    word_count: 45
+    word_count: 44
     block_count: 2
   - section_id: 2
     heading_level: 2
     heading_text: ~
     start_line: 14
-    end_line: 19
+    end_line: 18
     parent_section_id: 0
     child_section_ids: []
     word_count: 6
@@ -65,24 +65,24 @@ sections:
     end_line: 24
     parent_section_id: 0
     child_section_ids: []
-    word_count: 31
+    word_count: 30
     block_count: 1
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 3
   cognitive_complexity: 0.2
   halstead:
-    operators_distinct: 6
-    operators_total: 21
+    operators_distinct: 5
+    operators_total: 16
     operands_distinct: 78
-    operands_total: 93
-    vocabulary: 84
-    length: 114
-    volume: 728.7241861967788
-    difficulty: 3.5769230769230766
-    effort: 2606.590358319247
+    operands_total: 91
+    vocabulary: 83
+    length: 107
+    volume: 682.129219154121
+    difficulty: 2.916666666666667
+    effort: 1989.5435558661864
     embedded_volume: 0
-    total_volume: 728.7241861967788
+    total_volume: 682.129219154121
 links:
   total: 0
   internal: 0

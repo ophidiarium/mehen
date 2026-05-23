@@ -23,9 +23,9 @@
 use std::collections::HashSet;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::loc::LineClass;
 use crate::loc::LineClasses;
+use crate::syntax_tree::Node;
 use crate::types::{EcuInputs, LocFamily};
 
 /// Counts the ECU inputs that fall out of the AST. `classes` is used to

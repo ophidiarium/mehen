@@ -1,5 +1,5 @@
 ---
-source: tests/pr_comment_golden.rs
+source: crates/mehen-cli/tests/pr_comment_golden.rs
 expression: redacted
 ---
 <!-- mehen-metrics -->
@@ -12,7 +12,7 @@ No metric changes detected.
 
 | File | DMI | Words | FKGL | Link Debt | Filler Risk |
 |---|---:|---:|---:|---:|---:|
-| `docs/api/auth.md` | 85 (HEAD~1: 90) 🔴 | 194 (HEAD~1: 38) ⚪ | 13.7 (HEAD~1: 0.0) 🔴 | 0.45 (HEAD~1: 0.00) 🔴 | 0.67 (HEAD~1: 0.67) ⚠️ |
+| `docs/api/auth.md` | 85 (HEAD~1: 90) 🔴 | 197 (HEAD~1: 38) ⚪ | 13.7 (HEAD~1: 0.0) 🔴 | 0.45 (HEAD~1: 0.00) 🔴 | 0.67 (HEAD~1: 0.67) ⚠️ |
 
 **Callouts**
 

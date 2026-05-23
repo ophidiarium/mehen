@@ -33,7 +33,7 @@ pub mod lang_detect;
 
 use serde::Serialize;
 
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 
 use self::english::EnglishReport;
 use self::japanese::JapaneseReport;
@@ -259,15 +259,10 @@ fn blocks_stripped_kinds(root: &Node<'_>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tree_sitter::Parser as TsParser;
 
     fn analyze_src(src: &str) -> ProseReport {
-        let mut parser = TsParser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .expect("set_language");
-        let tree = parser.parse(src.as_bytes(), None).expect("parse");
-        let root = crate::legacy_node::Node(tree.root_node());
+        let tree = crate::syntax_tree::parse(src);
+        let root = tree.root();
         analyze_prose(&root, src.as_bytes())
     }
 

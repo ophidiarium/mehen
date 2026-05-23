@@ -28,7 +28,7 @@ use serde::Serialize;
 use unicode_script::{Script, UnicodeScript};
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 
 /// Sentinel character inserted where an `InlineCode` span was stripped.
 ///
@@ -121,6 +121,8 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
             | Markdown::BlockQuote
             | Markdown::PlainBlockQuote
             | Markdown::Callout
+            | Markdown::ListItemContent
+            | Markdown::TaskListItemContent
     );
 
     // Stop containers: never descend, never emit.
@@ -162,7 +164,10 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
         let is_container = matches!(
             kind,
             Markdown::BlockQuote | Markdown::PlainBlockQuote | Markdown::Callout
-        );
+        ) || (matches!(
+            kind,
+            Markdown::ListItemContent | Markdown::TaskListItemContent
+        ) && has_nested_prose_block(node));
 
         if is_container {
             // Containers (blockquote / callout) don't emit their own slice:
@@ -207,6 +212,37 @@ fn walk<'a>(node: &Node<'_>, source: &'a [u8], blocks: &mut Vec<ProseBlock<'a>>)
             }
         }
     }
+}
+
+fn has_nested_prose_block(node: &Node<'_>) -> bool {
+    let mut cursor = node.cursor();
+    if !cursor.goto_first_child() {
+        return false;
+    }
+    loop {
+        let kind: Markdown = cursor.node().kind_id().into();
+        if matches!(
+            kind,
+            Markdown::Paragraph
+                | Markdown::AtxHeading
+                | Markdown::AtxHeading2
+                | Markdown::AtxHeading3
+                | Markdown::AtxHeading4
+                | Markdown::AtxHeading5
+                | Markdown::AtxHeading6
+                | Markdown::SetextHeading
+                | Markdown::SetextHeading2
+                | Markdown::BlockQuote
+                | Markdown::PlainBlockQuote
+                | Markdown::Callout
+        ) {
+            return true;
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    false
 }
 
 /// Produces the clean prose text for a prose-block node.
@@ -535,22 +571,7 @@ pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<D
     let mut out = blocks;
 
     // Pass 1: non-heading short blocks inherit from preceding heading.
-    let mut last_heading_lang: Option<Language> = None;
-    for b in out.iter_mut() {
-        if is_heading_kind(&b.kind) {
-            if !matches!(b.language, Language::None | Language::Other) {
-                last_heading_lang = Some(b.language);
-            }
-            continue;
-        }
-        let visible_len = b.text.chars().filter(|c| !c.is_whitespace()).count();
-        if visible_len < 15
-            && matches!(b.language, Language::Other)
-            && let Some(inh) = last_heading_lang
-        {
-            b.language = inh;
-        }
-    }
+    inherit_short_blocks_from_headings(&mut out);
 
     // Pass 2: headings that came back `Other` inherit from nearest neighbor.
     // Kanji-only headings ("## 目的") are a common trigger.
@@ -587,8 +608,14 @@ pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<D
     // kanji-only headings like `## 目的`. Without this pass, short body
     // blocks right after such a heading stayed `Other` because pass 1 had
     // no `last_heading_lang` yet (Codex P2 on PR #85).
+    inherit_short_blocks_from_headings(&mut out);
+
+    out
+}
+
+fn inherit_short_blocks_from_headings(blocks: &mut [DetectedBlock]) {
     let mut last_heading_lang: Option<Language> = None;
-    for b in out.iter_mut() {
+    for b in blocks.iter_mut() {
         if is_heading_kind(&b.kind) {
             if !matches!(b.language, Language::None | Language::Other) {
                 last_heading_lang = Some(b.language);
@@ -603,8 +630,6 @@ pub(crate) fn propagate_heading_inheritance(blocks: Vec<DetectedBlock>) -> Vec<D
             b.language = inh;
         }
     }
-
-    out
 }
 
 fn is_heading_kind(kind: &Markdown) -> bool {
@@ -717,16 +742,12 @@ mod tests {
     }
 
     fn parse_blocks(src: &str) -> Vec<ProseBlock<'static>> {
-        use tree_sitter::Parser as TsParser;
         // Leak the buffer so we can return borrowed `ProseBlock` values with
         // a 'static lifetime for this test-only helper.
         let bytes: &'static [u8] = Box::leak(src.as_bytes().to_vec().into_boxed_slice());
-        let mut parser = TsParser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        let tree = parser.parse(bytes, None).unwrap();
-        let root = crate::legacy_node::Node(tree.root_node());
+        let source = std::str::from_utf8(bytes).unwrap();
+        let tree = crate::syntax_tree::parse(source);
+        let root = tree.root();
         // SAFETY: the source buffer `bytes` outlives the returned Vec; tree
         // goes out of scope at function end but the collected blocks own
         // their extracted text and only borrow `_raw` which points at the

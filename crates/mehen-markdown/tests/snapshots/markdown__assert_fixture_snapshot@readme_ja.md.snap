@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.4782608695652174
 size:
-  words: 24
-  effective_content_units: 0.1
+  words: 23
+  effective_content_units: 0.09583333333333334
   sections: 5
   headings: 5
 ecu_inputs:
@@ -45,7 +45,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 5
-    end_line: 8
+    end_line: 7
     parent_section_id: 0
     child_section_ids: []
     word_count: 3
@@ -54,7 +54,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 9
-    end_line: 14
+    end_line: 13
     parent_section_id: 0
     child_section_ids: []
     word_count: 7
@@ -63,7 +63,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 15
-    end_line: 20
+    end_line: 19
     parent_section_id: 0
     child_section_ids: []
     word_count: 7
@@ -75,24 +75,24 @@ sections:
     end_line: 23
     parent_section_id: 0
     child_section_ids: []
-    word_count: 4
+    word_count: 3
     block_count: 1
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 4
   cognitive_complexity: 0.2
   halstead:
-    operators_distinct: 4
-    operators_total: 27
-    operands_distinct: 29
-    operands_total: 29
-    vocabulary: 33
-    length: 56
-    volume: 282.4860706840734
-    difficulty: 2
-    effort: 564.9721413681468
+    operators_distinct: 3
+    operators_total: 22
+    operands_distinct: 28
+    operands_total: 28
+    vocabulary: 31
+    length: 50
+    volume: 247.70981551934375
+    difficulty: 1.5
+    effort: 371.56472327901565
     embedded_volume: 0
-    total_volume: 282.4860706840734
+    total_volume: 247.70981551934375
 links:
   total: 0
   internal: 0
@@ -124,15 +124,15 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 90.76285714285714
+  documentation_maintainability_index: 90.70626086956521
   section_balance_score: 0.85
   good_scaffold_score: 0
   artifact_debt_score: 0
 grounding:
-  repository_grounding_score: 0.06785714285714284
+  repository_grounding_score: 0.035217391304347825
   evidence_coverage_score: 0
 ai_era:
-  filler_lazy_structure_risk: 0.6447619047619049
+  filler_lazy_structure_risk: 0.6494782608695653
   labels:
     - large-unanchored-prose
     - low-artifact-density
@@ -144,9 +144,9 @@ ai_era:
     - - low-artifact-density
       - 1
     - - low-repository-grounding
-      - 0.9321428571428572
+      - 0.9647826086956521
 review:
-  review_criticality_index: 0.8821428571428569
+  review_criticality_index: 0.4578260869565217
 artifacts: []
 prose:
   language_detection:

@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -45,7 +45,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 7
-    end_line: 12
+    end_line: 11
     parent_section_id: 0
     child_section_ids: []
     word_count: 90
@@ -54,7 +54,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 13
-    end_line: 18
+    end_line: 17
     parent_section_id: 0
     child_section_ids: []
     word_count: 82
@@ -63,7 +63,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 19
-    end_line: 24
+    end_line: 23
     parent_section_id: 0
     child_section_ids: []
     word_count: 66

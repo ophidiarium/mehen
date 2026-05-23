@@ -428,7 +428,7 @@ mod tests {
         // carries the sentinel.
         //
         // Construct the post-strip sentence directly so this test
-        // doesn't depend on the tree-sitter pipeline.
+        // doesn't depend on the Markdown parser pipeline.
         let sentinel = crate::prose::lang_detect::INLINE_CODE_SENTINEL.to_string();
         // "very" is in the bundled weasel list — ensures the control
         // case below actually fires.

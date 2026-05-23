@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
+use crate::syntax_tree::Node;
 use crate::tree_helpers::{find_first, node_text};
 use crate::types::{LinkClass, LinkRecord, Links, Section};
 
@@ -207,8 +207,9 @@ fn classify_autolink(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
 
 fn classify_footnote_reference(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
     let line = (node.start_row() as u64) + 1;
-    let label =
+    let raw_label =
         find_first(node, Markdown::FootnoteReferenceLabel).map(|n| node_text(&n, source))?;
+    let label = normalize_footnote_label(&raw_label);
     Some(LinkRecord {
         line,
         class: LinkClass::Footnote,
@@ -218,6 +219,16 @@ fn classify_footnote_reference(node: &Node<'_>, source: &str) -> Option<LinkReco
         is_bare_url: false,
         resolved: None,
     })
+}
+
+fn normalize_footnote_label(label: &str) -> String {
+    label
+        .trim()
+        .trim_start_matches("[^")
+        .trim_start_matches('^')
+        .trim_end_matches(']')
+        .trim()
+        .to_string()
 }
 
 fn classify_reference_definition(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
@@ -527,12 +538,7 @@ fn collect_footnote_labels_rec(node: &Node<'_>, source: &str, out: &mut HashSet<
         && let Some(label) = find_first(node, FootnoteLabel)
     {
         let text = node_text(&label, source);
-        // Strip `[^` prefix / `]` suffix if present.
-        let stripped = text
-            .trim_start_matches("[^")
-            .trim_end_matches(']')
-            .to_string();
-        out.insert(stripped);
+        out.insert(normalize_footnote_label(&text));
         return;
     }
     let mut cursor = node.cursor();
@@ -802,12 +808,8 @@ mod tests {
         // heading slugs. Anchor collection must match so `#intro-1` on
         // a doc with two `## Intro` headings resolves cleanly.
         let src = "## Intro\n\nfirst\n\n## Intro\n\nsecond\n\n## Intro\n\nthird\n";
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        let tree = parser.parse(src, None).unwrap();
-        let root = crate::legacy_node::Node(tree.root_node());
+        let tree = crate::syntax_tree::parse(src);
+        let root = tree.root();
         let slugs = collect_anchor_slugs(&root, src);
         assert!(slugs.contains("intro"), "base slug present");
         assert!(slugs.contains("intro-1"), "second occurrence gets -1");

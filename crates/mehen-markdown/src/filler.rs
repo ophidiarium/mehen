@@ -30,9 +30,10 @@ use std::collections::BTreeSet;
 
 use crate::grammar::Markdown;
 use crate::grounding::GroundingOutputs;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
 use crate::section_balance::SectionBalance;
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{ProseContext, is_non_prose_container, node_text, opens_prose_context};
 use crate::types::{ArtifactRecord, LinkClass, LinkRecord, LocFamily, Section};
 
 /// Diagnostic labels from §17.11.
@@ -471,82 +472,19 @@ fn count_placeholder_words(root: &Node<'_>, source: &str) -> u64 {
 fn walk_placeholder_words(node: &Node<'_>, source: &str, total: &mut u64, inside_prose: bool) {
     use Markdown::*;
     let kind: Markdown = node.kind_id().into();
-    match kind {
-        FencedCodeBlock
-        | IndentedCodeBlock
-        | InlineCode
-        | CodeFenceContent
-        | InlineCodeContent
-        | InlineCodeContent2
-        | InfoString
-        | Language
-        | MathBlock
-        | MathInline
-        | MathBlockContent
-        | MathInlineContent
-        | HtmlBlock
-        | HtmlBlock1
-        | HtmlBlock3
-        | HtmlBlock4
-        | HtmlBlock5
-        | HtmlBlock6
-        | HtmlBlock7
-        | HtmlCommentBlock
-        | HtmlInline
-        | HtmlComment
-        | HtmlCdata
-        | HtmlDeclaration
-        | HtmlProcessingInstruction
-        | HtmlOpenTag
-        | HtmlCloseTag
-        | MdxJsxBlock
-        | MdxJsxInline
-        | MdxJsxOpenTag
-        | MdxJsxOpenTag2
-        | MdxJsxCloseTag
-        | MdxJsxCloseTag2
-        | MdxJsxExpression
-        | Autolink
-        | Uri
-        | Email
-        | LinkDestination
-        | LinkDestinationParenthesis
-        | LinkTitle
-        | TextNoAngle
-        | MinusMetadata
-        | PlusMetadata => {
-            return;
-        }
-        _ => {}
+    if is_non_prose_container(kind) {
+        return;
     }
-    let opens_prose = matches!(
-        kind,
-        Paragraph
-            | AtxHeadingContent
-            | SetextHeading
-            | SetextHeading2
-            | BlockQuote
-            | PlainBlockQuote
-            | Callout
-            | CalloutHeaderParagraph
-            | ListItemContent
-            | TaskListItemContent
-    );
-    let next_inside = inside_prose || opens_prose;
+    let next_inside = inside_prose || opens_prose_context(kind, ProseContext::PLACEHOLDER_TEXT);
 
     if next_inside
         && matches!(
             kind,
             WordToken | WordToken1 | WordToken2 | WordToken3 | IdentifierLikeToken
         )
+        && is_placeholder(node_text(node, source).trim())
     {
-        let start = node.start_byte();
-        let end = node.end_byte();
-        let raw = source.as_bytes().get(start..end).unwrap_or(&[]);
-        let text = String::from_utf8_lossy(raw);
-        if is_placeholder(text.trim()) {
-            *total += 1;
-        }
+        *total += 1;
     }
 
     let mut cursor = node.cursor();

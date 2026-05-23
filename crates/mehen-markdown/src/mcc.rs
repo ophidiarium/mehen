@@ -17,7 +17,7 @@
 //! - Diagram parse error (+3.00) → 0.00 until Phase C diagram parser lands.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 use crate::tree_helpers::{
     count_table_cells, fence_content_line_count, fence_language_tag, find_link_dest,
     find_link_label, has_scheme as is_external, node_line_span,
@@ -685,18 +685,14 @@ fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> tree_sitter::Tree {
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        parser.parse(src, None).unwrap()
+    fn parse(src: &str) -> crate::syntax_tree::Tree {
+        crate::syntax_tree::parse(src)
     }
 
     #[test]
     fn empty_doc_mcc_zero() {
         let tree = parse("");
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mcc(&root, "");
         assert_eq!(r.mcc, 0.0);
         assert_eq!(r.positive, 0.0);
@@ -706,7 +702,7 @@ mod tests {
     fn heading_skip_penalizes() {
         let src = "# Top\n\n### Skipped\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mcc(&root, src);
         // Heading skip H1→H3 contributes 1.00 with nest_multiplier=1.
         assert!(r.positive >= 1.0, "positive: {}", r.positive);
@@ -718,7 +714,7 @@ mod tests {
         let filler = "word ".repeat(801);
         let src = format!("# Title\n\n{}\n", filler);
         let tree = parse(&src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mcc(&root, &src);
         // §8.1 charges 2.00 per section-without-subheading > 800 words.
         assert!(r.positive >= 2.0, "positive: {}", r.positive);
@@ -728,7 +724,7 @@ mod tests {
     fn fences_and_tables_adjust_cluster() {
         let src = "# T\n\n```\nfoo\n```\n\n```\nbar\n```\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mcc(&root, src);
         // Two unlabelled code fences: 1.00 + 1.50 penalty each. They sit in
         // an artifact-dense window, so cluster multiplier > 1.
@@ -741,8 +737,8 @@ mod tests {
         let unlabelled = "# H\n\nIntro prose.\n\n```\nlet x = 1;\n```\n\nExplanation.\n";
         let t1 = parse(labelled);
         let t2 = parse(unlabelled);
-        let r1 = compute_mcc(&crate::legacy_node::Node(t1.root_node()), labelled);
-        let r2 = compute_mcc(&crate::legacy_node::Node(t2.root_node()), unlabelled);
+        let r1 = compute_mcc(&t1.root(), labelled);
+        let r2 = compute_mcc(&t2.root(), unlabelled);
         // The positive difference between unlabelled and labelled should be
         // at least 1.50 (after matching cluster multipliers). Allow for tiny
         // numeric drift due to cluster windows.
@@ -759,7 +755,7 @@ mod tests {
         // credit. MCC should be lower than positive.
         let src = "# Example\n\nThis shows how to print:\n\n```rust\nfn main() { println!(\"hi\"); }\n```\n\nThat prints `hi`.\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mcc(&root, src);
         assert!(r.credit_used > 0.0, "credit should apply");
         assert!(r.mcc < r.positive, "{} !< {}", r.mcc, r.positive);

@@ -14,6 +14,8 @@
 //! `tree-sitter-go = "=0.25.x"` in `crates/mehen-go/Cargo.toml`
 //! propagates to xtask through the `mehen-go` path dep, so kind
 //! ordinals always match the grammar the analyzer links at runtime.
+//! Markdown is no longer listed here because `mehen-markdown` is backed
+//! by pulldown-cmark rather than tree-sitter.
 //!
 //! The generator itself is a small askama template (see
 //! `xtask/templates/grammar.rs`); the heavy lifting is the kind-name
@@ -64,12 +66,6 @@ pub(crate) const TARGETS: &[GeneratorTarget] = &[
         enum_name: "Kotlin",
         crate_dir: "crates/mehen-kotlin/src",
         language: mehen_kotlin::__grammar_language,
-    },
-    GeneratorTarget {
-        slug: "markdown",
-        enum_name: "Markdown",
-        crate_dir: "crates/mehen-markdown/src",
-        language: mehen_markdown::__grammar_language,
     },
 ];
 
@@ -208,10 +204,9 @@ fn token_names(language: &Language) -> Vec<(String, bool, String)> {
     }
 
     let mut names: Vec<(String, bool, String)> = by_id.into_values().collect();
-    // tree-sitter's ERROR sentinel is always appended. tree-sitter-
-    // markdown-text also defines an anonymous `_error` external token
-    // whose sanitized name collides with `Error`; suffix the explicit
-    // sentinel in that case so both variants compile.
+    // tree-sitter's ERROR sentinel is always appended. If a grammar also
+    // defines an anonymous token whose sanitized name collides with `Error`,
+    // suffix the explicit sentinel so both variants compile.
     let sentinel = if names.iter().any(|(n, _, _)| n == "Error") {
         "ErrorSentinel".to_string()
     } else {
@@ -238,11 +233,10 @@ fn sanitize_identifier(name: &str) -> String {
     if name == "Self" {
         return "SELF".to_string();
     }
-    // A token composed solely of underscores (e.g. Markdown's `__`
-    // emphasis delimiter) survives the loop below as `__`, which then
-    // collapses to an empty identifier in `camel_case`. Map such names
-    // to a run of `UNDERSCORE` tokens joined with `_` so each
-    // contributes a word boundary and the generated variant compiles.
+    // A token composed solely of underscores survives the loop below as
+    // `__`, which then collapses to an empty identifier in `camel_case`.
+    // Map such names to a run of `UNDERSCORE` tokens joined with `_` so
+    // each contributes a word boundary and the generated variant compiles.
     if !name.is_empty() && name.chars().all(|c| c == '_') {
         return std::iter::repeat_n("UNDERSCORE", name.len())
             .collect::<Vec<_>>()
@@ -406,7 +400,7 @@ mod tests {
         assert!(target_for("c").is_some());
         assert!(target_for("go").is_some());
         assert!(target_for("kotlin").is_some());
-        assert!(target_for("markdown").is_some());
+        assert!(target_for("markdown").is_none());
         assert!(target_for("nonexistent").is_none());
     }
 }

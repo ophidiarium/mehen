@@ -68,6 +68,32 @@ fn code_fences_fixture() {
 }
 
 #[test]
+fn fenced_code_fixture_metrics_are_crlf_stable() {
+    ensure_dispatch();
+    for name in [
+        "artifact_debt_high.md",
+        "code_fences.md",
+        "diagram_heavy_scaffolded.md",
+        "diagram_mermaid.md",
+        "diagram_parse_error.md",
+        "embedded_code_large.md",
+        "halstead_mixed.md",
+        "small_dense_valuable.md",
+    ] {
+        let (source, path) = load_fixture(name);
+        let lf_source = source.replace("\r\n", "\n").replace('\r', "\n");
+        let crlf_source = lf_source.replace('\n', "\r\n");
+        let lf_metrics = analyze_markdown(&lf_source, &path);
+        let crlf_metrics = analyze_markdown(&crlf_source, &path);
+        assert_eq!(
+            serde_json::to_value(crlf_metrics).expect("serializing CRLF metrics"),
+            serde_json::to_value(lf_metrics).expect("serializing LF metrics"),
+            "{name} metrics should be stable under CRLF line endings"
+        );
+    }
+}
+
+#[test]
 fn table_mixed_fixture() {
     assert_fixture_snapshot("table_mixed.md");
 }

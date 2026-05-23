@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Konstantin Vyatkin <tino@vtkn.io>
 
-//! Tree-sitter walking helpers shared across the per-metric analyzers.
+//! Markdown tree walking helpers shared across the per-metric analyzers.
 //!
 //! The Markdown crate has many sibling analyzers (`mcc`, `mrpc`,
-//! `halstead`, `embedded_code`, …) that all walk the same tree-sitter
-//! CST and need the same low-level extraction primitives: line spans,
+//! `halstead`, `embedded_code`, …) that all walk the same syntax tree
+//! and need the same low-level extraction primitives: line spans,
 //! fence-content line counts, fenced-code language tags, link
 //! destinations, table-cell counts, etc. Without a shared module each
 //! analyzer was carrying byte-identical helper copies; CPD flagged
@@ -17,7 +17,125 @@
 //! without holding a `TreeCursor` open across other work.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ProseContext {
+    include_heading_content: bool,
+    include_heading_blocks: bool,
+    include_link_labels: bool,
+    include_tables: bool,
+}
+
+impl ProseContext {
+    pub(crate) const BODY: Self = Self {
+        include_heading_content: false,
+        include_heading_blocks: false,
+        include_link_labels: true,
+        include_tables: true,
+    };
+
+    pub(crate) const BODY_AND_HEADING_TEXT: Self = Self {
+        include_heading_content: true,
+        include_heading_blocks: false,
+        include_link_labels: true,
+        include_tables: true,
+    };
+
+    pub(crate) const PLACEHOLDER_TEXT: Self = Self {
+        include_heading_content: true,
+        include_heading_blocks: false,
+        include_link_labels: false,
+        include_tables: false,
+    };
+
+    pub(crate) const SECTION_TEXT: Self = Self {
+        include_heading_content: true,
+        include_heading_blocks: true,
+        include_link_labels: true,
+        include_tables: true,
+    };
+}
+
+/// Containers whose descendants are structural or machine-readable rather than
+/// narrative prose for Markdown metric walks.
+pub(crate) fn is_non_prose_container(kind: Markdown) -> bool {
+    use Markdown::*;
+    matches!(
+        kind,
+        FencedCodeBlock
+            | IndentedCodeBlock
+            | InlineCode
+            | CodeFenceContent
+            | InlineCodeContent
+            | InlineCodeContent2
+            | InfoString
+            | Language
+            | MathBlock
+            | MathInline
+            | MathBlockContent
+            | MathInlineContent
+            | HtmlBlock
+            | HtmlBlock1
+            | HtmlBlock3
+            | HtmlBlock4
+            | HtmlBlock5
+            | HtmlBlock6
+            | HtmlBlock7
+            | HtmlCommentBlock
+            | HtmlInline
+            | HtmlComment
+            | HtmlCdata
+            | HtmlDeclaration
+            | HtmlProcessingInstruction
+            | HtmlOpenTag
+            | HtmlCloseTag
+            | MdxJsxBlock
+            | MdxJsxInline
+            | MdxJsxOpenTag
+            | MdxJsxOpenTag2
+            | MdxJsxCloseTag
+            | MdxJsxCloseTag2
+            | MdxJsxExpression
+            | DirectiveBlock
+            | Autolink
+            | Uri
+            | Email
+            | LinkDestination
+            | LinkDestinationParenthesis
+            | LinkTitle
+            | TextNoAngle
+            | MinusMetadata
+            | PlusMetadata
+            | PipeTableDelimiterRow
+            | PipeTableDelimiterCell
+            | PipeTableAlignLeft
+            | PipeTableAlignRight
+    )
+}
+
+pub(crate) fn opens_prose_context(kind: Markdown, context: ProseContext) -> bool {
+    use Markdown::*;
+    matches!(
+        kind,
+        Paragraph
+            | BlockQuote
+            | PlainBlockQuote
+            | Callout
+            | CalloutHeaderParagraph
+            | ListItemContent
+            | TaskListItemContent
+    ) || (context.include_heading_content
+        && matches!(kind, AtxHeadingContent | SetextHeading | SetextHeading2))
+        || (context.include_heading_blocks
+            && matches!(
+                kind,
+                AtxHeading | AtxHeading2 | AtxHeading3 | AtxHeading4 | AtxHeading5 | AtxHeading6
+            ))
+        || (context.include_link_labels && matches!(kind, LinkLabel | FootnoteLabel))
+        || (context.include_tables
+            && matches!(kind, PipeTableCell | PipeTableHeader | PipeTableRow))
+}
 
 /// Number of source lines a node covers, with the same end-of-line
 /// convention every Markdown analyzer wants:
@@ -37,31 +155,103 @@ pub(crate) fn node_line_span(node: &Node<'_>) -> usize {
     end.saturating_sub(start) + 1
 }
 
-/// Line count of the *content* inside a fenced code block — i.e. the
-/// span of the inner `code_fence_content` child, ignoring the opening
-/// and closing fence markers.
-///
-/// `indented_code_block` has no delimiters, so the whole node IS
-/// content; we fall back to [`node_line_span`] for that case.
-pub(crate) fn fence_content_line_count(node: &Node<'_>) -> usize {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::IndentedCodeBlock) {
-        return node_line_span(node);
-    }
+#[derive(Clone, Copy, Debug)]
+struct ContentBounds {
+    start_byte: usize,
+    end_byte: usize,
+    start_row: usize,
+    end_row: usize,
+    end_col: usize,
+}
+
+fn code_content_bounds(node: &Node<'_>) -> Option<ContentBounds> {
+    let target = match node.kind_id().into() {
+        Markdown::FencedCodeBlock => Markdown::CodeFenceContent,
+        Markdown::IndentedCodeBlock => Markdown::IndentedChunk,
+        _ => return None,
+    };
+
     let mut cursor = node.cursor();
     if !cursor.goto_first_child() {
-        return 0;
+        return None;
     }
+
+    let mut bounds: Option<ContentBounds> = None;
     loop {
         let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            return node_line_span(&child);
+        let child_kind: Markdown = child.kind_id().into();
+        if child_kind == target {
+            let (end_row, end_col) = child.end_position();
+            bounds = Some(match bounds {
+                Some(mut existing) => {
+                    existing.end_byte = child.end_byte();
+                    existing.end_row = end_row;
+                    existing.end_col = end_col;
+                    existing
+                }
+                None => ContentBounds {
+                    start_byte: child.start_byte(),
+                    end_byte: child.end_byte(),
+                    start_row: child.start_row(),
+                    end_row,
+                    end_col,
+                },
+            });
         }
         if !cursor.goto_next_sibling() {
             break;
         }
     }
-    0
+    bounds
+}
+
+/// Line count of the *content* inside a fenced code block — i.e. the
+/// span of the inner `code_fence_content` child, ignoring the opening
+/// and closing fence markers.
+///
+/// `indented_code_block` has no delimiters, so its `_indented_chunk`
+/// children are treated as the same content span.
+pub(crate) fn fence_content_line_count(node: &Node<'_>) -> usize {
+    let Some(bounds) = code_content_bounds(node) else {
+        return 0;
+    };
+    let mut end = bounds.end_row;
+    if end > bounds.start_row && bounds.end_col == 0 {
+        end -= 1;
+    }
+    end.saturating_sub(bounds.start_row) + 1
+}
+
+/// Source text inside a fenced or indented code block, with CRLF/LF normalized
+/// to LF so semantic metrics do not drift by checkout platform.
+pub(crate) fn fence_content_text(node: &Node<'_>, source: &str) -> Option<String> {
+    let bounds = code_content_bounds(node)?;
+    let bytes = source.as_bytes();
+    if bounds.end_byte > bytes.len() || bounds.start_byte > bounds.end_byte {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&bytes[bounds.start_byte..bounds.end_byte]);
+    Some(normalize_line_endings(&text))
+}
+
+fn normalize_line_endings(text: &str) -> String {
+    if !text.as_bytes().contains(&b'\r') {
+        return text.to_string();
+    }
+
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\r' {
+            if matches!(chars.peek(), Some('\n')) {
+                chars.next();
+            }
+            out.push('\n');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 /// Read the language tag from a fenced code block's `info_string`
@@ -105,6 +295,20 @@ pub(crate) fn fence_language_tag(node: &Node<'_>, source: &str, lowercase: bool)
                     }
                 }
             }
+            let bytes = source.as_bytes();
+            let start = child.start_byte();
+            let end = child.end_byte();
+            if end <= bytes.len() && start < end {
+                let raw = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
+                if !raw.is_empty() {
+                    return Some(if lowercase {
+                        raw.to_ascii_lowercase()
+                    } else {
+                        raw.to_string()
+                    });
+                }
+            }
+            return None;
         }
         if !cursor.goto_next_sibling() {
             break;
@@ -233,7 +437,7 @@ pub(crate) fn find_first<'a>(node: &Node<'a>, target: Markdown) -> Option<Node<'
 
 /// Slice the source bytes covered by `node` as a UTF-8 lossy `String`.
 /// Lossy conversion (rather than `from_utf8`) keeps every analyzer
-/// resilient to a tree-sitter cursor stepping into an invalid byte
+/// resilient to a syntax node stepping into an invalid byte
 /// run inside an HTML-block / MDX raw segment.
 pub(crate) fn node_text(node: &Node<'_>, source: &str) -> String {
     let start = node.start_byte();

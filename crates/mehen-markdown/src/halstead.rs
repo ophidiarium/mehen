@@ -4,8 +4,8 @@
 //! Markdown Halstead metrics per §9.
 //!
 //! Walks the AST once and classifies each leaf / inline / block node as
-//! operator or operand following §§9.1-9.2, using the tree-sitter-markdown-text
-//! grammar's node kinds. Operators are identified by kind (so all `##` H2
+//! operator or operand following §§9.1-9.2, using the Pulldown-backed Markdown
+//! syntax node kinds. Operators are identified by kind (so all `##` H2
 //! markers share one operator class); operands are identified by their byte
 //! text (so two occurrences of the same word count once in n2 but twice in
 //! N2, matching classical Halstead).
@@ -27,8 +27,8 @@
 use std::collections::BTreeMap;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
-use crate::tree_helpers::fence_language_tag;
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{fence_content_text, fence_language_tag};
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -207,7 +207,7 @@ impl Ctx<'_, '_> {
                 // Embedded content handled as a single identifier-like
                 // operand (the `code_fence_content` string). We do not
                 // descend into its leaves so §9.4's scaling applies cleanly.
-                if let Some(content) = fenced_code_content(node, self.source) {
+                if let Some(content) = fence_content_text(node, self.source) {
                     self.bump_operand(format!("code:{}", sha_hex(content.as_bytes())));
                 }
                 descend = false;
@@ -363,30 +363,6 @@ fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
     fence_language_tag(node, source, true)
 }
 
-fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start <= end {
-                return std::str::from_utf8(&bytes[start..end])
-                    .ok()
-                    .map(str::to_string);
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
 fn inline_code_text(node: &Node<'_>, source: &str) -> Option<String> {
     let bytes = source.as_bytes();
     let start = node.start_byte();
@@ -428,18 +404,14 @@ fn sha_hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> tree_sitter::Tree {
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        parser.parse(src, None).unwrap()
+    fn parse(src: &str) -> crate::syntax_tree::Tree {
+        crate::syntax_tree::parse(src)
     }
 
     #[test]
     fn empty_halstead_is_zero() {
         let tree = parse("");
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let h = compute_halstead(&root, "");
         assert_eq!(h.operators_distinct, 0);
         assert_eq!(h.operators_total, 0);
@@ -455,7 +427,7 @@ mod tests {
     fn heading_plus_prose_counts() {
         let src = "# Hello world\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let h = compute_halstead(&root, src);
         // Operators: 1 H1 marker → n1=1, N1=1.
         assert_eq!(h.operators_distinct, 1);
@@ -473,7 +445,7 @@ mod tests {
     fn link_counts_as_operator_and_url_as_operand() {
         let src = "# H\n\nSee [here](https://example.com).\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let h = compute_halstead(&root, src);
         // Operators include: one H1 marker, one Link, one Terminator (`.`).
         assert!(h.operators_distinct >= 3);

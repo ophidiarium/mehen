@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 use crate::tree_helpers::{count_table_cells, fence_content_line_count, has_scheme};
 
 /// Per-edge weights from §7.3.
@@ -734,13 +734,16 @@ fn find_heading_text_node<'a>(section: &Node<'a>) -> Option<Node<'a>> {
                 | SetextHeading
                 | SetextHeading2
         ) {
-            // The visible text lives in the `Inline` child; fall back to
-            // the heading node itself if the grammar surface changes.
+            // The visible text lives in the heading-content child; fall back
+            // to the heading node itself if the grammar surface changes.
             let mut inner = child.cursor();
             if inner.goto_first_child() {
                 loop {
                     let n = inner.node();
-                    if matches!(n.kind_id().into(), Markdown::Inline) {
+                    if matches!(
+                        n.kind_id().into(),
+                        Markdown::AtxHeadingContent | Markdown::Inline
+                    ) {
                         return Some(n);
                     }
                     if !inner.goto_next_sibling() {
@@ -995,18 +998,14 @@ fn label_text(node: &Node<'_>, source: &str, target: Markdown) -> Option<String>
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> tree_sitter::Tree {
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        parser.parse(src, None).unwrap()
+    fn parse(src: &str) -> crate::syntax_tree::Tree {
+        crate::syntax_tree::parse(src)
     }
 
     #[test]
     fn empty_document_has_zero_mrpc() {
         let tree = parse("");
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mrpc(&root, "");
         assert_eq!(r.weighted, 0.0);
         assert_eq!(r.raw, 0.0);
@@ -1016,7 +1015,7 @@ mod tests {
     fn pure_prose_has_minimal_mrpc() {
         let src = "# Title\n\nSome prose with no links or artifacts.\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mrpc(&root, src);
         // One section, no edges → weighted = max(1, 0 - 1 + 2*1) = 1.0.
         assert_eq!(r.weighted, 1.0);
@@ -1031,7 +1030,7 @@ mod tests {
         let src = "# Intro\n\n- [Install](#install)\n- [Usage](#usage)\n\n\
                    # Install\n\nInstall prose.\n\n# Usage\n\nUsage prose.\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mrpc(&root, src);
         // 3 sections, 2 sequential edges (Intro→Install, Install→Usage),
         // 2 internal-anchor edges (Intro→Install, Intro→Usage). No extra
@@ -1054,7 +1053,7 @@ mod tests {
                    ```\n";
         let tree = parse(src);
         // Find the fenced_code_block and assert its content line count.
-        fn find<'a>(n: &crate::legacy_node::Node<'a>) -> Option<crate::legacy_node::Node<'a>> {
+        fn find<'a>(n: &crate::syntax_tree::Node<'a>) -> Option<crate::syntax_tree::Node<'a>> {
             use Markdown::*;
             let kind: Markdown = n.kind_id().into();
             if matches!(kind, FencedCodeBlock) {
@@ -1075,7 +1074,7 @@ mod tests {
             }
             None
         }
-        let fence = find(&crate::legacy_node::Node(tree.root_node())).expect("fenced block");
+        let fence = find(&tree.root()).expect("fenced block");
         assert_eq!(fence_content_line_count(&fence), 10);
     }
 
@@ -1092,7 +1091,7 @@ mod tests {
     fn external_link_gets_external_weight() {
         let src = "# Title\n\nSee [rust-lang](https://www.rust-lang.org) for more.\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mrpc(&root, src);
         // N = 2 (section + external domain); E = 1 with weight 1.0.
         // Weighted MRPC = max(1, 1.0 - 2 + 2*1) = 1.0.
@@ -1103,7 +1102,7 @@ mod tests {
     fn multi_section_mrpc_grows() {
         let src = "# A\n\ntext\n\n## B\n\ntext\n\n## C\n\n[x](https://example.com)\n";
         let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
+        let root = tree.root();
         let r = compute_mrpc(&root, src);
         // 3 sections + 1 external domain = 4 nodes.
         // Edges: 2 hierarchy (A→B, A→C), 1 sequential (B→C), 1 external.
@@ -1168,11 +1167,10 @@ mod tests {
         // weighted form collapses to max(1, 0.80 - 2 + 2) = 1.0.
         let inline = "# Title\n\nSee [docs](../api.md) for details.\n";
         let reference = "# Title\n\nSee [docs][api-docs] for details.\n\n[api-docs]: ../api.md\n";
-        let a = compute_mrpc(&crate::legacy_node::Node(parse(inline).root_node()), inline);
-        let b = compute_mrpc(
-            &crate::legacy_node::Node(parse(reference).root_node()),
-            reference,
-        );
+        let inline_tree = parse(inline);
+        let reference_tree = parse(reference);
+        let a = compute_mrpc(&inline_tree.root(), inline);
+        let b = compute_mrpc(&reference_tree.root(), reference);
         assert_eq!(
             a.weighted, b.weighted,
             "inline vs reference-style weighted mismatch: {:?} vs {:?}",

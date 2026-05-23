@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -8,17 +8,17 @@ loc:
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 13
-  aloc: 0
+  bloc: 9
+  aloc: 4
 loc_ratios:
-  artifact_line_ratio: 0
+  artifact_line_ratio: 0.13793103448275862
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.4482758620689655
+  blank_line_ratio: 0.3103448275862069
 size:
-  words: 51
-  effective_content_units: 0.2125
+  words: 75
+  effective_content_units: 0.3125
   sections: 4
   headings: 4
 ecu_inputs:
@@ -32,7 +32,7 @@ sections:
     heading_level: 1
     heading_text: ~
     start_line: 1
-    end_line: 25
+    end_line: 29
     parent_section_id: ~
     child_section_ids:
       - 1
@@ -44,61 +44,61 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 7
-    end_line: 11
+    end_line: 10
     parent_section_id: 0
     child_section_ids: []
-    word_count: 10
+    word_count: 14
     block_count: 1
   - section_id: 2
     heading_level: 2
     heading_text: ~
     start_line: 12
-    end_line: 17
+    end_line: 16
     parent_section_id: 0
     child_section_ids: []
-    word_count: 9
+    word_count: 14
     block_count: 1
   - section_id: 3
     heading_level: 2
     heading_text: ~
     start_line: 18
-    end_line: 25
+    end_line: 29
     parent_section_id: 0
     child_section_ids: []
-    word_count: 11
-    block_count: 2
+    word_count: 26
+    block_count: 7
 complexity:
   reading_path_complexity: 1
-  reading_path_complexity_raw: 5
-  cognitive_complexity: 8.799999999999999
+  reading_path_complexity_raw: 7
+  cognitive_complexity: 7.099999999999999
   halstead:
-    operators_distinct: 8
-    operators_total: 52
-    operands_distinct: 64
-    operands_total: 78
-    vocabulary: 72
-    length: 130
-    volume: 802.0902501875006
-    difficulty: 4.875
-    effort: 3910.1899696640653
+    operators_distinct: 6
+    operators_total: 39
+    operands_distinct: 78
+    operands_total: 93
+    vocabulary: 84
+    length: 132
+    volume: 843.7858998067965
+    difficulty: 3.5769230769230766
+    effort: 3018.157257001233
     embedded_volume: 0
-    total_volume: 802.0902501875006
+    total_volume: 843.7858998067965
 links:
-  total: 18
+  total: 14
   internal: 2
-  relative: 8
+  relative: 6
   external: 4
   external_vendor: 0
   scholarly: 0
   issue_pr: 0
   absolute_same_repo: 0
   image: 0
-  footnote: 4
+  footnote: 2
   bare_url: 0
-  broken: 9
+  broken: 5
   link_debt_score: 0.55
-  information_scent_score: 0.45
-  review_burden: 35.5
+  information_scent_score: 0.4785714285714286
+  review_burden: 22.9
 link_records:
   - line: 9
     class: internal
@@ -150,13 +150,6 @@ link_records:
     is_bare_url: false
     resolved: true
   - line: 20
-    class: reference_definition
-    destination: ""
-    text: api-ref
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 20
     class: relative
     destination: "./quickstart.md"
     text: quickstart
@@ -190,21 +183,14 @@ link_records:
     text: "[^1]"
     is_image: false
     is_bare_url: false
-    resolved: false
+    resolved: true
   - line: 24
     class: footnote
     destination: "2"
     text: "[^2]"
     is_image: false
     is_bare_url: false
-    resolved: false
-  - line: 26
-    class: footnote
-    destination: "1"
-    text: "[^1]"
-    is_image: false
-    is_bare_url: false
-    resolved: false
+    resolved: true
   - line: 27
     class: relative
     destination: "./adr/007.md"
@@ -212,20 +198,13 @@ link_records:
     is_image: false
     is_bare_url: false
     resolved: false
-  - line: 27
-    class: footnote
-    destination: "2"
-    text: "[^2]"
-    is_image: false
-    is_bare_url: false
-    resolved: false
   - line: 29
     class: reference_definition
-    destination: ""
+    destination: "https://api.example.com/reference"
     text: api-ref
     is_image: false
     is_bare_url: false
-    resolved: true
+    resolved: ~
 visuals:
   images: 0
   diagrams: 0
@@ -241,17 +220,16 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 84.9616462948816
+  documentation_maintainability_index: 85.82757142857143
   section_balance_score: 0.85
-  good_scaffold_score: 0.1675
+  good_scaffold_score: 0.1717857142857143
   artifact_debt_score: 0
 grounding:
-  repository_grounding_score: 0
+  repository_grounding_score: 0.010000000000000002
   evidence_coverage_score: 0.5576923076923077
 ai_era:
-  filler_lazy_structure_risk: 0.534446142093201
+  filler_lazy_structure_risk: 0.4658571428571428
   labels:
-    - hollow-references
     - low-artifact-density
     - low-repository-grounding
     - placeholder-heavy
@@ -260,11 +238,11 @@ ai_era:
     - - low-artifact-density
       - 1
     - - low-repository-grounding
-      - 1
+      - 0.99
     - - specificity-scarcity
-      - 1
+      - 0.9166666666666666
 review:
-  review_criticality_index: 17.508928571428573
+  review_criticality_index: 15.665714285714285
 artifacts: []
 prose:
   language_detection:
@@ -297,6 +275,12 @@ prose:
       - start_line: 24
         end_line: 24
         language: en
+      - start_line: 26
+        end_line: 26
+        language: en
+      - start_line: 27
+        end_line: 27
+        language: en
   english:
     readability:
       flesch_reading_ease: ~
@@ -314,31 +298,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.781
-      hapax_ratio: 0.763
-      dis_ratio: 0.186
-      lexical_density: 0.747
-      avg_sentence_words: 7.9
+      mattr_50: 0.787
+      hapax_ratio: 0.761
+      dis_ratio: 0.194
+      lexical_density: 0.775
+      avg_sentence_words: 7.417
       p90_sentence_words: 14
       max_sentence_words: 21
-      stddev_sentence_words: 6.488
-      avg_word_chars: 5.418
+      stddev_sentence_words: 6.034
+      avg_word_chars: 5.449
       p90_word_chars: 9
-      sentence_count: 10
-      words_total: 79
+      sentence_count: 12
+      words_total: 89
     wording:
       passive_ratio: 0
       hedge_density: 0
-      weasel_density: 0.013
+      weasel_density: 0.011
       wordy_density: 0
       adverb_density: 0
-      nominalization_density: 0.051
+      nominalization_density: 0.056
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.992
+      wording_quality_score: 0.996
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -347,6 +331,6 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 79
-    sentences_counted: 10
+    words_counted: 89
+    sentences_counted: 12
     blocks_stripped: []

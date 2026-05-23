@@ -14,10 +14,10 @@ use std::path::{Path, PathBuf};
 
 use crate::diagrams::{DiagramSignal, parse_diagram};
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, normalize_zero, sat};
 use crate::nearby::{BlockSpan, has_prose_within};
-use crate::tree_helpers::{find_first, node_text};
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{fence_content_text, find_first, node_text};
 use crate::types::{DiagramRecord, ImageRecord, Visuals};
 
 /// Combined visual analysis output.
@@ -172,9 +172,7 @@ fn record_diagram(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option
     if !is_diagram_language(&language) {
         return None;
     }
-    let body = find_first(node, Markdown::CodeFenceContent)
-        .map(|n| node_text(&n, source))
-        .unwrap_or_default();
+    let body = fence_content_text(node, source).unwrap_or_default();
 
     let start_line = (node.start_row() as u64) + 1;
     let (end_row, end_col) = node.end_position();

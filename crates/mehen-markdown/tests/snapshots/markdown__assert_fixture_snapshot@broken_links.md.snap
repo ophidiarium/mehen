@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.23076923076923078
 size:
-  words: 27
-  effective_content_units: 0.1125
+  words: 35
+  effective_content_units: 0.14583333333333334
   sections: 2
   headings: 2
 ecu_inputs:
@@ -36,7 +36,7 @@ sections:
     parent_section_id: ~
     child_section_ids:
       - 1
-    word_count: 18
+    word_count: 26
     block_count: 6
   - section_id: 1
     heading_level: 2
@@ -50,23 +50,23 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 2
-  cognitive_complexity: 4.789
+  cognitive_complexity: 4.199
   halstead:
     operators_distinct: 8
-    operators_total: 19
-    operands_distinct: 35
-    operands_total: 37
-    vocabulary: 43
-    length: 56
-    volume: 303.8708262633175
-    difficulty: 4.228571428571429
-    effort: 1284.9394939134568
+    operators_total: 20
+    operands_distinct: 41
+    operands_total: 45
+    vocabulary: 49
+    length: 65
+    volume: 364.95613986748856
+    difficulty: 4.390243902439025
+    effort: 1602.2464677109256
     embedded_volume: 0
-    total_volume: 303.8708262633175
+    total_volume: 364.95613986748856
 links:
-  total: 5
+  total: 3
   internal: 1
-  relative: 3
+  relative: 1
   external: 1
   external_vendor: 0
   scholarly: 0
@@ -77,8 +77,8 @@ links:
   bare_url: 0
   broken: 2
   link_debt_score: 0.65
-  information_scent_score: 0.12
-  review_burden: 8.7
+  information_scent_score: 0.19999999999999998
+  review_burden: 7.1
 link_records:
   - line: 6
     class: relative
@@ -94,20 +94,6 @@ link_records:
     is_image: false
     is_bare_url: false
     resolved: false
-  - line: 8
-    class: reference_definition
-    destination: ""
-    text: Stale reference
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 8
-    class: reference_definition
-    destination: ""
-    text: stale
-    is_image: false
-    is_bare_url: false
-    resolved: true
   - line: 9
     class: external
     destination: "https://example.com"
@@ -130,30 +116,28 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 82.74603174603175
+  documentation_maintainability_index: 83.08571428571429
   section_balance_score: 0.85
-  good_scaffold_score: 0.018
+  good_scaffold_score: 0.029999999999999995
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0.23076923076923078
 ai_era:
-  filler_lazy_structure_risk: 0.46116402116402117
+  filler_lazy_structure_risk: 0.44285714285714284
   labels:
-    - hollow-references
     - low-artifact-density
     - low-repository-grounding
-    - placeholder-heavy
     - specificity-scarcity
   top_contributors:
     - - low-artifact-density
       - 1
     - - low-repository-grounding
       - 1
-    - - hollow-references
-      - 0.6666666666666667
+    - - specificity-scarcity
+      - 0.7738095238095238
 review:
-  review_criticality_index: 8.609553571428572
+  review_criticality_index: 6.624732142857143
 artifacts: []
 prose:
   language_detection:

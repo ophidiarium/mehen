@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.3
 size:
-  words: 12
-  effective_content_units: 0.5900000000000001
+  words: 26
+  effective_content_units: 0.6483333333333334
   sections: 1
   headings: 1
 ecu_inputs:
@@ -35,7 +35,7 @@ sections:
     end_line: 10
     parent_section_id: ~
     child_section_ids: []
-    word_count: 12
+    word_count: 26
     block_count: 3
 complexity:
   reading_path_complexity: 1
@@ -44,15 +44,15 @@ complexity:
   halstead:
     operators_distinct: 5
     operators_total: 10
-    operands_distinct: 17
-    operands_total: 18
-    vocabulary: 22
-    length: 28
-    volume: 124.86408532184433
-    difficulty: 2.6470588235294117
-    effort: 330.5225787931173
+    operands_distinct: 28
+    operands_total: 32
+    vocabulary: 33
+    length: 42
+    volume: 211.86455301305503
+    difficulty: 2.8571428571428568
+    effort: 605.3272943230143
     embedded_volume: 0
-    total_volume: 124.86408532184433
+    total_volume: 211.86455301305503
 links:
   total: 0
   internal: 0
@@ -84,7 +84,7 @@ tables:
   table_scaffold_score: 1
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 94.51
+  documentation_maintainability_index: 95.07307692307693
   section_balance_score: 0.85
   good_scaffold_score: 0.2
   artifact_debt_score: 0
@@ -92,7 +92,7 @@ grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0.6153846153846154
 ai_era:
-  filler_lazy_structure_risk: 0.4575
+  filler_lazy_structure_risk: 0.41057692307692306
   labels:
     - low-artifact-density
     - low-repository-grounding
@@ -100,10 +100,10 @@ ai_era:
   top_contributors:
     - - low-repository-grounding
       - 1
-    - - specificity-scarcity
-      - 1
     - - low-artifact-density
       - 0.6666666666666667
+    - - specificity-scarcity
+      - 0.6089743589743589
 review:
   review_criticality_index: 6.000000000000001
 artifacts:
