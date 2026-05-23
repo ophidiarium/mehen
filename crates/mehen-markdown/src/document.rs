@@ -6,15 +6,20 @@
 //! Metric passes that need Markdown semantics should consume this module
 //! directly instead of reconstructing those semantics from structural node
 //! walks. Cursor-style passes can still use the compact structural tree for
-//! nested spans, while links, anchors, reference definitions, and footnotes
-//! stay native pulldown data here.
+//! nested spans, while links, anchors, reference definitions, footnotes, and
+//! code blocks stay native pulldown data here.
 
 use std::collections::HashMap;
 use std::ops::Range;
 
 #[cfg(test)]
 use pulldown_cmark::Parser;
-use pulldown_cmark::{BrokenLink, CowStr, Event, HeadingLevel, LinkType, Options, Tag, TagEnd};
+use pulldown_cmark::{
+    BrokenLink, CodeBlockKind as PulldownCodeBlockKind, CowStr, Event, HeadingLevel, LinkType,
+    Options, Tag, TagEnd,
+};
+
+use crate::source_text::normalize_line_endings;
 
 #[derive(Debug)]
 pub(crate) struct MarkdownDocument {
@@ -23,6 +28,7 @@ pub(crate) struct MarkdownDocument {
     pub(crate) reference_definitions: Vec<ReferenceDefinition>,
     pub(crate) footnote_references: Vec<FootnoteReference>,
     pub(crate) footnote_definitions: Vec<FootnoteDefinition>,
+    pub(crate) code_blocks: Vec<CodeBlock>,
 }
 
 #[derive(Debug)]
@@ -90,6 +96,27 @@ pub(crate) struct FootnoteDefinition {
     pub(crate) label: String,
 }
 
+#[derive(Debug)]
+pub(crate) struct CodeBlock {
+    pub(crate) kind: CodeBlockKind,
+    pub(crate) start_line: u64,
+    pub(crate) end_line: u64,
+    pub(crate) language: Option<String>,
+    pub(crate) content: String,
+}
+
+impl CodeBlock {
+    pub(crate) fn is_fenced(&self) -> bool {
+        self.kind == CodeBlockKind::Fenced
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CodeBlockKind {
+    Fenced,
+    Indented,
+}
+
 #[cfg(test)]
 pub(crate) fn parse_document(source: &str) -> MarkdownDocument {
     let reference_definitions = reference_definitions_from_source(source);
@@ -151,6 +178,31 @@ pub(crate) fn normalize_reference_label(label: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
+}
+
+pub(crate) fn code_language(info: &str) -> Option<String> {
+    let head = info
+        .split(|c: char| c.is_whitespace() || c == ',' || c == '{')
+        .next()
+        .unwrap_or("")
+        .trim();
+    (!head.is_empty()).then(|| head.to_ascii_lowercase())
+}
+
+pub(crate) fn is_diagram_language(lang: &str) -> bool {
+    matches!(
+        lang,
+        "mermaid"
+            | "plantuml"
+            | "puml"
+            | "dot"
+            | "graphviz"
+            | "d2"
+            | "vega-lite"
+            | "vegalite"
+            | "vl"
+            | "vega"
+    )
 }
 
 pub(crate) fn reference_definitions_from_source(source: &str) -> Vec<ReferenceDefinition> {
@@ -520,8 +572,10 @@ pub(crate) struct DocumentBuilder<'a> {
     reference_definitions: Vec<ReferenceDefinition>,
     footnote_references: Vec<FootnoteReference>,
     footnote_definitions: Vec<FootnoteDefinition>,
+    code_blocks: Vec<CodeBlock>,
     heading_stack: Vec<HeadingFrame>,
     link_stack: Vec<LinkFrame>,
+    code_block_stack: Vec<CodeBlockFrame>,
 }
 
 impl<'a> DocumentBuilder<'a> {
@@ -534,8 +588,10 @@ impl<'a> DocumentBuilder<'a> {
             reference_definitions,
             footnote_references: Vec::new(),
             footnote_definitions: Vec::new(),
+            code_blocks: Vec::new(),
             heading_stack: Vec::new(),
             link_stack: Vec::new(),
+            code_block_stack: Vec::new(),
         }
     }
 
@@ -546,6 +602,7 @@ impl<'a> DocumentBuilder<'a> {
             reference_definitions: self.reference_definitions,
             footnote_references: self.footnote_references,
             footnote_definitions: self.footnote_definitions,
+            code_blocks: self.code_blocks,
         }
     }
 
@@ -553,7 +610,8 @@ impl<'a> DocumentBuilder<'a> {
         match event {
             Event::Start(tag) => self.start_tag(tag, range),
             Event::End(tag) => self.end_tag(tag),
-            Event::Text(text) | Event::Code(text) => self.push_text(&text),
+            Event::Text(text) => self.push_text_event(&text, range),
+            Event::Code(text) => self.push_text(&text),
             Event::InlineMath(text) | Event::DisplayMath(text) => self.push_text(&text),
             Event::FootnoteReference(label) => self.add_footnote_reference(&label, range),
             Event::SoftBreak | Event::HardBreak => self.push_text(" "),
@@ -576,10 +634,10 @@ impl<'a> DocumentBuilder<'a> {
                 id,
                 ..
             } => self.push_link(link_type, &dest_url, &id, range, true),
+            Tag::CodeBlock(kind) => self.push_code_block(kind, range),
             Tag::FootnoteDefinition(label) => self.push_footnote_definition(&label),
             Tag::Paragraph
             | Tag::BlockQuote(_)
-            | Tag::CodeBlock(_)
             | Tag::HtmlBlock
             | Tag::List(_)
             | Tag::Item
@@ -603,9 +661,9 @@ impl<'a> DocumentBuilder<'a> {
         match tag {
             TagEnd::Heading(_) => self.pop_heading(),
             TagEnd::Link | TagEnd::Image => self.pop_link(),
+            TagEnd::CodeBlock => self.pop_code_block(),
             TagEnd::Paragraph
             | TagEnd::BlockQuote(_)
-            | TagEnd::CodeBlock
             | TagEnd::HtmlBlock
             | TagEnd::List(_)
             | TagEnd::Item
@@ -688,6 +746,40 @@ impl<'a> DocumentBuilder<'a> {
         self.push_text(&format!("[^{label}]"));
     }
 
+    fn push_code_block(&mut self, kind: PulldownCodeBlockKind<'a>, range: Range<usize>) {
+        let (kind, language) = match kind {
+            PulldownCodeBlockKind::Fenced(info) => (CodeBlockKind::Fenced, code_language(&info)),
+            PulldownCodeBlockKind::Indented => (CodeBlockKind::Indented, None),
+        };
+        self.code_block_stack.push(CodeBlockFrame {
+            kind,
+            start_line: self.line_for(range.start),
+            end_line: self.end_line_for(range.clone()),
+            language,
+            content: String::new(),
+        });
+    }
+
+    fn pop_code_block(&mut self) {
+        if let Some(frame) = self.code_block_stack.pop() {
+            self.code_blocks.push(CodeBlock {
+                kind: frame.kind,
+                start_line: frame.start_line,
+                end_line: frame.end_line,
+                language: frame.language,
+                content: normalize_line_endings(&frame.content),
+            });
+        }
+    }
+
+    fn push_text_event(&mut self, text: &str, _range: Range<usize>) {
+        if let Some(code) = self.code_block_stack.last_mut() {
+            code.content.push_str(text);
+            return;
+        }
+        self.push_text(text);
+    }
+
     fn push_text(&mut self, text: &str) {
         if let Some(heading) = self.heading_stack.last_mut() {
             heading.text.push_str(text);
@@ -699,6 +791,18 @@ impl<'a> DocumentBuilder<'a> {
 
     pub(crate) fn line_for(&self, byte: usize) -> u64 {
         row_at(&self.line_starts, self.source.len(), byte) as u64 + 1
+    }
+
+    fn end_line_for(&self, range: Range<usize>) -> u64 {
+        let start_row = row_at(&self.line_starts, self.source.len(), range.start);
+        let mut end_row = row_at(&self.line_starts, self.source.len(), range.end);
+        let end_col = range
+            .end
+            .saturating_sub(*self.line_starts.get(end_row).unwrap_or(&range.end));
+        if end_row > start_row && end_col == 0 {
+            end_row -= 1;
+        }
+        end_row as u64 + 1
     }
 }
 
@@ -715,6 +819,15 @@ struct LinkFrame {
     reference_label: Option<String>,
     text: String,
     is_image: bool,
+}
+
+#[derive(Debug)]
+struct CodeBlockFrame {
+    kind: CodeBlockKind,
+    start_line: u64,
+    end_line: u64,
+    language: Option<String>,
+    content: String,
 }
 
 impl From<LinkType> for LinkUseKind {

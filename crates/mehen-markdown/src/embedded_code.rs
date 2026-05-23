@@ -20,9 +20,7 @@
 
 use std::sync::OnceLock;
 
-use crate::grammar::Markdown;
-use crate::syntax_tree::Node;
-use crate::tree_helpers::{fence_content_text, fence_language_tag};
+use crate::document::MarkdownDocument;
 
 /// Languages a fenced code block can declare. Mirrors the pre-1.0
 /// `LANG` enum, but kept local to this crate so we don't depend on
@@ -62,40 +60,28 @@ pub fn set_embedded_dispatch(f: DispatchFn) {
     let _ = DISPATCH.set(f);
 }
 
-/// Public entry: walk the AST, find every fenced code block whose info
-/// string maps to a supported [`FenceLanguage`], and sum the §9.4
-/// contributions.
-pub(crate) fn embedded_volume(root: &Node<'_>, source: &str) -> f64 {
+/// Public entry: analyze every fenced code block whose language maps to a
+/// supported [`FenceLanguage`] and sum the §9.4 contributions.
+pub(crate) fn embedded_volume(document: &MarkdownDocument) -> f64 {
     let mut total = 0.0;
-    visit(root, source, &mut total);
-    total
-}
-
-fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::FencedCodeBlock) {
-        let info = fence_language_tag(node, source, false);
-        let lang = info.as_deref().and_then(map_fence_to_lang);
-        if let (Some(lang), Some(mut body)) = (lang, fence_content_text(node, source)) {
+    for block in document
+        .code_blocks
+        .iter()
+        .filter(|block| block.is_fenced())
+    {
+        let lang = block.language.as_deref().and_then(map_fence_to_lang);
+        if let Some(lang) = lang {
+            let mut body = block.content.clone();
             if matches!(lang, FenceLanguage::Php) {
                 let leading = body.trim_start();
                 if !leading.starts_with("<?php") && !leading.starts_with("<?=") {
                     body.insert_str(0, "<?php\n");
                 }
             }
-            *total += analyze_fence(lang, body);
-        }
-        return;
-    }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            visit(&cursor.node(), source, total);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
+            total += analyze_fence(lang, body);
         }
     }
+    total
 }
 
 fn analyze_fence(lang: FenceLanguage, body: String) -> f64 {

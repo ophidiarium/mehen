@@ -96,7 +96,7 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let mrpc = compute_mrpc(&root, source);
     let mcc = compute_mcc(&root, source);
     let mut halstead = compute_halstead(&root, source);
-    let emb = embedded_volume(&root, source);
+    let emb = embedded_volume(&document);
     halstead.embedded_volume = emb;
     halstead.total_volume = halstead.volume + emb;
 
@@ -110,7 +110,7 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     let (link_records, link_agg) = analyze_links(&document, path, &sections, &[]);
 
     // Phase C: visuals (images + diagrams).
-    let visual_analysis = analyze_visuals(&root, source, path, words, &blocks);
+    let visual_analysis = analyze_visuals(&root, &document, source, path, words, &blocks);
 
     // Phase C: tables. Patch has_local_explanation afterwards via the
     // nearby-block index.
@@ -128,7 +128,7 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
 
     // Phase C: code fences (skipping diagram-tagged fences which are owned
     // by visuals.rs).
-    let code_fences: Vec<CodeFence> = analyze_code_fences(&root, source, &blocks);
+    let code_fences: Vec<CodeFence> = analyze_code_fences(&document, &blocks);
 
     // Phase C: math blocks.
     let math_blocks: Vec<MathBlock> = analyze_math_blocks(&root, source, &blocks);

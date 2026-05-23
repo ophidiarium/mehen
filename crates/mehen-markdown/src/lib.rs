@@ -44,6 +44,7 @@ pub mod prose;
 mod rci;
 mod section_balance;
 mod sections;
+mod source_text;
 mod syntax_tree;
 mod tables;
 mod tree_helpers;
@@ -61,7 +62,7 @@ use mehen_core::{
 
 use crate::types::MarkdownMetrics;
 
-/// Tree-sitter-backed Markdown analyzer for the engine registry.
+/// Pulldown-cmark-backed Markdown analyzer for the engine registry.
 ///
 /// The rich metric pipeline runs through [`analyze_markdown`] and
 /// produces [`types::MarkdownMetrics`] (a Markdown-specific report

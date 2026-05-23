@@ -3,7 +3,7 @@
 
 //! Per-fence code burden per §14.1.
 //!
-//! For each `fenced_code_block`, we compute:
+//! For each fenced code block, we compute:
 //!
 //! ```text
 //! CodeFenceBurden(c) =
@@ -20,11 +20,9 @@
 //! Phase C ships the shape-only terms (LOC, line length, missing tag). The
 //! parser-error / cognitive / halstead terms stay zero until Phase B lands.
 
-use crate::grammar::Markdown;
+use crate::document::{CodeBlock, MarkdownDocument, is_diagram_language};
 use crate::mathops::sat;
 use crate::nearby::{BlockSpan, has_prose_within};
-use crate::syntax_tree::Node;
-use crate::tree_helpers::{fence_content_text, find_first, node_text};
 
 /// Per-fence summary used to populate ArtifactRecord rows and Phase D's
 /// filler / grounding pipelines.
@@ -39,81 +37,44 @@ pub(crate) struct CodeFence {
     pub(crate) burden: f64,
 }
 
-/// Walks the tree, records every `fenced_code_block`, and skips diagram
+/// Records every fenced code block and skips diagram
 /// fences (they are owned by `visuals.rs`). Returns a deterministic list
 /// sorted by start_line.
 pub(crate) fn analyze_code_fences(
-    root: &Node<'_>,
-    source: &str,
+    document: &MarkdownDocument,
     blocks: &[BlockSpan],
 ) -> Vec<CodeFence> {
-    let mut out: Vec<CodeFence> = Vec::new();
-    walk(root, source, blocks, &mut out);
+    let mut out = document
+        .code_blocks
+        .iter()
+        .filter_map(|block| build(block, blocks))
+        .collect::<Vec<_>>();
     // Sort for determinism.
     out.sort_by_key(|a| a.start_line);
     out
 }
 
-fn walk(node: &Node<'_>, source: &str, blocks: &[BlockSpan], out: &mut Vec<CodeFence>) {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::FencedCodeBlock)
-        && let Some(rec) = build(node, source, blocks)
-    {
-        out.push(rec);
-        return;
+fn build(block: &CodeBlock, blocks: &[BlockSpan]) -> Option<CodeFence> {
+    if !block.is_fenced() {
+        return None;
     }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            walk(&cursor.node(), source, blocks, out);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-}
-
-fn build(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option<CodeFence> {
-    let start_line = (node.start_row() as u64) + 1;
-    let (end_row, end_col) = node.end_position();
-    let mut end = end_row;
-    if end > node.start_row() && end_col == 0 {
-        end -= 1;
-    }
-    let end_line = (end as u64) + 1;
-
-    let language = find_first(node, Markdown::InfoString)
-        .and_then(|n| find_first(&n, Markdown::Language))
-        .map(|n| node_text(&n, source).trim().to_ascii_lowercase())
-        .filter(|s| !s.is_empty());
-    let has_language_tag = language.is_some();
 
     // Diagrams are handled in `visuals.rs`; skip them here so the burden
     // score isn't counted twice. We still leave the record in the artifact
     // list (see `analyzer.rs`), but filter at the §14.1 site.
-    if let Some(lang) = language.as_deref()
-        && matches!(
-            lang,
-            "mermaid"
-                | "plantuml"
-                | "puml"
-                | "dot"
-                | "graphviz"
-                | "d2"
-                | "vega-lite"
-                | "vegalite"
-                | "vl"
-                | "vega"
-        )
+    if let Some(lang) = block.language.as_deref()
+        && is_diagram_language(lang)
     {
         return None;
     }
 
-    // Body LOC (excludes fence delimiters): use CodeFenceContent span.
-    let (body_loc, line_len_p95) = code_body_stats(node, source);
+    // Body LOC excludes fence delimiters because the document fact stores
+    // only the pulldown code-block text.
+    let (body_loc, line_len_p95) = code_body_stats(&block.content);
 
-    let has_nearby_prose = has_prose_within(blocks, start_line, end_line, 2);
+    let has_nearby_prose = has_prose_within(blocks, block.start_line, block.end_line, 2);
 
+    let has_language_tag = block.language.is_some();
     let missing_language_tag = if has_language_tag { 0.0 } else { 1.0 };
     let burden = 1.0
         + 0.08 * (body_loc as f64 - 12.0).max(0.0)
@@ -122,9 +83,9 @@ fn build(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option<CodeFenc
         + 1.50 * missing_language_tag;
 
     Some(CodeFence {
-        start_line,
-        end_line,
-        language,
+        start_line: block.start_line,
+        end_line: block.end_line,
+        language: block.language.clone(),
         loc: body_loc,
         has_language_tag,
         has_nearby_prose,
@@ -132,10 +93,7 @@ fn build(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option<CodeFenc
     })
 }
 
-fn code_body_stats(node: &Node<'_>, source: &str) -> (u64, f64) {
-    let Some(body) = fence_content_text(node, source) else {
-        return (0, 0.0);
-    };
+fn code_body_stats(body: &str) -> (u64, f64) {
     let mut line_lengths: Vec<usize> = Vec::new();
     for line in body.lines() {
         line_lengths.push(line.chars().count());
@@ -150,4 +108,35 @@ fn code_body_stats(node: &Node<'_>, source: &str) -> (u64, f64) {
         .saturating_sub(1)
         .min(line_lengths.len() - 1);
     (loc, line_lengths[idx] as f64)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::document::parse_document;
+
+    use super::analyze_code_fences;
+
+    #[test]
+    fn fenced_code_burden_uses_pulldown_body_without_delimiters() {
+        let document =
+            parse_document("# T\n\nIntro.\n\n```Rust,no_run {#sample}\nfn main() {}\n```\n");
+
+        let fences = analyze_code_fences(&document, &[]);
+
+        assert_eq!(fences.len(), 1);
+        assert_eq!(fences[0].start_line, 5);
+        assert_eq!(fences[0].end_line, 7);
+        assert_eq!(fences[0].language.as_deref(), Some("rust"));
+        assert_eq!(fences[0].loc, 1);
+        assert!(fences[0].has_language_tag);
+    }
+
+    #[test]
+    fn diagram_fences_are_owned_by_visuals() {
+        let document = parse_document("```mermaid\ngraph TD\n  A --> B\n```\n");
+
+        let fences = analyze_code_fences(&document, &[]);
+
+        assert!(fences.is_empty());
+    }
 }

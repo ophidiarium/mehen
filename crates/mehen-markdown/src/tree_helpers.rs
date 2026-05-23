@@ -17,6 +17,7 @@
 //! without holding a `TreeCursor` open across other work.
 
 use crate::grammar::Markdown;
+use crate::source_text::normalize_line_endings;
 use crate::syntax_tree::Node;
 
 #[derive(Clone, Copy, Debug)]
@@ -238,26 +239,6 @@ pub(crate) fn fence_content_text(node: &Node<'_>, source: &str) -> Option<String
     }
     let text = String::from_utf8_lossy(&bytes[bounds.start_byte..bounds.end_byte]);
     Some(normalize_line_endings(&text))
-}
-
-fn normalize_line_endings(text: &str) -> String {
-    if !text.as_bytes().contains(&b'\r') {
-        return text.to_string();
-    }
-
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\r' {
-            if matches!(chars.peek(), Some('\n')) {
-                chars.next();
-            }
-            out.push('\n');
-        } else {
-            out.push(ch);
-        }
-    }
-    out
 }
 
 /// Read the language tag from a fenced code block's `info_string`
