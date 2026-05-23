@@ -93,9 +93,9 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
 
     // Phase B: complexity surface (MRPC, MCC, Halstead). DMI is deferred
     // until Phase D has computed its inputs.
-    let mrpc = compute_mrpc(&root, source);
-    let mcc = compute_mcc(&root, source);
-    let mut halstead = compute_halstead(&root, source);
+    let mrpc = compute_mrpc(&root, &document, source);
+    let mcc = compute_mcc(&root, &document, source);
+    let mut halstead = compute_halstead(&root, &document, source);
     let emb = embedded_volume(&document);
     halstead.embedded_volume = emb;
     halstead.total_volume = halstead.volume + emb;

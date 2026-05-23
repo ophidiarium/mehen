@@ -26,9 +26,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::document::MarkdownDocument;
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
-use crate::tree_helpers::{fence_content_text, fence_language_tag};
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -77,7 +77,11 @@ enum OperatorKind {
 }
 
 /// Core public entry point. Walks the AST and emits the §9.3 derived values.
-pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
+pub(crate) fn compute_halstead(
+    root: &Node<'_>,
+    document: &MarkdownDocument,
+    source: &str,
+) -> Halstead {
     let mut operator_counts: BTreeMap<OperatorKind, u64> = BTreeMap::new();
     let mut operand_counts: BTreeMap<String, u64> = BTreeMap::new();
 
@@ -85,6 +89,7 @@ pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
         operator_counts: &mut operator_counts,
         operand_counts: &mut operand_counts,
         source,
+        document,
     };
     state.walk(root);
 
@@ -122,13 +127,14 @@ pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
     }
 }
 
-struct Ctx<'a, 'b> {
-    operator_counts: &'a mut BTreeMap<OperatorKind, u64>,
-    operand_counts: &'a mut BTreeMap<String, u64>,
-    source: &'b str,
+struct Ctx<'counts, 'source, 'doc> {
+    operator_counts: &'counts mut BTreeMap<OperatorKind, u64>,
+    operand_counts: &'counts mut BTreeMap<String, u64>,
+    source: &'source str,
+    document: &'doc MarkdownDocument,
 }
 
-impl Ctx<'_, '_> {
+impl Ctx<'_, '_, '_> {
     fn bump_op(&mut self, k: OperatorKind) {
         *self.operator_counts.entry(k).or_insert(0) += 1;
     }
@@ -201,25 +207,18 @@ impl Ctx<'_, '_> {
             // Code fences: record the language tag as the operator's
             // discriminator so e.g. `rust` and `python` are distinct
             // operators.
-            FencedCodeBlock => {
-                let tag = fence_info_tag(node, self.source).unwrap_or_default();
-                self.bump_op(OperatorKind::FenceTag(tag));
-                // Embedded content handled as a single identifier-like
-                // operand (the `code_fence_content` string). We do not
-                // descend into its leaves so §9.4's scaling applies cleanly.
-                if let Some(content) = fence_content_text(node, self.source) {
-                    self.bump_operand(format!("code:{}", sha_hex(content.as_bytes())));
-                }
-                descend = false;
-            }
-            IndentedCodeBlock => {
-                self.bump_op(OperatorKind::FenceTag(String::new()));
-                // Treat the entire indented content as one operand hash.
-                let bytes = self.source.as_bytes();
-                let start = node.start_byte();
-                let end = node.end_byte();
-                if end <= bytes.len() && start < end {
-                    self.bump_operand(format!("indent_code:{}", sha_hex(&bytes[start..end])));
+            FencedCodeBlock | IndentedCodeBlock => {
+                if let Some(block) = self.document.code_block_by_start_row(node.start_row()) {
+                    let tag = block.language.clone().unwrap_or_default();
+                    self.bump_op(OperatorKind::FenceTag(tag));
+                    // Embedded content is a single opaque operand so §9.4's
+                    // embedded-code scaling can own language-specific detail.
+                    let prefix = if block.is_fenced() {
+                        "code"
+                    } else {
+                        "indent_code"
+                    };
+                    self.bump_operand(format!("{prefix}:{}", sha_hex(block.content.as_bytes())));
                 }
                 descend = false;
             }
@@ -359,10 +358,6 @@ impl Ctx<'_, '_> {
     }
 }
 
-fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
-    fence_language_tag(node, source, true)
-}
-
 fn inline_code_text(node: &Node<'_>, source: &str) -> Option<String> {
     let bytes = source.as_bytes();
     let start = node.start_byte();
@@ -404,15 +399,14 @@ fn sha_hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> crate::syntax_tree::Tree {
-        crate::syntax_tree::parse(src)
+    fn compute(src: &str) -> Halstead {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        compute_halstead(&tree.root(), &document, src)
     }
 
     #[test]
     fn empty_halstead_is_zero() {
-        let tree = parse("");
-        let root = tree.root();
-        let h = compute_halstead(&root, "");
+        let h = compute("");
         assert_eq!(h.operators_distinct, 0);
         assert_eq!(h.operators_total, 0);
         assert_eq!(h.operands_distinct, 0);
@@ -426,9 +420,7 @@ mod tests {
     #[test]
     fn heading_plus_prose_counts() {
         let src = "# Hello world\n";
-        let tree = parse(src);
-        let root = tree.root();
-        let h = compute_halstead(&root, src);
+        let h = compute(src);
         // Operators: 1 H1 marker → n1=1, N1=1.
         assert_eq!(h.operators_distinct, 1);
         assert_eq!(h.operators_total, 1);
@@ -444,9 +436,7 @@ mod tests {
     #[test]
     fn link_counts_as_operator_and_url_as_operand() {
         let src = "# H\n\nSee [here](https://example.com).\n";
-        let tree = parse(src);
-        let root = tree.root();
-        let h = compute_halstead(&root, src);
+        let h = compute(src);
         // Operators include: one H1 marker, one Link, one Terminator (`.`).
         assert!(h.operators_distinct >= 3);
         // The URL is one operand; `See` and `here` are word operands.

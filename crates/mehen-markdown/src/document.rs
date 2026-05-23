@@ -29,6 +29,7 @@ pub(crate) struct MarkdownDocument {
     pub(crate) footnote_references: Vec<FootnoteReference>,
     pub(crate) footnote_definitions: Vec<FootnoteDefinition>,
     pub(crate) code_blocks: Vec<CodeBlock>,
+    code_block_start_lines: HashMap<u64, usize>,
 }
 
 #[derive(Debug)]
@@ -108,6 +109,10 @@ pub(crate) struct CodeBlock {
 impl CodeBlock {
     pub(crate) fn is_fenced(&self) -> bool {
         self.kind == CodeBlockKind::Fenced
+    }
+
+    pub(crate) fn content_line_count(&self) -> usize {
+        self.content.lines().count()
     }
 }
 
@@ -596,6 +601,12 @@ impl<'a> DocumentBuilder<'a> {
     }
 
     pub(crate) fn finish(self) -> MarkdownDocument {
+        let code_block_start_lines = self
+            .code_blocks
+            .iter()
+            .enumerate()
+            .map(|(index, block)| (block.start_line, index))
+            .collect();
         MarkdownDocument {
             headings: self.headings,
             links: self.links,
@@ -603,6 +614,7 @@ impl<'a> DocumentBuilder<'a> {
             footnote_references: self.footnote_references,
             footnote_definitions: self.footnote_definitions,
             code_blocks: self.code_blocks,
+            code_block_start_lines,
         }
     }
 
@@ -848,6 +860,12 @@ impl From<LinkType> for LinkUseKind {
 }
 
 impl MarkdownDocument {
+    pub(crate) fn code_block_by_start_row(&self, start_row: usize) -> Option<&CodeBlock> {
+        self.code_block_start_lines
+            .get(&(start_row as u64 + 1))
+            .and_then(|index| self.code_blocks.get(*index))
+    }
+
     pub(crate) fn reference_definition_labels(&self) -> HashMap<&str, &ReferenceDefinition> {
         self.reference_definitions
             .iter()

@@ -16,11 +16,11 @@
 //! - External link broken (+4.00) → 0.00 until Phase C.
 //! - Diagram parse error (+3.00) → 0.00 until Phase C diagram parser lands.
 
+use crate::document::{MarkdownDocument, is_diagram_language};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
 use crate::tree_helpers::{
-    count_table_cells, fence_content_line_count, fence_language_tag, find_link_dest,
-    find_link_label, has_scheme as is_external, node_line_span,
+    count_table_cells, find_link_dest, find_link_label, has_scheme as is_external, node_line_span,
 };
 
 /// §8 aggregate: positive weight before credit, credit amount used, final
@@ -37,8 +37,8 @@ pub(crate) struct MccResult {
 }
 
 /// Public entry point.
-pub(crate) fn compute_mcc(root: &Node<'_>, source: &str) -> MccResult {
-    let mut ctx = Walker::new(source);
+pub(crate) fn compute_mcc(root: &Node<'_>, document: &MarkdownDocument, source: &str) -> MccResult {
+    let mut ctx = Walker::new(source, document);
     // Pass 1: collect artifact lines for the 20-line-window cluster density
     // and record each block's sequence index for §8.4 locality lookup.
     ctx.scan_blocks(root);
@@ -55,8 +55,9 @@ pub(crate) fn compute_mcc(root: &Node<'_>, source: &str) -> MccResult {
     }
 }
 
-struct Walker<'a> {
+struct Walker<'a, 'doc> {
     source: &'a str,
+    document: &'doc MarkdownDocument,
     positive: f64,
     /// Individual scaffold-credit contributions queued during the walk.
     /// They are summed and capped at `0.25 * positive` after the walk.
@@ -86,8 +87,8 @@ enum BlockKind {
     Other,
 }
 
-impl<'a> Walker<'a> {
-    fn new(source: &'a str) -> Self {
+impl<'a, 'doc> Walker<'a, 'doc> {
+    fn new(source: &'a str, document: &'doc MarkdownDocument) -> Self {
         let mut lines = 1usize;
         for b in source.bytes() {
             if b == b'\n' {
@@ -99,6 +100,7 @@ impl<'a> Walker<'a> {
         }
         Self {
             source,
+            document,
             positive: 0.0,
             pending_credits: Vec::new(),
             last_heading_level: None,
@@ -285,25 +287,22 @@ impl<'a> Walker<'a> {
         }
 
         // Code fences.
-        if matches!(kind, FencedCodeBlock | IndentedCodeBlock) {
-            // LOC counts fence content only — fence markers would inflate
-            // the size-based weighting by ~2 lines near the §8.1 `<=12`
-            // cutoff (Codex P2).
-            let loc = fence_content_line_count(node);
-            let info = fence_info(node, self.source);
-            let is_diagram = matches!(
-                info.as_deref(),
-                Some("mermaid") | Some("plantuml") | Some("dot") | Some("graphviz") | Some("d2")
-            );
+        if matches!(kind, FencedCodeBlock | IndentedCodeBlock)
+            && let Some(block) = self.document.code_block_by_start_row(node.start_row())
+        {
+            // LOC counts pulldown code text only — fence markers never
+            // enter the size-based weighting.
+            let loc = block.content_line_count();
+            let is_diagram = block.language.as_deref().is_some_and(is_diagram_language);
             if is_diagram {
                 self.positive +=
                     1.50 * self.cluster_multiplier(node) * self.current_nest_multiplier();
-                // §8.4 diagram credit: 1.25 * local_explanation * has_label *
-                // bounded. Phase B doesn't have a caption detector yet — use
-                // a conservative `has_label = 1` (the `mermaid`/etc. info
-                // string already makes the diagram type clear) and local
-                // explanation via ±2 blocks.
-                let start = node.start_row() as u32;
+                // §8.4 diagram credit: 1.25 * local_explanation *
+                // has_label * bounded. Phase B doesn't have a caption
+                // detector yet — use a conservative `has_label = 1`
+                // (the diagram language tag makes the type clear) and
+                // local explanation via ±2 blocks.
+                let start = block.start_line.saturating_sub(1) as u32;
                 let local = local_explanation(&self.blocks, start);
                 let credit = 1.25 * (local as f64) * 1.0;
                 if credit > 0.0 {
@@ -316,11 +315,7 @@ impl<'a> Walker<'a> {
                 } else {
                     1.00 + 0.08 * (loc as f64 - 12.0)
                 };
-                let unlabelled = match kind {
-                    FencedCodeBlock => info.is_none(),
-                    IndentedCodeBlock => true,
-                    _ => false,
-                };
+                let unlabelled = !block.is_fenced() || block.language.is_none();
                 let mut weight = base;
                 if unlabelled {
                     weight += 1.50;
@@ -332,7 +327,7 @@ impl<'a> Walker<'a> {
                 // where has_label = language tag present, bounded = 1 if
                 // loc <= 30 decaying to 0 at loc == 60.
                 if !unlabelled {
-                    let start = node.start_row() as u32;
+                    let start = block.start_line.saturating_sub(1) as u32;
                     let local = local_explanation(&self.blocks, start);
                     let bounded = bounded_size(loc as f64, 30.0, 60.0);
                     let credit = 0.75 * (local as f64) * bounded;
@@ -675,25 +670,18 @@ fn pipe_table_has_header(node: &Node<'_>) -> bool {
     false
 }
 
-/// Reads the language tag from a fenced code block's `info_string`,
-/// lowercased so `Rust`/`rust` collapse to one identifier.
-fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
-    fence_language_tag(node, source, true)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> crate::syntax_tree::Tree {
-        crate::syntax_tree::parse(src)
+    fn compute(src: &str) -> MccResult {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        compute_mcc(&tree.root(), &document, src)
     }
 
     #[test]
     fn empty_doc_mcc_zero() {
-        let tree = parse("");
-        let root = tree.root();
-        let r = compute_mcc(&root, "");
+        let r = compute("");
         assert_eq!(r.mcc, 0.0);
         assert_eq!(r.positive, 0.0);
     }
@@ -701,9 +689,7 @@ mod tests {
     #[test]
     fn heading_skip_penalizes() {
         let src = "# Top\n\n### Skipped\n";
-        let tree = parse(src);
-        let root = tree.root();
-        let r = compute_mcc(&root, src);
+        let r = compute(src);
         // Heading skip H1→H3 contributes 1.00 with nest_multiplier=1.
         assert!(r.positive >= 1.0, "positive: {}", r.positive);
     }
@@ -713,9 +699,7 @@ mod tests {
         // Build a section with ≥ 801 words.
         let filler = "word ".repeat(801);
         let src = format!("# Title\n\n{}\n", filler);
-        let tree = parse(&src);
-        let root = tree.root();
-        let r = compute_mcc(&root, &src);
+        let r = compute(&src);
         // §8.1 charges 2.00 per section-without-subheading > 800 words.
         assert!(r.positive >= 2.0, "positive: {}", r.positive);
     }
@@ -723,9 +707,7 @@ mod tests {
     #[test]
     fn fences_and_tables_adjust_cluster() {
         let src = "# T\n\n```\nfoo\n```\n\n```\nbar\n```\n";
-        let tree = parse(src);
-        let root = tree.root();
-        let r = compute_mcc(&root, src);
+        let r = compute(src);
         // Two unlabelled code fences: 1.00 + 1.50 penalty each. They sit in
         // an artifact-dense window, so cluster multiplier > 1.
         assert!(r.positive > 5.0, "positive: {}", r.positive);
@@ -735,10 +717,8 @@ mod tests {
     fn unlabelled_code_fence_adds_1_5() {
         let labelled = "# H\n\nIntro prose.\n\n```rust\nlet x = 1;\n```\n\nExplanation.\n";
         let unlabelled = "# H\n\nIntro prose.\n\n```\nlet x = 1;\n```\n\nExplanation.\n";
-        let t1 = parse(labelled);
-        let t2 = parse(unlabelled);
-        let r1 = compute_mcc(&t1.root(), labelled);
-        let r2 = compute_mcc(&t2.root(), unlabelled);
+        let r1 = compute(labelled);
+        let r2 = compute(unlabelled);
         // The positive difference between unlabelled and labelled should be
         // at least 1.50 (after matching cluster multipliers). Allow for tiny
         // numeric drift due to cluster windows.
@@ -754,9 +734,7 @@ mod tests {
         // A code example with language tag + adjacent prose → non-zero
         // credit. MCC should be lower than positive.
         let src = "# Example\n\nThis shows how to print:\n\n```rust\nfn main() { println!(\"hi\"); }\n```\n\nThat prints `hi`.\n";
-        let tree = parse(src);
-        let root = tree.root();
-        let r = compute_mcc(&root, src);
+        let r = compute(src);
         assert!(r.credit_used > 0.0, "credit should apply");
         assert!(r.mcc < r.positive, "{} !< {}", r.mcc, r.positive);
         assert!(r.credit_used <= 0.25 * r.positive + 1e-9);
