@@ -75,15 +75,15 @@ complexity:
   halstead:
     operators_distinct: 6
     operators_total: 39
-    operands_distinct: 78
-    operands_total: 93
-    vocabulary: 84
-    length: 132
-    volume: 843.7858998067965
-    difficulty: 3.5769230769230766
-    effort: 3018.157257001233
+    operands_distinct: 79
+    operands_total: 94
+    vocabulary: 85
+    length: 133
+    volume: 852.4489945063143
+    difficulty: 3.5696202531645564
+    effort: 3042.9191955795013
     embedded_volume: 0
-    total_volume: 843.7858998067965
+    total_volume: 852.4489945063143
 links:
   total: 14
   internal: 2
@@ -96,10 +96,10 @@ links:
   image: 0
   footnote: 2
   bare_url: 0
-  broken: 6
+  broken: 5
   link_debt_score: 0.55
   information_scent_score: 0.4785714285714286
-  review_burden: 25.4
+  review_burden: 22.9
 link_records:
   - line: 9
     class: internal
@@ -146,10 +146,10 @@ link_records:
   - line: 20
     class: reference_definition
     destination: ""
-    text: API reference
+    text: api-ref
     is_image: false
     is_bare_url: false
-    resolved: false
+    resolved: true
   - line: 20
     class: relative
     destination: "./quickstart.md"
@@ -299,25 +299,25 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.787
-      hapax_ratio: 0.761
-      dis_ratio: 0.194
-      lexical_density: 0.775
-      avg_sentence_words: 7.417
+      mattr_50: 0.79
+      hapax_ratio: 0.773
+      dis_ratio: 0.182
+      lexical_density: 0.77
+      avg_sentence_words: 7.25
       p90_sentence_words: 14
       max_sentence_words: 21
-      stddev_sentence_words: 6.034
-      avg_word_chars: 5.449
+      stddev_sentence_words: 5.988
+      avg_word_chars: 5.506
       p90_word_chars: 9
       sentence_count: 12
-      words_total: 89
+      words_total: 87
     wording:
       passive_ratio: 0
       hedge_density: 0
       weasel_density: 0.011
       wordy_density: 0
       adverb_density: 0
-      nominalization_density: 0.056
+      nominalization_density: 0.057
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
@@ -332,6 +332,6 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 89
+    words_counted: 87
     sentences_counted: 12
     blocks_stripped: []

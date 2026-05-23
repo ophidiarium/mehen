@@ -257,14 +257,14 @@ impl<'a> Builder<'a> {
                 link_type,
                 dest_url,
                 title,
-                ..
-            } => self.push_link(link_type, &dest_url, &title, range, false),
+                id,
+            } => self.push_link(link_type, &dest_url, &title, &id, range, false),
             Tag::Image {
                 link_type,
                 dest_url,
                 title,
-                ..
-            } => self.push_link(link_type, &dest_url, &title, range, true),
+                id,
+            } => self.push_link(link_type, &dest_url, &title, &id, range, true),
             Tag::MetadataBlock(kind) => {
                 let kind = match kind {
                     MetadataBlockKind::YamlStyle => Markdown::MinusMetadata,
@@ -467,6 +467,7 @@ impl<'a> Builder<'a> {
         link_type: LinkType,
         dest_url: &str,
         title: &str,
+        reference_id: &str,
         range: Range<usize>,
         image: bool,
     ) {
@@ -493,19 +494,8 @@ impl<'a> Builder<'a> {
             },
             range.clone(),
         );
-        let dest_range = if matches!(
-            link_type,
-            LinkType::Inline
-                | LinkType::ReferenceUnknown
-                | LinkType::CollapsedUnknown
-                | LinkType::ShortcutUnknown
-                | LinkType::WikiLink { .. }
-        ) && !dest_url.is_empty()
-        {
-            find_link_destination_range(self.source, &range, dest_url)
-        } else {
-            None
-        };
+        let dest_range =
+            find_link_destination_range(self.source, &range, link_type, dest_url, reference_id);
         if let Some(dest_range) = dest_range.clone() {
             self.add_child_to(node, Markdown::LinkDestination, dest_range);
         }
@@ -1061,10 +1051,21 @@ fn find_label_definition_range(
 fn find_link_destination_range(
     source: &str,
     range: &Range<usize>,
+    link_type: LinkType,
     destination: &str,
+    reference_id: &str,
 ) -> Option<Range<usize>> {
-    let search_range = inline_link_payload_range(source, range).unwrap_or_else(|| range.clone());
-    find_in_range(source, &search_range, destination)
+    match link_type {
+        LinkType::Inline | LinkType::WikiLink { .. } if !destination.is_empty() => {
+            let search_range =
+                inline_link_payload_range(source, range).unwrap_or_else(|| range.clone());
+            find_in_range(source, &search_range, destination)
+        }
+        LinkType::Reference | LinkType::ReferenceUnknown if !reference_id.is_empty() => {
+            reference_link_key_range(source, range)
+        }
+        _ => None,
+    }
 }
 
 fn find_link_title_range(
@@ -1084,6 +1085,25 @@ fn inline_link_payload_range(source: &str, range: &Range<usize>) -> Option<Range
     let slice = source.get(range.clone())?;
     let payload_start = slice.find("](")? + 2;
     Some(range.start + payload_start..range.end)
+}
+
+fn reference_link_key_range(source: &str, range: &Range<usize>) -> Option<Range<usize>> {
+    let slice = source.get(range.clone())?;
+    let close = slice.rfind(']')?;
+    let before_close = &slice[..close];
+    let open = before_close.rfind('[')?;
+    if open == 0 || !before_close[..open].ends_with(']') {
+        return None;
+    }
+    trim_byte_range(source, range.start + open + 1..range.start + close)
+}
+
+fn trim_byte_range(source: &str, range: Range<usize>) -> Option<Range<usize>> {
+    let slice = source.get(range.clone())?;
+    let start_offset = slice.len() - slice.trim_start().len();
+    let end_offset = slice.trim_end().len();
+    let trimmed = range.start + start_offset..range.start + end_offset;
+    (trimmed.start < trimmed.end).then_some(trimmed)
 }
 
 fn find_reference_definition_destination_range(
@@ -1288,6 +1308,15 @@ mod tests {
         assert_eq!(node_text(&tree, source, destination), "foo");
         assert_eq!(tree.nodes[title].start_byte, 11);
         assert_eq!(node_text(&tree, source, title), "foo");
+    }
+
+    #[test]
+    fn reference_link_destination_uses_reference_key_not_label() {
+        let source = "[visible][ref]\n\n[ref]: docs.md\n";
+        let tree = parse(source);
+        let destination = first_node(&tree, Markdown::LinkDestination);
+
+        assert_eq!(node_text(&tree, source, destination), "ref");
     }
 
     #[test]

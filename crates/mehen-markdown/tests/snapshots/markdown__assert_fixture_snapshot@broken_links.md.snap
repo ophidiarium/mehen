@@ -55,15 +55,15 @@ complexity:
   halstead:
     operators_distinct: 7
     operators_total: 17
-    operands_distinct: 40
-    operands_total: 44
-    vocabulary: 47
-    length: 61
-    volume: 338.8299199523359
-    difficulty: 3.8500000000000005
-    effort: 1304.4951918164934
+    operands_distinct: 41
+    operands_total: 45
+    vocabulary: 48
+    length: 62
+    volume: 346.26767504471167
+    difficulty: 3.8414634146341466
+    effort: 1330.1746053546851
     embedded_volume: 0
-    total_volume: 338.8299199523359
+    total_volume: 346.26767504471167
 links:
   total: 4
   internal: 1
@@ -98,7 +98,7 @@ link_records:
   - line: 8
     class: reference_definition
     destination: ""
-    text: Stale reference
+    text: stale
     is_image: false
     is_bare_url: false
     resolved: false
@@ -194,31 +194,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.829
-      hapax_ratio: 0.824
-      dis_ratio: 0.147
-      lexical_density: 0.756
-      avg_sentence_words: 5.125
+      mattr_50: 0.85
+      hapax_ratio: 0.853
+      dis_ratio: 0.118
+      lexical_density: 0.75
+      avg_sentence_words: 5
       p90_sentence_words: 15
       max_sentence_words: 15
-      stddev_sentence_words: 4.343
-      avg_word_chars: 5.317
+      stddev_sentence_words: 4.416
+      avg_word_chars: 5.325
       p90_word_chars: 7
       sentence_count: 8
-      words_total: 41
+      words_total: 40
     wording:
       passive_ratio: 0
-      hedge_density: 0.024
+      hedge_density: 0.025
       weasel_density: 0
       wordy_density: 0
-      adverb_density: 0.024
-      nominalization_density: 0.049
+      adverb_density: 0.025
+      nominalization_density: 0.05
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.978
+      wording_quality_score: 0.975
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -227,7 +227,7 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 41
+    words_counted: 40
     sentences_counted: 8
     blocks_stripped:
       - code

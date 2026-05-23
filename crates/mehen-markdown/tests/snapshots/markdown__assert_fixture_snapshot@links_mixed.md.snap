@@ -65,15 +65,15 @@ complexity:
   halstead:
     operators_distinct: 7
     operators_total: 32
-    operands_distinct: 51
-    operands_total: 61
-    vocabulary: 58
-    length: 93
-    volume: 544.7922325468642
-    difficulty: 4.186274509803922
-    effort: 2280.649836250108
+    operands_distinct: 53
+    operands_total: 63
+    vocabulary: 60
+    length: 95
+    volume: 561.1546065828093
+    difficulty: 4.160377358490566
+    effort: 2334.6149198398007
     embedded_volume: 0
-    total_volume: 544.7922325468642
+    total_volume: 561.1546065828093
 links:
   total: 13
   internal: 2
@@ -86,10 +86,10 @@ links:
   image: 0
   footnote: 1
   bare_url: 1
-  broken: 4
+  broken: 3
   link_debt_score: 0.7536538461538462
   information_scent_score: 0.4507692307692308
-  review_burden: 20.1
+  review_burden: 17.6
 link_records:
   - line: 3
     class: internal
@@ -157,14 +157,14 @@ link_records:
   - line: 15
     class: reference_definition
     destination: ""
-    text: abc
+    text: abc-ref
     is_image: false
     is_bare_url: false
-    resolved: false
+    resolved: true
   - line: 15
     class: reference_definition
     destination: ""
-    text: missing
+    text: nope
     is_image: false
     is_bare_url: false
     resolved: false
@@ -288,31 +288,31 @@ prose:
         - ~
         - ~
     lexical:
-      mattr_50: 0.752
-      hapax_ratio: 0.756
-      dis_ratio: 0.195
-      lexical_density: 0.778
-      avg_sentence_words: 3.857
-      p90_sentence_words: 8
+      mattr_50: 0.76
+      hapax_ratio: 0.769
+      dis_ratio: 0.179
+      lexical_density: 0.765
+      avg_sentence_words: 3.643
+      p90_sentence_words: 7
       max_sentence_words: 9
-      stddev_sentence_words: 2.642
-      avg_word_chars: 5.111
+      stddev_sentence_words: 2.409
+      avg_word_chars: 5.216
       p90_word_chars: 8
       sentence_count: 14
-      words_total: 54
+      words_total: 51
     wording:
       passive_ratio: 0
       hedge_density: 0
       weasel_density: 0
-      wordy_density: 0.019
-      adverb_density: 0.019
-      nominalization_density: 0.037
+      wordy_density: 0.02
+      adverb_density: 0.02
+      nominalization_density: 0.039
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.974
+      wording_quality_score: 0.971
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -321,6 +321,6 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 54
+    words_counted: 51
     sentences_counted: 14
     blocks_stripped: []

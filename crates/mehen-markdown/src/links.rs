@@ -184,7 +184,11 @@ fn classify_link_or_image(node: &Node<'_>, source: &str, is_image: bool) -> Opti
     let line = (node.start_row() as u64) + 1;
     let label = find_first(node, Markdown::LinkLabel).and_then(|n| text_inside_label(&n, source));
     let destination = find_first(node, Markdown::LinkDestination).map(|n| node_text(&n, source));
-    let (class, dest, text) = if let Some(dest) = destination {
+    let (class, dest, text) = if is_full_reference_style_link(node, source)
+        && let Some(reference_key) = destination.as_ref().map(|dest| dest.trim().to_string())
+    {
+        (LinkClass::ReferenceDefinition, String::new(), reference_key)
+    } else if let Some(dest) = destination {
         let text = label.clone().unwrap_or_default();
         (classify_destination(&dest), dest, text)
     } else if let Some(label_text) = label.clone() {
@@ -207,6 +211,17 @@ fn classify_link_or_image(node: &Node<'_>, source: &str, is_image: bool) -> Opti
         is_bare_url,
         resolved: None,
     })
+}
+
+fn is_full_reference_style_link(node: &Node<'_>, source: &str) -> bool {
+    let text = node_text(node, source);
+    let Some(close) = text.rfind(']') else {
+        return false;
+    };
+    let Some(open) = text[..close].rfind('[') else {
+        return false;
+    };
+    open > 0 && text[..open].ends_with(']') && !text[open + 1..close].trim().is_empty()
 }
 
 fn classify_autolink(node: &Node<'_>, source: &str) -> Option<LinkRecord> {
@@ -852,8 +867,25 @@ mod tests {
 
         let missing = records
             .iter()
-            .find(|record| record.text == "missing")
-            .expect("missing reference link record");
+            .find(|record| record.text == "nope")
+            .expect("nope reference link record");
         assert_eq!(missing.resolved, Some(false));
+    }
+
+    #[test]
+    fn full_reference_link_resolves_with_reference_key_not_visible_text() {
+        let src = "See [visible][ref].\n\n[ref]: docs.md\n";
+        let tree = crate::syntax_tree::parse(src);
+        let root = tree.root();
+        let (records, aggregate) = analyze_links(&root, src, Path::new("README.md"), &[], &[]);
+
+        let link_use = records
+            .iter()
+            .find(|record| record.line == 1)
+            .expect("reference link use");
+        assert_eq!(link_use.class, LinkClass::ReferenceDefinition);
+        assert_eq!(link_use.text, "ref");
+        assert_eq!(link_use.resolved, Some(true));
+        assert_eq!(aggregate.broken, 0);
     }
 }
