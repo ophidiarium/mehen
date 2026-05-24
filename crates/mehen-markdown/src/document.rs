@@ -28,6 +28,7 @@ pub(crate) struct MarkdownDocument {
     pub(crate) footnote_definitions: Vec<FootnoteDefinition>,
     pub(crate) code_blocks: Vec<CodeBlock>,
     code_block_start_lines: HashMap<u64, usize>,
+    link_spans: HashMap<(usize, usize), usize>,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ pub(crate) struct LinkUse {
     pub(crate) reference_label: Option<String>,
     pub(crate) text: String,
     pub(crate) is_image: bool,
+    span: Range<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -787,6 +789,12 @@ impl<'a> DocumentBuilder<'a> {
             .enumerate()
             .map(|(index, block)| (block.start_line, index))
             .collect();
+        let link_spans = self
+            .links
+            .iter()
+            .enumerate()
+            .map(|(index, link)| ((link.span.start, link.span.end), index))
+            .collect();
         MarkdownDocument {
             headings: self.headings,
             links: self.links,
@@ -795,6 +803,7 @@ impl<'a> DocumentBuilder<'a> {
             footnote_definitions: self.footnote_definitions,
             code_blocks: self.code_blocks,
             code_block_start_lines,
+            link_spans,
         }
     }
 
@@ -900,6 +909,7 @@ impl<'a> DocumentBuilder<'a> {
         is_image: bool,
     ) {
         self.link_stack.push(LinkFrame {
+            span: range.clone(),
             line: self.line_for(range.start),
             kind: link_type.into(),
             destination: destination.to_string(),
@@ -919,6 +929,7 @@ impl<'a> DocumentBuilder<'a> {
                 reference_label: frame.reference_label,
                 text: frame.text.trim().to_string(),
                 is_image: frame.is_image,
+                span: frame.span,
             });
         }
     }
@@ -1005,6 +1016,7 @@ struct HeadingFrame {
 
 #[derive(Debug)]
 struct LinkFrame {
+    span: Range<usize>,
     line: u64,
     kind: LinkUseKind,
     destination: String,
@@ -1044,6 +1056,16 @@ impl MarkdownDocument {
         self.code_block_start_lines
             .get(&(start_row as u64 + 1))
             .and_then(|index| self.code_blocks.get(*index))
+    }
+
+    pub(crate) fn link_destination_by_span(
+        &self,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Option<&str> {
+        let index = self.link_spans.get(&(start_byte, end_byte))?;
+        let destination = self.links.get(*index)?.destination.as_str();
+        (!destination.is_empty()).then_some(destination)
     }
 
     pub(crate) fn reference_definition_labels(&self) -> HashMap<&str, &ReferenceDefinition> {

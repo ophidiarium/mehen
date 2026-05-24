@@ -29,7 +29,6 @@ use std::collections::BTreeMap;
 use crate::document::MarkdownDocument;
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
-use crate::tree_helpers::find_resolved_link_dest;
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -197,19 +196,25 @@ impl Ctx<'_, '_, '_> {
 
             // Link / image wrappers — each whole `Link` is one operator
             // occurrence for `[…](…)`. Inner LinkLabel prose descends as
-            // operand text; destination operands are resolved here so
-            // reference-style links use the definition target instead of the
-            // local reference key.
+            // operand text; destination operands come from pulldown-resolved
+            // document facts so reference-style links use the definition
+            // target instead of the local reference key.
             Link => {
                 self.bump_op(OperatorKind::LinkOp);
-                if let Some(dest) = find_resolved_link_dest(node, self.source, self.document) {
-                    self.bump_operand(dest);
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
+                {
+                    self.bump_operand(dest.to_string());
                 }
             }
             Image => {
                 self.bump_op(OperatorKind::ImageOp);
-                if let Some(dest) = find_resolved_link_dest(node, self.source, self.document) {
-                    self.bump_operand(dest);
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
+                {
+                    self.bump_operand(dest.to_string());
                 }
             }
 
@@ -500,6 +505,7 @@ mod tests {
             "# H\n\nSee [docs][api].\n\n[api]: https://example.com\n",
             "# H\n\nSee [docs][].\n\n[docs]: https://example.com\n",
             "# H\n\nSee [docs].\n\n[docs]: https://example.com\n",
+            "# H\n\nSee [docs][api\\]].\n\n[api\\]]: https://example.com\n",
         ];
 
         let expected = compute(inline);

@@ -6,17 +6,15 @@
 //! The Markdown crate has many sibling analyzers (`mcc`, `mrpc`,
 //! `halstead`, `embedded_code`, …) that all walk the same syntax tree
 //! and need the same low-level extraction primitives: line spans,
-//! link destinations, table-cell counts, prose-container checks, etc.
+//! table-cell counts, prose-container checks, and small node slices.
 //! Without a shared module each analyzer was carrying byte-identical
 //! helper copies; CPD flagged ~155 lines of duplication between `mcc.rs`
 //! and `mrpc.rs` alone.
 //!
-//! This module is the consolidation point. Helpers here are
-//! deliberately small, return owned values, and avoid borrowing from
-//! the cursor — that keeps each call site free to use the helper
-//! without holding a `TreeCursor` open across other work.
+//! This module is the consolidation point for structural tree mechanics.
+//! Markdown semantic facts such as resolved reference links live in
+//! `MarkdownDocument`, where pulldown-cmark already exposes them.
 
-use crate::document::{MarkdownDocument, normalize_reference_label, unescape_markdown};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
 
@@ -195,101 +193,6 @@ pub(crate) fn count_table_cells(node: &Node<'_>) -> usize {
     total
 }
 
-/// Find a `link_destination` (or parenthesized variant) inside `node`
-/// and return the URL with the surrounding `<>` stripped. The walk is
-/// a stack-based DFS — depth-first finding the first matching node so
-/// nested brackets in destinations don't confuse the search.
-pub(crate) fn find_link_dest(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut stack = vec![*node];
-    while let Some(n) = stack.pop() {
-        if matches!(
-            n.kind_id().into(),
-            Markdown::LinkDestination | Markdown::LinkDestinationParenthesis
-        ) {
-            let bytes = source.as_bytes();
-            let start = n.start_byte();
-            let end = n.end_byte();
-            if end <= bytes.len() && start < end {
-                let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
-                return Some(
-                    text.trim_start_matches('<')
-                        .trim_end_matches('>')
-                        .to_string(),
-                );
-            }
-        }
-        let mut cursor = n.cursor();
-        if cursor.goto_first_child() {
-            loop {
-                stack.push(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Find a link destination and resolve reference-style links through the
-/// document's reference definitions. Inline links keep their literal payload;
-/// `[text][id]`, `[id][]`, and shortcut `[id]` use the destination from
-/// `[id]: ...` when one exists.
-pub(crate) fn find_resolved_link_dest(
-    node: &Node<'_>,
-    source: &str,
-    document: &MarkdownDocument,
-) -> Option<String> {
-    if let Some(dest) = find_link_dest(node, source) {
-        if is_full_reference_link(node, source)
-            && let Some(resolved) = reference_definition_destination(document, &dest)
-        {
-            return Some(resolved);
-        }
-        return Some(dest);
-    }
-
-    if is_inline_link(node, source) {
-        return None;
-    }
-
-    find_link_label(node, source)
-        .as_deref()
-        .and_then(|label| reference_definition_destination(document, label))
-}
-
-fn reference_definition_destination(document: &MarkdownDocument, label: &str) -> Option<String> {
-    let label = normalize_reference_label(&unescape_markdown(label));
-    document
-        .reference_definitions
-        .iter()
-        .find(|definition| definition.label == label)
-        .map(|definition| definition.destination.clone())
-}
-
-fn is_inline_link(node: &Node<'_>, source: &str) -> bool {
-    source
-        .get(node.start_byte()..node.end_byte())
-        .is_some_and(|text| text.contains("]("))
-}
-
-fn is_full_reference_link(node: &Node<'_>, source: &str) -> bool {
-    let Some(text) = source.get(node.start_byte()..node.end_byte()) else {
-        return false;
-    };
-    if text.contains("](") {
-        return false;
-    }
-    let Some(close) = text.rfind(']') else {
-        return false;
-    };
-    let before_close = &text[..close];
-    let Some(open) = before_close.rfind('[') else {
-        return false;
-    };
-    open > 0 && before_close[..open].ends_with(']')
-}
-
 /// Find a `link_label` inside `node` and return its raw text.
 pub(crate) fn find_link_label(node: &Node<'_>, source: &str) -> Option<String> {
     let mut stack = vec![*node];
@@ -372,41 +275,4 @@ pub(crate) fn has_scheme(dest: &str) -> bool {
         return true;
     }
     false
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::syntax_tree::{Node, Tree, parse_with_document};
-
-    fn first_node<'a>(tree: &'a Tree, target: Markdown) -> Node<'a> {
-        let mut stack = vec![tree.root()];
-        while let Some(node) = stack.pop() {
-            if node.kind_id() == target as u16 {
-                return node;
-            }
-            let mut cursor = node.cursor();
-            if cursor.goto_first_child() {
-                loop {
-                    stack.push(cursor.node());
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-        }
-        panic!("missing {target:?} node");
-    }
-
-    #[test]
-    fn escaped_reference_key_resolves_definition_destination() {
-        let source = "[visible][ref\\]]\n\n[ref\\]]: https://example.com\n";
-        let (tree, document) = parse_with_document(source);
-        let link = first_node(&tree, Markdown::Link);
-
-        assert_eq!(
-            find_resolved_link_dest(&link, source, &document),
-            Some("https://example.com".to_string())
-        );
-    }
 }

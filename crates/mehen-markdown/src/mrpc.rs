@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 use crate::document::{MarkdownDocument, is_diagram_language};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
-use crate::tree_helpers::{count_table_cells, find_resolved_link_dest, has_scheme};
+use crate::tree_helpers::{count_table_cells, has_scheme};
 
 /// Per-edge weights from §7.3.
 mod weights {
@@ -325,11 +325,13 @@ impl<'doc> GraphBuilder<'doc> {
                 return;
             }
             Link | Image => {
-                // Inline `[text](url)` / `![alt](url)` uses a descendant
-                // destination. Reference-style `[text][id]` / `[id][]` /
-                // shortcut `[id]` resolves through `MarkdownDocument`.
-                if let Some(dest) = find_resolved_link_dest(node, source, self.document) {
-                    self.handle_link(&dest);
+                // Pulldown resolves inline and reference-style destinations
+                // before these compact syntax nodes are walked.
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
+                {
+                    self.handle_link(dest);
                 }
                 return;
             }
@@ -983,7 +985,8 @@ mod tests {
         // `../api.md` so the graph has 1 section + 1 linked_doc and the
         // weighted form collapses to max(1, 0.80 - 2 + 2) = 1.0.
         let inline = "# Title\n\nSee [docs](../api.md) for details.\n";
-        let reference = "# Title\n\nSee [docs][api-docs] for details.\n\n[api-docs]: ../api.md\n";
+        let reference =
+            "# Title\n\nSee [docs][api-docs\\]] for details.\n\n[api-docs\\]]: ../api.md\n";
         let a = compute(inline);
         let b = compute(reference);
         assert_eq!(

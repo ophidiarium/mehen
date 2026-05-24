@@ -20,8 +20,7 @@ use crate::document::{MarkdownDocument, is_diagram_language};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
 use crate::tree_helpers::{
-    count_table_cells, find_link_label, find_resolved_link_dest, has_scheme as is_external,
-    node_line_span,
+    count_table_cells, find_link_label, has_scheme as is_external, node_line_span,
 };
 
 /// §8 aggregate: positive weight before credit, credit amount used, final
@@ -249,8 +248,10 @@ impl<'a, 'doc> Walker<'a, 'doc> {
             self.positive += 0.25 * self.current_nest_multiplier();
             // External link unchecked → +0.30 per §8.1. Phase B applies this
             // universally until Phase C differentiates valid / broken.
-            if let Some(dest) = find_resolved_link_dest(node, self.source, self.document)
-                && is_external(&dest)
+            if let Some(dest) = self
+                .document
+                .link_destination_by_span(node.start_byte(), node.end_byte())
+                && is_external(dest)
             {
                 self.positive += 0.30 * self.current_nest_multiplier();
             }
@@ -733,7 +734,7 @@ mod tests {
     #[test]
     fn reference_style_external_link_matches_inline_mcc() {
         let inline = "# H\n\nSee [docs](https://example.com).\n";
-        let reference = "# H\n\nSee [docs][api].\n\n[api]: https://example.com\n";
+        let reference = "# H\n\nSee [docs][api\\]].\n\n[api\\]]: https://example.com\n";
         let a = compute(inline);
         let b = compute(reference);
 
