@@ -1,0 +1,11 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CARGO_TERM_COLOR = "never"
+CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR = "1"
+CLICOLOR = "0"
+CLICOLOR_FORCE = "0"
+GH_PAGER = "cat"
+MAX_THINKING_TOKENS = "32000"
+NEXTEST_COLOR = "0"
