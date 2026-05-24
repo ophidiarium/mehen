@@ -754,6 +754,25 @@ mod tests {
     }
 
     #[test]
+    fn malformed_reference_destination_does_not_resolve_reference_use() {
+        let src = "[id]: /docs(\n\nSee [visible][id].\n";
+        let document = crate::document::parse_document(src);
+        let (records, _) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        assert!(
+            records
+                .iter()
+                .all(|record| record.class != LinkClass::ReferenceDefinition)
+        );
+        let link_use = records
+            .iter()
+            .find(|record| record.line == 3 && record.text == "id")
+            .expect("unresolved reference link use");
+        assert_eq!(link_use.class, LinkClass::UnresolvedReferenceUse);
+        assert_eq!(link_use.resolved, Some(false));
+    }
+
+    #[test]
     fn full_reference_link_resolves_with_reference_key_not_visible_text() {
         let src = "# Target\n\nSee [visible][ref].\n\n[ref]: #target\n";
         let document = crate::document::parse_document(src);

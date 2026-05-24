@@ -575,12 +575,13 @@ fn parse_link_destination(source: &str, start: usize) -> Option<(Range<usize>, S
                 depth -= 1;
                 cursor += 1;
             }
+            b')' => return None,
             b' ' | b'\t' | b'\n' | b'\r' => break,
             _ => cursor += 1,
         }
     }
 
-    (cursor > start).then(|| {
+    (cursor > start && depth == 0).then(|| {
         let destination = unescape_markdown(&source[start..cursor]);
         (start..cursor, destination, cursor)
     })
@@ -727,6 +728,24 @@ mod tests {
     #[test]
     fn angle_destination_rejects_unescaped_lt() {
         assert!(definitions("[id]: <a<b>\n").is_empty());
+    }
+
+    #[test]
+    fn raw_destination_rejects_unbalanced_parentheses() {
+        assert!(definitions("[id]: /docs(\n").is_empty());
+        assert!(definitions("[id]: /docs)\n").is_empty());
+
+        let definitions = definitions("[balanced]: /docs(ok)\n[escaped]: /docs\\(ok\\)\n");
+        assert_eq!(
+            definitions
+                .into_iter()
+                .map(|definition| (definition.label, definition.destination))
+                .collect::<Vec<_>>(),
+            vec![
+                ("balanced".to_string(), "/docs(ok)".to_string()),
+                ("escaped".to_string(), "/docs(ok)".to_string()),
+            ]
+        );
     }
 }
 
