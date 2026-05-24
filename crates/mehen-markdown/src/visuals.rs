@@ -50,7 +50,7 @@ pub(crate) fn analyze_visuals(
         .filter_map(|block| record_diagram(block, blocks))
         .collect();
 
-    walk_images(root, source, &base_dir, blocks, &mut images);
+    walk_images(root, document, source, &base_dir, blocks, &mut images);
 
     // Sort for determinism.
     images.sort_by(|a, b| a.line.cmp(&b.line).then(a.destination.cmp(&b.destination)));
@@ -71,6 +71,7 @@ pub(crate) fn analyze_visuals(
 
 fn walk_images(
     node: &Node<'_>,
+    document: &MarkdownDocument,
     source: &str,
     base_dir: &Path,
     blocks: &[BlockSpan],
@@ -79,7 +80,7 @@ fn walk_images(
     let kind: Markdown = node.kind_id().into();
     match kind {
         Markdown::Image => {
-            if let Some(rec) = record_image(node, source, base_dir, blocks) {
+            if let Some(rec) = record_image(node, document, source, base_dir, blocks) {
                 images.push(rec);
             }
             return;
@@ -87,7 +88,7 @@ fn walk_images(
         Markdown::ImageBlock => {
             // Image-block is a stand-alone image — its parent is the
             // document, not a paragraph. Treat it identically.
-            if let Some(rec) = record_image(node, source, base_dir, blocks) {
+            if let Some(rec) = record_image(node, document, source, base_dir, blocks) {
                 images.push(rec);
             }
             return;
@@ -97,7 +98,7 @@ fn walk_images(
     let mut cursor = node.cursor();
     if cursor.goto_first_child() {
         loop {
-            walk_images(&cursor.node(), source, base_dir, blocks, images);
+            walk_images(&cursor.node(), document, source, base_dir, blocks, images);
             if !cursor.goto_next_sibling() {
                 break;
             }
@@ -107,12 +108,15 @@ fn walk_images(
 
 fn record_image(
     node: &Node<'_>,
+    document: &MarkdownDocument,
     source: &str,
     base_dir: &Path,
     blocks: &[BlockSpan],
 ) -> Option<ImageRecord> {
     let line = (node.start_row() as u64) + 1;
-    let destination = find_first(node, Markdown::LinkDestination).map(|n| node_text(&n, source))?;
+    let destination = document
+        .link_destination_by_span(node.start_byte(), node.end_byte())?
+        .to_string();
     let alt_text = find_first(node, Markdown::LinkLabel)
         .map(|n| {
             let s = node_text(&n, source);
@@ -238,4 +242,47 @@ fn is_absolute_url(s: &str) -> bool {
         || s.starts_with("data:")
         || s.starts_with("ftp://")
         || s.starts_with("mailto:")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax_tree::parse_with_document;
+
+    #[test]
+    fn reference_style_images_are_recorded_with_resolved_destinations() {
+        let source = "\
+![full][asset-full]
+![collapsed][]
+![shortcut]
+
+[asset-full]: https://example.com/full.png
+[collapsed]: https://example.com/collapsed.png
+[shortcut]: https://example.com/shortcut.png
+";
+        let (tree, document) = parse_with_document(source);
+        let analysis = analyze_visuals(
+            &tree.root(),
+            &document,
+            source,
+            Path::new("/tmp/doc.md"),
+            10,
+            &[],
+        );
+        let destinations = analysis
+            .images
+            .iter()
+            .map(|image| image.destination.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            destinations,
+            vec![
+                "https://example.com/full.png",
+                "https://example.com/collapsed.png",
+                "https://example.com/shortcut.png",
+            ]
+        );
+        assert_eq!(analysis.aggregate.images, 3);
+    }
 }
