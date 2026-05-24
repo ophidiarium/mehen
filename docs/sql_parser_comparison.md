@@ -1,0 +1,225 @@
+# SQL Parser Selection for `mehen-sql`
+
+**Status:** decision-support analysis
+**Author:** evaluation pass (hands-on, repos cloned and one candidate built)
+**Date:** 2026-05-24
+**Companion doc:** [`mehen_sql_metrics_research_foundation.md`](./mehen_sql_metrics_research_foundation.md)
+
+## 0. TL;DR
+
+| | **sqruff** (`quarylabs/sqruff`) | **sqlfluffrs** (`sqlfluff/sqlfluff/sqlfluffrs`) | **ANTLR grammars-v4 + `antlr-rust-runtime`** |
+|---|---|---|---|
+| Verdict | **Recommended primary parser** | Not recommended as a dependency now | Niche supplement for deep PL/SQL / T-SQL only |
+| Language | Native Rust | Rust, but a build-component of a Python project | Generated Rust over a young Rust runtime |
+| License | Apache-2.0 | MIT | MIT/BSD per-grammar + BSD-3 runtime |
+| Build as git dep | Plain `cargo build` (verified) | **Requires Python + SQLFluff source to codegen dialects at build time** | Needs ANTLR (Java) at dev time; generated Rust can be committed |
+| Node model | One `SyntaxKind` enum (1087 variants) shared across all dialects | String-typed segments shared across dialects | One generic `ParseTree`; **rule vocabulary differs per dialect grammar** |
+| Built-in analysis | CTE/query graph, scopes, aliases, wildcards, **column lineage** | None (pure lex+parse) | None (pure CST) |
+| Dialects | 17, all hand-written Rust, feature-gated | ~28 (transpiled from Python) | 20 independent grammars |
+| Source spans | Verified line:col on every node | `pos_marker` per token | Token line:col |
+
+**Bottom line:** sqruff is the only candidate that compiles as an ordinary Rust git dependency, exposes a single dialect-agnostic typed node model with reliable spans, and already ships the higher-level CTE/scope/lineage analysis that the metrics document assumes. It covers essentially the entire proposed metric catalogue. The other two each carry a structural blocker (sqlfluffrs: a Python build-time dependency; ANTLR: no shared node vocabulary + unrunnable semantic predicates for the most important dialects).
+
+---
+
+## 1. What the metrics actually demand from a parser
+
+Distilled from the research foundation, the parser must provide:
+
+1. **Reliable per-node source spans** (line/col) — for top-offender attribution (§4.7, §10).
+2. **A dialect-agnostic node vocabulary** — so one extractor serves many dialects, matching mehen's "shared output, language-owned semantics" model (§2).
+3. **Statement-kind classification** across DDL/DML/DCL/TCL/procedural (§5.2, §6.14).
+4. **Query-block + CTE structure with a dependency graph** (§5.3–§5.5, §6.3–§6.4).
+5. **Join, subquery (incl. correlation), set-op, CASE, window, predicate trees** (§6.5–§6.12).
+6. **Scope/identifier resolution** — CTE vs table vs alias, qualification, wildcards (§5.4, §6.13).
+7. **Graceful failure surface** — unparsable segments + diagnostics for confidence metrics (§6.16).
+8. **Procedural control-flow nodes** for PL/SQL & T-SQL (§6.17, Phase 3).
+9. **Optional column lineage** (§8.7, Phase 4).
+
+The recurring theme: the document does not just want a token stream — it wants a *structured, dialect-normalized* tree plus some graph/scope analysis on top.
+
+---
+
+## 2. Candidate A — sqruff (quarylabs)
+
+Cloned at `v0.38.0` (commit `63ae4c4f`). Crates: `lib-core` (lexer+parser+segment model+analysis utils), `lib-dialects` (17 dialects), `lineage` (column lineage), `sqlinference`, `lib` (linter/templaters), `lsp`, `cli`.
+
+### 2.1 Node model and spans
+
+- The CST is `ErasedSegment` (= `Rc<NodeOrToken>`); every node carries a `SyntaxKind` (single enum, **1087 variants**) and an optional `PositionMarker`.
+- Traversal is first-class: `recursive_crawl(types, …)`, `child`/`children(SyntaxSet)`, `get_start_loc()/get_end_loc()` returning `(line, col)`, plus `is_code/is_comment/is_whitespace/is_meta` and `is_templated()` (literal vs templated spans).
+- **One enum across all 17 dialects** is the single biggest ergonomic win: a metric extractor written once (`SyntaxKind::JoinClause`, `CaseExpression`, `OverClause`, …) works for postgres, tsql, snowflake, bigquery, etc.
+
+### 2.2 Built-in higher-level analysis (this is the differentiator)
+
+`utils/analysis/query.rs` ships a `Query`/`Selectable` model that already provides, for free, much of §5:
+
+- `QueryInner { query_type, selectables, ctes: IndexMap<name, Query>, parent, subqueries, cte_definition_segment, cte_name_segment }`.
+- `crawl_sources()` resolves each source as **CTE-reference vs base table** (`Source::Query` vs `Source::TableReference`) — i.e. the CTE dependency graph is derivable directly.
+- `select_info()` → table aliases, select targets, column aliases, `using` columns; `wildcard_info()` → `SELECT *` / `t.*` with the tables they expand.
+- `TableReference::is_qualified()` → directly feeds `sql.identifier.unqualified_column_ratio`.
+- A separate `lineage` crate (`Lineage::new(parser, column, sql).build()`) gives column-level lineage for the optional `sql.lineage.*` family (Phase 4) on the same parser.
+
+### 2.3 Empirical verification (built and run)
+
+I added `sqruff-lib-core` + `sqruff-lib-dialects` (postgres feature only) as path deps to a throwaway crate and parsed a deliberately gnarly query (recursive CTE + `UNION ALL`, `LEFT JOIN` with compound `ON`, window function with explicit `ROWS` frame, nested `CASE`, `IN (subquery)`, correlated scalar subquery, `r.*`). Output:
+
+```
+lex errors: 0
+unparsable segments: 0
+SelectStatement       = 7      CommonTableExpression = 3
+JoinClause            = 3      SetExpression         = 1   (UNION ALL)
+CaseExpression        = 2      OverClause            = 1
+WindowSpecification   = 1      FrameClause           = 1
+ColumnReference       = 31     WildcardExpression    = 1   (r.*)
+FunctionContents      = 2
+  join span: L6:20..L6:62   "JOIN region_tree rt ON r.parent_id = rt.id"
+  join span: L11:5..L11:70  "LEFT JOIN customers c ON s.customer_id = c.id AND c.active = true"
+  join span: L25:1..L25:43  "JOIN region_tree rt ON r.region_id = rt.id"
+query_type: WithCompound
+CTEs detected: ["REGION_TREE", "SALES_BASE", "RANKED"]
+top-level subqueries: 1
+```
+
+Everything the Phase-1 catalogue needs came out of one parse, with correct spans, **zero** unparsable segments, and the CTE/subquery graph recovered by the built-in analyzer. Incremental rebuild after the first compile was 0.31s.
+
+### 2.4 Coverage of the proposed metric families
+
+Confirmed `SyntaxKind` variants exist for: `CommonTableExpression`, `JoinClause`, `JoinOnCondition`, `SetExpression`/`SetOperator`, `CaseExpression`/`WhenClause`, `OverClause`/`WindowSpecification`/`FrameClause`/`PartitionClause`, `GroupbyClause`/`CubeRollupClause`/`GroupingSetsClause`, `MergeStatement`/`MergeMatch`, `QualifyClause`, `FromPivotExpression`/`FromUnpivotExpression`, `WildcardExpression`, `CastExpression`, `FunctionContents`, `Expression`, `ColumnReference`, every `*Statement` (insert/update/delete/truncate/drop/alter/access/transaction…), and procedural ones (`IfStatement`, `LoopStatement`, `WhileStatement`, `ForLoopStatement`, `BeginEndBlock`, `TryCatch`, `RaiseStatement`, `ReturnStatement`, `CreateProcedureStatement`, `DeclareStatement`, `ExecuteStatement`). `SyntaxKind::Unparsable` is the recovery node for confidence metrics.
+
+### 2.5 Cons / risks
+
+- **`Rc`-based tree is not `Send`/`Sync`.** mehen's `LanguageAnalyzer` is `Send + Sync` and returns *owned* `LanguageAnalysis`. This is fine because parsing+extraction happen inside a single `analyze()` call and only owned `MetricSet`/`MetricContribution` escape — the same pattern mehen already uses around non-`Send` parse state. Constraint to respect: do not hold an `ErasedSegment` across threads; extract facts within the call.
+- **API stability is not guaranteed** (Open question #1 in the research doc). `lib-core` is an internal crate of an app, version `0.x`, no semver promise. Mitigation: the metrics doc already mandates a `parser_adapter` boundary that converts `SyntaxKind` nodes into mehen `SqlFact`s — keep that thin seam so a sqruff bump is contained.
+- **Procedural depth is linter-grade, not exhaustive.** The procedural `SyntaxKind`s exist and tsql/oracle dialects use them, but sqruff's oracle/PL-SQL surface is narrower than the dedicated ANTLR `plsql` grammar. Acceptable for Phase 1–2; revisit for a deep Phase-3 procedural push (see §4).
+- **Dependency weight:** pulls `fancy-regex`, `strum`, `indexmap`, `hashbrown`, `smol_str`, `serde_yaml` (in dialects). Comparable to what mehen already absorbs for ruff/tree-sitter. `lib-dialects` is feature-gated, so you can compile only the dialects you ship.
+- **Templating (Jinja/dbt) lives in the heavier `lib` crate**, which pulls Python templater plumbing. For standalone `.sql` you only need `lib-core` + `lib-dialects`; treat templating as an opt-in later decision (Open question #3).
+
+---
+
+## 3. Candidate B — sqlfluffrs (the Rust crate inside SQLFluff)
+
+Cloned at `v4.2.1` (commit `3fdeaf50`). Workspace: `sqlfluffrs_types` (token/marker/grammar tables), `sqlfluffrs_lexer`, `sqlfluffrs_dialects`, `sqlfluffrs_parser` (table-driven), `sqlfluffrs_python` (pyo3).
+
+### 3.1 The decisive blocker: dialects are generated from Python at build time
+
+`sqlfluffrs_dialects/build.rs` (quoting its own header): the generated dialect sources `src/dialect/<name>/{parser,matcher}.rs` and `src/dialect/mod.rs` are **not checked into version control**; they are produced by running `python utils/rustify.py build`, which imports the SQLFluff Python package (`from sqlfluff.core.dialects import dialect_readout`) and transpiles each Python dialect into Rust. I confirmed `sqlfluffrs_dialects/src/dialect/` does not exist in a fresh checkout.
+
+Consequences for using it as a Cargo git dependency:
+
+- `cargo build` in mehen would shell out to a **Python interpreter** and require the SQLFluff source tree importable (build.rs prepends `<repo>/src` to `PYTHONPATH`). That is a hard, non-Rust build prerequisite on every dev machine and CI runner.
+- It contradicts the whole point of mehen's generated-code policy (commit the generated `grammar.rs`, verify drift in CI). sqlfluffrs regenerates on mtime, into `OUT_DIR`-adjacent paths, from a Python toolchain you don't control.
+- The project README is explicit: *"not intended to be used as a standalone linting solution… experimental,"* and AGENTS.md: *"Experimental and incomplete… may have compatibility issues with some dialects."* Its release cadence is tied to SQLFluff's Python releases, and the `python` feature wires in `pyo3`.
+
+### 3.2 If that blocker were removed
+
+The token model would be workable but weaker than sqruff:
+
+- `Token { token_type: String, class_types: HashSet<String>, pos_marker: Option<PositionMarker>, segments: Vec<Token>, … }` — node types are **strings** (mirrors SQLFluff's dynamic Python typing). You'd match `"select_statement"`, `"join_clause"`, `"common_table_expression"` by string — no enum exhaustiveness, slower comparisons, easy to typo.
+- **No Rust analysis layer at all** — `sqlfluffrs` is lexer+parser only. The CTE/query graph, scope resolution, wildcard expansion, correlation detection, and lineage that sqruff hands you would all have to be re-implemented from scratch in Rust against string-typed nodes.
+- Spans exist (`pos_marker`), and dialect breadth (~28, transpiled) is the widest in theory — but only as good as the in-progress transpiler, which the maintainers call incomplete.
+- The owned `Vec<Token>` tree (with `Weak<Token>` parents) is likely `Send`, a minor plus over sqruff's `Rc`, but irrelevant given the build blocker.
+
+### 3.3 Verdict
+
+Re-evaluate only if upstream ever ships **pre-generated, checked-in Rust dialects** (or a published crate on crates.io with no Python build step). Until then, the build-time Python dependency disqualifies it for a Rust-only CLI.
+
+---
+
+## 4. Candidate C — ANTLR grammars-v4 + `ophidiarium/antlr-rust-runtime`
+
+`grammars-v4/sql` has 20 independent dialect grammars (postgresql, plsql, tsql, mysql, sqlite, snowflake, db2, hive, trino, clickhouse, databricks, mariadb, teradata, …; **no generic ANSI, no BigQuery, no DuckDB**). `antlr-rust-runtime` is `v0.3.0`, BSD-3, a clean-room runtime with a **metadata-first** generator: `antlr4-rust-gen` consumes ANTLR `.interp` files (serialized ATN + token/rule names) and emits Rust. It passes the full upstream runtime-testsuite (357 descriptors).
+
+### 4.1 Structural blockers for the metrics use case
+
+1. **No shared node vocabulary.** The generated tree is a generic `ParseTree { Rule(RuleContext), Terminal, Error }`; you navigate by `rule_index → rule_names[idx]` (a string) and positional children — there are no typed accessors. Worse, each dialect grammar is authored independently, so postgresql's rule names bear no relation to tsql's or sqlite's. A metric extractor would have to be **rewritten per dialect grammar** — the opposite of mehen's shared-vocabulary model and an N× maintenance burden.
+2. **Semantic predicates/actions can't run from `.interp`.** The runtime's path deserializes the ATN but cannot execute target-language semantic predicates or `superClass` helper methods (their code isn't in `.interp`). The two most important relational dialects depend on exactly this:
+   - `postgresql` → `superClass = PostgreSQLLexerBase/ParserBase` + 9 predicates (dollar-quoting, etc.).
+   - `plsql` → `superClass = PlSqlLexerBase/ParserBase` + 20 predicates.
+   - `mysql` (Oracle/original) → `superClass = MySQLBaseRecognizer` + many `{this.serverVersion >= …}?` predicates.
+
+   These base classes are shipped for Java/C#/Go/JS/Python/TS/C++ — **not Rust**. Using those grammars means hand-porting the base classes to Rust *and* wiring predicate evaluation, per grammar. `tsql`, `snowflake`, and `sqlite` are the clean ones (no `superClass`, 0 predicates, no embedded actions) and would generate/parse cleanly.
+3. **No analysis layer whatsoever.** Pure CST. CTE graph, scopes, correlation, wildcard expansion, lineage — all from scratch, on top of generic rule contexts.
+4. **No normalized statement kinds.** `select` vs `insert` vs `create_procedure` is just a rule name that differs per grammar; you build the §5.2 taxonomy by hand for each.
+
+### 4.2 The one place ANTLR wins
+
+The `plsql` (12.6k lines) and `tsql` (7.6k lines) grammars are the most complete procedural-SQL grammars in existence. For a *deep* Phase-3 procedural push (full PL/SQL exception/cursor/loop semantics, T-SQL `TRY/CATCH`/`WHILE`/cursors), the dedicated ANTLR grammars model far more than sqruff's linter-oriented procedural surface. `tsql` is the sweet spot: no base classes, no predicates → generates cleanly onto `antlr-rust-runtime`, and `.interp`-generated Rust can be **committed** (matching mehen's generated-`grammar.rs` policy, with `antlr4-rust-gen` playing the role `xtask tree-sitter generate` plays today).
+
+### 4.3 Verdict
+
+Not viable as the primary/general SQL parser: no cross-dialect vocabulary, broken predicate handling for postgres/plsql/mysql, and everything above the CST built from zero. Worth keeping in the back pocket as a **dedicated procedural augmentation** (tsql first, then plsql if the base classes are ported) once Phase-3 demands depth sqruff can't reach.
+
+---
+
+## 5. Side-by-side metric-coverage matrix
+
+Rating each parser by how much work the proposed metric family needs.
+**Direct** = node/API exists, count/measure immediately · **Derive** = straightforward traversal/aggregation on existing nodes · **Build** = must implement a non-trivial analysis layer yourself · **Blocked** = structural obstacle before you can start.
+
+| Metric family (doc §) | sqruff | sqlfluffrs* | ANTLR (clean dialects)** |
+|---|:--:|:--:|:--:|
+| LOC / size / comments (6.1) | Direct | Direct | Direct |
+| Statement kinds DDL/DML/DCL/TCL (6.2, 6.14) | Direct | Derive | Build (per grammar) |
+| Query blocks + depth (6.3) | Direct | Derive | Derive |
+| CTE count + dependency graph (6.4) | **Direct** (`Query.ctes`, `crawl_sources`) | Build | Build |
+| Joins + kinds (6.5) | Direct | Derive | Derive |
+| Subquery + derived tables (6.6) | Direct | Derive | Derive |
+| Correlated-subquery detection (6.6) | Derive (parent links exist) | Build | Build |
+| Predicate / boolean tree (6.7) | Direct/Derive | Derive | Derive |
+| CASE incl. nesting (6.8) | Direct | Derive | Derive |
+| Aggregation / GROUPING SETS / ROLLUP (6.9) | Direct | Derive | Derive |
+| Window incl. frames (6.10) | Direct | Derive | Derive |
+| Set ops + depth (6.11) | Direct | Derive | Derive |
+| Expression depth / function nesting (6.12) | Direct | Derive | Derive |
+| Output shape: `*`, alias coverage (6.13) | **Direct** (`wildcard_info`, `select_info`) | Build | Build |
+| Unqualified-column ratio (6.13) | Derive (`is_qualified`) | Build | Build |
+| Object touch / migration risk (6.14) | Direct | Derive | Build |
+| Halstead operators/operands (7) | Derive | Derive | Derive |
+| Dialect / portability (6.15) | Direct (`DialectKind` + dialect kinds) | Derive | Build (no generic ANSI) |
+| Parser health / unparsable (6.16) | **Direct** (`SyntaxKind::Unparsable`) | Direct (`unparsable`) | Derive (`Error` nodes) |
+| Procedural cyclomatic/cognitive (6.17) | Derive (linter-grade) | Derive | **Direct** (plsql/tsql richest) |
+| Column lineage (8.7) | **Direct** (`lineage` crate) | Build | Build |
+
+\* sqlfluffrs ratings assume the **Python build-time blocker is solved** — otherwise the whole column is Blocked.
+\*\* ANTLR ratings are for `tsql`/`snowflake`/`sqlite`; for `postgresql`/`plsql`/`mysql` every cell is **Blocked** until Rust base classes + predicate evaluation are hand-ported.
+
+---
+
+## 6. Fit with mehen's architecture
+
+- **Git-dependency precedent:** mehen already pins ruff via tagged git deps. sqruff fits the same pattern cleanly (path/git, feature-gated dialects, plain `cargo build`). sqlfluffrs breaks it (Python at build time). ANTLR sidesteps it by committing generated Rust, but needs the Java ANTLR tool at *generation* time (a dev/xtask step, not a build step).
+- **Generated-code policy:** mehen forbids hand-editing generated `grammar.rs` and checks drift in CI via `xtask`. ANTLR's `.interp → antlr4-rust-gen → committed Rust` maps onto this policy naturally; sqlfluffrs violates it (regenerates from Python into uncommitted paths); sqruff is hand-written Rust (no codegen concern).
+- **`Send + Sync` analyzer contract:** sqruff (`Rc`) and tree-sitter (borrowed nodes) both require extract-within-the-call — mehen already does this. sqlfluffrs (`Vec<Token>`/`Arc`) is friendliest here; ANTLR depends on the generated context ownership.
+- **Adapter seam:** regardless of choice, implement the doc's `parser_adapter` → `SqlFact` boundary so metrics never reference parser-internal node names directly. This is cheap with sqruff's enum, essential with ANTLR's per-grammar vocabularies, and the only thing that would make a future parser swap survivable.
+
+---
+
+## 7. Recommendation
+
+1. **Adopt sqruff (`lib-core` + `lib-dialects`) as the `mehen-sql` parser.** It is the only candidate that builds as a normal Rust dependency, gives one typed node vocabulary across 17 dialects with verified spans, ships the CTE/scope/wildcard analysis the metrics assume, and even has a column-lineage crate for Phase 4. The hands-on probe showed it covers the entire Phase-1 catalogue from a single parse.
+2. **Wrap it behind the `parser_adapter`/`SqlFact` boundary** the research doc already specifies, so the `0.x` API surface and the `Rc` tree stay contained and a later swap is localized.
+3. **Defer templating:** start with `lib-core`+`lib-dialects` for standalone `.sql`; only pull sqruff's `lib` templaters (or emit templating-burden metrics) once Open question #3 is decided.
+4. **Hold ANTLR `tsql`/`plsql` in reserve for Phase 3** *iff* procedural depth becomes a hard requirement that sqruff's linter-grade procedural nodes can't satisfy. If pursued, start with `tsql` (clean grammar, commits generated Rust via `antlr4-rust-gen` like the tree-sitter `xtask` flow). Do **not** take on postgres/plsql/mysql ANTLR grammars without budgeting the Rust base-class + predicate-evaluation port.
+5. **Drop sqlfluffrs** from consideration unless it later publishes pre-generated, checked-in Rust dialects (or a crates.io release with no Python build step).
+
+### Suggested `mehen-sql/Cargo.toml` shape
+
+```toml
+# Pinned here (single consumer), mirroring the ruff pattern.
+sqruff-lib-core = { git = "https://github.com/quarylabs/sqruff", tag = "v0.38.0" }
+sqruff-lib-dialects = { git = "https://github.com/quarylabs/sqruff", tag = "v0.38.0",
+                        default-features = false,
+                        features = ["postgres", "tsql", "snowflake", "bigquery",
+                                    "mysql", "sqlite", "duckdb", "oracle"] }
+# Phase 4 (optional): sqruff-lineage for sql.lineage.*
+```
+
+---
+
+## Appendix — evidence log
+
+- Repos cloned to `/tmp/sql-parser-eval/`: `sqruff` (`v0.38.0`), `sqlfluff` (incl. `sqlfluffrs` `v4.2.1`), `grammars-v4`, `antlr-rust-runtime` (`v0.3.0`).
+- sqruff parse probe: `/tmp/sql-parser-eval/probe` (path-deps on `lib-core` + `lib-dialects[postgres]`), built and run with `rustc 1.89.0`; results in §2.3.
+- sqlfluffrs build blocker: read from `sqlfluffrs/sqlfluffrs_dialects/build.rs` and confirmed `src/dialect/` absent in a fresh checkout; dialect count from `src/sqlfluff/dialects/dialect_*.py` (28).
+- ANTLR predicate/base-class findings: `rg` over `grammars-v4/sql/*/*.g4` (`superClass`, `}?`) and the shipped per-language `*Base` directories (no Rust); runtime capabilities from `antlr-rust-runtime/README.md` + `docs/runtime-testsuite.md` and the generic `ParseTree` walker in `tests/kotlin-parity/dumper/src/main.rs`.
