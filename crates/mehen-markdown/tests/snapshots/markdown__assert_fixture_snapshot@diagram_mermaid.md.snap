@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.23076923076923078
 size:
-  words: 46
-  effective_content_units: 3.2416666666666667
+  words: 43
+  effective_content_units: 3.229166666666667
   sections: 1
   headings: 1
 ecu_inputs:
@@ -35,7 +35,7 @@ sections:
     end_line: 13
     parent_section_id: ~
     child_section_ids: []
-    word_count: 46
+    word_count: 43
     block_count: 3
 complexity:
   reading_path_complexity: 2
@@ -43,16 +43,16 @@ complexity:
   cognitive_complexity: 1.4329326923076922
   halstead:
     operators_distinct: 5
-    operators_total: 16
-    operands_distinct: 44
-    operands_total: 50
-    vocabulary: 49
-    length: 66
-    volume: 370.5708497116037
-    difficulty: 2.8409090909090913
-    effort: 1052.7580957716016
+    operators_total: 12
+    operands_distinct: 41
+    operands_total: 47
+    vocabulary: 46
+    length: 59
+    volume: 325.89015540736375
+    difficulty: 2.8658536585365852
+    effort: 933.9534941552497
     embedded_volume: 0
-    total_volume: 370.5708497116037
+    total_volume: 325.89015540736375
 links:
   total: 0
   internal: 0
@@ -75,7 +75,7 @@ visuals:
   diagram_nodes_total: 2
   diagram_edges_total: 2
   diagram_cycles_total: 1
-  visual_scaffold_score: 0.9569487529386909
+  visual_scaffold_score: 0.9595886165829116
   visual_net_effect: 1.4000000000000004
 tables:
   count: 0
@@ -84,27 +84,27 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 97.90709237924113
+  documentation_maintainability_index: 98.01249313614167
   section_balance_score: 1
-  good_scaffold_score: 0.23923718823467272
+  good_scaffold_score: 0.2398971541457279
   artifact_debt_score: 0
 grounding:
-  repository_grounding_score: 0.025155279503105588
+  repository_grounding_score: 0.028405315614617933
   evidence_coverage_score: 0.6153846153846154
 ai_era:
-  filler_lazy_structure_risk: 0.3737732919254658
+  filler_lazy_structure_risk: 0.36553986710963454
   labels:
     - low-artifact-density
     - low-repository-grounding
   top_contributors:
     - - low-repository-grounding
-      - 0.9748447204968944
+      - 0.9715946843853821
     - - low-artifact-density
       - 0.6666666666666667
     - - specificity-scarcity
-      - 0.3442028985507246
+      - 0.28100775193798444
 review:
-  review_criticality_index: 6.327018633540373
+  review_criticality_index: 6.369269102990034
 artifacts:
   - id: 0
     kind: diagram

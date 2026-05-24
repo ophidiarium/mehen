@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.11235955056179775
 size:
-  words: 46
-  effective_content_units: 24.341666666666665
+  words: 44
+  effective_content_units: 24.333333333333332
   sections: 5
   headings: 5
 ecu_inputs:
@@ -39,13 +39,13 @@ sections:
       - 2
       - 3
       - 4
-    word_count: 20
+    word_count: 18
     block_count: 1
   - section_id: 1
     heading_level: 2
     heading_text: ~
     start_line: 6
-    end_line: 32
+    end_line: 31
     parent_section_id: 0
     child_section_ids: []
     word_count: 0
@@ -54,7 +54,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 33
-    end_line: 54
+    end_line: 53
     parent_section_id: 0
     child_section_ids: []
     word_count: 0
@@ -63,7 +63,7 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 55
-    end_line: 80
+    end_line: 79
     parent_section_id: 0
     child_section_ids: []
     word_count: 0
@@ -82,17 +82,17 @@ complexity:
   reading_path_complexity_raw: 7
   cognitive_complexity: 6.144
   halstead:
-    operators_distinct: 10
-    operators_total: 22
-    operands_distinct: 53
-    operands_total: 62
-    vocabulary: 63
-    length: 84
-    volume: 502.091513573993
-    difficulty: 5.849056603773585
-    effort: 2936.7616831686382
+    operators_distinct: 9
+    operators_total: 16
+    operands_distinct: 51
+    operands_total: 60
+    vocabulary: 60
+    length: 76
+    volume: 448.92368526624745
+    difficulty: 5.294117647058823
+    effort: 2376.654804350722
     embedded_volume: 25.825071751093375
-    total_volume: 527.9165853250863
+    total_volume: 474.74875701734084
 links:
   total: 0
   internal: 0
@@ -124,26 +124,26 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 97.84956521739132
+  documentation_maintainability_index: 98.32488311688311
   section_balance_score: 0.85
   good_scaffold_score: 0.2
   artifact_debt_score: 0
 grounding:
-  repository_grounding_score: 0.2717391304347826
+  repository_grounding_score: 0.28006493506493507
   evidence_coverage_score: 0.5538461538461539
 ai_era:
-  filler_lazy_structure_risk: 0.22086956521739132
+  filler_lazy_structure_risk: 0.18125974025974026
   labels:
     - low-repository-grounding
   top_contributors:
     - - low-repository-grounding
-      - 0.7282608695652174
-    - - specificity-scarcity
-      - 0.3442028985507246
+      - 0.7199350649350649
     - - large-unanchored-prose
-      - 0.16956521739130437
+      - 0.11818181818181828
+    - - specificity-scarcity
+      - 0.11363636363636365
 review:
-  review_criticality_index: 17.921180124223607
+  review_criticality_index: 18.029415584415585
 artifacts:
   - id: 0
     kind: code

@@ -18,8 +18,8 @@
 use std::collections::BTreeSet;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::nearby::{BlockSpan, has_prose_within};
+use crate::syntax_tree::Node;
 
 #[derive(Debug, Clone)]
 pub(crate) struct MathBlock {

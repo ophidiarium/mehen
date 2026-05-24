@@ -11,8 +11,8 @@
 //! flags that Phase D consumes.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
+use crate::syntax_tree::Node;
 use crate::types::{TableRecord, Tables};
 
 /// Walks the tree and returns one [`TableRecord`] per `pipe_table`. The

@@ -11,7 +11,7 @@
 //! given artifact line range has a prose block ±2 positions away.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 
 /// A flattened block descriptor. One entry per top-level block in the
 /// document. Lines are one-based and inclusive.

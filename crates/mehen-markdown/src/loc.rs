@@ -11,7 +11,7 @@
 //! [`LineClasses::loc_family`].
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 use crate::types::{LocFamily, LocRatios};
 
 /// One-of line categories, in precedence order when multiple nodes claim the
@@ -202,7 +202,7 @@ fn classify_node(node: &Node<'_>, classes: &mut [LineClass]) {
 }
 
 /// Returns the number of physical lines in `source`, counting a trailing
-/// newline-less line and handling CRLF consistently with tree-sitter.
+/// newline-less line and handling CRLF consistently with parser byte spans.
 pub(crate) fn physical_line_count(source: &str) -> usize {
     if source.is_empty() {
         return 0;

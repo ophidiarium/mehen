@@ -145,6 +145,8 @@ pub enum LinkClass {
     IssuePr,
     /// Reference to a footnote definition in the same doc.
     Footnote,
+    /// Reference-style link/image use whose label did not resolve.
+    UnresolvedReferenceUse,
     /// A `link_reference_definition` block — the `[abc]: url` anchor entry.
     ReferenceDefinition,
 }

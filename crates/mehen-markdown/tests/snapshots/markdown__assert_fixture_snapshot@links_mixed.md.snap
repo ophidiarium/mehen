@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -8,17 +8,17 @@ loc:
   cloc: 0
   tloc: 0
   mloc: 0
-  bloc: 13
-  aloc: 2
+  bloc: 12
+  aloc: 3
 loc_ratios:
-  artifact_line_ratio: 0.06896551724137931
+  artifact_line_ratio: 0.10344827586206896
   code_line_ratio: 0
   table_line_ratio: 0
   math_line_ratio: 0
-  blank_line_ratio: 0.4482758620689655
+  blank_line_ratio: 0.41379310344827586
 size:
-  words: 29
-  effective_content_units: 0.12083333333333333
+  words: 44
+  effective_content_units: 0.18333333333333332
   sections: 3
   headings: 3
 ecu_inputs:
@@ -37,7 +37,7 @@ sections:
     child_section_ids:
       - 1
       - 2
-    word_count: 26
+    word_count: 38
     block_count: 7
   - section_id: 1
     heading_level: 2
@@ -46,8 +46,8 @@ sections:
     end_line: 26
     parent_section_id: 0
     child_section_ids: []
-    word_count: 3
-    block_count: 3
+    word_count: 5
+    block_count: 4
   - section_id: 2
     heading_level: 2
     heading_text: ~
@@ -55,29 +55,29 @@ sections:
     end_line: 29
     parent_section_id: 0
     child_section_ids: []
-    word_count: 0
+    word_count: 1
     block_count: 2
 complexity:
   reading_path_complexity: 1
-  reading_path_complexity_raw: 4
-  cognitive_complexity: 6.3389999999999995
+  reading_path_complexity_raw: 5
+  cognitive_complexity: 6.138999999999999
   halstead:
-    operators_distinct: 8
-    operators_total: 37
-    operands_distinct: 40
-    operands_total: 47
-    vocabulary: 48
-    length: 84
-    volume: 469.1368500605771
-    difficulty: 4.7
-    effort: 2204.9431952847126
+    operators_distinct: 7
+    operators_total: 32
+    operands_distinct: 51
+    operands_total: 61
+    vocabulary: 58
+    length: 93
+    volume: 544.7922325468642
+    difficulty: 4.186274509803922
+    effort: 2280.649836250108
     embedded_volume: 0
-    total_volume: 469.1368500605771
+    total_volume: 544.7922325468642
 links:
-  total: 15
+  total: 13
   internal: 2
-  relative: 7
-  external: 5
+  relative: 4
+  external: 6
   external_vendor: 1
   scholarly: 1
   issue_pr: 1
@@ -85,10 +85,10 @@ links:
   image: 0
   footnote: 1
   bare_url: 1
-  broken: 2
-  link_debt_score: 0.76
-  information_scent_score: 0.3857142857142857
-  review_burden: 16.7
+  broken: 3
+  link_debt_score: 0.7536538461538462
+  information_scent_score: 0.5038461538461538
+  review_burden: 17.8
 link_records:
   - line: 3
     class: internal
@@ -154,33 +154,19 @@ link_records:
     is_bare_url: false
     resolved: ~
   - line: 15
-    class: reference_definition
-    destination: ""
-    text: abc
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 15
-    class: reference_definition
-    destination: ""
-    text: abc-ref
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 15
-    class: reference_definition
-    destination: ""
-    text: missing
-    is_image: false
-    is_bare_url: false
-    resolved: true
-  - line: 15
-    class: reference_definition
+    class: unresolved_reference_use
     destination: ""
     text: nope
     is_image: false
     is_bare_url: false
-    resolved: true
+    resolved: false
+  - line: 15
+    class: external
+    destination: "https://example.org"
+    text: abc
+    is_image: false
+    is_bare_url: false
+    resolved: ~
   - line: 17
     class: footnote
     destination: "1"
@@ -217,15 +203,15 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 81.60371428571428
+  documentation_maintainability_index: 82.28016483516484
   section_balance_score: 0.85
-  good_scaffold_score: 0.10785714285714285
+  good_scaffold_score: 0.12557692307692309
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0.10714285714285714
   evidence_coverage_score: 0.4230769230769231
 ai_era:
-  filler_lazy_structure_risk: 0.48457142857142865
+  filler_lazy_structure_risk: 0.45142857142857146
   labels:
     - low-artifact-density
     - low-repository-grounding
@@ -234,12 +220,12 @@ ai_era:
   top_contributors:
     - - low-artifact-density
       - 1
-    - - placeholder-heavy
-      - 1
     - - specificity-scarcity
       - 1
+    - - low-repository-grounding
+      - 0.8928571428571429
 review:
-  review_criticality_index: 14.732767857142859
+  review_criticality_index: 14.500625
 artifacts: []
 prose:
   language_detection:
@@ -275,6 +261,9 @@ prose:
       - start_line: 21
         end_line: 21
         language: en
+      - start_line: 25
+        end_line: 25
+        language: en
       - start_line: 27
         end_line: 27
         language: en
@@ -299,30 +288,30 @@ prose:
         - ~
     lexical:
       mattr_50: 0.76
-      hapax_ratio: 0.775
-      dis_ratio: 0.175
-      lexical_density: 0.788
-      avg_sentence_words: 4
-      p90_sentence_words: 8
+      hapax_ratio: 0.769
+      dis_ratio: 0.179
+      lexical_density: 0.765
+      avg_sentence_words: 3.643
+      p90_sentence_words: 7
       max_sentence_words: 9
-      stddev_sentence_words: 2.689
-      avg_word_chars: 5.038
+      stddev_sentence_words: 2.409
+      avg_word_chars: 5.216
       p90_word_chars: 8
-      sentence_count: 13
-      words_total: 52
+      sentence_count: 14
+      words_total: 51
     wording:
       passive_ratio: 0
       hedge_density: 0
       weasel_density: 0
-      wordy_density: 0.019
-      adverb_density: 0.019
-      nominalization_density: 0.019
+      wordy_density: 0.02
+      adverb_density: 0.02
+      nominalization_density: 0.039
       expletive_count: 0
       lexical_illusions: 0
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 0.972
+      wording_quality_score: 0.971
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -331,6 +320,6 @@ prose:
   japanese: ~
   meta:
     short_doc_warning: true
-    words_counted: 52
-    sentences_counted: 13
+    words_counted: 51
+    sentences_counted: 14
     blocks_stripped: []

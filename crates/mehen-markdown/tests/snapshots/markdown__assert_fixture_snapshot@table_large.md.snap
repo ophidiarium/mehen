@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.14285714285714285
 size:
-  words: 36
-  effective_content_units: 5.61
+  words: 125
+  effective_content_units: 5.980833333333333
   sections: 1
   headings: 1
 ecu_inputs:
@@ -35,24 +35,24 @@ sections:
     end_line: 14
     parent_section_id: ~
     child_section_ids: []
-    word_count: 36
+    word_count: 125
     block_count: 2
 complexity:
   reading_path_complexity: 2
   reading_path_complexity_raw: 2
   cognitive_complexity: 1.3219413178184862
   halstead:
-    operators_distinct: 6
-    operators_total: 27
-    operands_distinct: 46
-    operands_total: 52
-    vocabulary: 52
-    length: 79
-    volume: 450.33473773314626
-    difficulty: 3.391304347826087
-    effort: 1527.2221540515395
+    operators_distinct: 5
+    operators_total: 24
+    operands_distinct: 68
+    operands_total: 141
+    vocabulary: 73
+    length: 165
+    volume: 1021.3210522152029
+    difficulty: 5.183823529411765
+    effort: 5294.348101556751
     embedded_volume: 0
-    total_volume: 450.33473773314626
+    total_volume: 1021.3210522152029
 links:
   total: 0
   internal: 0
@@ -84,15 +84,15 @@ tables:
   table_scaffold_score: 0.7416666666666667
   hard_warnings: 1
 maintainability:
-  documentation_maintainability_index: 92.60528846153846
-  section_balance_score: 0.85
+  documentation_maintainability_index: 94.57195512820513
+  section_balance_score: 1
   good_scaffold_score: 0.14833333333333334
   artifact_debt_score: 0
 grounding:
   repository_grounding_score: 0
   evidence_coverage_score: 0.6153846153846154
 ai_era:
-  filler_lazy_structure_risk: 0.3763888888888889
+  filler_lazy_structure_risk: 0.3375
   labels:
     - low-artifact-density
     - low-repository-grounding
@@ -101,8 +101,8 @@ ai_era:
       - 1
     - - low-artifact-density
       - 0.6666666666666667
-    - - specificity-scarcity
-      - 0.32407407407407407
+    - - lazy-sectioning
+      - 0.24999999999999994
 review:
   review_criticality_index: 6.000000000000001
 artifacts:

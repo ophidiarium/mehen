@@ -26,9 +26,9 @@
 use std::path::Path;
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, sat};
-use crate::tree_helpers::node_text;
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{ProseContext, is_non_prose_container, node_text, opens_prose_context};
 use crate::types::{ArtifactKind, ArtifactRecord, LinkClass, LinkRecord, Section, TableRecord};
 
 /// Inputs collected from the AST walk that feed both §15 and §17.6 /
@@ -240,86 +240,21 @@ fn visit_token_counts(
 
     let kind: Markdown = node.kind_id().into();
 
-    // Stop containers: do not descend, and do not inherit their content as
-    // prose. An inline_code node is handled specially before the stop list so
-    // we can still count it.
-    match kind {
-        InlineCode => {
-            if inside_prose {
-                out.inline_code_tokens += 1;
-            }
-            return;
+    // Inline code is machine-readable but still a grounding signal inside
+    // prose, so count the node itself and skip its children.
+    if kind == InlineCode {
+        if inside_prose {
+            out.inline_code_tokens += 1;
         }
-        FencedCodeBlock
-        | IndentedCodeBlock
-        | CodeFenceContent
-        | InlineCodeContent
-        | InlineCodeContent2
-        | InfoString
-        | Language
-        | MathBlock
-        | MathInline
-        | MathBlockContent
-        | MathInlineContent
-        | HtmlBlock
-        | HtmlBlock1
-        | HtmlBlock3
-        | HtmlBlock4
-        | HtmlBlock5
-        | HtmlBlock6
-        | HtmlBlock7
-        | HtmlCommentBlock
-        | HtmlInline
-        | HtmlComment
-        | HtmlCdata
-        | HtmlDeclaration
-        | HtmlProcessingInstruction
-        | HtmlOpenTag
-        | HtmlCloseTag
-        | MdxJsxBlock
-        | MdxJsxInline
-        | MdxJsxOpenTag
-        | MdxJsxOpenTag2
-        | MdxJsxCloseTag
-        | MdxJsxCloseTag2
-        | MdxJsxExpression
-        | Autolink
-        | Uri
-        | Email
-        | LinkDestination
-        | LinkDestinationParenthesis
-        | LinkTitle
-        | TextNoAngle
-        | MinusMetadata
-        | PlusMetadata
-        | PipeTableDelimiterRow
-        | PipeTableDelimiterCell
-        | PipeTableAlignLeft
-        | PipeTableAlignRight => {
-            return;
-        }
-        _ => {}
+        return;
     }
 
-    let opens_prose = matches!(
-        kind,
-        Paragraph
-            | AtxHeadingContent
-            | SetextHeading
-            | SetextHeading2
-            | BlockQuote
-            | PlainBlockQuote
-            | Callout
-            | CalloutHeaderParagraph
-            | ListItemContent
-            | TaskListItemContent
-            | LinkLabel
-            | FootnoteLabel
-            | PipeTableCell
-            | PipeTableHeader
-            | PipeTableRow
-    );
-    let next_inside = inside_prose || opens_prose;
+    if is_non_prose_container(kind) {
+        return;
+    }
+
+    let next_inside =
+        inside_prose || opens_prose_context(kind, ProseContext::BODY_AND_HEADING_TEXT);
 
     if next_inside {
         match kind {
@@ -366,77 +301,11 @@ fn collect_package_api_config_tokens(root: &Node<'_>, source: &str, _file_path: 
 fn visit_package_api_config(node: &Node<'_>, source: &str, total: &mut u64, inside_prose: bool) {
     use Markdown::*;
     let kind: Markdown = node.kind_id().into();
-    match kind {
-        FencedCodeBlock
-        | IndentedCodeBlock
-        | InlineCode
-        | CodeFenceContent
-        | InlineCodeContent
-        | InlineCodeContent2
-        | InfoString
-        | Language
-        | MathBlock
-        | MathInline
-        | MathBlockContent
-        | MathInlineContent
-        | HtmlBlock
-        | HtmlBlock1
-        | HtmlBlock3
-        | HtmlBlock4
-        | HtmlBlock5
-        | HtmlBlock6
-        | HtmlBlock7
-        | HtmlCommentBlock
-        | HtmlInline
-        | HtmlComment
-        | HtmlCdata
-        | HtmlDeclaration
-        | HtmlProcessingInstruction
-        | HtmlOpenTag
-        | HtmlCloseTag
-        | MdxJsxBlock
-        | MdxJsxInline
-        | MdxJsxOpenTag
-        | MdxJsxOpenTag2
-        | MdxJsxCloseTag
-        | MdxJsxCloseTag2
-        | MdxJsxExpression
-        | Autolink
-        | Uri
-        | Email
-        | LinkDestination
-        | LinkDestinationParenthesis
-        | LinkTitle
-        | TextNoAngle
-        | MinusMetadata
-        | PlusMetadata
-        | PipeTableDelimiterRow
-        | PipeTableDelimiterCell
-        | PipeTableAlignLeft
-        | PipeTableAlignRight => {
-            return;
-        }
-        _ => {}
+    if is_non_prose_container(kind) {
+        return;
     }
-    let opens_prose = matches!(
-        kind,
-        Paragraph
-            | AtxHeadingContent
-            | SetextHeading
-            | SetextHeading2
-            | BlockQuote
-            | PlainBlockQuote
-            | Callout
-            | CalloutHeaderParagraph
-            | ListItemContent
-            | TaskListItemContent
-            | LinkLabel
-            | FootnoteLabel
-            | PipeTableCell
-            | PipeTableHeader
-            | PipeTableRow
-    );
-    let next_inside = inside_prose || opens_prose;
+    let next_inside =
+        inside_prose || opens_prose_context(kind, ProseContext::BODY_AND_HEADING_TEXT);
 
     if next_inside && kind == PathLikeToken {
         let text = node_text(node, source);
@@ -545,9 +414,10 @@ fn compute_per_section_anchors(
                 matches!(l.resolved, Some(true))
             }
             LinkClass::IssuePr => true,
-            LinkClass::AbsoluteSameRepo | LinkClass::Footnote | LinkClass::ReferenceDefinition => {
-                false
-            }
+            LinkClass::AbsoluteSameRepo
+            | LinkClass::Footnote
+            | LinkClass::UnresolvedReferenceUse
+            | LinkClass::ReferenceDefinition => false,
         };
         if !is_anchor {
             continue;
@@ -625,64 +495,10 @@ fn visit_per_section_resolved_paths(
 ) {
     use Markdown::*;
     let kind: Markdown = node.kind_id().into();
-    // Skip non-prose containers — mirrors the gating in visit_token_counts.
-    if matches!(
-        kind,
-        FencedCodeBlock
-            | IndentedCodeBlock
-            | InlineCode
-            | CodeFenceContent
-            | InlineCodeContent
-            | InlineCodeContent2
-            | InfoString
-            | Language
-            | MathBlock
-            | MathInline
-            | MathBlockContent
-            | MathInlineContent
-            | HtmlBlock
-            | HtmlBlock1
-            | HtmlBlock3
-            | HtmlBlock4
-            | HtmlBlock5
-            | HtmlBlock6
-            | HtmlBlock7
-            | HtmlCommentBlock
-            | MdxJsxBlock
-            | MdxJsxInline
-            | DirectiveBlock
-            | MinusMetadata
-            | PlusMetadata
-            | LinkDestination
-            | LinkDestinationParenthesis
-            | Uri
-    ) {
+    if is_non_prose_container(kind) {
         return;
     }
-    let opens_prose = matches!(
-        kind,
-        Paragraph
-            | AtxHeading
-            | AtxHeading2
-            | AtxHeading3
-            | AtxHeading4
-            | AtxHeading5
-            | AtxHeading6
-            | SetextHeading
-            | SetextHeading2
-            | BlockQuote
-            | PlainBlockQuote
-            | Callout
-            | CalloutHeaderParagraph
-            | ListItemContent
-            | TaskListItemContent
-            | LinkLabel
-            | FootnoteLabel
-            | PipeTableCell
-            | PipeTableHeader
-            | PipeTableRow
-    );
-    let next_inside = inside_prose || opens_prose;
+    let next_inside = inside_prose || opens_prose_context(kind, ProseContext::SECTION_TEXT);
     if next_inside && matches!(kind, PathLikeToken) {
         let text = node_text(node, source);
         if repo_resolves(base, &text) {

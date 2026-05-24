@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.22727272727272727
 size:
-  words: 154
-  effective_content_units: 0.6416666666666667
+  words: 151
+  effective_content_units: 0.6291666666666667
   sections: 1
   headings: 1
 ecu_inputs:
@@ -35,24 +35,24 @@ sections:
     end_line: 22
     parent_section_id: ~
     child_section_ids: []
-    word_count: 154
+    word_count: 151
     block_count: 5
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 1
   cognitive_complexity: 0
   halstead:
-    operators_distinct: 3
-    operators_total: 26
-    operands_distinct: 101
-    operands_total: 157
-    vocabulary: 104
-    length: 183
-    volume: 1226.1804684198198
-    difficulty: 2.3316831683168315
-    effort: 2859.064359533342
+    operators_distinct: 2
+    operators_total: 22
+    operands_distinct: 97
+    operands_total: 153
+    vocabulary: 99
+    length: 175
+    volume: 1160.1374085139316
+    difficulty: 1.577319587628866
+    effort: 1829.9074587900159
     embedded_volume: 0
-    total_volume: 1226.1804684198198
+    total_volume: 1160.1374085139316
 links:
   total: 0
   internal: 0

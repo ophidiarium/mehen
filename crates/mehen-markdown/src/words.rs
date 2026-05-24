@@ -5,9 +5,10 @@
 //!
 //! Counts `word_token`, `numeric_token`, `identifier_like_token`, and
 //! `path_like_token` nodes *only when they appear inside prose contexts*.
-//! A prose context is a `paragraph`, `atx_heading_content`, `setext_heading`,
-//! `block_quote`, `callout`, or a list item's inline content. Inline code,
-//! link destinations, image destinations, raw HTML, MDX, math, autolinks,
+//! A prose context is a `paragraph`, `block_quote`, `callout`, or a list
+//! item's inline content. Heading text is intentionally excluded from `W`
+//! to preserve the metric's body-prose denominator. Inline code, link
+//! destinations, image destinations, raw HTML, MDX, math, autolinks,
 //! front-matter, and pipe-table delimiter characters are NOT prose and do
 //! not contribute.
 //!
@@ -15,7 +16,8 @@
 //! traversal into `link_label` is allowed — only the destination is skipped.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{ProseContext, is_non_prose_container, opens_prose_context};
 
 /// Counts narrative word-like tokens across the document.
 pub(crate) fn count_words(root: &Node<'_>) -> u64 {
@@ -29,93 +31,13 @@ pub(crate) fn count_words(root: &Node<'_>) -> u64 {
 /// `inside_prose` tracks whether the current walk is below a prose-shaped
 /// ancestor. Technical containers flip the flag off for their subtree.
 fn visit(node: &Node<'_>, total: &mut u64, inside_prose: bool) {
-    use Markdown::*;
-
     let kind: Markdown = node.kind_id().into();
-
-    // First handle "stop" containers — never descend into these. They shadow
-    // any outer prose context.
-    match kind {
-        // Code.
-        FencedCodeBlock
-        | IndentedCodeBlock
-        | InlineCode
-        | CodeFenceContent
-        | InlineCodeContent
-        | InlineCodeContent2
-        | InfoString
-        | Language
-        // Math.
-        | MathBlock
-        | MathInline
-        | MathBlockContent
-        | MathInlineContent
-        // Raw HTML / MDX.
-        | HtmlBlock
-        | HtmlBlock1
-        | HtmlBlock3
-        | HtmlBlock4
-        | HtmlBlock5
-        | HtmlBlock6
-        | HtmlBlock7
-        | HtmlCommentBlock
-        | HtmlInline
-        | HtmlComment
-        | HtmlCdata
-        | HtmlDeclaration
-        | HtmlProcessingInstruction
-        | HtmlOpenTag
-        | HtmlCloseTag
-        | MdxJsxBlock
-        | MdxJsxInline
-        | MdxJsxOpenTag
-        | MdxJsxOpenTag2
-        | MdxJsxCloseTag
-        | MdxJsxCloseTag2
-        | MdxJsxExpression
-        // Autolinks are URI / email spans, not prose.
-        | Autolink
-        | Uri
-        | Email
-        // Link / image destinations are URLs, not prose.
-        | LinkDestination
-        | LinkDestinationParenthesis
-        | LinkTitle
-        | TextNoAngle
-        // Front-matter is structured YAML/TOML, not prose.
-        | MinusMetadata
-        | PlusMetadata
-        // Pipe-table delimiter characters are pure structure.
-        | PipeTableDelimiterRow
-        | PipeTableDelimiterCell
-        | PipeTableAlignLeft
-        | PipeTableAlignRight => {
-            return;
-        }
-        _ => {}
+    if is_non_prose_container(kind) {
+        return;
     }
 
     // A prose-eligible container opens a prose context for its descendants.
-    let opens_prose = matches!(
-        kind,
-        Paragraph
-            | AtxHeadingContent
-            | SetextHeading
-            | SetextHeading2
-            | BlockQuote
-            | PlainBlockQuote
-            | Callout
-            | CalloutHeaderParagraph
-            | ListItemContent
-            | TaskListItemContent
-            | LinkLabel
-            | FootnoteLabel
-            | PipeTableCell
-            | PipeTableHeader
-            | PipeTableRow
-    );
-
-    let next_inside = inside_prose || opens_prose;
+    let next_inside = inside_prose || opens_prose_context(kind, ProseContext::BODY);
 
     if next_inside && is_word_token(kind) {
         *total += 1;

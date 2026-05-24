@@ -24,10 +24,8 @@ pub enum AnalysisBackend {
     /// rust-analyzer's `ra_ap_syntax` parser. Used by `mehen-rust` from
     /// Phase 9 of the rewrite onward, replacing tree-sitter-rust.
     RaApSyntax,
-    /// The current pre-1.0 Markdown analyzer.
-    MarkdownLegacy,
-    /// Comrak. Reserved for the Phase 10 Markdown evaluation.
-    Comrak,
+    /// Pulldown-cmark parser used by `mehen-markdown`.
+    PulldownCmark,
     /// Anything not yet covered.
     Other(String),
 }
@@ -41,8 +39,7 @@ impl AnalysisBackend {
             AnalysisBackend::Mago => "mago",
             AnalysisBackend::Prism => "prism",
             AnalysisBackend::RaApSyntax => "rust-ra-ap-syntax",
-            AnalysisBackend::MarkdownLegacy => "markdown-legacy",
-            AnalysisBackend::Comrak => "comrak",
+            AnalysisBackend::PulldownCmark => "pulldown-cmark",
             AnalysisBackend::Other(s) => s.as_str(),
         }
     }

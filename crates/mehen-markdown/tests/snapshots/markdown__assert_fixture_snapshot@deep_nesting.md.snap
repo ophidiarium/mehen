@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -46,23 +46,23 @@ sections:
     parent_section_id: 0
     child_section_ids: []
     word_count: 12
-    block_count: 9
+    block_count: 8
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 1
-  cognitive_complexity: 17.177
+  cognitive_complexity: 16.038
   halstead:
-    operators_distinct: 8
-    operators_total: 24
+    operators_distinct: 7
+    operators_total: 23
     operands_distinct: 37
     operands_total: 51
-    vocabulary: 45
-    length: 75
-    volume: 411.8889822247256
-    difficulty: 5.513513513513513
-    effort: 2270.955469563352
+    vocabulary: 44
+    length: 74
+    volume: 403.99793977916
+    difficulty: 4.824324324324324
+    effort: 1949.0170878535148
     embedded_volume: 0
-    total_volume: 411.8889822247256
+    total_volume: 403.99793977916
 links:
   total: 0
   internal: 0
@@ -94,7 +94,7 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 89.91751113234591
+  documentation_maintainability_index: 90.2329265169613
   section_balance_score: 0.85
   good_scaffold_score: 0
   artifact_debt_score: 0
@@ -116,7 +116,7 @@ ai_era:
     - - specificity-scarcity
       - 1
 review:
-  review_criticality_index: 15.621750776397514
+  review_criticality_index: 14.299697204968945
 artifacts: []
 prose:
   language_detection:
@@ -129,37 +129,25 @@ prose:
         end_line: 4
         language: en
       - start_line: 6
-        end_line: 7
+        end_line: 6
         language: en
       - start_line: 8
-        end_line: 9
-        language: en
-      - start_line: 9
-        end_line: 10
-        language: en
-      - start_line: 10
         end_line: 11
         language: en
       - start_line: 12
-        end_line: 13
+        end_line: 12
         language: en
       - start_line: 14
-        end_line: 15
-        language: en
-      - start_line: 15
         end_line: 15
         language: en
       - start_line: 17
         end_line: 17
         language: en
       - start_line: 20
-        end_line: 21
+        end_line: 20
         language: en
       - start_line: 22
         end_line: 23
-        language: en
-      - start_line: 23
-        end_line: 24
         language: en
       - start_line: 24
         end_line: 24
@@ -188,13 +176,13 @@ prose:
       hapax_ratio: 0.667
       dis_ratio: 0.242
       lexical_density: 0.863
-      avg_sentence_words: 3.4
-      p90_sentence_words: 6
+      avg_sentence_words: 4.636
+      p90_sentence_words: 9
       max_sentence_words: 11
-      stddev_sentence_words: 2.304
+      stddev_sentence_words: 3.17
       avg_word_chars: 5.451
       p90_word_chars: 9
-      sentence_count: 15
+      sentence_count: 11
       words_total: 51
     wording:
       passive_ratio: 0
@@ -218,5 +206,5 @@ prose:
   meta:
     short_doc_warning: true
     words_counted: 51
-    sentences_counted: 15
+    sentences_counted: 11
     blocks_stripped: []

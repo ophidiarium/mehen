@@ -13,17 +13,14 @@
 //!                 + 0.10 * loc_c
 //! ```
 //!
-//! The dispatch is decoupled from this crate via [`set_legacy_dispatch`]:
+//! The dispatch is decoupled from this crate via [`set_embedded_dispatch`]:
 //! the markdown crate doesn't depend on the per-language analyzers
-//! directly. The legacy `mehen` library (during the v1 transition) and
-//! the `mehen-engine` registry (post-transition, plan §4.7
-//! `LanguageDispatcher` seam) both supply a callback that maps a
-//! fence-language code + body to numeric volume/cognitive/sloc.
+//! directly. `mehen-engine` supplies a callback that maps a fence-language
+//! code + body to numeric volume/cognitive/sloc.
 
 use std::sync::OnceLock;
 
-use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::document::MarkdownDocument;
 
 /// Languages a fenced code block can declare. Mirrors the pre-1.0
 /// `LANG` enum, but kept local to this crate so we don't depend on
@@ -43,7 +40,7 @@ pub enum FenceLanguage {
 }
 
 /// Metrics extracted from one fenced code block. Returned by the
-/// dispatch callback registered through [`set_legacy_dispatch`].
+/// dispatch callback registered through [`set_embedded_dispatch`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EmbeddedFenceMetrics {
     pub volume: f64,
@@ -57,49 +54,34 @@ static DISPATCH: OnceLock<DispatchFn> = OnceLock::new();
 
 /// Register the embedded-code dispatch callback.
 ///
-/// Called by `mehen::init_markdown` (the legacy library) at startup so
-/// the physically-moved markdown analyzer can still drive
-/// `langs::get_function_spaces` for fence bodies. The post-transition
-/// `mehen-engine` will register a `LanguageDispatcher`-backed callback
-/// here instead.
-pub fn set_legacy_dispatch(f: DispatchFn) {
+/// Called by `mehen_engine::init_markdown` at startup so the Markdown
+/// analyzer can drive the language registry for fence bodies.
+pub fn set_embedded_dispatch(f: DispatchFn) {
     let _ = DISPATCH.set(f);
 }
 
-/// Public entry: walk the AST, find every fenced code block whose info
-/// string maps to a supported [`FenceLanguage`], and sum the §9.4
-/// contributions.
-pub(crate) fn embedded_volume(root: &Node<'_>, source: &str) -> f64 {
+/// Public entry: analyze every fenced code block whose language maps to a
+/// supported [`FenceLanguage`] and sum the §9.4 contributions.
+pub(crate) fn embedded_volume(document: &MarkdownDocument) -> f64 {
     let mut total = 0.0;
-    visit(root, source, &mut total);
-    total
-}
-
-fn visit(node: &Node<'_>, source: &str, total: &mut f64) {
-    let kind: Markdown = node.kind_id().into();
-    if matches!(kind, Markdown::FencedCodeBlock) {
-        let info = fence_info_tag(node, source);
-        let lang = info.as_deref().and_then(map_fence_to_lang);
-        if let (Some(lang), Some(mut body)) = (lang, fenced_code_content(node, source)) {
+    for block in document
+        .code_blocks
+        .iter()
+        .filter(|block| block.is_fenced())
+    {
+        let lang = block.language.as_deref().and_then(map_fence_to_lang);
+        if let Some(lang) = lang {
+            let mut body = block.content.clone();
             if matches!(lang, FenceLanguage::Php) {
                 let leading = body.trim_start();
                 if !leading.starts_with("<?php") && !leading.starts_with("<?=") {
                     body.insert_str(0, "<?php\n");
                 }
             }
-            *total += analyze_fence(lang, body);
-        }
-        return;
-    }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            visit(&cursor.node(), source, total);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
+            total += analyze_fence(lang, body);
         }
     }
+    total
 }
 
 fn analyze_fence(lang: FenceLanguage, body: String) -> f64 {
@@ -147,83 +129,4 @@ fn map_fence_to_lang(info: &str) -> Option<FenceLanguage> {
         "php" => FenceLanguage::Php,
         _ => return None,
     })
-}
-
-fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::InfoString) {
-            let mut c2 = child.cursor();
-            if c2.goto_first_child() {
-                loop {
-                    let inner = c2.node();
-                    if matches!(inner.kind_id().into(), Markdown::Language) {
-                        let bytes = source.as_bytes();
-                        let start = inner.start_byte();
-                        let end = inner.end_byte();
-                        if end <= bytes.len() && start < end {
-                            let tag = std::str::from_utf8(&bytes[start..end])
-                                .ok()?
-                                .trim()
-                                .to_string();
-                            if !tag.is_empty() {
-                                return Some(tag);
-                            }
-                        }
-                    }
-                    if !c2.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-            // Fallback: take the entire info string text and split by ws.
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start < end {
-                let raw = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
-                if !raw.is_empty() {
-                    return Some(raw.to_string());
-                }
-            }
-            return None;
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    let mut out = String::new();
-    let mut found = false;
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start < end {
-                let chunk = std::str::from_utf8(&bytes[start..end]).ok()?;
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(chunk);
-                found = true;
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    if found { Some(out) } else { None }
 }

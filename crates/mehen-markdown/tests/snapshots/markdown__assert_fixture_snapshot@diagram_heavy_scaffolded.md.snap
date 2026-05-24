@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.14516129032258066
 size:
-  words: 843
-  effective_content_units: 46.0125
+  words: 831
+  effective_content_units: 45.9625
   sections: 7
   headings: 7
 ecu_inputs:
@@ -41,52 +41,52 @@ sections:
       - 4
       - 5
       - 6
-    word_count: 52
+    word_count: 51
     block_count: 1
   - section_id: 1
     heading_level: 2
     heading_text: ~
     start_line: 10
-    end_line: 41
+    end_line: 40
     parent_section_id: 0
     child_section_ids: []
-    word_count: 132
+    word_count: 129
     block_count: 4
   - section_id: 2
     heading_level: 2
     heading_text: ~
     start_line: 42
-    end_line: 79
+    end_line: 78
     parent_section_id: 0
     child_section_ids: []
-    word_count: 186
+    word_count: 185
     block_count: 4
   - section_id: 3
     heading_level: 2
     heading_text: ~
     start_line: 80
-    end_line: 116
+    end_line: 115
     parent_section_id: 0
     child_section_ids: []
-    word_count: 150
+    word_count: 149
     block_count: 4
   - section_id: 4
     heading_level: 2
     heading_text: ~
     start_line: 117
-    end_line: 149
+    end_line: 148
     parent_section_id: 0
     child_section_ids: []
-    word_count: 156
+    word_count: 152
     block_count: 4
   - section_id: 5
     heading_level: 2
     heading_text: ~
     start_line: 150
-    end_line: 176
+    end_line: 175
     parent_section_id: 0
     child_section_ids: []
-    word_count: 98
+    word_count: 96
     block_count: 3
   - section_id: 6
     heading_level: 2
@@ -102,17 +102,17 @@ complexity:
   reading_path_complexity_raw: 11
   cognitive_complexity: 7.74375
   halstead:
-    operators_distinct: 7
-    operators_total: 105
-    operands_distinct: 450
-    operands_total: 861
-    vocabulary: 457
-    length: 966
-    volume: 8535.624642986097
-    difficulty: 6.696666666666666
-    effort: 57160.233025863556
+    operators_distinct: 6
+    operators_total: 90
+    operands_distinct: 443
+    operands_total: 849
+    vocabulary: 449
+    length: 939
+    volume: 8273.126765021936
+    difficulty: 5.749435665914221
+    effort: 47565.810091446656
     embedded_volume: 0
-    total_volume: 8535.624642986097
+    total_volume: 8273.126765021936
 links:
   total: 0
   internal: 0
@@ -144,7 +144,7 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 95.95454608283545
+  documentation_maintainability_index: 96.0348577113937
   section_balance_score: 1
   good_scaffold_score: 0.25
   artifact_debt_score: 0
@@ -164,7 +164,7 @@ ai_era:
     - - hollow-references
       - 0
 review:
-  review_criticality_index: 4.331127669039147
+  review_criticality_index: 4.4081114620938635
 artifacts:
   - id: 0
     kind: diagram

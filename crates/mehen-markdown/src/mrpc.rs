@@ -20,9 +20,10 @@
 
 use std::collections::BTreeMap;
 
+use crate::document::{MarkdownDocument, is_diagram_language};
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
-use crate::tree_helpers::{count_table_cells, fence_content_line_count, has_scheme};
+use crate::syntax_tree::Node;
+use crate::tree_helpers::{count_table_cells, has_scheme};
 
 /// Per-edge weights from §7.3.
 mod weights {
@@ -119,14 +120,18 @@ pub(crate) struct MrpcResult {
 
 /// Public entry point: walks the parsed AST to build `G_doc` and compute
 /// both the §7.2 raw form and the §7.3 weighted form.
-pub(crate) fn compute_mrpc(root: &Node<'_>, source: &str) -> MrpcResult {
-    let mut graph = GraphBuilder::default();
+pub(crate) fn compute_mrpc(
+    root: &Node<'_>,
+    document: &MarkdownDocument,
+    source: &str,
+) -> MrpcResult {
+    let mut graph = GraphBuilder::new(document);
     graph.walk(root, source);
     graph.emit()
 }
 
-#[derive(Default)]
-struct GraphBuilder {
+struct GraphBuilder<'doc> {
+    document: &'doc MarkdownDocument,
     sections: Vec<SectionInfo>,
     large_codes: u32,
     large_tables: u32,
@@ -146,12 +151,6 @@ struct GraphBuilder {
     /// internal anchors can resolve to an existing section node instead
     /// of fabricating one per unique anchor (Codex P1 on PR #83).
     section_slugs: BTreeMap<String, u32>,
-    /// Normalized reference label → destination URL collected from every
-    /// `LinkReferenceDefinition` in the document. Reference-style links
-    /// (`[text][id]` or shortcut `[id]`) resolve their destination through
-    /// this map so they produce the same edge as their inline equivalent
-    /// (`[text](url)`). See Codex P1 on PR #83.
-    link_refs: BTreeMap<String, String>,
 }
 
 struct SectionInfo {
@@ -159,41 +158,29 @@ struct SectionInfo {
     parent: Option<u32>,
 }
 
-impl GraphBuilder {
+impl<'doc> GraphBuilder<'doc> {
+    fn new(document: &'doc MarkdownDocument) -> Self {
+        GraphBuilder {
+            document,
+            sections: Vec::new(),
+            large_codes: 0,
+            large_tables: 0,
+            diagrams: 0,
+            footnotes: BTreeMap::new(),
+            linked_docs: BTreeMap::new(),
+            external_domains: BTreeMap::new(),
+            section_artifacts: Vec::new(),
+            edges: Vec::new(),
+            section_stack: Vec::new(),
+            section_slugs: BTreeMap::new(),
+        }
+    }
+
     fn walk(&mut self, root: &Node<'_>, source: &str) {
-        // Pass 0: collect every `LinkReferenceDefinition` so reference-style
-        // links (`[text][id]`, `[id][]`, and shortcut `[id]`) can resolve
-        // their destination through the same `classify_link` pipeline used
-        // for inline links. Without this pre-pass reference-style links
-        // never emit the correct edge type because their URL lives in a
-        // sibling definition node (Codex P1 on PR #83).
-        self.collect_link_refs(root, source);
         self.walk_recurse(root, source);
         // Sequential section edges (document order, only within the same
         // parent).
         self.add_sequential_edges();
-    }
-
-    fn collect_link_refs(&mut self, node: &Node<'_>, source: &str) {
-        use Markdown::*;
-        let kind: Markdown = node.kind_id().into();
-        if matches!(kind, LinkReferenceDefinition)
-            && let Some(label) = link_ref_label(node, source)
-            && let Some(dest) = link_destination(node, source)
-        {
-            self.link_refs
-                .entry(normalize_ref_label(&label))
-                .or_insert(dest);
-        }
-        let mut cursor = node.cursor();
-        if cursor.goto_first_child() {
-            loop {
-                self.collect_link_refs(&cursor.node(), source);
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
     }
 
     fn walk_recurse(&mut self, node: &Node<'_>, source: &str) {
@@ -242,33 +229,24 @@ impl GraphBuilder {
                 return;
             }
             FencedCodeBlock | IndentedCodeBlock => {
-                // LOC counts content only, never the fence markers —
-                // otherwise a 10-line fence reads as 12 LOC and the
-                // threshold tips prematurely (Codex P2).
-                let loc = fence_content_line_count(node);
-                let info = fence_info(node, source);
-                let is_diagram = matches!(
-                    info.as_deref(),
-                    Some("mermaid")
-                        | Some("plantuml")
-                        | Some("dot")
-                        | Some("graphviz")
-                        | Some("d2")
-                );
-                if is_diagram {
-                    let id = self.diagrams;
-                    self.diagrams += 1;
-                    self.add_artifact_node(GraphNodeId {
-                        kind: NodeKind::Diagram,
-                        index: id,
-                    });
-                } else if loc >= LARGE_CODE_LOC {
-                    let id = self.large_codes;
-                    self.large_codes += 1;
-                    self.add_artifact_node(GraphNodeId {
-                        kind: NodeKind::LargeCode,
-                        index: id,
-                    });
+                if let Some(block) = self.document.code_block_by_start_row(node.start_row()) {
+                    let loc = block.content_line_count();
+                    let is_diagram = block.language.as_deref().is_some_and(is_diagram_language);
+                    if is_diagram {
+                        let id = self.diagrams;
+                        self.diagrams += 1;
+                        self.add_artifact_node(GraphNodeId {
+                            kind: NodeKind::Diagram,
+                            index: id,
+                        });
+                    } else if loc >= LARGE_CODE_LOC {
+                        let id = self.large_codes;
+                        self.large_codes += 1;
+                        self.add_artifact_node(GraphNodeId {
+                            kind: NodeKind::LargeCode,
+                            index: id,
+                        });
+                    }
                 }
                 return;
             }
@@ -318,12 +296,10 @@ impl GraphBuilder {
             }
             LinkReferenceDefinition => {
                 // Reference definitions never contribute a graph node of
-                // their own — their destination is surfaced through the
-                // `Link | Image` branch via `link_refs`. Otherwise a
-                // reference-style link `[text][id]` + `[id]: …` would
-                // produce a different MRPC than the equivalent inline
-                // `[text](…)` even though the navigation cost is identical
-                // (Codex P1 on PR #83).
+                // their own. Reference-style links resolve through
+                // `MarkdownDocument` facts in the `Link | Image` branch, so
+                // `[text][id]` + `[id]: ...` carries the same navigation cost
+                // as the equivalent inline `[text](...)`.
                 return;
             }
             FootnoteReference => {
@@ -349,16 +325,13 @@ impl GraphBuilder {
                 return;
             }
             Link | Image => {
-                // Inline `[text](url)` / `![alt](url)` — destination is a
-                // descendant. Reference-style `[text][id]` / `[id][]` /
-                // shortcut `[id]` — destination lives in the matching
-                // `LinkReferenceDefinition` collected during the pre-pass.
-                if let Some(dest) = link_destination(node, source) {
-                    self.handle_link(&dest);
-                } else if let Some(label) = link_ref_label(node, source)
-                    && let Some(dest) = self.link_refs.get(&normalize_ref_label(&label)).cloned()
+                // Pulldown resolves inline and reference-style destinations
+                // before these compact syntax nodes are walked.
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
                 {
-                    self.handle_link(&dest);
+                    self.handle_link(dest);
                 }
                 return;
             }
@@ -542,7 +515,7 @@ impl GraphBuilder {
     }
 }
 
-fn connected_components(g: &GraphBuilder, total_nodes: u32) -> f64 {
+fn connected_components(g: &GraphBuilder<'_>, total_nodes: u32) -> f64 {
     use std::collections::HashMap;
 
     // Assign a compact integer id to every declared node so union-find is
@@ -734,13 +707,16 @@ fn find_heading_text_node<'a>(section: &Node<'a>) -> Option<Node<'a>> {
                 | SetextHeading
                 | SetextHeading2
         ) {
-            // The visible text lives in the `Inline` child; fall back to
-            // the heading node itself if the grammar surface changes.
+            // The visible text lives in the heading-content child; fall back
+            // to the heading node itself if the grammar surface changes.
             let mut inner = child.cursor();
             if inner.goto_first_child() {
                 loop {
                     let n = inner.node();
-                    if matches!(n.kind_id().into(), Markdown::Inline) {
+                    if matches!(
+                        n.kind_id().into(),
+                        Markdown::AtxHeadingContent | Markdown::Inline
+                    ) {
                         return Some(n);
                     }
                     if !inner.goto_next_sibling() {
@@ -792,58 +768,6 @@ fn resolve_anchor_to_section(dest: &str, section_slugs: &BTreeMap<String, u32>) 
     section_slugs.get(&slug).copied().map(|x| x as usize)
 }
 
-fn fence_info(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(
-            child.kind_id().into(),
-            Markdown::InfoString | Markdown::Language
-        ) {
-            // `Language` is a child of `InfoString`; either works.
-            let inner = find_language_inside(&child).unwrap_or(child);
-            let bytes = source.as_bytes();
-            let start = inner.start_byte();
-            let end = inner.end_byte();
-            if start <= bytes.len() && end <= bytes.len() && start < end {
-                let info = std::str::from_utf8(&bytes[start..end])
-                    .ok()?
-                    .trim()
-                    .to_ascii_lowercase();
-                if !info.is_empty() {
-                    return Some(info);
-                }
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
-fn find_language_inside<'a>(node: &Node<'a>) -> Option<Node<'a>> {
-    if matches!(node.kind_id().into(), Markdown::Language) {
-        return Some(*node);
-    }
-    let mut cursor = node.cursor();
-    if cursor.goto_first_child() {
-        loop {
-            let child = cursor.node();
-            if matches!(child.kind_id().into(), Markdown::Language) {
-                return Some(child);
-            }
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
-    None
-}
-
 /// Extract the URL from an `autolink` node. Autolinks wrap the URL in
 /// `<>` and emit a `Uri` child; the text between the angle brackets is
 /// the destination.
@@ -884,41 +808,6 @@ fn autolink_destination(node: &Node<'_>, source: &str) -> Option<String> {
     None
 }
 
-fn link_destination(node: &Node<'_>, source: &str) -> Option<String> {
-    // Find a `link_destination` or `link_destination_parenthesis` descendant.
-    let mut stack = vec![*node];
-    while let Some(n) = stack.pop() {
-        let kind: Markdown = n.kind_id().into();
-        if matches!(
-            kind,
-            Markdown::LinkDestination | Markdown::LinkDestinationParenthesis | Markdown::Uri
-        ) {
-            let bytes = source.as_bytes();
-            let start = n.start_byte();
-            let end = n.end_byte();
-            if end <= bytes.len() && start < end {
-                let text = std::str::from_utf8(&bytes[start..end]).ok()?.trim();
-                if !text.is_empty() {
-                    // The grammar can wrap the URL in angle brackets; strip them.
-                    let clean = text.trim_start_matches('<').trim_end_matches('>');
-                    return Some(clean.to_string());
-                }
-            }
-            return None;
-        }
-        let mut cursor = n.cursor();
-        if cursor.goto_first_child() {
-            loop {
-                stack.push(cursor.node());
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-    }
-    None
-}
-
 fn footnote_def_label(node: &Node<'_>, source: &str) -> Option<String> {
     label_text(node, source, Markdown::FootnoteLabel)
 }
@@ -926,42 +815,6 @@ fn footnote_def_label(node: &Node<'_>, source: &str) -> Option<String> {
 fn footnote_ref_label(node: &Node<'_>, source: &str) -> Option<String> {
     label_text(node, source, Markdown::FootnoteReferenceLabel)
         .or_else(|| label_text(node, source, Markdown::FootnoteLabel))
-}
-
-fn link_ref_label(node: &Node<'_>, source: &str) -> Option<String> {
-    label_text(node, source, Markdown::LinkLabel)
-}
-
-/// Normalize a reference-link label per the CommonMark / GFM rules:
-/// strip the surrounding `[…]`, trim, fold internal whitespace runs to a
-/// single space, and lowercase (ASCII only is sufficient for our test
-/// coverage — GFM additionally applies Unicode case-folding but nothing
-/// in the metric math depends on that).
-fn normalize_ref_label(label: &str) -> String {
-    let mut inner = label.trim();
-    if let Some(stripped) = inner.strip_prefix('[') {
-        inner = stripped;
-    }
-    if let Some(stripped) = inner.strip_suffix(']') {
-        inner = stripped;
-    }
-    let mut out = String::with_capacity(inner.len());
-    let mut last_ws = false;
-    for ch in inner.chars() {
-        if ch.is_whitespace() {
-            if !last_ws && !out.is_empty() {
-                out.push(' ');
-                last_ws = true;
-            }
-        } else {
-            out.push(ch.to_ascii_lowercase());
-            last_ws = false;
-        }
-    }
-    if out.ends_with(' ') {
-        out.pop();
-    }
-    out
 }
 
 fn label_text(node: &Node<'_>, source: &str, target: Markdown) -> Option<String> {
@@ -995,19 +848,14 @@ fn label_text(node: &Node<'_>, source: &str, target: Markdown) -> Option<String>
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> tree_sitter::Tree {
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        parser.parse(src, None).unwrap()
+    fn compute(src: &str) -> MrpcResult {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        compute_mrpc(&tree.root(), &document, src)
     }
 
     #[test]
     fn empty_document_has_zero_mrpc() {
-        let tree = parse("");
-        let root = crate::legacy_node::Node(tree.root_node());
-        let r = compute_mrpc(&root, "");
+        let r = compute("");
         assert_eq!(r.weighted, 0.0);
         assert_eq!(r.raw, 0.0);
     }
@@ -1015,9 +863,7 @@ mod tests {
     #[test]
     fn pure_prose_has_minimal_mrpc() {
         let src = "# Title\n\nSome prose with no links or artifacts.\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let r = compute_mrpc(&root, src);
+        let r = compute(src);
         // One section, no edges → weighted = max(1, 0 - 1 + 2*1) = 1.0.
         assert_eq!(r.weighted, 1.0);
     }
@@ -1030,9 +876,7 @@ mod tests {
         // every anchor added one node and one edge.
         let src = "# Intro\n\n- [Install](#install)\n- [Usage](#usage)\n\n\
                    # Install\n\nInstall prose.\n\n# Usage\n\nUsage prose.\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let r = compute_mrpc(&root, src);
+        let r = compute(src);
         // 3 sections, 2 sequential edges (Intro→Install, Install→Usage),
         // 2 internal-anchor edges (Intro→Install, Intro→Usage). No extra
         // LinkedDoc nodes → node count stays at 3.
@@ -1044,7 +888,7 @@ mod tests {
     }
 
     #[test]
-    fn fence_content_line_count_excludes_delimiters() {
+    fn code_block_fact_line_count_excludes_delimiters() {
         // Codex P2 on PR #83: LOC for a fenced code block must count
         // content only. A fence with exactly 10 content lines used to
         // report 12 LOC (opening + closing + 10) and trip the ≥12 LARGE
@@ -1052,31 +896,9 @@ mod tests {
         let src = "# Demo\n\n```text\n\
                    a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n\
                    ```\n";
-        let tree = parse(src);
-        // Find the fenced_code_block and assert its content line count.
-        fn find<'a>(n: &crate::legacy_node::Node<'a>) -> Option<crate::legacy_node::Node<'a>> {
-            use Markdown::*;
-            let kind: Markdown = n.kind_id().into();
-            if matches!(kind, FencedCodeBlock) {
-                return Some(*n);
-            }
-            let mut cursor = n.cursor();
-            if !cursor.goto_first_child() {
-                return None;
-            }
-            loop {
-                let child = cursor.node();
-                if let Some(found) = find(&child) {
-                    return Some(found);
-                }
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-            None
-        }
-        let fence = find(&crate::legacy_node::Node(tree.root_node())).expect("fenced block");
-        assert_eq!(fence_content_line_count(&fence), 10);
+        let (_tree, document) = crate::syntax_tree::parse_with_document(src);
+        let block = document.code_blocks.first().expect("fenced block");
+        assert_eq!(block.content_line_count(), 10);
     }
 
     #[test]
@@ -1091,9 +913,7 @@ mod tests {
     #[test]
     fn external_link_gets_external_weight() {
         let src = "# Title\n\nSee [rust-lang](https://www.rust-lang.org) for more.\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let r = compute_mrpc(&root, src);
+        let r = compute(src);
         // N = 2 (section + external domain); E = 1 with weight 1.0.
         // Weighted MRPC = max(1, 1.0 - 2 + 2*1) = 1.0.
         assert_eq!(r.weighted, 1.0);
@@ -1102,9 +922,7 @@ mod tests {
     #[test]
     fn multi_section_mrpc_grows() {
         let src = "# A\n\ntext\n\n## B\n\ntext\n\n## C\n\n[x](https://example.com)\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let r = compute_mrpc(&root, src);
+        let r = compute(src);
         // 3 sections + 1 external domain = 4 nodes.
         // Edges: 2 hierarchy (A→B, A→C), 1 sequential (B→C), 1 external.
         // Sum weights = 0.15 + 0.15 + 0.20 + 1.00 = 1.50
@@ -1167,12 +985,10 @@ mod tests {
         // `../api.md` so the graph has 1 section + 1 linked_doc and the
         // weighted form collapses to max(1, 0.80 - 2 + 2) = 1.0.
         let inline = "# Title\n\nSee [docs](../api.md) for details.\n";
-        let reference = "# Title\n\nSee [docs][api-docs] for details.\n\n[api-docs]: ../api.md\n";
-        let a = compute_mrpc(&crate::legacy_node::Node(parse(inline).root_node()), inline);
-        let b = compute_mrpc(
-            &crate::legacy_node::Node(parse(reference).root_node()),
-            reference,
-        );
+        let reference =
+            "# Title\n\nSee [docs][api-docs\\]] for details.\n\n[api-docs\\]]: ../api.md\n";
+        let a = compute(inline);
+        let b = compute(reference);
         assert_eq!(
             a.weighted, b.weighted,
             "inline vs reference-style weighted mismatch: {:?} vs {:?}",
@@ -1186,16 +1002,22 @@ mod tests {
     }
 
     #[test]
-    fn normalize_ref_label_is_case_and_whitespace_insensitive() {
-        // GFM normalizes label by trimming, folding whitespace runs, and
-        // lowercasing — ensure our reference lookup does the same.
+    fn reference_style_external_links_match_inline_mrpc() {
+        let inline = "# Title\n\n[A](https://example.com/a) [B](https://example.com/b)\n";
+        let reference =
+            "# Title\n\n[A][a] [B][b]\n\n[a]: https://example.com/a\n[b]: https://example.com/b\n";
+        let a = compute(inline);
+        let b = compute(reference);
+
         assert_eq!(
-            normalize_ref_label("[api-docs]"),
-            normalize_ref_label("  API-DOCS  ")
+            a.weighted, b.weighted,
+            "inline vs external reference weighted mismatch: {:?} vs {:?}",
+            a, b
         );
         assert_eq!(
-            normalize_ref_label("Foo Bar"),
-            normalize_ref_label("foo  bar")
+            a.raw, b.raw,
+            "inline vs external reference raw mismatch: {:?} vs {:?}",
+            a, b
         );
     }
 }

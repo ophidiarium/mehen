@@ -48,7 +48,7 @@ enum TreeSitterCommand {
     /// Regenerate kind enums for one language into the owning crate, or
     /// `--all` to regenerate every language.
     Generate {
-        /// Language slug (e.g. `c`, `go`, `kotlin`, `markdown`).
+        /// Language slug (e.g. `c`, `go`, `kotlin`).
         /// Required unless `--all` is set.
         language: Option<String>,
         /// Regenerate every checked-in `grammar.rs`. Use this after

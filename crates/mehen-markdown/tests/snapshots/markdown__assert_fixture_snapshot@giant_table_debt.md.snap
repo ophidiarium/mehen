@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.07407407407407407
 size:
-  words: 69
-  effective_content_units: 51.9475
+  words: 949
+  effective_content_units: 55.61416666666666
   sections: 2
   headings: 2
 ecu_inputs:
@@ -45,24 +45,24 @@ sections:
     end_line: 54
     parent_section_id: 0
     child_section_ids: []
-    word_count: 36
+    word_count: 916
     block_count: 2
 complexity:
   reading_path_complexity: 1.15
   reading_path_complexity_raw: 2
-  cognitive_complexity: 13.112382190832792
+  cognitive_complexity: 15.112382190832793
   halstead:
     operators_distinct: 5
-    operators_total: 33
-    operands_distinct: 74
-    operands_total: 96
-    vocabulary: 79
-    length: 129
-    volume: 813.1877165148463
-    difficulty: 3.2432432432432434
-    effort: 2637.3655670751773
+    operators_total: 29
+    operands_distinct: 134
+    operands_total: 976
+    vocabulary: 139
+    length: 1005
+    volume: 7154.535778087125
+    difficulty: 18.208955223880597
+    effort: 130276.62163084019
     embedded_volume: 0
-    total_volume: 813.1877165148463
+    total_volume: 7154.535778087125
 links:
   total: 0
   internal: 0
@@ -94,28 +94,28 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 1
 maintainability:
-  documentation_maintainability_index: 86.20510351966873
-  section_balance_score: 0.85
+  documentation_maintainability_index: 84.74552382091251
+  section_balance_score: 0.91
   good_scaffold_score: 0
   artifact_debt_score: 0.15
 grounding:
-  repository_grounding_score: 0
-  evidence_coverage_score: 0.23076923076923078
+  repository_grounding_score: 0.03322444678609062
+  evidence_coverage_score: 0.02103627813234799
 ai_era:
-  filler_lazy_structure_risk: 0.42884057971014494
+  filler_lazy_structure_risk: 0.4102413066385669
   labels:
     - low-artifact-density
     - low-repository-grounding
     - specificity-scarcity
   top_contributors:
     - - low-repository-grounding
-      - 1
+      - 0.9667755532139094
     - - low-artifact-density
-      - 0.6666666666666667
+      - 0.7713382507903056
     - - specificity-scarcity
-      - 0.6461352657004831
+      - 0.6792237442922375
 review:
-  review_criticality_index: 12.826872185788062
+  review_criticality_index: 5.236081078982659
 artifacts:
   - id: 0
     kind: table

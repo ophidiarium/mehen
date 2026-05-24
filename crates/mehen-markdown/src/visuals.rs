@@ -13,10 +13,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::diagrams::{DiagramSignal, parse_diagram};
+use crate::document::{CodeBlock, MarkdownDocument, is_diagram_language};
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
 use crate::mathops::{clamp01, normalize_zero, sat};
 use crate::nearby::{BlockSpan, has_prose_within};
+use crate::syntax_tree::Node;
 use crate::tree_helpers::{find_first, node_text};
 use crate::types::{DiagramRecord, ImageRecord, Visuals};
 
@@ -31,6 +32,7 @@ pub(crate) struct VisualAnalysis {
 /// computes the aggregate visual metrics.
 pub(crate) fn analyze_visuals(
     root: &Node<'_>,
+    document: &MarkdownDocument,
     source: &str,
     file_path: &Path,
     words: u64,
@@ -42,9 +44,13 @@ pub(crate) fn analyze_visuals(
         .unwrap_or_else(|| PathBuf::from("."));
 
     let mut images: Vec<ImageRecord> = Vec::new();
-    let mut diagrams: Vec<DiagramRecord> = Vec::new();
+    let mut diagrams: Vec<DiagramRecord> = document
+        .code_blocks
+        .iter()
+        .filter_map(|block| record_diagram(block, blocks))
+        .collect();
 
-    walk(root, source, &base_dir, blocks, &mut images, &mut diagrams);
+    walk_images(root, document, source, &base_dir, blocks, &mut images);
 
     // Sort for determinism.
     images.sort_by(|a, b| a.line.cmp(&b.line).then(a.destination.cmp(&b.destination)));
@@ -63,18 +69,18 @@ pub(crate) fn analyze_visuals(
     }
 }
 
-fn walk(
+fn walk_images(
     node: &Node<'_>,
+    document: &MarkdownDocument,
     source: &str,
     base_dir: &Path,
     blocks: &[BlockSpan],
     images: &mut Vec<ImageRecord>,
-    diagrams: &mut Vec<DiagramRecord>,
 ) {
     let kind: Markdown = node.kind_id().into();
     match kind {
         Markdown::Image => {
-            if let Some(rec) = record_image(node, source, base_dir, blocks) {
+            if let Some(rec) = record_image(node, document, source, base_dir, blocks) {
                 images.push(rec);
             }
             return;
@@ -82,23 +88,17 @@ fn walk(
         Markdown::ImageBlock => {
             // Image-block is a stand-alone image — its parent is the
             // document, not a paragraph. Treat it identically.
-            if let Some(rec) = record_image(node, source, base_dir, blocks) {
+            if let Some(rec) = record_image(node, document, source, base_dir, blocks) {
                 images.push(rec);
             }
             return;
-        }
-        Markdown::FencedCodeBlock => {
-            if let Some(rec) = record_diagram(node, source, blocks) {
-                diagrams.push(rec);
-                return;
-            }
         }
         _ => {}
     }
     let mut cursor = node.cursor();
     if cursor.goto_first_child() {
         loop {
-            walk(&cursor.node(), source, base_dir, blocks, images, diagrams);
+            walk_images(&cursor.node(), document, source, base_dir, blocks, images);
             if !cursor.goto_next_sibling() {
                 break;
             }
@@ -108,12 +108,15 @@ fn walk(
 
 fn record_image(
     node: &Node<'_>,
+    document: &MarkdownDocument,
     source: &str,
     base_dir: &Path,
     blocks: &[BlockSpan],
 ) -> Option<ImageRecord> {
     let line = (node.start_row() as u64) + 1;
-    let destination = find_first(node, Markdown::LinkDestination).map(|n| node_text(&n, source))?;
+    let destination = document
+        .link_destination_by_span(node.start_byte(), node.end_byte())?
+        .to_string();
     let alt_text = find_first(node, Markdown::LinkLabel)
         .map(|n| {
             let s = node_text(&n, source);
@@ -163,29 +166,17 @@ fn record_image(
     })
 }
 
-fn record_diagram(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option<DiagramRecord> {
-    let info = find_first(node, Markdown::InfoString)
-        .and_then(|n| find_first(&n, Markdown::Language))
-        .map(|n| node_text(&n, source))
-        .unwrap_or_default();
-    let language = info.trim().to_ascii_lowercase();
-    if !is_diagram_language(&language) {
+fn record_diagram(block: &CodeBlock, blocks: &[BlockSpan]) -> Option<DiagramRecord> {
+    if !block.is_fenced() {
         return None;
     }
-    let body = find_first(node, Markdown::CodeFenceContent)
-        .map(|n| node_text(&n, source))
-        .unwrap_or_default();
-
-    let start_line = (node.start_row() as u64) + 1;
-    let (end_row, end_col) = node.end_position();
-    let mut end = end_row;
-    if end > node.start_row() && end_col == 0 {
-        end -= 1;
+    let language = block.language.as_deref()?;
+    if !is_diagram_language(language) {
+        return None;
     }
-    let end_line = (end as u64) + 1;
 
-    let signal: DiagramSignal = parse_diagram(&language, &body);
-    let has_nearby = has_prose_within(blocks, start_line, end_line, 2);
+    let signal: DiagramSignal = parse_diagram(language, &block.content);
+    let has_nearby = has_prose_within(blocks, block.start_line, block.end_line, 2);
     let has_title_or_caption = signal.has_title || has_nearby;
 
     let missing_title = if has_title_or_caption { 0.0 } else { 1.0 };
@@ -197,9 +188,9 @@ fn record_diagram(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option
         + 1.00 * missing_title;
 
     Some(DiagramRecord {
-        start_line,
-        end_line,
-        language,
+        start_line: block.start_line,
+        end_line: block.end_line,
+        language: language.to_string(),
         nodes: signal.nodes,
         edges: signal.edges,
         components: signal.components,
@@ -208,22 +199,6 @@ fn record_diagram(node: &Node<'_>, source: &str, blocks: &[BlockSpan]) -> Option
         has_title_or_caption,
         complexity,
     })
-}
-
-fn is_diagram_language(lang: &str) -> bool {
-    matches!(
-        lang,
-        "mermaid"
-            | "plantuml"
-            | "puml"
-            | "dot"
-            | "graphviz"
-            | "d2"
-            | "vega-lite"
-            | "vegalite"
-            | "vl"
-            | "vega"
-    )
 }
 
 fn aggregate_visuals(images: &[ImageRecord], diagrams: &[DiagramRecord], words: u64) -> Visuals {
@@ -267,4 +242,47 @@ fn is_absolute_url(s: &str) -> bool {
         || s.starts_with("data:")
         || s.starts_with("ftp://")
         || s.starts_with("mailto:")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax_tree::parse_with_document;
+
+    #[test]
+    fn reference_style_images_are_recorded_with_resolved_destinations() {
+        let source = "\
+![full][asset-full]
+![collapsed][]
+![shortcut]
+
+[asset-full]: https://example.com/full.png
+[collapsed]: https://example.com/collapsed.png
+[shortcut]: https://example.com/shortcut.png
+";
+        let (tree, document) = parse_with_document(source);
+        let analysis = analyze_visuals(
+            &tree.root(),
+            &document,
+            source,
+            Path::new("/tmp/doc.md"),
+            10,
+            &[],
+        );
+        let destinations = analysis
+            .images
+            .iter()
+            .map(|image| image.destination.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            destinations,
+            vec![
+                "https://example.com/full.png",
+                "https://example.com/collapsed.png",
+                "https://example.com/shortcut.png",
+            ]
+        );
+        assert_eq!(analysis.aggregate.images, 3);
+    }
 }

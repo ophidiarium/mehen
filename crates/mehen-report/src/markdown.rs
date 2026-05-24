@@ -713,7 +713,7 @@ mod tests {
             tool: "mehen".to_string(),
             path: "README.md".into(),
             language: Language::Markdown,
-            analysis_backend: AnalysisBackend::MarkdownLegacy,
+            analysis_backend: AnalysisBackend::PulldownCmark,
             diagnostics: Vec::new(),
             root,
         };

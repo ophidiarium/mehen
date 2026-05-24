@@ -16,14 +16,12 @@ use std::path::PathBuf;
 use mehen_markdown::analyze_markdown;
 use mehen_markdown::diagrams;
 
-/// Register the legacy embedded-code dispatch once per test process.
+/// Register the embedded-code dispatch once per test process.
 ///
 /// Tests that exercise fenced-code metrics need a real
 /// `volume`/`cognitive_sum`/`sloc` for each fence body. The dispatch
 /// callback is registered globally via `OnceLock`, so multiple `init`
-/// calls are idempotent. Phase-6+ replaces the legacy bridge with the
-/// rewrite-plan §4.7 `LanguageDispatcher` driven by the new
-/// per-language analyzer crates.
+/// calls are idempotent.
 fn ensure_dispatch() {
     mehen_engine::init_markdown();
 }
@@ -65,6 +63,32 @@ fn pure_prose_fixture() {
 #[test]
 fn code_fences_fixture() {
     assert_fixture_snapshot("code_fences.md");
+}
+
+#[test]
+fn fenced_code_fixture_metrics_are_crlf_stable() {
+    ensure_dispatch();
+    for name in [
+        "artifact_debt_high.md",
+        "code_fences.md",
+        "diagram_heavy_scaffolded.md",
+        "diagram_mermaid.md",
+        "diagram_parse_error.md",
+        "embedded_code_large.md",
+        "halstead_mixed.md",
+        "small_dense_valuable.md",
+    ] {
+        let (source, path) = load_fixture(name);
+        let lf_source = source.replace("\r\n", "\n").replace('\r', "\n");
+        let crlf_source = lf_source.replace('\n', "\r\n");
+        let lf_metrics = analyze_markdown(&lf_source, &path);
+        let crlf_metrics = analyze_markdown(&crlf_source, &path);
+        assert_eq!(
+            serde_json::to_value(crlf_metrics).expect("serializing CRLF metrics"),
+            serde_json::to_value(lf_metrics).expect("serializing LF metrics"),
+            "{name} metrics should be stable under CRLF line endings"
+        );
+    }
 }
 
 #[test]

@@ -3,8 +3,8 @@
 
 //! Top-level Markdown analysis entry point.
 //!
-//! Parses a Markdown source buffer with the tree-sitter-markdown-text grammar
-//! and produces a [`MarkdownMetrics`] record covering:
+//! Parses a Markdown source buffer with pulldown-cmark and produces a
+//! [`MarkdownMetrics`] record covering:
 //!
 //! - §5 LOC family,
 //! - §4 word count `W`,
@@ -48,7 +48,6 @@ use crate::filler::analyze_filler;
 use crate::good_scaffold::analyze_good_scaffold;
 use crate::grounding::analyze_grounding;
 use crate::halstead::compute_halstead;
-use crate::legacy_node::Node;
 use crate::links::analyze_links;
 use crate::loc::{LineClasses, derive_ratios, physical_line_count};
 use crate::math_burden::{MathBlock, analyze_math_blocks};
@@ -59,6 +58,7 @@ use crate::prose::analyze_prose;
 use crate::rci::{RciInputs, compute_rci};
 use crate::section_balance::analyze_section_balance;
 use crate::sections::collect_sections;
+use crate::syntax_tree::{Node, parse_with_document};
 use crate::tables::{aggregate_tables, analyze_tables};
 use crate::types::{
     AiEra, ArtifactKind, ArtifactRecord, Complexity, DiagramRecord, Grounding, ImageRecord,
@@ -66,22 +66,14 @@ use crate::types::{
 };
 use crate::visuals::analyze_visuals;
 use crate::words::count_words;
-use tree_sitter::Parser as TsParser;
 
 /// Parses `source` as Markdown and returns a metric record covering Phase A,
 /// Phase B, Phase C, and Phase E. `path` is recorded verbatim into the
 /// output's `path` field; the caller controls whether it is absolute or
 /// relative.
 pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
-    let mut parser = TsParser::new();
-    parser
-        .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-        .expect("tree-sitter-markdown-text set_language failed");
-    let tree = parser
-        .parse(source.as_bytes(), None)
-        .expect("tree-sitter-markdown-text parse failed");
-    let ts_root = tree.root_node();
-    let root = crate::legacy_node::Node(ts_root);
+    let (tree, document) = parse_with_document(source);
+    let root = tree.root();
 
     // Phase A: LOC family, ratios, size, sections, ECU inputs.
     let total_lines = physical_line_count(source);
@@ -101,10 +93,10 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
 
     // Phase B: complexity surface (MRPC, MCC, Halstead). DMI is deferred
     // until Phase D has computed its inputs.
-    let mrpc = compute_mrpc(&root, source);
-    let mcc = compute_mcc(&root, source);
-    let mut halstead = compute_halstead(&root, source);
-    let emb = embedded_volume(&root, source);
+    let mrpc = compute_mrpc(&root, &document, source);
+    let mcc = compute_mcc(&root, &document, source);
+    let mut halstead = compute_halstead(&root, &document, source);
+    let emb = embedded_volume(&document);
     halstead.embedded_volume = emb;
     halstead.total_volume = halstead.volume + emb;
 
@@ -115,10 +107,10 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
     // TODO(link-check): the `resolved = None` external links become a CLI
     // flag so `--link-check` probes external URLs. For now they stay
     // unchecked to keep analysis offline and deterministic.
-    let (link_records, link_agg) = analyze_links(&root, source, path, &sections, &[]);
+    let (link_records, link_agg) = analyze_links(&document, path, &sections, &[]);
 
     // Phase C: visuals (images + diagrams).
-    let visual_analysis = analyze_visuals(&root, source, path, words, &blocks);
+    let visual_analysis = analyze_visuals(&root, &document, source, path, words, &blocks);
 
     // Phase C: tables. Patch has_local_explanation afterwards via the
     // nearby-block index.
@@ -136,7 +128,7 @@ pub fn analyze_markdown(source: &str, path: &Path) -> MarkdownMetrics {
 
     // Phase C: code fences (skipping diagram-tagged fences which are owned
     // by visuals.rs).
-    let code_fences: Vec<CodeFence> = analyze_code_fences(&root, source, &blocks);
+    let code_fences: Vec<CodeFence> = analyze_code_fences(&document, &blocks);
 
     // Phase C: math blocks.
     let math_blocks: Vec<MathBlock> = analyze_math_blocks(&root, source, &blocks);

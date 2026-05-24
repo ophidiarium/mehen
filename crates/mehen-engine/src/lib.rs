@@ -44,7 +44,7 @@ pub use top_offenders::{TopOffendersOpts, run_top_offenders};
 /// analyzer crate, so this dispatch path goes straight through the
 /// new `AnalyzerRegistry`.
 pub fn init_markdown() {
-    mehen_markdown::set_legacy_dispatch(markdown_dispatch::dispatch);
+    mehen_markdown::set_embedded_dispatch(markdown_dispatch::dispatch);
 }
 
 mod markdown_dispatch {

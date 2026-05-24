@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Maps byte offsets to 1-based line numbers within a source file.
 ///
 /// This exists in `mehen-core` rather than each analyzer crate because every
-/// analyzer needs it and Comrak's planned `LineColumn` → byte translation
-/// (rewrite plan review §2.3) wants a single canonical implementation.
+/// analyzer needs a single canonical byte/line mapping implementation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineIndex {
     /// Byte offsets at which each line starts. `line_starts[0]` is always 0.

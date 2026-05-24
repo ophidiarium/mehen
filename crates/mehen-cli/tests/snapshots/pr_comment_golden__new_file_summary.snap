@@ -1,5 +1,5 @@
 ---
-source: tests/pr_comment_golden.rs
+source: crates/mehen-cli/tests/pr_comment_golden.rs
 expression: redacted
 ---
 <!-- mehen-metrics -->
@@ -12,11 +12,11 @@ No metric changes detected.
 
 | File | DMI | Words | FKGL | Link Debt | Filler Risk |
 |---|---:|---:|---:|---:|---:|
-| `docs/architecture/runtime.md` | 87 🆕 | 115 🆕 | 7.1 🆕 | 0.45 🆕 | 0.57 🆕 |
+| `docs/architecture/runtime.md` | 87 🆕 | 117 🆕 | 7.1 🆕 | 0.45 🆕 | 0.56 🆕 |
 
 **Callouts**
 
-- 🆕 **docs/architecture/runtime.md** — 115 words, 3 headings, 1 code fence(s), 0 diagram(s), 0 table(s); DMI 87, filler risk 0.57 (MODERATE)
+- 🆕 **docs/architecture/runtime.md** — 117 words, 3 headings, 1 code fence(s), 0 diagram(s), 0 table(s); DMI 87, filler risk 0.56 (MODERATE)
 
 <details>
 <summary>Full metric breakdown (structural · wording · lexical · readability)</summary>
@@ -41,7 +41,7 @@ No metric changes detected.
 
 ### Filler risk contributors (files with risk > 0.40)
 
-- **`docs/architecture/runtime.md` (0.57)** — specificity-scarcity 1.00, low-repository-grounding 0.96, large-unanchored-prose 0.78
+- **`docs/architecture/runtime.md` (0.56)** — specificity-scarcity 1.00, low-repository-grounding 0.96, large-unanchored-prose 0.75
 
 </details>
 

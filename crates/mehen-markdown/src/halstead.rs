@@ -4,8 +4,8 @@
 //! Markdown Halstead metrics per §9.
 //!
 //! Walks the AST once and classifies each leaf / inline / block node as
-//! operator or operand following §§9.1-9.2, using the tree-sitter-markdown-text
-//! grammar's node kinds. Operators are identified by kind (so all `##` H2
+//! operator or operand following §§9.1-9.2, using the Pulldown-backed Markdown
+//! syntax node kinds. Operators are identified by kind (so all `##` H2
 //! markers share one operator class); operands are identified by their byte
 //! text (so two occurrences of the same word count once in n2 but twice in
 //! N2, matching classical Halstead).
@@ -26,9 +26,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::document::MarkdownDocument;
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
-use crate::tree_helpers::fence_language_tag;
+use crate::syntax_tree::Node;
 use crate::types::Halstead;
 
 /// Distinct operator classes (rich enough that MCC and Halstead use the same
@@ -77,7 +77,11 @@ enum OperatorKind {
 }
 
 /// Core public entry point. Walks the AST and emits the §9.3 derived values.
-pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
+pub(crate) fn compute_halstead(
+    root: &Node<'_>,
+    document: &MarkdownDocument,
+    source: &str,
+) -> Halstead {
     let mut operator_counts: BTreeMap<OperatorKind, u64> = BTreeMap::new();
     let mut operand_counts: BTreeMap<String, u64> = BTreeMap::new();
 
@@ -85,6 +89,7 @@ pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
         operator_counts: &mut operator_counts,
         operand_counts: &mut operand_counts,
         source,
+        document,
     };
     state.walk(root);
 
@@ -122,13 +127,14 @@ pub(crate) fn compute_halstead(root: &Node<'_>, source: &str) -> Halstead {
     }
 }
 
-struct Ctx<'a, 'b> {
-    operator_counts: &'a mut BTreeMap<OperatorKind, u64>,
-    operand_counts: &'a mut BTreeMap<String, u64>,
-    source: &'b str,
+struct Ctx<'counts, 'source, 'doc> {
+    operator_counts: &'counts mut BTreeMap<OperatorKind, u64>,
+    operand_counts: &'counts mut BTreeMap<String, u64>,
+    source: &'source str,
+    document: &'doc MarkdownDocument,
 }
 
-impl Ctx<'_, '_> {
+impl Ctx<'_, '_, '_> {
     fn bump_op(&mut self, k: OperatorKind) {
         *self.operator_counts.entry(k).or_insert(0) += 1;
     }
@@ -190,36 +196,43 @@ impl Ctx<'_, '_> {
 
             // Link / image wrappers — each whole `Link` is one operator
             // occurrence for `[…](…)`. Inner LinkLabel prose descends as
-            // operand text; the LinkDestination descends as an operand path.
+            // operand text; destination operands come from pulldown-resolved
+            // document facts so reference-style links use the definition
+            // target instead of the local reference key.
             Link => {
                 self.bump_op(OperatorKind::LinkOp);
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
+                {
+                    self.bump_operand(dest.to_string());
+                }
             }
             Image => {
                 self.bump_op(OperatorKind::ImageOp);
+                if let Some(dest) = self
+                    .document
+                    .link_destination_by_span(node.start_byte(), node.end_byte())
+                {
+                    self.bump_operand(dest.to_string());
+                }
             }
 
             // Code fences: record the language tag as the operator's
             // discriminator so e.g. `rust` and `python` are distinct
             // operators.
-            FencedCodeBlock => {
-                let tag = fence_info_tag(node, self.source).unwrap_or_default();
-                self.bump_op(OperatorKind::FenceTag(tag));
-                // Embedded content handled as a single identifier-like
-                // operand (the `code_fence_content` string). We do not
-                // descend into its leaves so §9.4's scaling applies cleanly.
-                if let Some(content) = fenced_code_content(node, self.source) {
-                    self.bump_operand(format!("code:{}", sha_hex(content.as_bytes())));
-                }
-                descend = false;
-            }
-            IndentedCodeBlock => {
-                self.bump_op(OperatorKind::FenceTag(String::new()));
-                // Treat the entire indented content as one operand hash.
-                let bytes = self.source.as_bytes();
-                let start = node.start_byte();
-                let end = node.end_byte();
-                if end <= bytes.len() && start < end {
-                    self.bump_operand(format!("indent_code:{}", sha_hex(&bytes[start..end])));
+            FencedCodeBlock | IndentedCodeBlock => {
+                if let Some(block) = self.document.code_block_by_start_row(node.start_row()) {
+                    let tag = block.language.clone().unwrap_or_default();
+                    self.bump_op(OperatorKind::FenceTag(tag));
+                    // Embedded content is a single opaque operand so §9.4's
+                    // embedded-code scaling can own language-specific detail.
+                    let prefix = if block.is_fenced() {
+                        "code"
+                    } else {
+                        "indent_code"
+                    };
+                    self.bump_operand(format!("{prefix}:{}", sha_hex(block.content.as_bytes())));
                 }
                 descend = false;
             }
@@ -295,10 +308,20 @@ impl Ctx<'_, '_> {
                 self.push_text_operand(node);
             }
 
-            // Link destinations — operand (URL).
-            LinkDestination | LinkDestinationParenthesis | Uri => {
+            // Link definitions are plumbing for reference-style links. The
+            // rendered link use owns the semantic destination operand.
+            LinkReferenceDefinition => {
+                descend = false;
+            }
+
+            // Link destinations are handled at the `Link` / `Image` wrapper
+            // so reference-style links can resolve semantically. Autolink
+            // URIs have no wrapper destination, so keep counting those here.
+            LinkDestination | LinkDestinationParenthesis => {
+                descend = false;
+            }
+            Uri => {
                 self.push_text_operand(node);
-                // Don't descend further into URL text.
                 descend = false;
             }
 
@@ -359,34 +382,6 @@ impl Ctx<'_, '_> {
     }
 }
 
-fn fence_info_tag(node: &Node<'_>, source: &str) -> Option<String> {
-    fence_language_tag(node, source, true)
-}
-
-fn fenced_code_content(node: &Node<'_>, source: &str) -> Option<String> {
-    let mut cursor = node.cursor();
-    if !cursor.goto_first_child() {
-        return None;
-    }
-    loop {
-        let child = cursor.node();
-        if matches!(child.kind_id().into(), Markdown::CodeFenceContent) {
-            let bytes = source.as_bytes();
-            let start = child.start_byte();
-            let end = child.end_byte();
-            if end <= bytes.len() && start <= end {
-                return std::str::from_utf8(&bytes[start..end])
-                    .ok()
-                    .map(str::to_string);
-            }
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-    None
-}
-
 fn inline_code_text(node: &Node<'_>, source: &str) -> Option<String> {
     let bytes = source.as_bytes();
     let start = node.start_byte();
@@ -427,20 +422,46 @@ fn sha_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
-    fn parse(src: &str) -> tree_sitter::Tree {
-        let mut parser = tree_sitter::Parser::new();
-        parser
-            .set_language(&tree_sitter_markdown_text::LANGUAGE.into())
-            .unwrap();
-        parser.parse(src, None).unwrap()
+    fn compute(src: &str) -> Halstead {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        compute_halstead(&tree.root(), &document, src)
+    }
+
+    fn operand_counts(src: &str) -> BTreeMap<String, u64> {
+        let (tree, document) = crate::syntax_tree::parse_with_document(src);
+        let mut operator_counts = BTreeMap::new();
+        let mut operand_counts = BTreeMap::new();
+        let mut state = Ctx {
+            operator_counts: &mut operator_counts,
+            operand_counts: &mut operand_counts,
+            source: src,
+            document: &document,
+        };
+        state.walk(&tree.root());
+        operand_counts
+    }
+
+    fn assert_halstead_close(a: &Halstead, b: &Halstead) {
+        assert_eq!(a.operators_distinct, b.operators_distinct);
+        assert_eq!(a.operators_total, b.operators_total);
+        assert_eq!(a.operands_distinct, b.operands_distinct);
+        assert_eq!(a.operands_total, b.operands_total);
+        assert_eq!(a.vocabulary, b.vocabulary);
+        assert_eq!(a.length, b.length);
+        assert!((a.volume - b.volume).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!((a.difficulty - b.difficulty).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!((a.effort - b.effort).abs() < 1e-9, "{a:?} != {b:?}");
+        assert!(
+            (a.total_volume - b.total_volume).abs() < 1e-9,
+            "{a:?} != {b:?}"
+        );
     }
 
     #[test]
     fn empty_halstead_is_zero() {
-        let tree = parse("");
-        let root = crate::legacy_node::Node(tree.root_node());
-        let h = compute_halstead(&root, "");
+        let h = compute("");
         assert_eq!(h.operators_distinct, 0);
         assert_eq!(h.operators_total, 0);
         assert_eq!(h.operands_distinct, 0);
@@ -454,9 +475,7 @@ mod tests {
     #[test]
     fn heading_plus_prose_counts() {
         let src = "# Hello world\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let h = compute_halstead(&root, src);
+        let h = compute(src);
         // Operators: 1 H1 marker → n1=1, N1=1.
         assert_eq!(h.operators_distinct, 1);
         assert_eq!(h.operators_total, 1);
@@ -472,12 +491,49 @@ mod tests {
     #[test]
     fn link_counts_as_operator_and_url_as_operand() {
         let src = "# H\n\nSee [here](https://example.com).\n";
-        let tree = parse(src);
-        let root = crate::legacy_node::Node(tree.root_node());
-        let h = compute_halstead(&root, src);
+        let h = compute(src);
         // Operators include: one H1 marker, one Link, one Terminator (`.`).
         assert!(h.operators_distinct >= 3);
         // The URL is one operand; `See` and `here` are word operands.
         assert!(h.operands_distinct >= 3);
+    }
+
+    #[test]
+    fn reference_style_link_destinations_match_inline_halstead() {
+        let inline = "# H\n\nSee [docs](https://example.com).\n";
+        let cases = [
+            "# H\n\nSee [docs][api].\n\n[api]: https://example.com\n",
+            "# H\n\nSee [docs][].\n\n[docs]: https://example.com\n",
+            "# H\n\nSee [docs].\n\n[docs]: https://example.com\n",
+            "# H\n\nSee [docs][api\\]].\n\n[api\\]]: https://example.com\n",
+        ];
+
+        let expected = compute(inline);
+        for reference in cases {
+            let actual = compute(reference);
+            assert_halstead_close(&expected, &actual);
+        }
+
+        let full_reference_operands = operand_counts(cases[0]);
+        assert_eq!(full_reference_operands.get("https://example.com"), Some(&1));
+        assert!(
+            !full_reference_operands.contains_key("api"),
+            "reference key leaked into Halstead operands: {full_reference_operands:?}"
+        );
+    }
+
+    #[test]
+    fn reference_style_image_destinations_match_inline_halstead() {
+        let inline = "# H\n\n![diagram](https://example.com/diagram.png)\n";
+        let reference = "# H\n\n![diagram][asset]\n\n[asset]: https://example.com/diagram.png\n";
+
+        assert_halstead_close(&compute(inline), &compute(reference));
+
+        let operands = operand_counts(reference);
+        assert_eq!(operands.get("https://example.com/diagram.png"), Some(&1));
+        assert!(
+            !operands.contains_key("asset"),
+            "image reference key leaked into Halstead operands: {operands:?}"
+        );
     }
 }

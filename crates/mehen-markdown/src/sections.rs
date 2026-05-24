@@ -3,11 +3,11 @@
 
 //! Derived section tree per §3.4.
 //!
-//! The tree-sitter-markdown-text grammar produces a natively nested `section`
-//! AST: each heading opens a `section` that contains all downstream blocks
-//! until the next same-or-higher-level heading. Heading skips (e.g. H1 → H3)
-//! keep the intervening depth collapsed — the grammar does *not* synthesize
-//! virtual sections. This module flattens that tree into the
+//! The Markdown syntax layer synthesizes a nested `section` AST: each heading
+//! opens a `section` that contains all downstream blocks until the next
+//! same-or-higher-level heading. Heading skips (e.g. H1 → H3) keep the
+//! intervening depth collapsed — no virtual sections are synthesized. This
+//! module flattens that tree into the
 //! [`crate::types::Section`] list consumed by the exported schema.
 //!
 //! Parent/child relationships are preserved by walking in pre-order and
@@ -16,7 +16,7 @@
 //! section and a `child_section_ids` list of directly-nested subsections.
 
 use crate::grammar::Markdown;
-use crate::legacy_node::Node;
+use crate::syntax_tree::Node;
 use crate::types::Section;
 use crate::words::count_words;
 
@@ -327,6 +327,16 @@ fn is_block(kind: &Markdown) -> bool {
             | Markdown::DirectiveBlock
             | Markdown::ImageBlock
             | Markdown::PipeTable
+            | Markdown::ListItem
+            | Markdown::ListItem2
+            | Markdown::ListItem3
+            | Markdown::ListItem4
+            | Markdown::ListItem5
+            | Markdown::TaskListItem
+            | Markdown::TaskListItem2
+            | Markdown::TaskListItem3
+            | Markdown::TaskListItem4
+            | Markdown::TaskListItem5
             | Markdown::BlockQuote
             | Markdown::PlainBlockQuote
             | Markdown::Callout

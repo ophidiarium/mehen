@@ -1,5 +1,5 @@
 ---
-source: src/markdown/tests/mod.rs
+source: crates/mehen-markdown/tests/markdown.rs
 ---
 path: "<fixture_path>"
 loc:
@@ -17,8 +17,8 @@ loc_ratios:
   math_line_ratio: 0
   blank_line_ratio: 0.30952380952380953
 size:
-  words: 57
-  effective_content_units: 2.3374999999999995
+  words: 63
+  effective_content_units: 2.3625
   sections: 6
   headings: 6
 ecu_inputs:
@@ -55,25 +55,25 @@ sections:
     heading_level: 2
     heading_text: ~
     start_line: 15
-    end_line: 21
+    end_line: 20
     parent_section_id: 0
     child_section_ids: []
     word_count: 11
-    block_count: 5
+    block_count: 4
   - section_id: 3
     heading_level: 2
     heading_text: ~
     start_line: 22
-    end_line: 27
+    end_line: 26
     parent_section_id: 0
     child_section_ids: []
-    word_count: 2
+    word_count: 8
     block_count: 1
   - section_id: 4
     heading_level: 2
     heading_text: ~
     start_line: 28
-    end_line: 33
+    end_line: 32
     parent_section_id: 0
     child_section_ids: []
     word_count: 0
@@ -90,19 +90,19 @@ sections:
 complexity:
   reading_path_complexity: 1
   reading_path_complexity_raw: 5
-  cognitive_complexity: 20.154333333333337
+  cognitive_complexity: 19.51933333333334
   halstead:
     operators_distinct: 10
     operators_total: 42
-    operands_distinct: 66
-    operands_total: 79
-    vocabulary: 76
-    length: 121
-    volume: 755.9992291266738
-    difficulty: 5.984848484848485
-    effort: 4524.540840985396
+    operands_distinct: 72
+    operands_total: 85
+    vocabulary: 82
+    length: 127
+    volume: 807.4091045864966
+    difficulty: 5.902777777777778
+    effort: 4765.956520128626
     embedded_volume: 0
-    total_volume: 755.9992291266738
+    total_volume: 807.4091045864966
 links:
   total: 6
   internal: 0
@@ -177,7 +177,7 @@ tables:
   table_scaffold_score: 0
   hard_warnings: 0
 maintainability:
-  documentation_maintainability_index: 88.72496194331983
+  documentation_maintainability_index: 89.11734945054943
   section_balance_score: 0.85
   good_scaffold_score: 0.14500000000000002
   artifact_debt_score: 0.35
@@ -185,17 +185,18 @@ grounding:
   repository_grounding_score: 0.04000000000000001
   evidence_coverage_score: 0.1346153846153846
 ai_era:
-  filler_lazy_structure_risk: 0.39147368421052636
+  filler_lazy_structure_risk: 0.37342857142857144
   labels:
     - large-unanchored-prose
     - low-repository-grounding
+    - specificity-scarcity
   top_contributors:
     - - low-repository-grounding
       - 0.96
     - - large-unanchored-prose
-      - 0.7736842105263158
+      - 0.6333333333333333
     - - specificity-scarcity
-      - 0.3728070175438597
+      - 0.4563492063492064
 review:
   review_criticality_index: 21.3325
 artifacts:
@@ -233,18 +234,6 @@ prose:
         end_line: 6
         language: en
       - start_line: 8
-        end_line: 9
-        language: en
-      - start_line: 9
-        end_line: 10
-        language: en
-      - start_line: 10
-        end_line: 11
-        language: en
-      - start_line: 11
-        end_line: 12
-        language: en
-      - start_line: 12
         end_line: 12
         language: en
       - start_line: 13
@@ -298,13 +287,13 @@ prose:
       hapax_ratio: 0.66
       dis_ratio: 0.226
       lexical_density: 0.779
-      avg_sentence_words: 4.278
-      p90_sentence_words: 8
+      avg_sentence_words: 5.5
+      p90_sentence_words: 10
       max_sentence_words: 19
-      stddev_sentence_words: 4.08
+      stddev_sentence_words: 4.516
       avg_word_chars: 4.909
       p90_word_chars: 9
-      sentence_count: 18
+      sentence_count: 14
       words_total: 77
     wording:
       passive_ratio: 0
@@ -314,11 +303,11 @@ prose:
       adverb_density: 0.013
       nominalization_density: 0.026
       expletive_count: 0
-      lexical_illusions: 0
+      lexical_illusions: 1
       cliche_density: 0
       nonword_count: 0
       long_sentence_count: 0
-      wording_quality_score: 1
+      wording_quality_score: 0.95
     inclusive_language:
       flags: []
       inclusive_language_score: 1
@@ -328,6 +317,6 @@ prose:
   meta:
     short_doc_warning: true
     words_counted: 77
-    sentences_counted: 18
+    sentences_counted: 14
     blocks_stripped:
       - code

@@ -75,7 +75,7 @@ gix = { version = "^0.83", default-features = false, features = ["attributes", "
 
 tree-sitter = "=0.26.9"
 # Per-language grammars (`tree-sitter-c`, `tree-sitter-go`,
-# `tree-sitter-kotlin`, `tree-sitter-markdown-text`, `tree-sitter-pwsh`)
+# `tree-sitter-kotlin`, `tree-sitter-pwsh`)
 # are pinned inline in their consuming analyzer crate. xtask reaches
 # each grammar through the analyzer's `__grammar_language()` accessor
 # instead of pinning grammars itself, so the kind-enum generator and
