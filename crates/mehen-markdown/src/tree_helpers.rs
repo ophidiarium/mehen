@@ -16,7 +16,7 @@
 //! the cursor — that keeps each call site free to use the helper
 //! without holding a `TreeCursor` open across other work.
 
-use crate::document::{MarkdownDocument, normalize_reference_label};
+use crate::document::{MarkdownDocument, normalize_reference_label, unescape_markdown};
 use crate::grammar::Markdown;
 use crate::syntax_tree::Node;
 
@@ -259,7 +259,7 @@ pub(crate) fn find_resolved_link_dest(
 }
 
 fn reference_definition_destination(document: &MarkdownDocument, label: &str) -> Option<String> {
-    let label = normalize_reference_label(label);
+    let label = normalize_reference_label(&unescape_markdown(label));
     document
         .reference_definitions
         .iter()
@@ -372,4 +372,41 @@ pub(crate) fn has_scheme(dest: &str) -> bool {
         return true;
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax_tree::{Node, Tree, parse_with_document};
+
+    fn first_node<'a>(tree: &'a Tree, target: Markdown) -> Node<'a> {
+        let mut stack = vec![tree.root()];
+        while let Some(node) = stack.pop() {
+            if node.kind_id() == target as u16 {
+                return node;
+            }
+            let mut cursor = node.cursor();
+            if cursor.goto_first_child() {
+                loop {
+                    stack.push(cursor.node());
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        }
+        panic!("missing {target:?} node");
+    }
+
+    #[test]
+    fn escaped_reference_key_resolves_definition_destination() {
+        let source = "[visible][ref\\]]\n\n[ref\\]]: https://example.com\n";
+        let (tree, document) = parse_with_document(source);
+        let link = first_node(&tree, Markdown::Link);
+
+        assert_eq!(
+            find_resolved_link_dest(&link, source, &document),
+            Some("https://example.com".to_string())
+        );
+    }
 }

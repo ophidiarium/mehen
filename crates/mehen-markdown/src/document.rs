@@ -628,7 +628,7 @@ fn next_is_escapable_punctuation(bytes: &[u8], cursor: usize) -> bool {
     bytes.get(cursor + 1).is_some_and(u8::is_ascii_punctuation)
 }
 
-fn unescape_markdown(text: &str) -> String {
+pub(crate) fn unescape_markdown(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
@@ -713,6 +713,15 @@ mod tests {
             unescape_markdown("foo\\] bar\\q baz\\\\"),
             "foo] bar\\q baz\\"
         );
+    }
+
+    #[test]
+    fn reference_definition_labels_preserve_first_duplicate() {
+        let document = parse_document("[foo]: /first\n[foo]: /second\n");
+        let labels = document.reference_definition_labels();
+
+        assert_eq!(document.reference_definitions.len(), 2);
+        assert_eq!(labels["foo"].destination, "/first");
     }
 
     #[test]
@@ -1019,9 +1028,12 @@ impl MarkdownDocument {
     }
 
     pub(crate) fn reference_definition_labels(&self) -> HashMap<&str, &ReferenceDefinition> {
-        self.reference_definitions
-            .iter()
-            .map(|definition| (definition.label.as_str(), definition))
-            .collect()
+        let mut labels = HashMap::new();
+        for definition in &self.reference_definitions {
+            labels
+                .entry(definition.label.as_str())
+                .or_insert(definition);
+        }
+        labels
     }
 }
