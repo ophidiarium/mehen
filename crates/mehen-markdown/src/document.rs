@@ -481,12 +481,8 @@ fn parse_link_label(source: &str, start: usize) -> Option<(Range<usize>, String,
     let content_start = cursor;
     while cursor < source.len() {
         match bytes[cursor] {
-            b'\\' => {
-                cursor += 1;
-                if cursor < source.len() {
-                    cursor += 1;
-                }
-            }
+            b'\\' if next_is_escapable_punctuation(bytes, cursor) => cursor += 2,
+            b'\\' => cursor += 1,
             b'[' => return None,
             b']' => {
                 let raw = &source[content_start..cursor];
@@ -550,12 +546,8 @@ fn parse_link_destination(source: &str, start: usize) -> Option<(Range<usize>, S
         let mut cursor = start + 1;
         while cursor < source.len() {
             match bytes[cursor] {
-                b'\\' => {
-                    cursor += 1;
-                    if cursor < source.len() {
-                        cursor += 1;
-                    }
-                }
+                b'\\' if next_is_escapable_punctuation(bytes, cursor) => cursor += 2,
+                b'\\' => cursor += 1,
                 b'>' => {
                     let inner = start + 1..cursor;
                     let destination = unescape_markdown(&source[inner.clone()]);
@@ -573,12 +565,8 @@ fn parse_link_destination(source: &str, start: usize) -> Option<(Range<usize>, S
     let mut depth = 0usize;
     while cursor < source.len() {
         match bytes[cursor] {
-            b'\\' => {
-                cursor += 1;
-                if cursor < source.len() {
-                    cursor += 1;
-                }
-            }
+            b'\\' if next_is_escapable_punctuation(bytes, cursor) => cursor += 2,
+            b'\\' => cursor += 1,
             b'(' => {
                 depth += 1;
                 cursor += 1;
@@ -611,12 +599,8 @@ fn parse_link_title(source: &str, start: usize) -> Option<(Range<usize>, usize)>
     let content_start = cursor;
     while cursor < source.len() {
         match bytes[cursor] {
-            b'\\' => {
-                cursor += 1;
-                if cursor < source.len() {
-                    cursor += 1;
-                }
-            }
+            b'\\' if next_is_escapable_punctuation(bytes, cursor) => cursor += 2,
+            b'\\' => cursor += 1,
             byte if byte == open && open == b'(' => return None,
             byte if byte == close => {
                 let inner = content_start..cursor;
@@ -640,21 +624,23 @@ fn only_blank_until_line_end(source: &str, mut cursor: usize) -> bool {
     true
 }
 
+fn next_is_escapable_punctuation(bytes: &[u8], cursor: usize) -> bool {
+    bytes.get(cursor + 1).is_some_and(u8::is_ascii_punctuation)
+}
+
 fn unescape_markdown(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut escaped = false;
-    for ch in text.chars() {
-        if escaped {
-            out.push(ch);
-            escaped = false;
-        } else if ch == '\\' {
-            escaped = true;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(next) = chars.next_if(char::is_ascii_punctuation) {
+                out.push(next);
+            } else {
+                out.push(ch);
+            }
         } else {
             out.push(ch);
         }
-    }
-    if escaped {
-        out.push('\\');
     }
     out
 }
@@ -708,6 +694,25 @@ mod tests {
     #[test]
     fn reference_label_rejects_nested_brackets() {
         assert!(definitions("[a[b]]: /url\n").is_empty());
+    }
+
+    #[test]
+    fn reference_definitions_preserve_non_escapable_backslashes() {
+        let source = "[foo\\q]: <https://example.com/a\\q>\n[bar\\]]: /ok\\q\n";
+        let definitions = definitions(source);
+
+        assert_eq!(definitions[0].label, "foo\\q");
+        assert_eq!(definitions[0].destination, "https://example.com/a\\q");
+        assert_eq!(definitions[1].label, "bar]");
+        assert_eq!(definitions[1].destination, "/ok\\q");
+    }
+
+    #[test]
+    fn unescape_markdown_only_unescapes_commonmark_punctuation() {
+        assert_eq!(
+            unescape_markdown("foo\\] bar\\q baz\\\\"),
+            "foo] bar\\q baz\\"
+        );
     }
 
     #[test]

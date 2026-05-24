@@ -738,6 +738,22 @@ mod tests {
     }
 
     #[test]
+    fn non_escapable_reference_label_backslash_resolves() {
+        let src = "# Target\n\n[foo\\q]: #target\n\nSee [visible][foo\\q].\n";
+        let document = crate::document::parse_document(src);
+        let (records, aggregate) = analyze_links(&document, Path::new("README.md"), &[], &[]);
+
+        let link_use = records
+            .iter()
+            .find(|record| record.text == "visible")
+            .expect("non-escapable escaped-label reference use");
+        assert_eq!(link_use.class, LinkClass::Internal);
+        assert_eq!(link_use.destination, "#target");
+        assert_eq!(link_use.resolved, Some(true));
+        assert_eq!(aggregate.broken, 0);
+    }
+
+    #[test]
     fn full_reference_link_resolves_with_reference_key_not_visible_text() {
         let src = "# Target\n\nSee [visible][ref].\n\n[ref]: #target\n";
         let document = crate::document::parse_document(src);
