@@ -15,6 +15,48 @@ publish = false
 # keeps `cargo run -p mehen` and `cargo build --bin mehen` both
 # working without duplicate-target errors.
 
+# `cargo binstall` configuration. The crate is `publish = false`, so
+# users install via the `--git` form: `cargo binstall --git
+# https://github.com/ophidiarium/mehen mehen`. binstall reads this
+# metadata from the manifest at the resolved git ref and downloads
+# the matching pre-built archive from the GitHub Release.
+#
+# Per-target overrides are required because the archive layout in
+# `.github/workflows/release.yml` ("Create CLI binary archive") names
+# files by `{linux,darwin,windows}_{x86_64,arm64}[-musl]` rather than
+# the rust target triple binstall would pick by default. The archives
+# contain a flat `mehen` (or `mehen.exe`) at the root, so `bin-dir`
+# omits an enclosing directory.
+[package.metadata.binstall]
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_linux_x86_64.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_linux_x86_64-musl.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_linux_arm64.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_linux_arm64-musl.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_darwin_x86_64.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_darwin_arm64.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_windows_x86_64.zip"
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/mehen_{ version }_windows_arm64.zip"
+pkg-fmt = "zip"
+
 [dependencies]
 mehen-core = { workspace = true }
 mehen-engine = { workspace = true }
