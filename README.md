@@ -78,12 +78,42 @@ rule conformance, and a textlint-ja subset. Full reference in the
 
 ## Distribution
 
-`mehen` ships native binaries through both ecosystems:
+`mehen` ships native binaries through:
 
 - npm (`mehen` + platform packages)
 - PyPI (`mehen` via maturin binary packaging)
+- GitHub Releases (per-target archives, also installable via `cargo binstall`)
 
 ## Quick Start
+
+### Install
+
+Pick the path that matches the toolchain you already have. All three
+install the same native binaries published from each release.
+
+From npm:
+
+```bash
+npm install -g mehen
+# or, project-local
+npm install --save-dev mehen
+```
+
+From PyPI:
+
+```bash
+pip install mehen
+# or with uv
+uv tool install mehen
+```
+
+From a Rust toolchain via [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall)
+(downloads the pre-built binary from the GitHub Release — much
+faster than `cargo install`, which would build from source):
+
+```bash
+cargo binstall --git https://github.com/ophidiarium/mehen mehen
+```
 
 ### Run without installation
 
