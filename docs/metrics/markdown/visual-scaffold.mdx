@@ -1,0 +1,70 @@
+---
+title: "Visual Scaffold + Net Effect"
+description: "How much diagrams and images help vs. hurt comprehension."
+keywords: ["visual scaffold", "diagrams", "images", "documentation"]
+---
+
+A diagram or image helps comprehension only when it is labelled, bounded, nearby-explained, and its
+target resolves.
+
+## Per-visual scaffold
+
+```text
+V_scaffold(v) =
+  alt_or_caption(v)
+  · nearby_reference(v)
+  · bounded_size(v)
+  · repo_resolved(v)
+```
+
+Each factor is in `[0, 1]`. A diagram that is well captioned, referenced from prose nearby, bounded in
+size, and whose target resolves earns a full credit; missing any factor pulls the credit toward zero.
+
+Aggregated with diminishing returns:
+
+```text
+VisualScaffoldScore = clamp01(sum(V_scaffold(v)) / max(1, sqrt(W/500 + 1)))
+```
+
+## Diagram Complexity
+
+For parseable diagrams (Mermaid, GraphViz, etc.):
+
+```text
+DiagramComplexity =
+    0.40 · diagram_nodes
+  + 0.55 · diagram_edges
+  + 1.50 · diagram_cycles
+  + 2.00 · parse_error
+  + 1.00 · missing_title_or_caption
+```
+
+Cycles require mental simulation; parse errors and missing captions are maintenance defects.
+
+## Visual Net Effect
+
+```text
+VisualNetEffect = Σ DiagramComplexity + Σ image_complexity − 2.0 · Σ V_scaffold(v)
+```
+
+| Sign | Meaning |
+|---|---|
+| Negative | Visuals probably help more than they hurt. |
+| Positive | Visuals are under-explained or too complex. |
+
+## References
+
+- Mayer, R. E. (2009). *Multimedia Learning*, 2nd ed. Cambridge University Press — multimedia
+  principle and contiguity principle behind "must be referenced from prose nearby".
+- Larkin, J. H. & Simon, H. A. (1987). *Why a diagram is (sometimes) worth ten thousand words.*
+  Cognitive Science 11(1): 65–100 — when diagrams help vs. hurt comprehension; the basis for the
+  bounded-size and parse-error terms.
+  [DOI](https://doi.org/10.1111/j.1551-6708.1987.tb00863.x).
+- W3C: [WCAG 2.1 — Non-text Content (1.1.1)](https://www.w3.org/WAI/WCAG21/Understanding/non-text-content.html)
+  — the source of the alt-or-caption requirement.
+
+## See also
+
+- [Table Burden + Scaffold](/metrics/markdown/table-burden) — same idea for tables.
+- [Artifact Debt](/metrics/markdown/artifact-debt) — broader hygiene metric.
+- [Good Scaffold](/metrics/markdown/good-scaffold) — combines visual + table + code-example credits.

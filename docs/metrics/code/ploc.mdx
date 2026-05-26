@@ -1,0 +1,50 @@
+---
+title: "PLOC — Physical Lines of Code"
+description: "Physical instruction lines — code lines with comments and blanks excluded."
+keywords: ["ploc", "physical lines", "ncloc", "non-comment lines"]
+---
+
+**PLOC** (Physical Lines of Code) counts source lines that contain at least one code token. Pure
+comment lines and pure blank lines are excluded.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `loc.ploc` | int | Physical instruction lines. |
+
+## How it is computed
+
+A line counts toward PLOC when the parser reports at least one non-trivia token on it. Lines that hold
+only whitespace, only block-comment continuation, or only line-comment text are excluded. Mixed lines
+(code followed by an inline comment) count as PLOC.
+
+## When it is useful
+
+- "Real code" size: PLOC strips out comments and blanks, so it is closer to what reviewers think of as
+  the size of a file.
+- Comparing comment density: pair with [CLOC](/metrics/code/cloc) to compute the comment ratio
+  `cloc / (cloc + ploc)`.
+- Maintainability inputs: PLOC is one of the inputs to the
+  [Maintainability Index](/metrics/code/mi).
+
+## Equivalents in other tools
+
+| Tool | Equivalent |
+|---|---|
+| Sonar | `ncloc` (non-comment lines of code). |
+| `cloc` (CLI) | "code" column. |
+| Visual Studio MI calculation | "lines of code" input. |
+
+## References
+
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/).
+- Sonar: [`ncloc` in metric definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [LOC family](/metrics/code/loc) — overview.
+- [CLOC](/metrics/code/cloc) — comment lines.
+- [LLOC](/metrics/code/lloc) — logical (statement) lines.

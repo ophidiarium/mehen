@@ -1,0 +1,52 @@
+---
+title: "Commands overview"
+description: "The mehen CLI exposes three commands: metrics, diff, and top-offenders."
+keywords: ["commands", "cli", "mehen commands"]
+---
+
+The mehen CLI has a small, focused command surface designed for CI runs, pre-PR hooks, and pull
+request automation.
+
+## Commands
+
+| Page | What it does |
+|---|---|
+| [`mehen metrics`](/commands/metrics) | Analyze exactly one file and emit a metrics report. |
+| [`mehen diff`](/commands/diff) | Compare metrics between two git revisions and emit JSON or Markdown. |
+| [`mehen top-offenders`](/commands/top-offenders) | Walk one or more paths and rank the worst-offending files. |
+
+`mehen --version --json` is the fourth supported invocation — it emits a machine-readable shape that the
+[GitHub Action](/guides/github-action) reads to stamp its sticky comment footer.
+
+## Why three commands
+
+Each command matches one consumption pattern:
+
+- **`metrics`** → "tell me about this one file" — single-file IDE/CI hooks, code-review screencasts.
+- **`diff`** → "what changed on this PR" — the engine behind the GitHub Action sticky comment.
+- **`top-offenders`** → "where are the hottest files?" — repository scans for prioritization dashboards.
+
+AST inspection for maintainers lives in `cargo xtask` rather than the public CLI — see
+[Developers → Add a new language](/developers/new-language).
+
+## Output formats
+
+All three commands accept a small format set. See
+[Concepts → Output formats](/concepts/output-formats) for the schema of each.
+
+| Format | Available on |
+|---|---|
+| `json` | every command |
+| `markdown` | every command (default for `top-offenders`; `github-markdown` style for `diff`) |
+| `yaml`, `toml` | `metrics` only |
+
+## Profiles
+
+`mehen metrics` accepts a built-in `--profile` flag: `default`, `ci`, or `strict`. Profiles tune the
+metric selector set and the threshold suggestions.
+
+## See also
+
+- [GitHub Action](/guides/github-action) — production consumer of `mehen diff`.
+- [Concepts → Architecture](/concepts/architecture) — how each command flows through the engine.
+- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs) — `--fail-on` and threshold inputs.

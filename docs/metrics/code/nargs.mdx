@@ -1,0 +1,53 @@
+---
+title: "NARGS — Number of Arguments"
+description: "Argument count per function or method, with file-level aggregates."
+keywords: ["nargs", "arguments", "parameters", "function size"]
+---
+
+**NARGS** counts the number of formal arguments declared by each function, method, or closure. mehen
+reports per-function values plus aggregate statistics (total, min, max, average) at the file level.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `nargs` | int | Total arguments across all functions and closures in the space. |
+| `nargs.average` | float | Mean argument count per function. |
+| `nargs.functions` | int | Total arguments declared by named functions. |
+| `nargs.functions_min` / `_max` / `_average` | — | Aggregates over named functions only. |
+| `nargs.closures` | int | Total arguments declared by closures/lambdas. |
+| `nargs.closures_min` / `_max` / `_average` | — | Aggregates over closures only. |
+| `nargs.average_functions` | float | Mean per named function. |
+| `nargs.average_closures` | float | Mean per closure. |
+| `nargs.total_functions` | int | Total of `nargs.functions` (alias). |
+| `nargs.total_closures` | int | Total of `nargs.closures` (alias). |
+
+## Why both functions and closures are reported
+
+Closures are first-class values in TypeScript, Rust, Ruby, Kotlin, Python, etc. Mixing closure parameter
+counts with named-function parameter counts hides the long-tail of inline lambdas. mehen reports both
+buckets so you can see, for example, that a file's named functions average 2 arguments while its
+callbacks average 4.
+
+## How to read it
+
+Conventional ceilings (no universal authority — pick one for your repo):
+
+| Per-function `nargs` | Interpretation |
+|---|---|
+| 0–3 | Easy to call. |
+| 4–5 | Borderline; consider a parameter object. |
+| 6+ | Refactor candidate. |
+
+Robert C. Martin's *Clean Code* recommends **≤ 3** as a soft cap; it's a stylistic preference, not a hard
+rule.
+
+## References
+
+- Sonar: [Metrics definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+- Martin, R. C. (2008). *Clean Code*, ch. 3. (Soft cap of 3 for "ideal" function arity.)
+
+## See also
+
+- [NOM](/metrics/code/nom) — number of methods.
+- [NEXITS](/metrics/code/nexits) — exit-point count.

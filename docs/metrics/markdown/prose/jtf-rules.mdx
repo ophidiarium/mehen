@@ -1,0 +1,42 @@
+---
+title: "JTF rule conformance"
+description: "Japan Translation Federation's 12 rules, mechanically checkable on Markdown blocks."
+keywords: ["jtf", "japan translation federation", "japanese style guide", "writing quality"]
+---
+
+The Japan Translation Federation's **JTF Japanese Style Guide for Translators** has 12 mechanical rules
+that mehen checks on Japanese-tagged Markdown blocks.
+
+## Rules
+
+| # | Check | Severity |
+|---|---|---|
+| 1 | keitai/jōtai consistency (`である` / `です・ます`) | warn |
+| 2 | `、` / `。` used as punctuation | info |
+| 3 | Stick to Jōyō kanji (flag `hyōgai`) | warn |
+| 4 | Okurigana per official rules | info |
+| 5 | Trailing long-vowel mark on katakana compound endings (`コンピューター` not `コンピュータ`) | warn |
+| 6 | Long katakana compounds broken with `・` or half-width space | info |
+| 7 | Kanji / hiragana / katakana full-width | error |
+| 8 | Digits and Latin alphabet half-width | warn |
+| 9 | Symbols full-width | info |
+| 10 | No space between full-width and half-width | info |
+| 11 | `.`, `,`, spaces half-width | info |
+| 12 | Standardize unit notation | info |
+
+## How violations surface
+
+Each violation contributes to:
+
+- The document's **`jtf_violation_density`** (input to Japanese WQS).
+- A list of `(line, column, rule, message)` flags reported in the JSON output.
+- Per-rule callouts in the [PR comment](/guides/pr-comment-design).
+
+## References
+
+- Japan Translation Federation: [Japanese Style Guide for Translators (3rd Edition)](https://www.jtf.jp/jp/style_guide/styleguide.html).
+
+## See also
+
+- [Japanese script composition](/metrics/markdown/prose/japanese-script-composition) — Tier 0 inputs.
+- [textlint-ja subset](/metrics/markdown/prose/textlint-ja) — additional Japanese rules.

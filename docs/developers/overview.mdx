@@ -1,0 +1,103 @@
+---
+title: "Developers"
+description: "Build mehen, run the test suite, and contribute changes."
+keywords: ["mehen development", "rust", "contributing"]
+---
+
+This section documents how to build mehen, run its tests, and contribute changes.
+
+## Prerequisites
+
+- A recent stable Rust toolchain. See [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
+- For tree-sitter grammar regeneration (Go / Kotlin / C / PowerShell): a Linux or macOS shell, or
+  Windows via WSL.
+
+## Clone
+
+```bash
+# HTTPS
+git clone -j8 https://github.com/ophidiarium/mehen.git
+
+# SSH
+git clone -j8 git@github.com:ophidiarium/mehen.git
+```
+
+## Build and lint
+
+From the repo root:
+
+```bash
+cargo check
+cargo build
+cargo fmt --all
+cargo clippy --all-targets --all-features --locked
+```
+
+## Testing
+
+mehen uses `nextest` when available, falling back to `cargo test`:
+
+```bash
+if cargo nextest --version >/dev/null 2>&1; then
+  cargo nextest run --all-features
+else
+  cargo test --all-targets --locked
+fi
+```
+
+## Snapshot tests (`insta`)
+
+Many metric tests use `insta` snapshots. Always pass `--workspace` to avoid false `unreferenced`
+failures.
+
+<Tabs>
+  <Tab title="CI-style check">
+    ```bash
+    cargo insta test --workspace --all-features --check --unreferenced reject \
+        --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+    ```
+  </Tab>
+  <Tab title="Update intentionally">
+    ```bash
+    cargo insta test --workspace --all-features --review \
+        --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+    ```
+  </Tab>
+</Tabs>
+
+## Repository layout
+
+| Crate | Purpose |
+|---|---|
+| `crates/mehen-cli` | CLI binary — entry point, command routing, exit codes. |
+| `crates/mehen-engine` | Pipeline orchestration — `run_diff`, `run_top_offenders`, registry. |
+| `crates/mehen-core` | Parser-neutral domain types and the `LanguageAnalyzer` trait. |
+| `crates/mehen-metrics` | Shared metric formulas, accumulators, finalizers. |
+| `crates/mehen-python` | Python analyzer (Ruff). |
+| `crates/mehen-typescript` | TypeScript / JavaScript / TSX / JSX analyzer (Oxc). |
+| `crates/mehen-php` | PHP analyzer (Mago). |
+| `crates/mehen-ruby` | Ruby analyzer (Prism). |
+| `crates/mehen-rust` | Rust analyzer (`ra_ap_syntax`). |
+| `crates/mehen-go`, `mehen-kotlin`, `mehen-c`, `mehen-powershell` | Tree-sitter-backed analyzers. |
+| `crates/mehen-markdown` | Markdown analyzer (pulldown-cmark) with embedded-code dispatch via `LanguageDispatcher`. |
+| `crates/mehen-tree-sitter` | Shared tree-sitter wrapper and CST traversal helpers. |
+| `crates/mehen-git` | Git operations. |
+| `crates/mehen-report` | JSON, YAML, TOML, and GitHub-Markdown rendering. |
+| `xtask` | Developer-only commands (kind-enum codegen, AST dumps, audits). |
+
+## Coding expectations
+
+- Keep internals internal (`pub(crate)` / private) unless a real external API is needed.
+- Prefer explicit imports over wildcard re-exports.
+- Avoid dead code — this is a CLI-focused codebase.
+- Preserve deterministic metric behavior across platforms.
+
+## Pages
+
+- [How-to: Add a new language](/developers/new-language)
+- [How-to: Implement LoC](/developers/loc)
+- [How-to: Update grammars](/developers/update-grammars)
+
+## Contributing
+
+Issues and pull requests welcome at [github.com/ophidiarium/mehen](https://github.com/ophidiarium/mehen).

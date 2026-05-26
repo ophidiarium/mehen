@@ -1,0 +1,68 @@
+---
+title: "ABC metric"
+description: "Fitzpatrick's ABC count: Assignments, Branches, Conditions, with a magnitude that combines all three."
+keywords: ["abc", "assignments", "branches", "conditions", "fitzpatrick"]
+---
+
+The **ABC** metric is a size measure proposed by Jerry Fitzpatrick in 1997. It counts three types of
+syntactic features and reports them as a vector and as a magnitude.
+
+| Letter | What it counts |
+|---|---|
+| **A**ssignments | Variable assignments (`=`, `+=`, `−=`, `++`, `−−`, etc.). |
+| **B**ranches | Calls to other procedures (i.e., method/function invocations). |
+| **C**onditions | Conditional tests (`if`, `case`, `when`, ternary, exception catches, comparison
+operators). |
+
+The vector `<A, B, C>` is reported alongside the **magnitude** `|ABC| = sqrt(A² + B² + C²)`.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `abc` | float | Magnitude `sqrt(A² + B² + C²)`. |
+| `abc.assignments` | int | Total assignments in the space. |
+| `abc.assignments_min` | int | Minimum across child spaces. |
+| `abc.assignments_max` | int | Maximum across child spaces. |
+| `abc.assignments_average` | float | Average across child spaces. |
+| `abc.branches` | int | Total branches. |
+| `abc.branches_min` / `_max` / `_average` | — | Aggregates. |
+| `abc.conditions` | int | Total conditions. |
+| `abc.conditions_min` / `_max` / `_average` | — | Aggregates. |
+
+## How to read it
+
+There is no universal threshold, but Fitzpatrick's original paper proposed:
+
+| Magnitude | Interpretation |
+|---|---|
+| 0–10 | Tiny method; check whether it should be inlined. |
+| 10–20 | Normal method size. |
+| 20–40 | Large; consider refactoring. |
+| 40+ | Very large; refactor candidate. |
+
+The Ruby community adopted ABC widely via `rubocop-rubycop`/`rubycritic`, which uses
+`<A, B, C>` and a magnitude threshold of 17 by default for methods.
+
+## Per-language increments
+
+Each language analyzer maps its statement and expression node kinds onto the three buckets. The
+canonical mapping:
+
+- **Assignments:** `=`, `+=`, `−=`, `*=`, `/=`, `%=`, `<<=`, `>>=`, `&=`, `|=`, `^=`, prefix/postfix
+  `++`/`−−`, parameter default values where applicable.
+- **Branches:** function calls, method calls, constructors, `super(...)` calls, and dynamic dispatch.
+- **Conditions:** `if`, `else if`, `case`/`when`, ternary, `&&` / `||`, equality and ordering operators,
+  exception handlers (`catch`, `rescue`, `except`).
+
+## References
+
+- Fitzpatrick, J. (1997). *Applying the ABC Metric to C, C++, and Java.* C++ Report, June 1997.
+  [Author archive (PDF)](https://www.softwarerenovation.com/Articles/ABC-Metric-paper.pdf).
+- RuboCop: [`Metrics/AbcSize` cop documentation](https://docs.rubocop.org/rubocop/cops_metrics.html#metricsabcsize)
+  — production-grade Ruby implementation with documented thresholds.
+
+## See also
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — counts branches/conditions differently.
+- [LOC family](/metrics/code/loc) — orthogonal size measure.

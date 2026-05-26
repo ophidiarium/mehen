@@ -1,0 +1,41 @@
+---
+title: "Lexical diversity"
+description: "Formula-independent vocabulary richness: MATTR, hapax, lexical density, sentence/word moments."
+keywords: ["lexical diversity", "mattr", "hapax", "ttr", "vocabulary"]
+---
+
+Formula-independent indicators of vocabulary richness and content-word saturation. They do not depend on
+syllable counts and are robust across document types.
+
+## What mehen emits
+
+- **MATTR₅₀** — Moving-Average Type-Token Ratio over 50-token sliding windows
+  (Covington & McFall 2010). Length-invariant by construction and cheap to compute. MTLD and HD-D are
+  reported as alternative diversity measures behind `--features lexical-diversity`.
+- **Hapax ratio / dis-legomena ratio** — `V_1 / V` and `V_2 / V`. Zipf's law predicts hapax ≈ 0.5
+  on natural prose; > 0.6 flags laundry-list reference dumps, extremely low values flag repetitive
+  template content.
+- **Lexical density** — content words / total words. Without POS tagging, approximated as
+  `1 − stopwords / tokens` using the 175-entry NLTK English stopword list. Typical ranges: spoken ~0.40,
+  written ~0.52, academic ~0.60.
+- **Yule's K** — optional; MATTR is usually sufficient.
+- **Sentence/word length moments** — `avg_sentence_words`, `p90_sentence_words`,
+  `max_sentence_words`, `stddev_sentence_words`, `avg_word_chars`, `p90_word_chars`. These drive the
+  readability formulas but are reported individually so writers see the levers directly.
+
+## References
+
+- Covington, M. A. & McFall, J. D. (2010). *Cutting the Gordian knot: The Moving-Average Type-Token
+  Ratio (MATTR).* Journal of Quantitative Linguistics.
+- McCarthy, P. M. & Jarvis, S. (2010). *MTLD, vocd-D, and HD-D.* Behavior Research Methods.
+- Yule, G. U. (1944). *The Statistical Study of Literary Vocabulary.* Cambridge University Press.
+- Halliday, M. A. K. (1985). *Spoken and Written Language.* Oxford University Press — origin of the
+  modern lexical-density definition.
+- Stanford NLP: [Type-Token Ratio overview in introductory NLP slides](https://web.stanford.edu/class/cs224n/) —
+  used by Stanford's CS 224N course as a teaching reference.
+
+## See also
+
+- [English readability ensemble](/metrics/markdown/prose/english-readability) — uses sentence-length
+  moments.
+- [Wording quality](/metrics/markdown/prose/wording-quality) — orthogonal style metric.

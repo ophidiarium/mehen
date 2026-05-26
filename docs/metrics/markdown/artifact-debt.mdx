@@ -1,0 +1,50 @@
+---
+title: "Artifact Debt"
+description: "Cost of unlabelled, unparsable, oversized, unexplained, or externally fragile artifacts."
+keywords: ["artifact debt", "code fences", "documentation hygiene"]
+---
+
+Artifacts (code fences, tables, diagrams, images, math blocks, raw HTML/MDX) are not bad on their own —
+artifact **debt** is high when artifacts are unlabelled, unparsable, oversized, unexplained, or
+externally fragile.
+
+## Formula
+
+```text
+ArtifactDebtScore = clamp01(
+    0.25 · sat(unlabelled_code_fences / max(1, code_fences); 0.05, 0.50)
+  + 0.20 · sat(artifact_parse_errors  / max(1, artifacts);   0.00, 0.20)
+  + 0.15 · sat(oversized_artifacts    / max(1, artifacts);   0.05, 0.30)
+  + 0.15 · sat(unexplained_artifacts  / max(1, artifacts);   0.10, 0.60)
+  + 0.15 · sat(raw_html_or_mdx_lines  / max(1, DLOC);        0.05, 0.25)
+  + 0.10 · sat(external_artifact_links/ max(1, artifacts);   0.10, 0.60)
+)
+```
+
+## What each component flags
+
+- **Unlabelled code fences** — `` ``` `` instead of `` ```python `` (defeats syntax highlighting and
+  embedded-analyzer dispatch).
+- **Parse errors** — broken Mermaid / Math / TOML / JSON inside artifacts.
+- **Oversized artifacts** — code blocks or tables far above the document's median.
+- **Unexplained artifacts** — no prose within ±2 blocks of the artifact.
+- **Raw HTML / MDX density** — high HTML/MDX line ratio relative to DLOC.
+- **External artifact links** — images and embeds pointing to external hosts (fragile under outages).
+
+## How DMI uses it
+
+Artifact Debt contributes to [DMI](/metrics/markdown/dmi) via the `A_norm` term.
+
+## References
+
+- Cunningham, W. (1992). *The WyCash Portfolio Management System.* OOPSLA '92 Experience Report —
+  origin of the "technical debt" metaphor this metric extends to documentation artifacts.
+  [DOI](https://doi.org/10.1145/157710.157715).
+- Kruchten, P., Nord, R. L. & Ozkaya, I. (2012). *Technical Debt: From Metaphor to Theory and
+  Practice.* IEEE Software 29(6): 18–21.
+  [DOI](https://doi.org/10.1109/MS.2012.167).
+
+## See also
+
+- [Visual Scaffold](/metrics/markdown/visual-scaffold) — diagram-specific scaffolding.
+- [Table Burden](/metrics/markdown/table-burden) — table-specific burden.

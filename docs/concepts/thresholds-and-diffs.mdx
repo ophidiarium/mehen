@@ -1,0 +1,61 @@
+---
+title: "Thresholds and diffs"
+description: "How `mehen diff` thresholds gate the GitHub Action."
+keywords: ["thresholds", "diff", "gating", "ci"]
+---
+
+The [GitHub Action](/guides/github-action) accepts a `thresholds` input that gates PRs on adverse
+per-file metric deltas. This page explains how thresholds compose with the JSON output of
+`mehen diff` and how to write your own gating logic in CI.
+
+## Action threshold input
+
+```yaml
+- uses: ophidiarium/mehen@v0
+  with:
+    paths: src
+    thresholds: |
+      cyclomatic=5
+      cognitive=4
+      loc.lloc=120
+```
+
+The action runs `mehen diff` and then evaluates each per-file delta against the supplied limits. A
+violation:
+
+- Counts toward the `violations` output.
+- Fails the action when `fail-on-threshold: true` (default).
+
+## Adverse direction
+
+Each metric has an adverse direction. Thresholds limit how far in the adverse direction a per-file
+delta is allowed to go:
+
+| Metric | Adverse | Example threshold |
+|---|---|---|
+| `cyclomatic` | ↑ | `cyclomatic=5` blocks a per-file increase by more than 5. |
+| `cognitive` | ↑ | `cognitive=4`. |
+| `loc.lloc` | ↑ | `loc.lloc=120`. |
+| `mi.visual_studio` | ↓ | `mi.visual_studio=10` blocks a per-file decrease by more than 10. |
+| `halstead.volume` | ↑ | `halstead.volume=200`. |
+
+mehen knows the direction for the standard metrics and applies the threshold accordingly.
+
+## Composition with diff JSON
+
+If you want richer logic than the action provides, run `mehen diff -O json` yourself and pipe the JSON
+into a CI script:
+
+```bash
+mehen diff --from "$BASE_SHA" --to "$HEAD_SHA" --paths src \
+           --output-format json > metrics-diff.json
+jq '.files[] | select(.deltas.cyclomatic.delta > 5)' metrics-diff.json
+```
+
+`jq` and the JSON shape give you full control. The downside: you reimplement adversity rules.
+
+## See also
+
+- [GitHub Action](/guides/github-action) — full input/output reference.
+- [Commands → diff](/commands/diff) — `mehen diff` CLI reference.
+- [Output formats](/concepts/output-formats) — JSON shape.

@@ -1,0 +1,83 @@
+---
+title: "Cyclomatic complexity"
+description: "McCabe's count of linearly independent paths through a function."
+keywords: ["cyclomatic complexity", "mccabe", "control flow", "complexity"]
+---
+
+**Cyclomatic complexity** is McCabe's count of the number of linearly independent paths through a
+function's control-flow graph. A function with no branches has complexity 1. Each `if`, `for`, `while`,
+`case`, boolean `&&` / `||`, ternary, or exception handler increments the count.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `cyclomatic` | int | Total cyclomatic complexity for the space (function/method/file). |
+| `cyclomatic.sum` | int | Sum across child spaces. |
+| `cyclomatic.average` | float | Mean across functions. |
+| `cyclomatic.min` | int | Minimum across functions. |
+| `cyclomatic.max` | int | Maximum across functions. |
+
+## Formula
+
+```text
+CC = E − N + 2P
+```
+
+For a connected control-flow graph with `E` edges, `N` nodes, and `P` connected components.
+In practice, mehen counts decisions plus 1:
+
+```text
+CC = 1 + decisions
+```
+
+where decisions are language-specific. Each language analyzer contributes increments for `if`, `else if`,
+loops, switch arms, `&&` / `||`, ternary expressions, exception handlers, and other control-flow
+constructs.
+
+## Per-language increments
+
+The exact set of node kinds that increment complexity is owned by each language analyzer crate. The list
+matches McCabe's original prescription closely:
+
+- **Branches:** `if`, `else if`, `case`/`when` arms.
+- **Loops:** `for`, `while`, `do`, `loop`, `until`.
+- **Boolean operators:** `&&`, `||` (each occurrence).
+- **Ternary / conditional expression:** the `?:` operator.
+- **Exception handlers:** `catch`, `rescue`, `except`.
+- **Early returns:** counted in [NEXITS](/metrics/code/nexits), not cyclomatic.
+
+## How to read it
+
+| Value | Interpretation |
+|---|---|
+| 1–4 | Simple, low risk. |
+| 5–10 | Moderate, well within McCabe's recommended ceiling. |
+| 11–20 | Complex; refactor candidate. |
+| 21+ | Untestable in practice — split into smaller functions. |
+
+McCabe's original 1976 paper recommended **10 as the upper limit per function**, with rare exceptions for
+state machines.
+
+<Tip>
+Cyclomatic complexity counts paths, not understanding. A long chain of `else if` arms might score 8 but
+read clearly. A nested ternary scoring 4 might be near-impossible to follow. Pair this metric with
+[Cognitive complexity](/metrics/code/cognitive).
+</Tip>
+
+## References
+
+- McCabe, T. J. (1976). *A Complexity Measure*. IEEE Transactions on Software Engineering, SE-2(4):
+  308–320. [DOI](https://doi.org/10.1109/TSE.1976.233837) ·
+  [PDF (literateprogramming.com archive)](http://www.literateprogramming.com/mccabe.pdf).
+- Kearney, J. K., et al. *Software Complexity Measurement* — MIT lecture notes covering McCabe and
+  Halstead together. [PDF (MIT OCW 16.355)](http://sunnyday.mit.edu/16.355/kearney.pdf).
+- Watson, A. H. & McCabe, T. J. (1996). *Structured Testing: A Testing Methodology Using the
+  Cyclomatic Complexity Metric.* NIST Special Publication 500-235.
+  [NIST PDF](https://www.nist.gov/publications/structured-testing-testing-methodology-using-cyclomatic-complexity-metric).
+- Sonar: [Cyclomatic complexity](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [Cognitive complexity](/metrics/code/cognitive) — Sonar's "how hard to understand" complement.
+- [Weighted Methods per Class (WMC)](/metrics/code/wmc) — sum of cyclomatic across class methods.

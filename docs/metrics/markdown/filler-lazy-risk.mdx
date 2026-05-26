@@ -1,0 +1,97 @@
+---
+title: "Filler / Lazy Structure Risk"
+description: "Structural evidence for 'big but vacuous' documents — without claiming anything about how the text was written."
+keywords: ["filler risk", "lazy structure", "ai documentation", "documentation quality"]
+---
+
+This metric addresses the AI-era documentation problem:
+
+> The document is just filler: structure is lazy, there are no references, it is large but useless.
+
+<Warning>
+This is **not** AI-authorship detection. It reports structural evidence — unanchored prose, low artifact
+density, weak repository grounding, lazy sectioning, repetition, specificity scarcity, hollow
+references, and placeholder density — without making any claim about how the text was written.
+</Warning>
+
+## Sub-scores (.1–17.8)
+
+| Sub-score | What it captures |
+|---|---|
+| **UnanchoredProseMass** | Fraction of words living in sections with no evidence anchors. |
+| **LowArtifactDensity** | `1 − sat(A / (W/800); 0.5, 2.0)` — too few code, tables, diagrams. |
+| **LowRepoGrounding** | `1 − RepositoryGroundingScore`. |
+| **LazySectioning** | Heading density, large-section rate, "shallow big doc" flag (`W > 2,500` AND max heading depth ≤ 2). |
+| **RepetitionDensity** | Token-shingle Jaccard > 0.82 detects near-duplicate paragraphs. |
+| **SpecificityScarcity** | Identifiers + paths + version tokens + inline code tokens relative to `W`. |
+| **ReferenceHollowness** | Bibliography entries without verifiable DOI/arXiv/RFC/URL anchors. |
+| **PlaceholderDensity** | TODO/TBD/FIXME/XXX/lorem and empty links per 1,000 words. |
+
+## Formula
+
+```text
+FillerLazyRisk = clamp01(
+    0.20 · UnanchoredProseMass
+  + 0.15 · LowArtifactDensity
+  + 0.20 · LowRepoGrounding
+  + 0.15 · LazySectioning
+  + 0.12 · RepetitionDensity
+  + 0.12 · SpecificityScarcity
+  + 0.04 · ReferenceHollowness
+  + 0.02 · PlaceholderDensity
+)
+```
+
+## Bands
+
+| Score | Band |
+|---|---|
+| 0.00 – 0.20 | Low. |
+| 0.21 – 0.40 | Mild. |
+| 0.41 – 0.60 | Review. |
+| 0.61 – 0.80 | High. |
+| 0.81 – 1.00 | Severe. |
+
+## Diagnostic labels
+
+High scores attach stable string labels reviewers can act on:
+
+- `large-unanchored-prose`
+- `low-repository-grounding`
+- `lazy-sectioning`
+- `low-artifact-density`
+- `near-duplicate-paragraphs`
+- `specificity-scarcity`
+- `hollow-references`
+- `placeholder-heavy`
+
+The PR comment quotes these labels verbatim instead of paraphrasing.
+
+## Example output
+
+```text
+Filler / Lazy Structure Risk: 0.73 HIGH
+
+Top contributors:
+  - 71% of prose is in sections without evidence anchors
+  - 3,420 words, only 1 relative link and 0 code examples
+  - max heading depth = 2 with 4 sections > 1,200 words
+  - specificity density = 1.8% (threshold: 3%-15%)
+```
+
+## References
+
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  motivates the evidence-anchor and specificity-scarcity sub-scores.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+- Halliday, M. A. K. (1985). *Spoken and Written Language.* Oxford University Press — lexical-density
+  basis used by `SpecificityScarcity`.
+- Manning, C. D., Raghavan, P. & Schütze, H. (2008). *Introduction to Information Retrieval*, ch. 6.
+  Cambridge University Press — Jaccard / token-shingle methods used by `RepetitionDensity`.
+  [Stanford online edition](https://nlp.stanford.edu/IR-book/).
+
+## See also
+
+- [DMI](/metrics/markdown/dmi) — uses Filler Risk as one of its inputs.
+- [Repository Grounding](/metrics/markdown/repository-grounding) — feeds LowRepoGrounding.
+- [Evidence Coverage](/metrics/markdown/evidence-coverage) — feeds UnanchoredProseMass.

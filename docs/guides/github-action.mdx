@@ -1,0 +1,163 @@
+---
+title: "GitHub Action"
+description: "Drop the ophidiarium/mehen action into a workflow to publish per-PR metric trends."
+keywords: ["github action", "ci", "pull request", "metrics"]
+---
+
+The official **`ophidiarium/mehen`** GitHub Action computes changed-file metric trends on every pull
+request, compares them against the base branch, and publishes a sticky comment with the deltas. It is
+the primary consumption surface for mehen today.
+
+## Minimal workflow
+
+```yaml .github/workflows/mehen.yml
+name: mehen
+on: pull_request
+
+jobs:
+  mehen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: ophidiarium/mehen@v0
+        with:
+          paths: src
+```
+
+That's the whole setup. The action installs the `mehen` CLI, runs `mehen diff` against the PR's base
+branch, and posts a sticky comment with the per-file metric deltas.
+
+## Polyglot monorepo
+
+For monorepos, pass each tracked root and let mehen pick supported languages from changed files in those
+trees:
+
+```yaml
+- uses: ophidiarium/mehen@v0
+  with:
+    paths: |
+      crates/api/src
+      apps/web/src
+      tools
+    thresholds: |
+      cyclomatic=5
+      cognitive=4
+      loc.lloc=120
+```
+
+## Inputs
+
+| Input | Default | Description |
+|---|---|---|
+| `version` | `""` (latest) | Version of the mehen npm package to run. |
+| `install-method` | `npm` | How to provide the mehen CLI: `npm`, `cargo`, or `path`. |
+| `mehen-path` | `mehen` | Path to a mehen executable when `install-method: path`. |
+| `node-version` | `24` | Node.js version used by the action runner. |
+| `paths` | `.` | Repository-relative files or directories to compare. Newline, comma, or semicolon separated. |
+| `include` | `""` | Glob patterns to include. |
+| `exclude` | `""` | Glob patterns to exclude. |
+| `exclude-tests` | `true` | Exclude common test-file patterns (`*_test.go`, `**/__tests__/**`, `*.spec.ts`) on top of any user-provided excludes. |
+| `metrics` | `""` | Comma-separated metrics passed to `mehen diff`. |
+| `from` | `""` | Base git revision. Defaults to the PR base branch or `main`. |
+| `to` | `""` | Head git revision. Defaults to the PR head SHA or `HEAD`. |
+| `show-unchanged` | `false` | Include files where all selected metrics are unchanged. |
+| `comment` | `true` | Create or update a pull request comment. |
+| `github-token` | (workflow token) | GitHub token used to update PR comments. |
+| `thresholds` | `""` | Adverse per-file delta limits, e.g. `cyclomatic=5,cognitive=3,loc.lloc=100`. |
+| `fail-on-threshold` | `true` | Fail the action when any configured threshold is exceeded. |
+| `comment-title` | `## 📊 Source Code Metrics` | Markdown heading used for the sticky comment. |
+
+## Outputs
+
+| Output | Description |
+|---|---|
+| `violations` | Number of threshold violations. |
+| `report_json` | Path to the JSON diff report produced by mehen. |
+| `report_markdown` | Path to the rendered Markdown report. |
+
+## Permissions
+
+The action needs to write PR comments:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+```
+
+`contents: read` lets the runner check out the repo. `pull-requests: write` and `issues: write` let the
+action upsert the sticky comment.
+
+## Sticky comment
+
+The action posts a single comment on the PR and updates it on each push instead of stacking new
+comments. The Markdown layout, cell format, and callout catalog are documented on the
+[PR comment design](/guides/pr-comment-design) page.
+
+## Markdown documentation section (preview)
+
+When a PR touches Markdown files, `mehen diff` will also emit a **Documentation Metrics** section
+inside the same sticky comment, anchored by `<!-- mehen-docs -->`. The full specification — anchor
+rules, cell format, callout template catalog, planned `--fail-on` gating — is on the
+[PR comment design](/guides/pr-comment-design) page.
+
+<Note>
+Until the Markdown renderer emits the anchor and the callout catalog is wired end-to-end, the GitHub
+Action only publishes the source-code metrics section.
+</Note>
+
+## Examples
+
+<Tabs>
+  <Tab title="Strict gating">
+    ```yaml
+    - uses: ophidiarium/mehen@v0
+      with:
+        paths: src
+        thresholds: |
+          cyclomatic=3
+          cognitive=3
+        fail-on-threshold: true
+    ```
+  </Tab>
+  <Tab title="Comment-only (advisory)">
+    ```yaml
+    - uses: ophidiarium/mehen@v0
+      with:
+        paths: src
+        fail-on-threshold: false
+    ```
+  </Tab>
+  <Tab title="Pin a version">
+    ```yaml
+    - uses: ophidiarium/mehen@v0
+      with:
+        paths: src
+        version: "0.10.0"
+    ```
+  </Tab>
+  <Tab title="Use a pre-installed binary">
+    ```yaml
+    - run: cargo binstall --git https://github.com/ophidiarium/mehen mehen
+    - uses: ophidiarium/mehen@v0
+      with:
+        install-method: path
+        mehen-path: $(which mehen)
+        paths: src
+    ```
+  </Tab>
+</Tabs>
+
+## See also
+
+- [Commands → diff](/commands/diff) — the underlying CLI command.
+- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs).
+- [PR comment design](/guides/pr-comment-design) — full Markdown spec.

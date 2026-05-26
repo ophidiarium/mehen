@@ -1,0 +1,36 @@
+---
+title: "Blank lines"
+description: "Whitespace-only lines."
+keywords: ["blank lines", "whitespace", "loc"]
+---
+
+**Blank** lines are whitespace-only physical lines — no code, no comment.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `loc.blank` | int | Whitespace-only lines. |
+
+## How it is computed
+
+A line counts toward `loc.blank` when its full physical text is empty or whitespace-only. Lines that
+contain only a comment do not count as blank — they count toward [CLOC](/metrics/code/cloc).
+
+## When it is useful
+
+- **Whitespace ratio** — a high blank-line ratio sometimes indicates excessive vertical separation, often
+  in generated code.
+- **Identity check** — `sloc == ploc + cloc + blank` should hold (within the rules of how mixed lines are
+  attributed). If it doesn't, that's a parser bug.
+
+## References
+
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/).
+
+## See also
+
+- [LOC family](/metrics/code/loc) — overview.
+- [SLOC](/metrics/code/sloc), [PLOC](/metrics/code/ploc), [CLOC](/metrics/code/cloc).

@@ -1,0 +1,54 @@
+---
+title: "Prose layer overview"
+description: "Language-aware Markdown signals: readability formulas, lexical diversity, wording quality, Japanese script composition and JTF conformance."
+keywords: ["prose layer", "readability", "english", "japanese", "wording quality"]
+---
+
+The structural Markdown layer ([Markdown Metrics](/metrics/markdown/overview)) is deliberately
+language-opaque. The **prose layer** adds language-aware signals — readability formulas, lexical
+diversity, wording quality, Japanese script composition and JTF conformance — on top of the same AST.
+
+## Architectural constraints
+
+1. **Layered, not folded.** Prose metrics are a separate top-level section in the output schema. They do
+   not modify [DMI](/metrics/markdown/dmi), [MCC](/metrics/markdown/mcc),
+   [MRPC](/metrics/markdown/mrpc), or [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) weights
+   silently.
+2. **Per-block language tag.** Language detection runs per Markdown block (paragraph, heading, list
+   item, blockquote), not per document.
+3. **Structural artifacts stay excluded.** Code fences, inline code, link destinations, image alt-text,
+   YAML/TOML/JSON front matter, HTML/MDX, and table delimiters are stripped before any readability or
+   wording calculation.
+4. **Short-text refusal.** Grade-level formulas are suppressed when `words < 100` OR `sentences < 5`.
+5. **Feature-gated dictionaries.** Dictionary-dependent features ship behind Cargo `--features` flags so
+   the default binary stays small.
+6. **Deterministic and reproducible.** No network, no cloud, no sampling.
+
+## Tier model
+
+| Tier | Cargo features | Adds | Binary cost |
+|---|---|---|---|
+| **0 (default)** | none | Unicode-block language detection; UAX #29 segmentation; vowel-group syllables; Tateishi RS; basic wording heuristics; JTF mechanical checks | ~100–300 KB |
+| **1a** | `syllables-cmu` | CMU Pronouncing Dictionary | +1–2 MB |
+| **1b** | `japanese-jouyou` | Jōyō grade proxy, hyōgai ratio | +10 KB |
+| **1c** | `japanese-jlpt` | JLPT N5–N1 word and kanji bands | +300 KB |
+| **1d** | `lingua` | High-accuracy trigram language detection | +2–5 MB |
+| **2a** | `japanese-morph` | Lindera + IPADIC, bunsetsu, POS, Shibasaki grade | +50 MB |
+| **2b** | `japanese-unidic` | Vibrato + UniDic; jReadability | external dict |
+| **2c** | `lexical-diversity` | MTLD, HD-D, Yule's K | +50 KB |
+| **2d** | `vale-rules` | Parse vale-compatible YAML rule packs | +200 KB |
+
+## Pages
+
+| Page | Purpose |
+|---|---|
+| [Block-level language detection](/metrics/markdown/prose/language-detection) | Per-block English/Japanese/other tagging. |
+| [English readability ensemble](/metrics/markdown/prose/english-readability) | Flesch, FKGL, Fog, SMOG, ARI, Coleman-Liau, Dale-Chall, FORCAST, LIX/RIX. |
+| [Lexical diversity](/metrics/markdown/prose/lexical-diversity) | MATTR, hapax, density, sentence/word moments. |
+| [Wording quality](/metrics/markdown/prose/wording-quality) | Passive, hedges, weasels, wordy, adverbs, nominalizations, cliches, illusions. |
+| [Inclusive language](/metrics/markdown/prose/inclusive-language) | alex / retext-equality flags. |
+| [Japanese script composition](/metrics/markdown/prose/japanese-script-composition) | Kanji/hiragana/katakana ratios, registers. |
+| [Tateishi RS + Jōyō grade](/metrics/markdown/prose/tateishi-and-jouyou) | Japanese readability formulas. |
+| [JTF rules](/metrics/markdown/prose/jtf-rules) | Japan Translation Federation 12 rules. |
+| [textlint-ja subset](/metrics/markdown/prose/textlint-ja) | Selected `textlint-rule-preset-ja-technical-writing` rules. |
+

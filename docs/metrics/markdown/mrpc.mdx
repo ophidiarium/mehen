@@ -1,0 +1,63 @@
+---
+title: "MRPC — Markdown Reading Path Complexity"
+description: "Cyclomatic-complexity analogue for a Markdown document's navigation graph."
+keywords: ["mrpc", "reading path", "cyclomatic", "documentation complexity"]
+---
+
+**MRPC** is the [cyclomatic complexity](/metrics/code/cyclomatic) analogue for a Markdown file. It
+builds a document navigation graph `G_doc = (N, E)` where nodes are sections, large code blocks,
+diagrams, footnotes, linked repository documents, and external domains, and edges are sequential,
+parent-child, internal-link, relative-link, external-link, and artifact-explanation relations.
+
+## Classical form
+
+```text
+MRPC_raw = |E| − |N| + 2P
+```
+
+where `P` is the number of connected components.
+
+## Weighted form
+
+Edges carry weights to reflect different navigation costs:
+
+| Edge type | Weight |
+|---|---|
+| Hierarchy (parent-child) | `0.15` |
+| Sequential | `0.20` |
+| Internal anchor | `0.50` |
+| Relative repo link | `0.80` |
+| External | `1.00` |
+| Broken | `1.20` |
+
+```text
+MRPC = max(1, Σ weight(e) − |N| + 2P)
+```
+
+## Interpretation
+
+| MRPC | Meaning |
+|---|---|
+| 1–5 | Mostly linear. |
+| 6–15 | Branchy but contained. |
+| 16–35 | Documentation hub — high navigational complexity. |
+| > 35 | Documentation subsystem; consider split or profile-specific threshold. |
+
+A tutorial with `MRPC = 20` is suspect; an API index with `MRPC = 20` is normal. Use
+profile-specific thresholds rather than a universal cap.
+
+## References
+
+- McCabe, T. J. (1976). *A Complexity Measure.* IEEE Transactions on Software Engineering, SE-2(4):
+  308–320 — the cyclomatic ancestor.
+  [DOI](https://doi.org/10.1109/TSE.1976.233837) ·
+  [PDF](http://www.literateprogramming.com/mccabe.pdf).
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  basis for weighting external vs. relative vs. anchor edges.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+
+## See also
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — the source-code analogue.
+- [MCC](/metrics/markdown/mcc) — local cognitive burden.
+- [Link Debt](/metrics/markdown/link-debt) — broken/external link cost.

@@ -1,0 +1,83 @@
+---
+title: "Output formats"
+description: "Format support per command: JSON, Markdown, YAML, TOML."
+keywords: ["output formats", "json", "markdown", "yaml", "toml"]
+---
+
+mehen emits structured output in formats appropriate to each command's role.
+
+## Format matrix
+
+| Format | `mehen metrics` | `mehen diff` | `mehen top-offenders` |
+|---|---|---|---|
+| `json` | ✓ (default) | ✓ | ✓ |
+| `markdown` | ✓ | ✓ (GitHub-flavored) | ✓ (default) |
+| `yaml` | ✓ | — | — |
+| `toml` | ✓ | — | — |
+
+## Choosing a format
+
+- **`json`** — canonical machine shape. Use it when piping into a CI script or `jq`.
+- **`markdown`** — for `mehen diff`, this is GitHub-flavored Markdown for the sticky comment posted
+  by the [GitHub Action](/guides/github-action). For `mehen metrics` and `mehen top-offenders`, it's a
+  human-friendly summary.
+- **`yaml` / `toml`** — convenient for committing to a repo or piping into config-aware tooling.
+  Available on `mehen metrics` only.
+
+## JSON shape (mehen metrics)
+
+```json
+{
+  "schema_version": "1.0",
+  "tool": "mehen",
+  "path": "src/main.py",
+  "language": "python",
+  "analysis_backend": "python-ruff",
+  "diagnostics": [],
+  "metrics": {
+    "cyclomatic": 4,
+    "cognitive": 6,
+    "loc": { "sloc": 78, "ploc": 64, "lloc": 41, "cloc": 9, "blank": 5 },
+    "halstead": { "volume": 412.0, "difficulty": 7.5, "effort": 3090.0 }
+  },
+  "spaces": []
+}
+```
+
+Markdown files emit a top-level `markdown:` block with the
+[documentation suite](/metrics/markdown/overview).
+
+## JSON shape (mehen diff)
+
+```json
+{
+  "schema_version": "1.0",
+  "base": "main",
+  "head": "HEAD",
+  "files": [
+    {
+      "path": "src/main.py",
+      "old": { "cyclomatic": 4, "cognitive": 6 },
+      "new": { "cyclomatic": 5, "cognitive": 9 },
+      "deltas": { "cyclomatic": { "delta": 1 }, "cognitive": { "delta": 3 } }
+    }
+  ],
+  "markdown_files": [],
+  "analysis_errors": [],
+  "threshold_violations": []
+}
+```
+
+The GitHub Action consumes JSON for decisions and the Markdown shape for the comment body.
+
+## Pretty-printing
+
+`mehen metrics --pretty` indents JSON output. The other commands always emit single-pass output for
+deterministic piping.
+
+## See also
+
+- [Commands → `mehen metrics`](/commands/metrics).
+- [Commands → `mehen diff`](/commands/diff).
+- [Commands → `mehen top-offenders`](/commands/top-offenders).
+- [PR comment design](/guides/pr-comment-design).

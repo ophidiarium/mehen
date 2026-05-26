@@ -1,0 +1,43 @@
+---
+title: "textlint-ja subset"
+description: "Selected rules from textlint-rule-preset-ja-technical-writing applied to Japanese Markdown blocks."
+keywords: ["textlint", "japanese", "writing rules", "technical writing"]
+---
+
+mehen ports a subset of [`textlint-rule-preset-ja-technical-writing`](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)
+with their documented defaults.
+
+## Rules
+
+| Rule | Default | Check |
+|---|---|---|
+| `sentence-length` | ≤ 100 chars | Long-sentence flag. |
+| `max-comma` | ≤ 3 `,` / sentence | Over-comma'd sentences. |
+| `max-ten` | ≤ 3 `、` / sentence | Over-reading-marked sentences. |
+| `max-kanji-continuous-len` | ≤ 6 | Hard-to-read kanji runs. |
+| `no-mix-dearu-desumasu` | zone-aware | JTF rule 1. |
+| `ja-no-mixed-period` | `。` | Sentence terminator consistency. |
+| `no-double-negative-ja` | — | `ないではない`. |
+| `no-doubled-joshi` | `min_interval: 1` | Repeated particles (`を…を`). |
+| `no-doubled-conjunctive-particle-ga` | — | Repeated `が`. |
+| `no-doubled-conjunction` | — | `しかし…しかし`. |
+| `no-dropping-the-ra` | — | Colloquial `見れる` for `見られる`. |
+| `no-hankaku-kana` | — | Halfwidth kana forbidden. |
+| `no-exclamation-question-mark` | — | `!` / `?` in technical docs. |
+| `ja-no-weak-phrase` | — | `かもしれない`, `と思います`. |
+| `ja-no-successive-word` | — | Repeated words. |
+| `ja-no-abusage` | — | Misused kanji. |
+| `ja-no-redundant-expression` | — | `することができる` → `できる`. |
+| `ja-unnatural-alphabet` | — | IME miscarriages. |
+
+All thresholds are user-tunable via profile configuration.
+
+## References
+
+- textlint: [textlint.github.io](https://textlint.github.io).
+- [`textlint-rule-preset-ja-technical-writing`](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing).
+
+## See also
+
+- [JTF rules](/metrics/markdown/prose/jtf-rules) — orthogonal Japanese style guide.
+- [Wording quality](/metrics/markdown/prose/wording-quality) — English style flags.

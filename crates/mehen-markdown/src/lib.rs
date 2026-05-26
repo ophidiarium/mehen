@@ -122,7 +122,7 @@ impl LanguageAnalyzer for MarkdownAnalyzer {
 /// Publish the headline `MarkdownMetrics` numbers into the shared
 /// `MetricSet` flat-key shape that the `mehen metrics --format json`
 /// envelope serializes. Keys mirror the §23 export schema documented
-/// in `mehen-book/src/markdown/metrics.md` so the registry-driven
+/// in `docs/metrics/markdown/overview.mdx` so the registry-driven
 /// path returns the same numeric values that `analyze_markdown` does.
 ///
 /// The full `MarkdownMetrics` record (sections, link records, prose

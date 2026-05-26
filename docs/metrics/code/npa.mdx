@@ -1,0 +1,59 @@
+---
+title: "NPA — Number of Public Attributes"
+description: "Number of public attributes declared on classes and interfaces."
+keywords: ["npa", "public attributes", "encapsulation"]
+---
+
+**NPA** (Number of Public Attributes) counts public fields/properties exposed by classes and interfaces
+in a file. A high NPA usually signals weak encapsulation — internal state leaking outside the type.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `npa` | int | Total public attributes across classes and interfaces. |
+| `npa.classes` | int | NPA contributed by classes. |
+| `npa.interfaces` | int | NPA contributed by interfaces. |
+| `npa.class_attributes` | int | Same as `npa.classes` (alias). |
+| `npa.interface_attributes` | int | Same as `npa.interfaces` (alias). |
+| `npa.classes_average` | float | Mean attributes per class. |
+| `npa.interfaces_average` | float | Mean attributes per interface. |
+| `npa.total_attributes` | int | Total NPA in the file (alias of `npa`). |
+| `npa.average` | float | Mean attributes per declaration (class or interface). |
+
+## What counts as "public"
+
+The exact rule is language-specific:
+
+| Language | Public attribute is… |
+|---|---|
+| Java / Kotlin | A field declared `public` (or with no modifier in Kotlin classes). |
+| TypeScript / JS | A class field without `private` / `protected` / `#` prefix. |
+| Python | A class attribute that does not start with `_`. |
+| Ruby | An `attr_accessor` / `attr_reader` / `attr_writer` declaration (Ruby fields are private by
+default). |
+| C# | A field with `public` access modifier (mehen support is partial — see analyzer notes). |
+
+## How to read it
+
+A "few" public attributes is usually fine. Many can mean:
+
+- Data classes / records: `NPA = number of fields` is expected and benign.
+- Property bags or "god objects": NPA grows past 10 — refactor candidate.
+
+Read NPA alongside [NPM](/metrics/code/npm). A class with NPA much greater than NPM is a struct in
+disguise; a class with NPM much greater than NPA is encapsulating state behind methods.
+
+## References
+
+- Lorenz, M. & Kidd, J. (1994). *Object-Oriented Software Metrics: A Practical Guide.* Prentice Hall.
+- Chidamber, S. R. & Kemerer, C. F. (1994). *A Metrics Suite for Object Oriented Design.* IEEE TSE
+  20(6): 476–493. [DOI](https://doi.org/10.1109/32.295895).
+- Briand, L. C., Daly, J. W. & Wüst, J. K. (1998). *A Unified Framework for Coupling Measurement in
+  Object-Oriented Systems.* IEEE TSE 25(1): 91–121.
+  [DOI](https://doi.org/10.1109/32.748920).
+
+## See also
+
+- [NPM](/metrics/code/npm) — number of public methods.
+- [NOM](/metrics/code/nom) — number of methods (public + private).

@@ -1,0 +1,181 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "mehen",
+  "theme": "aspen",
+  "favicon": "favicon.svg",
+  "logo": {
+    "light": "logo/light.svg",
+    "dark": "logo/dark.svg"
+  },
+  "colors": {
+    "primary": "#0F8A5F",
+    "light": "#E6F8EF",
+    "dark": "#0A4A33"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/ophidiarium/mehen"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/ophidiarium/mehen"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart",
+              "supported-languages"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/spaces",
+              "concepts/output-formats",
+              "concepts/thresholds-and-diffs"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/overview",
+              "commands/metrics",
+              "commands/diff",
+              "commands/top-offenders"
+            ]
+          },
+          {
+            "group": "GitHub Action",
+            "pages": [
+              "guides/github-action",
+              "guides/pr-comment-design"
+            ]
+          },
+          {
+            "group": "Developers",
+            "pages": [
+              "developers/overview",
+              "developers/new-language",
+              "developers/loc",
+              "developers/update-grammars"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Code metrics",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "metrics/code/overview"
+            ]
+          },
+          {
+            "group": "Size",
+            "pages": [
+              "metrics/code/loc",
+              "metrics/code/sloc",
+              "metrics/code/ploc",
+              "metrics/code/lloc",
+              "metrics/code/cloc",
+              "metrics/code/blank"
+            ]
+          },
+          {
+            "group": "Complexity",
+            "pages": [
+              "metrics/code/cyclomatic",
+              "metrics/code/cognitive",
+              "metrics/code/wmc",
+              "metrics/code/halstead",
+              "metrics/code/mi",
+              "metrics/code/abc"
+            ]
+          },
+          {
+            "group": "Function & class shape",
+            "pages": [
+              "metrics/code/nargs",
+              "metrics/code/nexits",
+              "metrics/code/nom",
+              "metrics/code/npa",
+              "metrics/code/npm"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Markdown metrics",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "metrics/markdown/overview"
+            ]
+          },
+          {
+            "group": "Structural",
+            "pages": [
+              "metrics/markdown/loc-family",
+              "metrics/markdown/section-tree",
+              "metrics/markdown/effective-content-units",
+              "metrics/markdown/mrpc",
+              "metrics/markdown/mcc",
+              "metrics/markdown/halstead",
+              "metrics/markdown/dmi",
+              "metrics/markdown/link-debt",
+              "metrics/markdown/table-burden",
+              "metrics/markdown/visual-scaffold",
+              "metrics/markdown/artifact-debt",
+              "metrics/markdown/repository-grounding",
+              "metrics/markdown/evidence-coverage",
+              "metrics/markdown/filler-lazy-risk",
+              "metrics/markdown/review-criticality-index",
+              "metrics/markdown/section-balance",
+              "metrics/markdown/good-scaffold"
+            ]
+          },
+          {
+            "group": "Prose layer",
+            "pages": [
+              "metrics/markdown/prose/overview",
+              "metrics/markdown/prose/language-detection",
+              "metrics/markdown/prose/english-readability",
+              "metrics/markdown/prose/lexical-diversity",
+              "metrics/markdown/prose/wording-quality",
+              "metrics/markdown/prose/inclusive-language",
+              "metrics/markdown/prose/japanese-script-composition",
+              "metrics/markdown/prose/tateishi-and-jouyou",
+              "metrics/markdown/prose/jtf-rules",
+              "metrics/markdown/prose/textlint-ja"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SQL metrics (preview)",
+        "groups": [
+          {
+            "group": "Preview",
+            "pages": [
+              "metrics/sql/overview",
+              "metrics/sql/roadmap"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

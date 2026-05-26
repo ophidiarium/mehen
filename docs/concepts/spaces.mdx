@@ -1,0 +1,51 @@
+---
+title: "Spaces"
+description: "How mehen models functions, methods, classes, traits, and modules as nested containers."
+keywords: ["spaces", "containers", "nesting", "metric aggregation"]
+---
+
+A **space** is mehen's language-aware container for a function, method, class, trait, interface, module,
+or file. Spaces nest: a method lives inside a class which lives inside a file. Most metrics are reported
+per space, and aggregates roll up to the parent.
+
+## Why a single abstraction
+
+Different languages call their containers different things — a Python `class` is not literally a Java
+`class` is not a Rust `impl`. But for metric purposes they all play the same structural role:
+
+- They contain functions/methods.
+- They define a scope for visibility (public / private).
+- They are addressable in tools and reports.
+
+mehen's `Space` abstraction unifies them so the engine, metric finalizers, and reporters can speak one
+vocabulary across languages.
+
+## Space kinds
+
+| Kind | Examples |
+|---|---|
+| `File` | Always the root space. |
+| `Function` | Top-level functions, methods. |
+| `Closure` | Lambdas / closures / arrow functions. |
+| `Class` | `class`, `record`, `data class`. |
+| `Interface` | `interface`, `trait`, `protocol`. |
+| `Trait` | Rust traits, Kotlin traits where distinct. |
+| `Impl` | Rust `impl` blocks. |
+| `Module` | Files / Rust `mod` / Python `class`-as-namespace where applicable. |
+
+## Aggregation
+
+Every metric is computed at the leaf space (where it makes sense — a function for cyclomatic, a class for
+NPM, etc.) and then aggregated up to the file:
+
+- **Sum** for additive metrics (`cyclomatic.sum`, `nom.functions`).
+- **Average** for ratios (`cyclomatic.average`, `nom.average_functions`).
+- **Min / max** for distribution endpoints (`cyclomatic.min`, `cyclomatic.max`).
+
+Aggregation rules live in `mehen-metrics`. Per-language analyzers decide which kind each tree node
+becomes.
+
+## See also
+
+- [Concepts → Architecture](/concepts/architecture) — where spaces sit in the pipeline.
+- [Code metrics overview](/metrics/code/overview) — which metric is reported at which space kind.

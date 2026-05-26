@@ -1,0 +1,63 @@
+---
+title: "Review Criticality Index"
+description: "Should I review this document carefully? Combines per-word density with delta and changed-anchor terms."
+keywords: ["rci", "review criticality", "documentation review", "diff"]
+---
+
+**RCI** answers "Should I review this document carefully?". A small document can be review-critical if
+it is dense with technical anchors. RCI combines a per-word **DensityScore** with a delta term and a
+changed-links/artifacts term.
+
+## Formula
+
+```text
+DensityScore = mehen-internal blend of:
+    MCC per word
+  + MDH volume per word
+  + RepositoryGroundingScore
+  + EvidenceCoverageScore
+  + LinkReviewBurden per word
+  + embedded code complexity per word
+
+RCI = clamp01(
+    0.65 · DensityScore
+  + 0.20 · sat(abs(metric_delta_percent); 10, 60)
+  + 0.15 · sat(changed_links_or_artifacts; 2, 20)
+) · 100
+```
+
+## Bands
+
+| RCI | Meaning |
+|---|---|
+| 0–25 | Low — skim is fine. |
+| 26–50 | Normal review. |
+| 51–75 | Careful review recommended. |
+| 76–100 | High-risk change. |
+
+## DMI × RCI × Filler matrix
+
+| DMI | RCI | Filler Risk | Meaning |
+|---|---|---|---|
+| High | Low | Low | Long but easy and probably healthy. |
+| High | Low | High | Easy to maintain but likely low-value filler. |
+| Low | High | Low | Dense valuable doc; review carefully. |
+| Low | High | High | Dangerous: hard to maintain *and* weakly grounded. |
+
+This matrix is the canonical way to summarize a Markdown file in CI.
+
+## References
+
+- Bacchelli, A. & Bird, C. (2013). *Expectations, outcomes, and challenges of modern code review.*
+  ICSE 2013 — empirical basis for prioritizing review attention by per-change density.
+  [DOI](https://doi.org/10.1109/ICSE.2013.6606617) ·
+  [Author copy](https://www.microsoft.com/en-us/research/publication/expectations-outcomes-and-challenges-of-modern-code-review/).
+- Rigby, P. C. & Bird, C. (2013). *Convergent contemporary software peer review practices.*
+  ESEC/FSE 2013 — supports the "review what changed" prioritization that RCI encodes.
+  [DOI](https://doi.org/10.1145/2491411.2491444).
+
+## See also
+
+- [DMI](/metrics/markdown/dmi) — orthogonal "is it maintainable?" axis.
+- [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) — orthogonal "is it filler?" axis.
+- [PR comment design](/guides/pr-comment-design) — RCI in the drill-down section.

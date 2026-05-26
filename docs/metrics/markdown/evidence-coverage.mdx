@@ -1,0 +1,59 @@
+---
+title: "Evidence Coverage"
+description: "Per-section structural support density across links, code, tables, and diagrams."
+keywords: ["evidence coverage", "documentation", "anchors", "support"]
+---
+
+**Evidence Coverage** measures structural support for each section. Where
+[Repository Grounding](/metrics/markdown/repository-grounding) is a document-level signal, Evidence
+Coverage is per-section, so one well-linked section cannot hide many unsupported ones.
+
+## Formula
+
+```text
+anchor_density_s   = evidence_anchors_s / max(1, W_s / 250)
+section_evidence_s = sat(anchor_density_s; 0.2, 1.5)
+
+EvidenceCoverageScore =
+    0.5 · mean(section_evidence_s)
+  + 0.5 · p25(section_evidence_s)
+```
+
+## What is an "evidence anchor"
+
+For each section, mehen counts:
+
+- Resolved internal anchors.
+- Resolved relative repository links.
+- Code fences with explicit language tags.
+- Diagram blocks (Mermaid, GraphViz, etc.).
+- Table headers.
+- Footnote references.
+
+These are normalized against the section's word count (per 250-word window).
+
+## Why the 25th-percentile term matters
+
+The mean alone hides skew: one section with 10 anchors and four sections with 0 anchors averages 2,
+which looks fine. The 25th-percentile term ensures the score reflects the **worst supported** sections.
+
+## How downstream metrics use it
+
+Evidence Coverage feeds [DMI](/metrics/markdown/dmi) indirectly via Filler / Lazy Risk and is reported
+in the [PR comment](/guides/pr-comment-design) drill-down.
+
+## References
+
+- Daugherty, S. R. & Krueger, K. R. (1991). *The 90-10 rule of unequal coverage and its
+  ramifications for measurement.* Psychological Reports 68(3) — motivation for percentile-based
+  reporting (the 25th-percentile term that prevents one well-anchored section from hiding many
+  unsupported ones).
+  [DOI](https://doi.org/10.2466/pr0.1991.68.3.939).
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  source for the "evidence anchor" concept (each link, code block, or table is a foraging cue).
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+
+## See also
+
+- [Repository Grounding](/metrics/markdown/repository-grounding) — document-level analogue.
+- [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) — uses unanchored prose mass as an input.

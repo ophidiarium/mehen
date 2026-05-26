@@ -1,0 +1,60 @@
+---
+title: "Wording quality"
+description: "Style and register: passive voice, hedges, weasels, wordy phrases, adverbs, nominalizations, expletives, illusions, cliches, long sentences."
+keywords: ["wording quality", "passive voice", "hedge words", "style", "writing quality"]
+---
+
+Wording quality is style and register. Where [readability formulas](/metrics/markdown/prose/english-readability)
+score difficulty, wording quality flags writing patterns that consistently hurt clarity.
+
+## What mehen emits
+
+| Sub-metric | Default threshold |
+|---|---|
+| **Passive voice** ([write-good](https://github.com/btford/write-good) / retext-passive pattern) | Doc-type ratio from the [readability ensemble](/metrics/markdown/prose/english-readability). |
+| **Hedge words** (Hyland 2005; ~165 entries) | Flag > 3 % in non-narrative docs. |
+| **Weasel words** (write-good) | Count-based. |
+| **Wordy phrases** (~240 entries from too-wordy / retext-simplify) | Per-match count / 100 words. |
+| **Adverb density** (`-ly` endings minus exceptions) | Hemingway budget ≤ 1 per 100 words. |
+| **Nominalizations** (`-tion`, `-sion`, `-ment`, `-ence`, `-ance`, `-ity`, `-ness`, `-ism`) | Flag paragraph > 10 % of content words. |
+| **Expletive constructions** (`^(there\|it)\s+(is\|are\|was\|were)`) | Per 100 sentences. |
+| **Lexical illusions** (`lower(t[i-1]) == lower(t[i])`) | Zero-tolerance defect. |
+| **Clichés** (~700 entries) | Per 1,000 words. |
+| **Non-words** (`irregardless → regardless`, `thusly → thus`, …) | Error-level flag. |
+| **Long sentences** | Warning > 30 words, error > 40. |
+
+## Wording Quality Score
+
+```text
+WordingQualityScore = clamp01(
+    1
+  − 0.18 · sat(passive_ratio;          0.25, 0.60)
+  − 0.15 · sat(hedge_density;          0.02, 0.08)
+  − 0.12 · sat(weasel_density;         0.01, 0.05)
+  − 0.12 · sat(wordy_density;          0.01, 0.05)
+  − 0.10 · sat(adverb_density;         0.02, 0.06)
+  − 0.08 · sat(nominalization_density; 0.08, 0.20)
+  − 0.08 · sat(long_sentence_rate;     0.05, 0.30)
+  − 0.07 · sat(cliche_density;         0.002, 0.02)
+  − 0.05 · (lexical_illusions > 0 ? 1 : 0)
+  − 0.05 · (nonword_count     > 0 ? 1 : 0)
+)
+```
+
+WQS is deliberately orthogonal to [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk):
+Filler covers repetition and specificity, WQS covers style and register.
+
+## References
+
+- Hyland, K. (2005). *Metadiscourse: Exploring Interaction in Writing.* Continuum.
+- Williams, J. M. (1981). *Style: Lessons in Clarity and Grace.* University of Chicago Press.
+- [write-good rules](https://github.com/btford/write-good).
+- [proselint](https://github.com/amperser/proselint).
+- [retext-passive](https://github.com/retextjs/retext-passive).
+- [Hemingway editor](https://hemingwayapp.com).
+
+## See also
+
+- [English readability ensemble](/metrics/markdown/prose/english-readability) — orthogonal difficulty
+  axis.
+- [Inclusive language](/metrics/markdown/prose/inclusive-language) — separate flag list.

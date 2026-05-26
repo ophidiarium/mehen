@@ -1,0 +1,68 @@
+---
+title: "MCC — Markdown Cognitive Complexity"
+description: "Local reading burden caused by flow breaks, nesting, context switches, and dense artifact clusters."
+keywords: ["mcc", "markdown cognitive", "readability", "documentation complexity"]
+---
+
+**MCC** estimates local reading burden caused by flow breaks, nesting, context switches, and dense
+artifact clusters. It is the documentation analogue of
+[cognitive complexity](/metrics/code/cognitive) for source code.
+
+## Base weights
+
+Each construct contributes a base weight, ranging from `0.20` for a normal heading-level increment up to
+`+4.00` for a verified broken external link.
+
+## Formula
+
+The MCC formula has three multiplicative layers:
+
+```text
+MCC_positive = Σ base_weight(c) · nesting_multiplier(c) · clustering_multiplier(c)
+
+MCC = max(0, MCC_positive − min(Σ scaffold_credit(a), MCC_credit_cap))
+```
+
+### Nesting multiplier
+
+```text
+nesting_multiplier = 1 + 0.18 · nest(n)
+```
+
+Smaller than code-oriented nesting penalties because Markdown nesting is cheaper than control-flow
+nesting.
+
+### Artifact clustering multiplier
+
+Dense clusters of artifacts in a 20-rendered-line window increase local switching cost.
+
+### Scaffolding credit
+
+Well-labelled, bounded, locally explained artifacts earn credit capped at `0.25 · MCC_positive`. Credit
+applies only when label, nearby explanation, and bounded size are all present.
+
+## Interpretation
+
+| MCC | Meaning |
+|---|---|
+| 0–10 | Easy to read. |
+| 11–25 | Normal. |
+| 26–50 | Dense. |
+| > 100 | Documentation subsystem rather than one page. |
+
+## References
+
+- Campbell, G. A. (2018). *Cognitive Complexity — A new way of measuring understandability.*
+  SonarSource white paper — the design ancestor.
+  [PDF](https://www.sonarsource.com/resources/cognitive-complexity/).
+- Sweller, J. (1988). *Cognitive load during problem solving: Effects on learning.* Cognitive
+  Science 12(2): 257–285 — basis for the nesting and clustering multipliers.
+  [DOI](https://doi.org/10.1207/s15516709cog1202_4).
+- Mayer, R. E. (2009). *Multimedia Learning*, 2nd ed. Cambridge University Press —
+  split-attention and contiguity principles behind the artifact-clustering penalty.
+
+## See also
+
+- [Cognitive complexity](/metrics/code/cognitive) — the source-code analogue.
+- [MRPC](/metrics/markdown/mrpc) — global reading-path complexity.
+- [Visual Scaffold](/metrics/markdown/visual-scaffold) — artifact scaffolding credit driver.

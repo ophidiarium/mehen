@@ -1,0 +1,31 @@
+---
+title: "Inclusive Language Score"
+description: "alex / retext-equality flags for gendered defaults, ableist idioms, exclusionary tech terms, and condescending phrasing."
+keywords: ["inclusive language", "alex", "retext-equality", "writing quality"]
+---
+
+mehen runs an `alex`-style / `retext-equality`-style check against a bundled dictionary covering:
+
+## Categories
+
+- **Gendered defaults** — `mankind → humanity`, `fireman → firefighter`, `manhole → maintenance-hole`.
+- **Ableist idioms** — `crazy`, `insane`, `lame`, `dumb`, `blind to`, `tone deaf`.
+- **Exclusionary tech terms** — `master/slave → primary/replica`,
+  `whitelist/blacklist → allowlist/denylist`, `grandfather clause → legacy exception`,
+  `sanity check → spot check`.
+- **Condescending** — `obviously`, `just`, `simply`, `easy`, `of course`.
+
+## Output
+
+Per-document `InclusiveLanguageScore` plus a list of flags with source spans. Any new
+inclusive-language flag is a 🔴 regression in the [PR comment](/guides/pr-comment-design).
+
+## References
+
+- [alex](https://github.com/get-alex/alex).
+- [retext-equality](https://github.com/retextjs/retext-equality).
+- [Inclusive Naming Initiative](https://inclusivenaming.org/).
+
+## See also
+
+- [Wording quality](/metrics/markdown/prose/wording-quality) — orthogonal style flags.

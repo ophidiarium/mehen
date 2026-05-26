@@ -1,0 +1,54 @@
+---
+title: "Code metrics overview"
+description: "What mehen reports for source code: size, complexity, and function/class shape."
+keywords: ["code metrics", "complexity", "halstead", "loc", "maintainability"]
+---
+
+mehen reports three families of source-code metrics, all computed from the language analyzer's parse
+tree. Every metric is described on its own page with the canonical formula, what mehen emits, and links
+to authoritative references.
+
+## Size
+
+| Metric | Key | Description |
+|---|---|---|
+| [SLOC](/metrics/code/sloc) | `loc.sloc` | Total physical lines, including blanks and comments. |
+| [PLOC](/metrics/code/ploc) | `loc.ploc` | Physical instruction lines (no blanks/comments). |
+| [LLOC](/metrics/code/lloc) | `loc.lloc` | Logical lines — statements as defined per language. |
+| [CLOC](/metrics/code/cloc) | `loc.cloc` | Comment lines (line + block + doc comments). |
+| [Blank](/metrics/code/blank) | `loc.blank` | Whitespace-only lines. |
+
+The umbrella is described on the [LOC family](/metrics/code/loc) page.
+
+## Complexity
+
+| Metric | Key | Description |
+|---|---|---|
+| [Cyclomatic complexity](/metrics/code/cyclomatic) | `cyclomatic` | McCabe's count of linearly independent paths. |
+| [Cognitive complexity](/metrics/code/cognitive) | `cognitive` | Sonar's "how hard to understand" complexity. |
+| [Weighted Methods per Class](/metrics/code/wmc) | `wmc` | Sum of cyclomatic complexity across class methods. |
+| [Halstead suite](/metrics/code/halstead) | `halstead.*` | Volume, difficulty, effort, bugs, time. |
+| [Maintainability Index](/metrics/code/mi) | `mi.*` | Original, Visual Studio, and SEI variants. |
+| [ABC](/metrics/code/abc) | `abc.*` | Assignments, branches, conditions, magnitude. |
+
+## Function and class shape
+
+| Metric | Key | Description |
+|---|---|---|
+| [NOM](/metrics/code/nom) | `nom` | Number of methods (functions + closures). |
+| [NARGS](/metrics/code/nargs) | `nargs` | Argument count per function/method. |
+| [NEXITS](/metrics/code/nexits) | `nexit` | Exit-point count per function/method. |
+| [NPA](/metrics/code/npa) | `npa` | Number of public attributes (classes/interfaces). |
+| [NPM](/metrics/code/npm) | `npm` | Number of public methods (classes/interfaces). |
+
+## Spaces
+
+Every metric is also reported per **space** — the language-aware container for a function, method, class,
+trait, or module. See [Concepts → Spaces](/concepts/spaces) for how containers nest and how metric
+aggregation rolls up to the file.
+
+## Markdown is separate
+
+Markdown documentation gets its own metric family — DMI, MRPC, MCC, link debt, filler/lazy risk, etc. —
+because functions, classes, and statements do not exist in prose. See
+[Markdown metrics](/metrics/markdown/overview).

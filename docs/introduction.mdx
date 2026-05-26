@@ -1,0 +1,126 @@
+---
+title: "Introduction"
+description: "mehen is a Rust-powered CLI for heuristic source code metrics — complexity, maintainability, lines of code, documentation health — at scale."
+keywords: ["mehen", "code metrics", "complexity", "maintainability", "halstead", "documentation metrics", "markdown"]
+---
+
+**mehen** is a fast, deterministic command-line tool that measures source code and Markdown documentation
+across a repository. It tracks complexity, maintainability, size, and documentation health, and is
+purpose-built for CI runs, pre-PR hooks, and pull request automation.
+
+```bash
+mehen metrics src/main.py --pretty
+mehen top-offenders src --metric cognitive
+mehen diff --from main --to HEAD --paths src --output-format markdown
+```
+
+<Columns cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install via npm, PyPI, or `cargo binstall` from a single GitHub Release.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Analyze a file, rank a tree, and diff a PR in under a minute.
+  </Card>
+  <Card title="GitHub Action" icon="github" href="/guides/github-action">
+    Drop the action into a workflow to publish per-PR metric trends.
+  </Card>
+  <Card title="Code metrics" icon="ruler" href="/metrics/code/overview">
+    Cyclomatic, cognitive, Halstead, MI, ABC, LOC family, NOM/NPA/NPM/WMC.
+  </Card>
+  <Card title="Markdown metrics" icon="book-open" href="/metrics/markdown/overview">
+    DMI, MRPC, MCC, Halstead-md, link debt, filler/lazy risk, prose layer.
+  </Card>
+  <Card title="SQL metrics (preview)" icon="database" href="/metrics/sql/overview">
+    Roadmap for the upcoming `mehen-sql` analyzer.
+  </Card>
+</Columns>
+
+## What is Mehen?
+
+**Mehen** is a mythical ancient Egyptian serpent associated with guarding Ra. In the same spirit, the
+`mehen` CLI helps guard your codebase and documentation from collapsing under hidden complexity.
+
+## Why teams use mehen
+
+<Columns cols={2}>
+  <Card title="Polyglot by design" icon="layer-group">
+    Per-file language detection across nine source languages plus Markdown — built for monorepos.
+  </Card>
+  <Card title="Real parsers, not regex" icon="microchip">
+    Each language uses the best available parser: Ruff for Python, Oxc for TS/JS/JSX/TSX, Mago for
+    PHP, Prism for Ruby, ra_ap_syntax for Rust, pulldown-cmark for Markdown, tree-sitter for Go, C,
+    Kotlin, PowerShell.
+  </Card>
+  <Card title="Deterministic, no network" icon="lock">
+    Pure static analysis. Same input → same output. Safe for air-gapped CI.
+  </Card>
+  <Card title="Code and documentation" icon="files">
+    A single tool covers source-code complexity *and* Markdown documentation health.
+  </Card>
+  <Card title="Pull-request native" icon="git-pull-request">
+    Built-in `mehen diff` plus a sticky comment GitHub Action — no glue code required.
+  </Card>
+  <Card title="Many output formats" icon="file-export">
+    Console, JSON, YAML, TOML, GitHub-flavored Markdown.
+  </Card>
+</Columns>
+
+## What mehen computes
+
+For source code:
+
+- **[Cyclomatic complexity](/metrics/code/cyclomatic)** and **[Cognitive complexity](/metrics/code/cognitive)**
+- **[Halstead metrics](/metrics/code/halstead)** (volume, difficulty, effort, estimated bugs)
+- **[Maintainability Index](/metrics/code/mi)** (Original, Visual Studio, SEI variants)
+- **[ABC](/metrics/code/abc)** (Assignments / Branches / Conditions)
+- **[NOM](/metrics/code/nom)**, **[NARGS](/metrics/code/nargs)**, **[NEXITS](/metrics/code/nexits)**, **[NPA](/metrics/code/npa)**, **[NPM](/metrics/code/npm)**, **[WMC](/metrics/code/wmc)**
+- **[LOC family](/metrics/code/loc)** — SLOC, PLOC, LLOC, CLOC, blanks
+
+For Markdown documentation:
+
+- **[Documentation Maintainability Index (DMI)](/metrics/markdown/dmi)**
+- **[Markdown Reading Path Complexity (MRPC)](/metrics/markdown/mrpc)**
+- **[Markdown Cognitive Complexity (MCC)](/metrics/markdown/mcc)**
+- **[Markdown Halstead](/metrics/markdown/halstead)**
+- **[Link Debt](/metrics/markdown/link-debt)**, **[Table Burden](/metrics/markdown/table-burden)**,
+  **[Visual Scaffold](/metrics/markdown/visual-scaffold)**, **[Artifact Debt](/metrics/markdown/artifact-debt)**
+- **[Repository Grounding](/metrics/markdown/repository-grounding)**, **[Evidence Coverage](/metrics/markdown/evidence-coverage)**
+- **[Filler / Lazy Structure Risk](/metrics/markdown/filler-lazy-risk)**, **[Review Criticality Index](/metrics/markdown/review-criticality-index)**
+- An opt-in [English readability ensemble](/metrics/markdown/prose/english-readability) and
+  [Japanese script composition](/metrics/markdown/prose/japanese-script-composition) prose layer.
+
+## Get started
+
+<Steps>
+  <Step title="Install mehen">
+    Pick the path that matches your toolchain:
+
+    <Tabs>
+      <Tab title="npm">
+        ```bash
+        npm install -g mehen
+        ```
+      </Tab>
+      <Tab title="PyPI">
+        ```bash
+        uv tool install mehen
+        # or: pip install mehen
+        ```
+      </Tab>
+      <Tab title="cargo binstall">
+        ```bash
+        cargo binstall --git https://github.com/ophidiarium/mehen mehen
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Analyze a file">
+    ```bash
+    mehen metrics src/main.py --pretty
+    ```
+  </Step>
+  <Step title="Add the GitHub Action">
+    Publish per-PR metric trends with a few lines of YAML.
+    See the [GitHub Action guide](/guides/github-action).
+  </Step>
+</Steps>

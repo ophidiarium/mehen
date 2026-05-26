@@ -1,0 +1,75 @@
+---
+title: "Markdown LOC family"
+description: "Lines of Markdown by construct: physical, prose, code, tables, math, blanks, and artifacts."
+keywords: ["markdown loc", "documentation size", "ploc", "tloc", "mloc"]
+---
+
+The Markdown LOC family separates physical lines by what they contain. A 1,000-line file with 700 lines
+of code fences is not the same artifact as a 1,000-line prose file, and a single SLOC count would hide
+that.
+
+## What mehen emits
+
+| Key | Meaning |
+|---|---|
+| `MD.DLOC` | Physical Markdown lines (everything). |
+| `MD.PLOC` | Prose lines (narrative paragraphs, headings, list text). |
+| `MD.CLOC` | Code-fence and indented-code lines. |
+| `MD.TLOC` | Table lines. |
+| `MD.MLOC` | Math block lines. |
+| `MD.BLOC` | Blank lines. |
+| `MD.ALOC` | Artifact lines = `CLOC + TLOC + MLOC` + diagram / raw HTML / MDX lines. |
+
+## Derived ratios
+
+Each component / `max(1, DLOC)` produces a ratio:
+
+- `ArtifactLineRatio`
+- `CodeLineRatio`
+- `TableLineRatio`
+- `MathLineRatio`
+- `BlankLineRatio`
+
+These ratios drive document classification (prose-dominant vs. artifact-dominant) and anomaly detection.
+
+## Worked example
+
+````markdown
+# Auth API
+
+Brief intro paragraph.
+
+```ts
+export async function login(): Promise<Session> { /* … */ }
+```
+
+| Field | Required |
+|---|---|
+| `email` | yes |
+````
+
+```yaml
+loc:
+  dloc: 11
+  ploc: 4
+  cloc: 3
+  tloc: 3
+  mloc: 0
+  bloc: 2
+  aloc: 6
+```
+
+## References
+
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20 — the standard reference for LOC categorization that this Markdown family
+  extends to prose / code / table / math / blank lines.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/).
+- CommonMark Spec: [Container blocks and leaf blocks](https://spec.commonmark.org/0.30/) — the
+  parser-level distinctions the per-construct counts rely on.
+
+## See also
+
+- [Effective Content Units](/metrics/markdown/effective-content-units) — review-mass normalization that
+  uses these counts.
+- [Section tree](/metrics/markdown/section-tree) — per-section LOC aggregation.

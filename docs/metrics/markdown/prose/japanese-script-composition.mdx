@@ -1,0 +1,80 @@
+---
+title: "Japanese script composition"
+description: "Tier 0 Japanese register signal: kanji, hiragana, katakana, latin, and digit ratios."
+keywords: ["japanese", "script composition", "kanji ratio", "tateishi"]
+---
+
+Japanese is unusual among major languages: script composition alone carries enough information to
+produce defensible readability scores without a tokenizer. This is the foundational insight of
+Tateishi, Ono & Yamada (1988) and remains the basis for mehen's Tier-0 Japanese layer.
+
+## Unicode script classification
+
+Each grapheme cluster classifies into:
+
+- Hiragana
+- Katakana
+- Kanji (Han + Extensions A/B + Compatibility)
+- CJK punctuation
+- Latin (+ Fullwidth)
+- Digit
+
+## Primary ratios
+
+`kanji_ratio`, `hiragana_ratio`, `katakana_ratio`, `latin_ratio`, `digit_ratio`, `script_entropy`
+(Shannon entropy over the five classes).
+
+## Register bands
+
+| Kanji ratio | Register |
+|---|---|
+| < 20 % | Children's writing, conversation. |
+| 20–30 % | Casual prose, novels, user-facing content. |
+| 30–40 % | Newspaper, business writing, non-fiction. |
+| 40–50 % | Technical, legal, academic. |
+| > 50 % | Classical / literary, specialist text. |
+
+Katakana > 15 % typically signals software documentation (loanwords like `データベース`) or marketing
+copy. Hiragana > 75 % indicates text aimed at small children or machine-translated output.
+
+## Script-run features
+
+A "run" is a maximal substring of same-script characters. Per document:
+
+- Mean chars per alphabet run (`la`).
+- Mean chars per hiragana run (`lh`).
+- Mean chars per kanji run (`lc`).
+- Mean chars per katakana run (`lk`).
+- Percentages of each run type (`pa`, `ph`, `pc`, `pk`).
+- Mean chars per sentence (`ls`).
+- `、` per `。` (`cp`).
+
+These are the exact inputs the Tateishi formula needs.
+
+## Sentence segmentation
+
+Primary terminators `。`, `！`, `？` plus half-width equivalents. Do not split inside `「…」`, `『…』`,
+`（…）`. Treat blank-line paragraph boundaries and Markdown block boundaries as hard terminators.
+Ellipsis `…` / `‥` / `...` is not a terminator.
+
+## Sentence-length thresholds
+
+- Warning: > 60 chars.
+- Hard-to-read: > 90.
+- Error: > 120.
+- Mean sentence length > 60 triggers a document-level warning.
+
+## References
+
+- Tateishi, K., Ono, Y. & Yamada, H. (1988). *A Computer Readability Formula of Japanese Texts for
+  Machine Scoring.* Proceedings of COLING-1988: 649–654.
+  [ACL Anthology](https://aclanthology.org/C88-2132/).
+- Lee, J. & Hasebe, Y. (2017). *jReadability — a web-based Japanese text-readability indexing
+  system.* (Foundation for register-based Japanese readability work.)
+  [jReadability](https://jreadability.net/sys/en).
+
+## See also
+
+- [Tateishi RS + Jōyō grade](/metrics/markdown/prose/tateishi-and-jouyou) — readability scores built on
+  these inputs.
+- [JTF rules](/metrics/markdown/prose/jtf-rules) — Japan Translation Federation conformance.
