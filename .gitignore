@@ -7,4 +7,5 @@ __pycache__/
 dist/
 .mypy_cache/
 .claude/worktrees/
-.claude/setting.local.json
+.claude/setting.local.json.DS_Store
+.DS_Store
