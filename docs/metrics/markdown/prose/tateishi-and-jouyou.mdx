@@ -7,7 +7,7 @@ keywords: ["tateishi", "japanese readability", "jouyou grade", "rs"]
 mehen's Tier-0 Japanese readability score is the **Tateishi simplified RS** (Tateishi, Ono & Yamada
 1988). It needs only sentence boundaries and script-run features — both computable without a tokenizer.
 
-## Tateishi RS (§35.1)
+## Tateishi RS
 
 Simplified 6-variable form:
 
@@ -21,7 +21,7 @@ guards:
 - Refuse when `hiragana_ratio > 0.90` (the formula is gamed upward).
 - Refuse when character count < 300.
 
-## Jōyō grade proxy (§35.2)
+## Jōyō grade proxy
 
 The 2,136-character 2010 Jōyō list maps each character to a grade 1–8 (1–6 elementary, 7 = secondary
 Jōyō, 8 = non-Jōyō `hyōgai`). Ships as a ~6 KB static table behind `--features japanese-jouyou`:
@@ -39,22 +39,26 @@ reading; > 6 indicates high-school+ technical prose.
 Behind `--features japanese-morph` (Lindera + IPADIC) or `--features japanese-unidic` (Vibrato +
 UniDic):
 
-- **Shibasaki & Hara (§35.4)** — adds bunsetsu and morphological inputs.
-- **Lee & Hasebe jReadability (§35.5)** — modern web-corpus-trained formula.
-- **Obi / Obi2 (§35.6)** — Japanese textbook-grade analogue.
-- **Mizuno / Goda (§35.7)** — alternative readability work.
+- **Shibasaki & Hara** — adds bunsetsu and morphological inputs.
+- **Lee & Hasebe jReadability** — modern web-corpus-trained formula.
+- **Obi / Obi2** — Japanese textbook-grade analogue.
+- **Mizuno / Goda** — alternative readability work.
 
-JLPT bands (§35.3) — N5–N1 word and kanji bands — are optional behind `--features japanese-jlpt`
+JLPT bands — N5–N1 word and kanji bands — are optional behind `--features japanese-jlpt`
 (~300 KB).
 
 ## References
 
-- Tateishi, K., Ono, Y., & Yamada, H. (1988). *A Computer Readability Formula of Japanese Texts for
-  Machine Scoring.*
-- 文化審議会 (2010). *常用漢字表.* (Jōyō kanji list, 2010 revision.)
-- Lee, J. & Hasebe, Y. (2017). *jReadability: Web-based Japanese Text Readability Indexing System.*
-- Wikipedia: [Jōyō kanji](https://en.wikipedia.org/wiki/Jōyō_kanji).
-- Research foundation §35 — derivations and threshold rationale.
+- Tateishi, K., Ono, Y. & Yamada, H. (1988). *A Computer Readability Formula of Japanese Texts for
+  Machine Scoring.* Proceedings of COLING-1988: 649–654.
+  [ACL Anthology](https://aclanthology.org/C88-2132/).
+- 文化庁 (Agency for Cultural Affairs of Japan, 2010). *常用漢字表.* (Jōyō kanji list, 2010 revision.)
+  [Official notice (PDF)](https://www.bunka.go.jp/kokugo_nihongo/sisaku/joho/joho/kakuki/14/tosin02/index.html).
+- Lee, J. & Hasebe, Y. (2017). *jReadability — a web-based Japanese text-readability indexing system.*
+  [jReadability](https://jreadability.net/sys/en).
+- Sato, S., Matsuyoshi, S. & Kondoh, Y. (2008). *Automatic Assessment of Japanese Text Readability
+  Based on a Textbook Corpus.* Proceedings of LREC 2008.
+  [LREC PDF](https://aclanthology.org/L08-1064/).
 
 ## See also
 

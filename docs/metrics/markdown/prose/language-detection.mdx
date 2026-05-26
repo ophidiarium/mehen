@@ -7,7 +7,7 @@ keywords: ["language detection", "english", "japanese", "unicode block"]
 Language identification happens once per Markdown block so prose-metric dispatch can choose the correct
 locale pipeline.
 
-## Tier 0 default (§30.1)
+## Tier 0 default
 
 Zero-dependency Unicode-block heuristic. For the English/Japanese split, Unicode-block ratios outperform
 trigram language models on short inputs because Chinese has no hiragana/katakana:
@@ -24,7 +24,7 @@ elif latin / total >= 0.80:              language = en
 else:                                    language = other
 ```
 
-## Opt-in trigram classifiers (§30.2)
+## Opt-in trigram classifiers
 
 Behind Cargo features:
 
@@ -33,7 +33,7 @@ Behind Cargo features:
 | `whatlang` | [whatlang-rs](https://github.com/greyblake/whatlang-rs) | Pure Rust, 70 languages, MIT, reliable above ~120 characters. |
 | `lingua` | [lingua-rs](https://github.com/pemistahl/lingua-rs) | Highest accuracy in published benchmarks; restricted to `[English, Japanese]` for binary size. |
 
-## Tagging rules (§30.3)
+## Tagging rules
 
 - A block inherits its parent heading's language when its own signal is inconclusive.
 - Code fences, inline code, link targets, image targets, front matter, and HTML are tagged `none` and
@@ -48,9 +48,14 @@ decide which pipeline runs.
 
 ## References
 
-- [Whatlang](https://github.com/greyblake/whatlang-rs).
-- [Lingua](https://github.com/pemistahl/lingua-rs).
-- Research foundation §30 — language-detection derivation.
+- Cavnar, W. B. & Trenkle, J. M. (1994). *N-Gram-Based Text Categorization.* Proc. SDAIR-94 —
+  the trigram language-identification approach used by `whatlang` and `lingua`.
+  [PDF](https://www.let.rug.nl/~vannoord/TextCat/textcat.pdf).
+- Brown, R. D. (2013). *Selecting and weighting n-grams to identify 1100 languages.* Proc. TSD —
+  modern accuracy benchmarks for trigram LID.
+  [DOI](https://doi.org/10.1007/978-3-642-40585-3_61).
+- [Whatlang Rust crate](https://github.com/greyblake/whatlang-rs).
+- [Lingua Rust crate](https://github.com/pemistahl/lingua-rs).
 
 ## See also
 

@@ -8,7 +8,7 @@ keywords: ["link debt", "broken links", "documentation", "references"]
 because they are objective defects; external links are not bad by default but make a document fragile
 when over-represented.
 
-## Link classification (§11.1)
+## Link classification
 
 Every link in the AST is bucketed by destination:
 
@@ -21,7 +21,7 @@ Every link in the AST is bucketed by destination:
 - Image target.
 - Broken / unresolved.
 
-## Link Debt Score (§11.2)
+## Link Debt Score
 
 ```text
 broken_rate      = L_broken / max(1, L_total)
@@ -40,9 +40,9 @@ LinkDebtScore = clamp01(
 
 ## Companion scores
 
-- **Information Scent Score (§11.3)** rewards descriptive link text, resolved relative links, working
+- **Information Scent Score** rewards descriptive link text, resolved relative links, working
   anchors, and a reference section when the doc is citation-heavy.
-- **Link Review Burden (§11.4)** —
+- **Link Review Burden** —
   `0.3·L_int + 0.8·L_rel + 1.0·L_ext + 2.5·L_broken + 0.5·L_footnote` —
   is the cost-per-PR signal used in diff reporting.
 
@@ -58,8 +58,15 @@ LinkDebtScore = clamp01(
 
 ## References
 
-- Pirolli, P. (1997). *Information foraging.* Psychological Review — origin of "information scent".
-- Research foundation §11 — Link Debt and companion-score derivations.
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  origin of the "information scent" companion score.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+- Spool, J. M., Schroeder, W., Scanlon, T. & Snyder, C. (1998). *Web site usability: A designer's
+  guide.* Morgan Kaufmann — empirical evidence for descriptive link text and resolved-anchor
+  weighting.
+- Nielsen, J. (1996). *Top ten mistakes in web design.* Nielsen Norman Group — broken-link
+  prevalence as the dominant link-debt term.
+  [Article](https://www.nngroup.com/articles/top-10-mistakes-web-design/).
 
 ## See also
 

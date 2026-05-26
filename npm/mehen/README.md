@@ -24,6 +24,21 @@ Also available on [PyPI](https://pypi.org/project/mehen/):
 uvx mehen --help
 ```
 
+## Commands
+
+```bash
+# Analyze exactly one file
+mehen metrics <path>
+
+# Compare metrics between two git revisions (powers the GitHub Action)
+mehen diff --from <base> --to <head> --paths <path>...
+
+# Rank the worst-offending files in one or more trees
+mehen top-offenders <path>... --metric <metric>
+```
+
+Full quickstart: <https://mehen.ophi.dev/quickstart>.
+
 ## What mehen computes
 
 For source code: cyclomatic complexity, cognitive complexity, Halstead suite, Maintainability Index,
@@ -38,25 +53,9 @@ Full metric catalog with formulas and references: <https://mehen.ophi.dev/metric
 
 ## Supported languages
 
-Python, TypeScript / JavaScript (`.ts` / `.mts` / `.cts` / `.js` / `.mjs` / `.cjs`),
-TSX / JSX, Rust, Go, Ruby, Kotlin, PowerShell, C, and Markdown.
-
-## Quick start
-
-```bash
-# Compute metrics for a directory
-npx -y mehen -m -p src
-
-# Export as JSON
-npx -y mehen -m -p src -O json -o ./metrics
-
-# Diff metrics against main
-npx -y mehen diff --from main --to HEAD --paths src
-```
-
-Other supported output formats: YAML, TOML, CBOR.
-
-Full quickstart: <https://mehen.ophi.dev/quickstart>.
+Python (Ruff), TypeScript / JavaScript / JSX / TSX (Oxc), PHP (Mago), Ruby (Prism), Rust
+(`ra_ap_syntax`), Go (tree-sitter), C (tree-sitter), Kotlin (tree-sitter), PowerShell (tree-sitter),
+and Markdown (pulldown-cmark).
 
 ## CI integration
 

@@ -4,8 +4,8 @@ description: "Run your first mehen analysis, read the output, and wire mehen int
 keywords: ["mehen quickstart", "first run", "github action"]
 ---
 
-This guide walks through three things: running mehen locally, exporting metrics, and producing a per-PR
-metric report from CI.
+This guide covers three things: analyzing one file, scanning a repository for the worst offenders, and
+producing a per-PR metric report from CI.
 
 <Steps>
   <Step title="Install mehen">
@@ -15,41 +15,39 @@ metric report from CI.
     npm install -g mehen
     ```
   </Step>
-  <Step title="Run a metrics report">
-    Point mehen at any directory and pass `-m` to compute metrics:
+  <Step title="Analyze a single file">
+    `mehen metrics` is the one-file command. It auto-detects the language and emits a report in
+    JSON (default), Markdown, YAML, or TOML.
 
     ```bash
-    mehen -m -p src
+    mehen metrics src/main.py --pretty
     ```
 
-    mehen detects each file's language by extension, dispatches it to the matching analyzer, and prints a
-    table of metrics per file. Source-code files yield cyclomatic, cognitive, Halstead, MI, ABC, LOC family,
-    and class/function shape metrics; Markdown files yield the
+    Source-code files yield the [code metric family](/metrics/code/overview); Markdown files yield the
     [documentation suite](/metrics/markdown/overview).
   </Step>
-  <Step title="Export to JSON">
-    Most teams plug the report into other tooling. Use `-O` to choose a format and `-o` to write to a
-    directory:
+  <Step title="Find the worst offenders in a tree">
+    `mehen top-offenders` walks one or more paths and ranks the files by one or more metrics:
 
     ```bash
-    mehen -m -p src -O json -o ./metrics
+    mehen top-offenders src --metric cognitive --metric loc.lloc --max-results 20
     ```
 
-    Other formats: `yaml`, `toml`, `cbor`. See [Output formats](/concepts/output-formats).
+    Polarity is automatic — mehen knows that lower cognitive complexity is better. Override with `+`
+    or `-` prefixes when you want different ordering.
   </Step>
-  <Step title="Diff against a base revision">
-    `mehen diff` reports per-file metric deltas against a base ref. This is the workhorse behind the
-    GitHub Action:
+  <Step title="Diff metrics on a PR">
+    `mehen diff` compares two git revisions. This is the workhorse behind the
+    [GitHub Action](/guides/github-action):
 
     ```bash
     mehen diff --from main --to HEAD --paths src --output-format markdown
     ```
 
-    The same command renders a sticky GitHub comment when run from the
-    [GitHub Action](/guides/github-action).
+    The same command renders the sticky GitHub comment when run from the action.
   </Step>
   <Step title="Add the GitHub Action">
-    Drop these few lines into `.github/workflows/mehen.yml` to publish a metric trend on every PR:
+    Drop a few lines into `.github/workflows/mehen.yml` to publish a metric trend on every PR:
 
     ```yaml
     name: mehen
@@ -80,7 +78,7 @@ metric report from CI.
 
 <Columns cols={2}>
   <Card title="Pick a metric" icon="ruler" href="/metrics/code/overview">
-    Read what each metric means, with links to authoritative references.
+    Read what each metric means, with formulas and references.
   </Card>
   <Card title="Markdown analysis" icon="book-open" href="/metrics/markdown/overview">
     Documentation Maintainability Index, link debt, filler/lazy risk, prose layer.

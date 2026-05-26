@@ -5,15 +5,13 @@ keywords: ["mehen", "code metrics", "complexity", "maintainability", "halstead",
 ---
 
 **mehen** is a fast, deterministic command-line tool that measures source code and Markdown documentation
-across a repository. It tracks complexity, maintainability, size, and documentation health, and is built
-for CI runs, pre-PR hooks, and pull request automation.
+across a repository. It tracks complexity, maintainability, size, and documentation health, and is
+purpose-built for CI runs, pre-PR hooks, and pull request automation.
 
 ```bash
-# Compute metrics for a directory
-mehen -m -p src
-
-# Export as JSON
-mehen -m -p src -O json -o ./metrics
+mehen metrics src/main.py --pretty
+mehen top-offenders src --metric cognitive
+mehen diff --from main --to HEAD --paths src --output-format markdown
 ```
 
 <Columns cols={2}>
@@ -21,7 +19,7 @@ mehen -m -p src -O json -o ./metrics
     Install via npm, PyPI, or `cargo binstall` from a single GitHub Release.
   </Card>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Run your first analysis and read the output in under a minute.
+    Analyze a file, rank a tree, and diff a PR in under a minute.
   </Card>
   <Card title="GitHub Action" icon="github" href="/guides/github-action">
     Drop the action into a workflow to publish per-PR metric trends.
@@ -46,7 +44,12 @@ mehen -m -p src -O json -o ./metrics
 
 <Columns cols={2}>
   <Card title="Polyglot by design" icon="layer-group">
-    Per-file language detection across nine source languages plus Markdown — useful for monorepos.
+    Per-file language detection across nine source languages plus Markdown — built for monorepos.
+  </Card>
+  <Card title="Real parsers, not regex" icon="microchip">
+    Each language uses the best available parser: Ruff for Python, Oxc for TS/JS/JSX/TSX, Mago for
+    PHP, Prism for Ruby, ra_ap_syntax for Rust, pulldown-cmark for Markdown, tree-sitter for Go, C,
+    Kotlin, PowerShell.
   </Card>
   <Card title="Deterministic, no network" icon="lock">
     Pure static analysis. Same input → same output. Safe for air-gapped CI.
@@ -58,10 +61,7 @@ mehen -m -p src -O json -o ./metrics
     Built-in `mehen diff` plus a sticky comment GitHub Action — no glue code required.
   </Card>
   <Card title="Many output formats" icon="file-export">
-    Console, JSON, YAML, TOML, CBOR, GitHub-flavored Markdown.
-  </Card>
-  <Card title="Built on tree-sitter" icon="tree">
-    Same incremental parsers used by editors — fast, robust, syntax-aware.
+    Console, JSON, YAML, TOML, GitHub-flavored Markdown.
   </Card>
 </Columns>
 
@@ -114,11 +114,9 @@ For Markdown documentation:
       </Tab>
     </Tabs>
   </Step>
-  <Step title="Run your first analysis">
-    Compute metrics for any directory:
-
+  <Step title="Analyze a file">
     ```bash
-    mehen -m -p src
+    mehen metrics src/main.py --pretty
     ```
   </Step>
   <Step title="Add the GitHub Action">

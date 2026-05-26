@@ -17,7 +17,7 @@ and blanks.
 | `loc.lloc` | [LLOC](/metrics/code/lloc) | Logical lines — statements per the language's grammar. |
 | `loc.cloc` | [CLOC](/metrics/code/cloc) | Comment lines (line, block, and doc comments). |
 | `loc.blank` | [Blank](/metrics/code/blank) | Whitespace-only lines. |
-| `loc` | — | Alias for `loc.sloc`, retained for legacy compatibility. |
+| `loc` | — | Alias for `loc.sloc`. |
 
 ## Worked example
 
@@ -56,10 +56,14 @@ The LOC family separates concerns that "lines of code" conflates:
 
 ## References
 
-- Wikipedia: [Source lines of code](https://en.wikipedia.org/wiki/Source_lines_of_code).
-- NIST: [Lines of Code](https://www.nist.gov/itl/ssd/software-assurance-metrics-and-tool-evaluation-samate)
-  (background and pitfalls).
-- Sonar: [Metrics definitions — lines](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20, Software Engineering Institute, Carnegie Mellon.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/) —
+  the standard reference for what does and does not count as a "line".
+- Nguyen, V., Deeds-Rubin, S., Tan, T. & Boehm, B. (2007). *A SLOC Counting Standard.* USC Center for
+  Systems and Software Engineering Technical Report.
+  [USC PDF](https://csse.usc.edu/TECHRPTS/2007/usc-csse-2007-737/usc-csse-2007-737.pdf).
+- Sonar: [Lines of code in metric definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
 
 ## See also
 

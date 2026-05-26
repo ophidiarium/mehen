@@ -9,7 +9,7 @@ instead of code operators. It uses the same shape as
 [source-code Halstead](/metrics/code/halstead) but with a documentation-specific operator/operand
 taxonomy.
 
-## Operators (§9.1)
+## Operators
 
 - Heading markers by level (`#`, `##`, …).
 - List markers (`-`, `*`, `1.`, …).
@@ -22,9 +22,9 @@ taxonomy.
 - Raw-HTML / MDX / directive operators.
 - Punctuation classes.
 - Diagram DSL statement classes.
-- Embedded-code operators (scaled — see §9.4).
+- Embedded-code operators.
 
-## Operands (§9.2)
+## Operands
 
 - Word-like tokens.
 - Numeric / version tokens.
@@ -37,7 +37,7 @@ taxonomy.
 - Diagram node / edge labels.
 - Math symbols and commands.
 
-## Formulas (§9.3)
+## Formulas
 
 Same shape as source-code Halstead:
 
@@ -49,7 +49,7 @@ MDH_diff   = (n1 / 2) · (N2 / max(1, n2))
 MDH_effort = MDH_volume · MDH_diff
 ```
 
-## Embedded-code adjustment (§9.4)
+## Embedded-code adjustment
 
 Embedded analyzers contribute:
 
@@ -64,8 +64,12 @@ signals; cognitive complexity stays linear because a hard example genuinely requ
 
 ## References
 
-- Halstead, M. H. (1977). *Elements of Software Science.* Elsevier.
-- Research foundation §9 — Markdown Halstead derivation.
+- Halstead, M. H. (1977). *Elements of Software Science.* Elsevier — the operator/operand model
+  this metric ports to Markdown's token taxonomy.
+  [OSTI record](https://www.osti.gov/biblio/5685613).
+- Kearney, J. K., et al. *Software Complexity Measurement* — MIT lecture notes summarizing the
+  Halstead operator/operand formulation.
+  [PDF (MIT OCW 16.355)](http://sunnyday.mit.edu/16.355/kearney.pdf).
 
 ## See also
 

@@ -8,7 +8,7 @@ keywords: ["rci", "review criticality", "documentation review", "diff"]
 it is dense with technical anchors. RCI combines a per-word **DensityScore** with a delta term and a
 changed-links/artifacts term.
 
-## Formula (§18)
+## Formula
 
 ```text
 DensityScore = mehen-internal blend of:
@@ -26,7 +26,7 @@ RCI = clamp01(
 ) · 100
 ```
 
-## Bands (§18.2)
+## Bands
 
 | RCI | Meaning |
 |---|---|
@@ -35,7 +35,7 @@ RCI = clamp01(
 | 51–75 | Careful review recommended. |
 | 76–100 | High-risk change. |
 
-## DMI × RCI × Filler matrix (§18.3)
+## DMI × RCI × Filler matrix
 
 | DMI | RCI | Filler Risk | Meaning |
 |---|---|---|---|
@@ -48,7 +48,13 @@ This matrix is the canonical way to summarize a Markdown file in CI.
 
 ## References
 
-- Research foundation §18 — RCI derivation and matrix.
+- Bacchelli, A. & Bird, C. (2013). *Expectations, outcomes, and challenges of modern code review.*
+  ICSE 2013 — empirical basis for prioritizing review attention by per-change density.
+  [DOI](https://doi.org/10.1109/ICSE.2013.6606617) ·
+  [Author copy](https://www.microsoft.com/en-us/research/publication/expectations-outcomes-and-challenges-of-modern-code-review/).
+- Rigby, P. C. & Bird, C. (2013). *Convergent contemporary software peer review practices.*
+  ESEC/FSE 2013 — supports the "review what changed" prioritization that RCI encodes.
+  [DOI](https://doi.org/10.1145/2491411.2491444).
 
 ## See also
 

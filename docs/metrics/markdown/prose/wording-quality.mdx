@@ -7,23 +7,23 @@ keywords: ["wording quality", "passive voice", "hedge words", "style", "writing 
 Wording quality is style and register. Where [readability formulas](/metrics/markdown/prose/english-readability)
 score difficulty, wording quality flags writing patterns that consistently hurt clarity.
 
-## What mehen emits (§33)
+## What mehen emits
 
-| Sub-metric | Section | Default threshold |
-|---|---|---|
-| **Passive voice** ([write-good](https://github.com/btford/write-good) / retext-passive pattern) | §33.1 | Doc-type ratio from §31.13. |
-| **Hedge words** (Hyland 2005; ~165 entries) | §33.2 | Flag > 3 % in non-narrative docs. |
-| **Weasel words** (write-good) | §33.3 | Count-based. |
-| **Wordy phrases** (~240 entries from too-wordy / retext-simplify) | §33.4 | Per-match count / 100 words. |
-| **Adverb density** (`-ly` endings minus exceptions) | §33.5 | Hemingway budget ≤ 1 per 100 words. |
-| **Nominalizations** (`-tion`, `-sion`, `-ment`, `-ence`, `-ance`, `-ity`, `-ness`, `-ism`) | §33.6 | Flag paragraph > 10 % of content words. |
-| **Expletive constructions** (`^(there\|it)\s+(is\|are\|was\|were)`) | §33.7 | Per 100 sentences. |
-| **Lexical illusions** (`lower(t[i-1]) == lower(t[i])`) | §33.8 | Zero-tolerance defect. |
-| **Clichés** (~700 entries) | §33.9 | Per 1,000 words. |
-| **Non-words** (`irregardless → regardless`, `thusly → thus`, …) | §33.9 | Error-level flag. |
-| **Long sentences** | §33.10 | Warning > 30 words, error > 40. |
+| Sub-metric | Default threshold |
+|---|---|
+| **Passive voice** ([write-good](https://github.com/btford/write-good) / retext-passive pattern) | Doc-type ratio from the [readability ensemble](/metrics/markdown/prose/english-readability). |
+| **Hedge words** (Hyland 2005; ~165 entries) | Flag > 3 % in non-narrative docs. |
+| **Weasel words** (write-good) | Count-based. |
+| **Wordy phrases** (~240 entries from too-wordy / retext-simplify) | Per-match count / 100 words. |
+| **Adverb density** (`-ly` endings minus exceptions) | Hemingway budget ≤ 1 per 100 words. |
+| **Nominalizations** (`-tion`, `-sion`, `-ment`, `-ence`, `-ance`, `-ity`, `-ness`, `-ism`) | Flag paragraph > 10 % of content words. |
+| **Expletive constructions** (`^(there\|it)\s+(is\|are\|was\|were)`) | Per 100 sentences. |
+| **Lexical illusions** (`lower(t[i-1]) == lower(t[i])`) | Zero-tolerance defect. |
+| **Clichés** (~700 entries) | Per 1,000 words. |
+| **Non-words** (`irregardless → regardless`, `thusly → thus`, …) | Error-level flag. |
+| **Long sentences** | Warning > 30 words, error > 40. |
 
-## Wording Quality Score (§33.11)
+## Wording Quality Score
 
 ```text
 WordingQualityScore = clamp01(
@@ -52,7 +52,6 @@ Filler covers repetition and specificity, WQS covers style and register.
 - [proselint](https://github.com/amperser/proselint).
 - [retext-passive](https://github.com/retextjs/retext-passive).
 - [Hemingway editor](https://hemingwayapp.com).
-- Research foundation §33 — derivations and threshold rationale.
 
 ## See also
 

@@ -14,7 +14,7 @@ density, weak repository grounding, lazy sectioning, repetition, specificity sca
 references, and placeholder density — without making any claim about how the text was written.
 </Warning>
 
-## Sub-scores (§§17.1–17.8)
+## Sub-scores (.1–17.8)
 
 | Sub-score | What it captures |
 |---|---|
@@ -27,7 +27,7 @@ references, and placeholder density — without making any claim about how the t
 | **ReferenceHollowness** | Bibliography entries without verifiable DOI/arXiv/RFC/URL anchors. |
 | **PlaceholderDensity** | TODO/TBD/FIXME/XXX/lorem and empty links per 1,000 words. |
 
-## Formula (§17.9)
+## Formula
 
 ```text
 FillerLazyRisk = clamp01(
@@ -42,7 +42,7 @@ FillerLazyRisk = clamp01(
 )
 ```
 
-## Bands (§17.10)
+## Bands
 
 | Score | Band |
 |---|---|
@@ -52,7 +52,7 @@ FillerLazyRisk = clamp01(
 | 0.61 – 0.80 | High. |
 | 0.81 – 1.00 | Severe. |
 
-## Diagnostic labels (§17.11)
+## Diagnostic labels
 
 High scores attach stable string labels reviewers can act on:
 
@@ -81,7 +81,14 @@ Top contributors:
 
 ## References
 
-- Research foundation §17 — Filler/Lazy Risk derivation, sub-scores, labels, anti-gaming notes.
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  motivates the evidence-anchor and specificity-scarcity sub-scores.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+- Halliday, M. A. K. (1985). *Spoken and Written Language.* Oxford University Press — lexical-density
+  basis used by `SpecificityScarcity`.
+- Manning, C. D., Raghavan, P. & Schütze, H. (2008). *Introduction to Information Retrieval*, ch. 6.
+  Cambridge University Press — Jaccard / token-shingle methods used by `RepetitionDensity`.
+  [Stanford online edition](https://nlp.stanford.edu/IR-book/).
 
 ## See also
 

@@ -8,7 +8,7 @@ keywords: ["mcc", "markdown cognitive", "readability", "documentation complexity
 artifact clusters. It is the documentation analogue of
 [cognitive complexity](/metrics/code/cognitive) for source code.
 
-## Base weights (§8.1)
+## Base weights
 
 Each construct contributes a base weight, ranging from `0.20` for a normal heading-level increment up to
 `+4.00` for a verified broken external link.
@@ -23,7 +23,7 @@ MCC_positive = Σ base_weight(c) · nesting_multiplier(c) · clustering_multipli
 MCC = max(0, MCC_positive − min(Σ scaffold_credit(a), MCC_credit_cap))
 ```
 
-### Nesting multiplier (§8.2)
+### Nesting multiplier
 
 ```text
 nesting_multiplier = 1 + 0.18 · nest(n)
@@ -32,16 +32,16 @@ nesting_multiplier = 1 + 0.18 · nest(n)
 Smaller than code-oriented nesting penalties because Markdown nesting is cheaper than control-flow
 nesting.
 
-### Artifact clustering multiplier (§8.3)
+### Artifact clustering multiplier
 
 Dense clusters of artifacts in a 20-rendered-line window increase local switching cost.
 
-### Scaffolding credit (§8.4)
+### Scaffolding credit
 
 Well-labelled, bounded, locally explained artifacts earn credit capped at `0.25 · MCC_positive`. Credit
 applies only when label, nearby explanation, and bounded size are all present.
 
-## Interpretation (§8.5)
+## Interpretation
 
 | MCC | Meaning |
 |---|---|
@@ -52,9 +52,14 @@ applies only when label, nearby explanation, and bounded size are all present.
 
 ## References
 
-- Campbell, G. A. (2018). *Cognitive Complexity — A new way of measuring understandability.* SonarSource.
-  [PDF](https://www.sonarsource.com/resources/cognitive-complexity/) — the design ancestor.
-- Research foundation §8 — MCC derivation and weights.
+- Campbell, G. A. (2018). *Cognitive Complexity — A new way of measuring understandability.*
+  SonarSource white paper — the design ancestor.
+  [PDF](https://www.sonarsource.com/resources/cognitive-complexity/).
+- Sweller, J. (1988). *Cognitive load during problem solving: Effects on learning.* Cognitive
+  Science 12(2): 257–285 — basis for the nesting and clustering multipliers.
+  [DOI](https://doi.org/10.1207/s15516709cog1202_4).
+- Mayer, R. E. (2009). *Multimedia Learning*, 2nd ed. Cambridge University Press —
+  split-attention and contiguity principles behind the artifact-clustering penalty.
 
 ## See also
 

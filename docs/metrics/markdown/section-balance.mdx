@@ -4,7 +4,7 @@ description: "Whether a Markdown document is chunked in a maintainable way."
 keywords: ["section balance", "headings", "structure", "documentation"]
 ---
 
-**Section Balance (§20)** checks whether the document is chunked in a maintainable way. It penalizes:
+**Section Balance** checks whether the document is chunked in a maintainable way. It penalizes:
 
 - Oversized sections at the 95th percentile.
 - A high rate of very large sections.
@@ -15,7 +15,7 @@ keywords: ["section balance", "headings", "structure", "documentation"]
 ## Inputs
 
 - The [section tree](/metrics/markdown/section-tree).
-- Per-section word counts (§4) from the LOC family.
+- Per-section word counts from the LOC family.
 - Profile-specific expected depth (default depends on doc type).
 
 ## How DMI uses it
@@ -25,7 +25,14 @@ Section Balance feeds [DMI](/metrics/markdown/dmi) via the `S_norm` term — "po
 
 ## References
 
-- Research foundation §20 — Section Balance derivation.
+- Miller, G. A. (1956). *The magical number seven, plus or minus two: some limits on our capacity
+  for processing information.* Psychological Review 63(2): 81–97 — working-memory ceiling that
+  motivates the oversized-section penalty.
+  [DOI](https://doi.org/10.1037/h0043158).
+- Sweller, J. (1988). *Cognitive load during problem solving: Effects on learning.* Cognitive
+  Science 12(2): 257–285 — cognitive-load theory underlying the "too-many-tiny-sections vs.
+  too-large-section" trade-off.
+  [DOI](https://doi.org/10.1207/s15516709cog1202_4).
 
 ## See also
 

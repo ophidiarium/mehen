@@ -1,35 +1,52 @@
 ---
 title: "Commands overview"
-description: "What the mehen CLI does and how its commands compose."
+description: "The mehen CLI exposes three commands: metrics, diff, and top-offenders."
 keywords: ["commands", "cli", "mehen commands"]
 ---
 
-The mehen CLI offers a small, focused set of commands. They compose around two ideas:
-
-1. **Compute static metrics** for one or more files / directories.
-2. **Compare metrics** across two git revisions (the basis of the
-   [GitHub Action](/guides/github-action)).
+The mehen CLI has a small, focused command surface designed for CI runs, pre-PR hooks, and pull
+request automation.
 
 ## Commands
 
 | Page | What it does |
 |---|---|
-| [`mehen` (metrics)](/commands/metrics) | Compute and display source-code and Markdown metrics for a path. |
-| [`mehen diff`](/commands/diff) | Diff metrics between two git revisions and emit JSON or Markdown. |
-| [`mehen` (nodes)](/commands/nodes) | Inspect AST nodes, detect parser errors, count specific node kinds. |
+| [`mehen metrics`](/commands/metrics) | Analyze exactly one file and emit a metrics report. |
+| [`mehen diff`](/commands/diff) | Compare metrics between two git revisions and emit JSON or Markdown. |
+| [`mehen top-offenders`](/commands/top-offenders) | Walk one or more paths and rank the worst-offending files. |
 
-## Why "static"?
+`mehen --version --json` is the fourth supported invocation — it emits a machine-readable shape that the
+[GitHub Action](/guides/github-action) reads to stamp its sticky comment footer.
 
-mehen does not run your code. Every metric is derived from the parser's tree representation —
-deterministic, network-free, and safe for air-gapped CI.
+## Why three commands
+
+Each command matches one consumption pattern:
+
+- **`metrics`** → "tell me about this one file" — single-file IDE/CI hooks, code-review screencasts.
+- **`diff`** → "what changed on this PR" — the engine behind the GitHub Action sticky comment.
+- **`top-offenders`** → "where are the hottest files?" — repository scans for prioritization dashboards.
+
+AST inspection for maintainers lives in `cargo xtask` rather than the public CLI — see
+[Developers → Add a new language](/developers/new-language).
 
 ## Output formats
 
-All commands accept:
+All three commands accept a small format set. See
+[Concepts → Output formats](/concepts/output-formats) for the schema of each.
 
-- `text` — pretty-printed console output (default).
-- `json` (`--pr` for pretty).
-- `yaml`, `toml`, `cbor`.
-- `markdown` (`mehen diff` only) — GitHub-flavored Markdown for sticky comments.
+| Format | Available on |
+|---|---|
+| `json` | every command |
+| `markdown` | every command (default for `top-offenders`; `github-markdown` style for `diff`) |
+| `yaml`, `toml` | `metrics` only |
 
-See [Concepts → Output formats](/concepts/output-formats) for the schema of each.
+## Profiles
+
+`mehen metrics` accepts a built-in `--profile` flag: `default`, `ci`, or `strict`. Profiles tune the
+metric selector set and the threshold suggestions.
+
+## See also
+
+- [GitHub Action](/guides/github-action) — production consumer of `mehen diff`.
+- [Concepts → Architecture](/concepts/architecture) — how each command flows through the engine.
+- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs) — `--fail-on` and threshold inputs.

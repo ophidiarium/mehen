@@ -24,7 +24,7 @@ Section
 └── link_counts     : { internal, relative, external, broken }
 ```
 
-## Quality flags (§3.4)
+## Quality flags
 
 mehen marks three structural smells on the section tree:
 
@@ -48,7 +48,12 @@ These flags surface on the [PR comment](/guides/pr-comment-design) as advisory c
 
 ## References
 
-- Research foundation §3.4 — section-tree derivation.
+- W3C: [Web Content Accessibility Guidelines 2.1 — Heading levels](https://www.w3.org/WAI/WCAG21/Understanding/headings-and-labels.html)
+  — the source of the heading-skip quality flag (assistive-technology users rely on heading-level
+  ordering).
+- CommonMark Spec: [ATX headings](https://spec.commonmark.org/0.30/#atx-headings) and
+  [setext headings](https://spec.commonmark.org/0.30/#setext-headings) — the parser-level definition
+  the section tree builds on.
 
 ## See also
 

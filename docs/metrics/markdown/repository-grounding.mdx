@@ -7,7 +7,7 @@ keywords: ["repository grounding", "documentation", "cross-references"]
 A Markdown file in a software project should connect to repository reality — files, commands, packages,
 APIs, configs, tests, and versioned facts — or at least acknowledge that it doesn't.
 
-## Formula (§15)
+## Formula
 
 ```text
 RepositoryGroundingScore = clamp01(
@@ -27,7 +27,7 @@ RepositoryGroundingScore = clamp01(
 - **Identifier density** — identifier-like tokens (CamelCase, snake_case, dotted paths) per word.
 - **Version fact density** — version pins, semver, dates, hash references per word.
 
-## Bands (§15.3)
+## Bands
 
 | Score | Meaning |
 |---|---|
@@ -44,7 +44,12 @@ RepositoryGroundingScore = clamp01(
 
 ## References
 
-- Research foundation §15 — Repository Grounding derivation.
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  underpins the "scent" intuition behind link-density and identifier-density.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
+- Spence, R. (1999). *A framework for navigation.* International Journal of Human-Computer Studies
+  51(5): 919–945 — navigation framework that motivates resolved-link weighting.
+  [DOI](https://doi.org/10.1006/ijhc.1999.0265).
 
 ## See also
 

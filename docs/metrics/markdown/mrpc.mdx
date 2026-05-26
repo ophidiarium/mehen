@@ -9,7 +9,7 @@ builds a document navigation graph `G_doc = (N, E)` where nodes are sections, la
 diagrams, footnotes, linked repository documents, and external domains, and edges are sequential,
 parent-child, internal-link, relative-link, external-link, and artifact-explanation relations.
 
-## Classical form (§7.2)
+## Classical form
 
 ```text
 MRPC_raw = |E| − |N| + 2P
@@ -17,7 +17,7 @@ MRPC_raw = |E| − |N| + 2P
 
 where `P` is the number of connected components.
 
-## Weighted form (§7.3)
+## Weighted form
 
 Edges carry weights to reflect different navigation costs:
 
@@ -34,7 +34,7 @@ Edges carry weights to reflect different navigation costs:
 MRPC = max(1, Σ weight(e) − |N| + 2P)
 ```
 
-## Interpretation (§7.4)
+## Interpretation
 
 | MRPC | Meaning |
 |---|---|
@@ -48,8 +48,13 @@ profile-specific thresholds rather than a universal cap.
 
 ## References
 
-- McCabe, T. J. (1976). *A Complexity Measure.* IEEE TSE — the cyclomatic ancestor.
-- Research foundation §7 — MRPC derivation, edge weights, profile thresholds.
+- McCabe, T. J. (1976). *A Complexity Measure.* IEEE Transactions on Software Engineering, SE-2(4):
+  308–320 — the cyclomatic ancestor.
+  [DOI](https://doi.org/10.1109/TSE.1976.233837) ·
+  [PDF](http://www.literateprogramming.com/mccabe.pdf).
+- Pirolli, P. & Card, S. (1999). *Information Foraging.* Psychological Review 106(4): 643–675 —
+  basis for weighting external vs. relative vs. anchor edges.
+  [DOI](https://doi.org/10.1037/0033-295X.106.4.643).
 
 ## See also
 

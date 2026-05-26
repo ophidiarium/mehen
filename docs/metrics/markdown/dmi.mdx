@@ -7,9 +7,9 @@ keywords: ["dmi", "documentation maintainability", "composite score", "documenta
 **DMI** summarizes how maintainable a Markdown file is as a repository artifact. It is the documentation
 analogue of the [Maintainability Index](/metrics/code/mi) for source code.
 
-## Formula (§10)
+## Formula
 
-Components are first normalized to `[0, 1]` (§10.1), then combined:
+Components are first normalized to `[0, 1]`, then combined:
 
 ```text
 DMI = clamp01(
@@ -26,7 +26,7 @@ DMI = clamp01(
 ) · 100
 ```
 
-## Bands (§10.4)
+## Bands
 
 | DMI | Band | Meaning |
 |---|---|---|
@@ -43,14 +43,13 @@ A long, linear filler document can score respectable DMI while scoring high on
 DMI but be extremely high-value. DMI measures maintainability burden, not value.
 
 The combined **DMI × RCI × Filler Risk** matrix
-([review criticality §18.3](/metrics/markdown/review-criticality-index)) is the canonical way to read
+([review criticality](/metrics/markdown/review-criticality-index)) is the canonical way to read
 DMI in context.
 
 ## References
 
 - Oman, P. & Hagemeister, J. (1992). *Metrics for assessing a software system's maintainability.*
   IEEE Conference on Software Maintenance — the source-code MI ancestor.
-- Research foundation §10 — DMI derivation, weights, and bands.
 
 ## See also
 

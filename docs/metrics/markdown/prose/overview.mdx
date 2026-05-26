@@ -8,7 +8,7 @@ The structural Markdown layer ([Markdown Metrics](/metrics/markdown/overview)) i
 language-opaque. The **prose layer** adds language-aware signals — readability formulas, lexical
 diversity, wording quality, Japanese script composition and JTF conformance — on top of the same AST.
 
-## Architectural constraints (§29.1)
+## Architectural constraints
 
 1. **Layered, not folded.** Prose metrics are a separate top-level section in the output schema. They do
    not modify [DMI](/metrics/markdown/dmi), [MCC](/metrics/markdown/mcc),
@@ -24,7 +24,7 @@ diversity, wording quality, Japanese script composition and JTF conformance — 
    the default binary stays small.
 6. **Deterministic and reproducible.** No network, no cloud, no sampling.
 
-## Tier model (§37.1)
+## Tier model
 
 | Tier | Cargo features | Adds | Binary cost |
 |---|---|---|---|
@@ -52,6 +52,3 @@ diversity, wording quality, Japanese script composition and JTF conformance — 
 | [JTF rules](/metrics/markdown/prose/jtf-rules) | Japan Translation Federation 12 rules. |
 | [textlint-ja subset](/metrics/markdown/prose/textlint-ja) | Selected `textlint-rule-preset-ja-technical-writing` rules. |
 
-## References
-
-- Research foundation §§29–38 — full prose-layer derivations and citation graph.

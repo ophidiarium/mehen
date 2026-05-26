@@ -1,30 +1,57 @@
 ---
 title: "mehen diff"
-description: "Diff metrics between two git revisions and emit a per-file delta report as JSON or Markdown."
-keywords: ["mehen diff", "metric delta", "git diff", "pr report"]
+description: "Compare metrics between two git revisions and emit a per-file delta report as JSON or GitHub-flavored Markdown."
+keywords: ["mehen diff", "metric delta", "git diff", "pull request"]
 ---
 
 `mehen diff` compares metrics between two git revisions and emits a per-file delta report. It is the
 engine behind the [GitHub Action](/guides/github-action) and the recommended way to wire mehen into a
 PR workflow.
 
-## Usage
-
-```bash
-mehen diff --from <base-ref> --to <head-ref> --paths <path>...
+```text
+mehen diff [OPTIONS]
 ```
 
 | Flag | Description |
 |---|---|
-| `--from` | Base git revision (e.g., `main`, a SHA, or a tag). |
-| `--to` | Head git revision (default: `HEAD`). |
-| `--paths` | One or more paths to scan. Repeatable. |
-| `--metrics` | Comma-separated list of metrics to include. |
-| `--include` | Glob pattern to include. Repeatable. |
-| `--exclude` | Glob pattern to exclude. Repeatable. |
-| `--output-format` | `json` or `markdown`. |
-| `--show-unchanged` | Include files where every selected metric is unchanged. |
-| `--ignore-generated` | Skip files matched by `.gitattributes linguist-generated`. |
+| `--from <FROM>` | Base revision to compare from. |
+| `--to <TO>` | Head revision to compare to. |
+| `-p, --paths <PATHS>...` | Repository-relative files or directories to compare. |
+| `-M, --metrics <METRICS>` | Comma-separated metrics. Defaults to `cyclomatic,cognitive,nom.functions,loc.lloc,mi.visual_studio`. Prefix with `+` for higher-is-better, `-` for lower-is-better. |
+| `-I, --include <INCLUDE>...` | Glob to include files. |
+| `-X, --exclude <EXCLUDE>...` | Glob to exclude files. |
+| `-O, --output-format <OUTPUT_FORMAT>` | `markdown` or `json`. |
+| `--show-unchanged` | Show files where every metric is unchanged. |
+| `--ignore-generated[=<BOOL>]` | Skip files marked `linguist-generated` (default `true`). |
+| `--fail-on <FAIL_ON>` | Exit non-zero when named thresholds are crossed. Comma-separated: `dmi-drop`, `new-broken-link`, `filler-high`, `all`. |
+
+## Examples
+
+<Tabs>
+  <Tab title="PR head vs main (Markdown)">
+    ```bash
+    mehen diff --from main --to HEAD --paths src --output-format markdown
+    ```
+  </Tab>
+  <Tab title="JSON for a CI script">
+    ```bash
+    mehen diff --from "$BASE_SHA" --to "$HEAD_SHA" --paths . \
+               --output-format json > metrics-diff.json
+    ```
+  </Tab>
+  <Tab title="Custom metrics + polarity">
+    ```bash
+    mehen diff --from main --to HEAD --paths src \
+               --metrics "+mi.visual_studio,-cognitive,-loc.lloc"
+    ```
+  </Tab>
+  <Tab title="Strict gate on docs">
+    ```bash
+    mehen diff --from main --to HEAD --paths docs \
+               --fail-on dmi-drop,new-broken-link,filler-high
+    ```
+  </Tab>
+</Tabs>
 
 ## Output formats
 
@@ -39,26 +66,40 @@ mehen diff --from <base-ref> --to <head-ref> --paths <path>...
   </Tab>
 </Tabs>
 
-## Example
-
-```bash
-# Compare PR head against main
-mehen diff --from main --to HEAD --paths src --output-format markdown
-```
-
-```bash
-# JSON output for CI scripts
-mehen diff --from "$BASE_SHA" --to "$HEAD_SHA" --paths . \
-           --output-format json > metrics-diff.json
-```
-
 ## What gets compared
 
-mehen runs `mehen -m` against each side, joins by file path, and computes per-metric deltas. Files that
-exist on only one side are reported as new or deleted.
+mehen runs the equivalent of `mehen metrics` against each side, joins by repository-relative path, and
+computes per-metric deltas. Files that exist on only one side are reported as new or deleted. Files
+matched by `linguist-generated` are skipped by default.
+
+## `--fail-on` thresholds
+
+`--fail-on` accepts a comma-separated list of band-crossing rule IDs:
+
+| Rule | Triggers when… |
+|---|---|
+| `dmi-drop` | A Markdown file's [DMI](/metrics/markdown/dmi) crosses a band downward. |
+| `new-broken-link` | At least one new broken link is added. |
+| `filler-high` | A Markdown file's [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) is `≥ 0.60`. |
+| `all` | Any of the above. |
+
+The rules align with the severity-1 / severity-2 indicators on the
+[PR comment design](/guides/pr-comment-design) page.
+
+For per-metric numeric gating (e.g. "fail if cyclomatic delta > 5"), use the
+[GitHub Action's `thresholds` input](/guides/github-action), which post-processes the JSON report.
+See [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs).
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success — the comment is advisory. |
+| 1 | IO, git, parser-fatal, or unsupported-language error. |
+| 2 | One or more `--fail-on` rules crossed (gating exit). |
 
 ## See also
 
 - [GitHub Action](/guides/github-action) — runs `mehen diff` for you and posts the report on PRs.
 - [PR comment design](/guides/pr-comment-design) — Markdown comment template.
-- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs) — how thresholds gate the action.
+- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs).

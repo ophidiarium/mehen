@@ -4,7 +4,8 @@ description: "Bump pinned tree-sitter grammar versions and regenerate the kind e
 keywords: ["grammar update", "tree-sitter", "dependabot", "developers"]
 ---
 
-Each tree-sitter-backed language in mehen is parsed via a pinned `tree-sitter-<lang>` crate. Grammars
+The languages that go through tree-sitter (Go, Kotlin, C, PowerShell, plus the Markdown text
+extensions used by `mehen-markdown`) are parsed via pinned `tree-sitter-<lang>` crates. Grammars
 change over time and need periodic updates — both for bug fixes and to keep up with new syntax.
 
 Grammars can be updated on **Linux** and **macOS** natively, or on **Windows** using **WSL**.
@@ -12,20 +13,22 @@ Grammars can be updated on **Linux** and **macOS** natively, or on **Windows** u
 ## Currently pinned tree-sitter grammars
 
 The pin lives in `xtask/Cargo.toml` (consumed by the kind-enum generator) and in the owning
-`crates/mehen-<lang>/Cargo.toml` (consumed by the analyzer at runtime). Most grammars are routed through
-`[workspace.dependencies]` in the root `Cargo.toml` and referenced as `{ workspace = true }` from both
-call sites; some, like `tree-sitter-c`, are inline-pinned because only one analyzer consumes them.
+`crates/mehen-<lang>/Cargo.toml` (consumed by the analyzer at runtime). Most grammars are routed
+through `[workspace.dependencies]` in the root `Cargo.toml` and referenced as
+`{ workspace = true }` from both call sites; some, like `tree-sitter-c`, are inline-pinned because
+only one analyzer consumes them.
 
 | Grammar | Used by |
 |---|---|
 | `tree-sitter-c` | `mehen-c` |
 | `tree-sitter-go` | `mehen-go` |
 | `tree-sitter-kotlin-sg` | `mehen-kotlin` |
-| `tree-sitter-markdown-text` | `mehen-markdown` |
 | `tree-sitter-pwsh` | `mehen-powershell` |
+| `tree-sitter-markdown-text` | `mehen-markdown` (auxiliary) |
 
-Other languages (Python, TS/JS/JSX/TSX, PHP, Ruby, Rust) flow through richer parsers (Ruff, Oxc, Mago,
-Prism, `ra_ap_syntax`) — they have no `grammar.rs` and need no kind-enum regeneration.
+The Python, TypeScript / JavaScript / TSX / JSX, PHP, Ruby, and Rust analyzers do **not** use
+tree-sitter; they have no `grammar.rs` and need no kind-enum regeneration. Markdown's primary parser
+is pulldown-cmark; the tree-sitter Markdown grammar is only used for ancillary text extensions.
 
 ## Update process
 
@@ -44,9 +47,9 @@ Prism, `ra_ap_syntax`) — they have no `grammar.rs` and need no kind-enum regen
     cargo xtask tree-sitter generate --all
     ```
 
-    This rewrites every `crates/mehen-<lang>/src/grammar.rs` from the pinned grammar's `node-kind` table.
-    CI runs `cargo xtask tree-sitter check-generated` to ensure pinned-grammar bumps without a regenerate
-    are caught at PR time.
+    This rewrites every tree-sitter-backed crate's `grammar.rs` from the pinned grammar's `node-kind`
+    table. CI runs `cargo xtask tree-sitter check-generated` to ensure pinned-grammar bumps without a
+    regenerate are caught at PR time.
   </Step>
   <Step title="Fix breakage">
     New node kinds may appear (and need handling), and existing node kinds may be renamed or
@@ -67,10 +70,10 @@ Prism, `ra_ap_syntax`) — they have no `grammar.rs` and need no kind-enum regen
 
 ## Automation
 
-Dependabot raises grammar bump PRs automatically. The `regenerate-grammars` workflow detects those PRs
-(branch name contains `tree-sitter`) and runs `cargo xtask tree-sitter generate --all` plus the test
-suite, then commits the regenerated files back to the PR branch. Reviewers should still verify analyzer
-code still handles any renamed kinds.
+Dependabot raises grammar bump PRs automatically. The `regenerate-grammars` workflow detects those
+PRs (branch name contains `tree-sitter`) and runs `cargo xtask tree-sitter generate --all` plus the
+test suite, then commits the regenerated files back to the PR branch. Reviewers should still verify
+analyzer code still handles any renamed kinds.
 
 ## See also
 

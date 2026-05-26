@@ -1,13 +1,13 @@
 ---
 title: "Add a new language"
-description: "How to add a new language analyzer to mehen — tree-sitter or richer parser backends."
-keywords: ["new language", "analyzer", "tree-sitter", "developers"]
+description: "How to add a new language analyzer to mehen — pick a parser, implement the LanguageAnalyzer trait, and register the analyzer."
+keywords: ["new language", "analyzer", "parser", "developers"]
 ---
 
 Each language is owned by a single per-language analyzer crate at `crates/mehen-<lang>/`. The analyzer:
 
-- Pins its own parser (a tree-sitter grammar, or a richer language-specific parser like Ruff / Oxc /
-  Mago / Prism / `ra_ap_syntax`).
+- Pins its own parser (a language-specific parser like Ruff / Oxc / Mago / Prism / `ra_ap_syntax`, or
+  a tree-sitter grammar).
 - Owns metric interpretation for that language's syntax — what counts as a decision, an operator, a
   method, a comment, etc.
 - Returns `LanguageAnalysis` (owned, `Send + 'static`) so `mehen-engine` can analyze files in parallel
@@ -15,6 +15,43 @@ Each language is owned by a single per-language analyzer crate at `crates/mehen-
 
 For tree-sitter-backed languages the analyzer also owns its `grammar.rs` kind enum, generated from the
 pinned grammar's `node-kind` table.
+
+## Choosing a parser
+
+The first decision is the parser. mehen prefers a language-specific parser when one exists with mature
+Rust bindings and rich AST/semantic coverage; tree-sitter is the default fallback when no such parser
+is available.
+
+| Parser style | Examples in mehen | When to pick |
+|---|---|---|
+| Language-specific | Ruff (Python), Oxc (TS/JS), Mago (PHP), Prism (Ruby), `ra_ap_syntax` (Rust), pulldown-cmark (Markdown) | A maintained Rust crate with a typed AST, semantic model, or rich grammar coverage exists. |
+| Tree-sitter | Go, Kotlin, C, PowerShell | No mature language-specific parser is available, or tree-sitter's grammar quality is the best fit. |
+
+## Adding a language-specific parser
+
+<Steps>
+  <Step title="Add the parser to the workspace">
+    Add the parser crate(s) to `crates/mehen-<lang>/Cargo.toml`. Pin an exact version (or a git
+    revision tagged for the release) so mehen's behavior is reproducible.
+  </Step>
+  <Step title="Implement the analyzer">
+    In `crates/mehen-<lang>/src/lib.rs`:
+
+    - Define `<Lang>Analyzer` and implement `mehen_core::LanguageAnalyzer` for it.
+    - Walk the parser's typed AST and emit metrics through
+      `mehen_metrics::{State, MetricTreeBuilder, …}` and the per-metric helpers.
+    - Make sure the parser's arena, source buffer, and parser state do not escape the `analyze` call
+      — `LanguageAnalysis` must be `Send + 'static`.
+  </Step>
+  <Step title="Register the analyzer">
+    Add it to `mehen-engine`'s registry (`crates/mehen-engine/src/registry.rs`) so
+    `Language::<YourLang>` dispatches to it.
+  </Step>
+  <Step title="Add tests">
+    Per-metric integration tests under `crates/mehen-<lang>/tests/` — typically one file per metric
+    family, snapshotting the rendered metric JSON via `insta`.
+  </Step>
+</Steps>
 
 ## Adding a tree-sitter-backed language
 
@@ -38,50 +75,37 @@ workspace (`Cargo.toml` `[workspace.dependencies]`).
 
     ```rust
     GeneratorTarget {
-        slug: "rust",
-        enum_name: "Rust",
-        crate_dir: "crates/mehen-rust/src",
-        language: || tree_sitter_rust::LANGUAGE.into(),
+        slug: "go",
+        enum_name: "Go",
+        crate_dir: "crates/mehen-go/src",
+        language: || tree_sitter_go::LANGUAGE.into(),
     },
     ```
   </Step>
   <Step title="Generate the kind enum">
     ```bash
-    cargo xtask tree-sitter generate rust
+    cargo xtask tree-sitter generate go
     ```
 
-    The result lands at `crates/mehen-rust/src/grammar.rs`.
+    The result lands at `crates/mehen-go/src/grammar.rs`.
 
     <Warning>
-    Never edit `grammar.rs` directly. `cargo xtask tree-sitter check-generated` runs in CI and fails the
-    build if the checked-in file doesn't match a fresh render.
+    Never edit `grammar.rs` directly. `cargo xtask tree-sitter check-generated` runs in CI and fails
+    the build if the checked-in file doesn't match a fresh render.
     </Warning>
   </Step>
   <Step title="Implement the analyzer">
-    In `crates/mehen-<lang>/src/lib.rs`:
-
-    - Define a `<Lang>Analyzer` struct that implements `mehen_core::LanguageAnalyzer`.
-    - Walk the parse tree and emit metrics through `mehen_metrics::{State, MetricTreeBuilder, ...}` and
-      the per-metric helpers.
-    - Use the generated `crate::grammar::<Lang>` enum for kind-id matching — it deduplicates positional
-      kinds and exposes mnemonic identifiers (`PLUS`, `EQ_EQ`, etc.).
+    Same pattern as a language-specific parser, but use the generated `crate::grammar::<Lang>` enum
+    for kind-id matching — it deduplicates positional kinds and exposes mnemonic identifiers
+    (`PLUS`, `EQ_EQ`, etc.).
   </Step>
   <Step title="Register the analyzer">
-    Add it to `mehen-engine`'s registry (`crates/mehen-engine/src/registry.rs`) so
-    `Language::<YourLang>` dispatches to it.
+    Same step as above: register in `crates/mehen-engine/src/registry.rs`.
   </Step>
   <Step title="Add tests">
-    Per-metric integration tests under `crates/mehen-<lang>/tests/` — typically one file per metric
-    family, snapshotting the rendered metric JSON via `insta`.
+    Per-metric integration tests under `crates/mehen-<lang>/tests/`.
   </Step>
 </Steps>
-
-## Adding a non-tree-sitter language
-
-Some languages flow through richer parsers (Ruff for Python, Oxc for TS/JS, Mago for PHP, Prism for
-Ruby, `ra_ap_syntax` for Rust). Those analyzers don't need a `grammar.rs` — they walk the parser's typed
-AST directly. Skip the codegen steps and go straight to the analyzer implementation step, importing the
-parser crates you need into `crates/mehen-<lang>/Cargo.toml`.
 
 ## Bumping a pinned grammar
 

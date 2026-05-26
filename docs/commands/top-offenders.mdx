@@ -1,0 +1,92 @@
+---
+title: "mehen top-offenders"
+description: "Walk one or more paths and rank the worst-offending files by one or more metrics."
+keywords: ["mehen top-offenders", "ranking", "code health", "cli"]
+---
+
+`mehen top-offenders` walks one or more paths, computes head-only metrics, and emits a deterministic
+sorted list of the worst-offending files. It is the right tool for repository health dashboards,
+prioritization reports, and "where do we spend time?" planning.
+
+```text
+mehen top-offenders [OPTIONS] --metric <METRICS> <PATHS>...
+```
+
+| Argument | Description |
+|---|---|
+| `<PATHS>...` | One or more files or directories to analyze. |
+
+| Flag | Default | Description |
+|---|---|---|
+| `-M, --metric <METRICS>` | required | Metric to rank by. Repeatable — first is primary key, next breaks ties, etc. Prefix with `+` for higher-is-better or `-` for lower-is-better. |
+| `--max-results <N>` | `10` | Maximum number of offenders to return. |
+| `-O, --output-format <FMT>` | `markdown` | `markdown` or `json`. |
+| `-I, --include <GLOB>` | — | Glob to include files. Repeatable. |
+| `-X, --exclude <GLOB>` | — | Glob to exclude files. Repeatable. |
+| `-j, --num-jobs <N>` | platform default | Number of parser jobs. |
+| `-l, --language-type <LANG>` | auto | Language type override (skip auto-detection). |
+
+## Known metric names
+
+`cyclomatic`, `cognitive`, `nom.functions`, `loc.lloc`, `mi.original`, `mi.sei`, `mi.visual_studio`,
+`halstead.volume`, `abc`, plus the full Markdown family from
+[Markdown metrics](/metrics/markdown/overview).
+
+## Polarity
+
+Each metric has a default direction. mehen knows that higher cognitive complexity is worse, higher
+maintainability index is better, etc. Override with the prefix:
+
+- `--metric +mi.visual_studio` — rank highest MI first (best at top).
+- `--metric -cognitive` — rank highest cognitive first (worst at top).
+- `--metric cognitive` — same as `-cognitive` because cognitive's default polarity is "lower is better".
+
+## Examples
+
+<Tabs>
+  <Tab title="Worst by cognitive">
+    ```bash
+    mehen top-offenders src --metric cognitive --max-results 20
+    ```
+  </Tab>
+  <Tab title="Multi-key sort">
+    ```bash
+    mehen top-offenders crates \
+      --metric cognitive --metric loc.lloc --metric halstead.volume
+    ```
+  </Tab>
+  <Tab title="Filter to one tree">
+    ```bash
+    mehen top-offenders . \
+      --include 'crates/**' --exclude '**/tests/**' \
+      --metric cognitive --output-format json
+    ```
+  </Tab>
+  <Tab title="Markdown docs only">
+    ```bash
+    mehen top-offenders docs \
+      --include '**/*.md' --include '**/*.mdx' \
+      --metric md.filler_lazy_risk --metric md.dmi
+    ```
+  </Tab>
+</Tabs>
+
+## Determinism
+
+The output ordering is fully deterministic: same paths, same metrics, same head ref → byte-identical
+report. Tie-breaking falls back to the next `--metric`, then to the repository-relative path. There is
+no sampling and no file-system-order dependence.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success. |
+| 1 | IO, parser-fatal, or unsupported-language error. |
+
+## See also
+
+- [`mehen metrics`](/commands/metrics) — single-file analysis.
+- [`mehen diff`](/commands/diff) — compare two revisions.
+- [Code metrics](/metrics/code/overview), [Markdown metrics](/metrics/markdown/overview) — the
+  metric catalog you can rank by.

@@ -1,72 +1,90 @@
 ---
-title: "Compute metrics"
-description: "Compute and display source-code and Markdown metrics for files or directories."
-keywords: ["mehen", "metrics command", "cli", "static analysis"]
+title: "mehen metrics"
+description: "Analyze exactly one file and emit a metrics report as JSON, Markdown, YAML, or TOML."
+keywords: ["mehen metrics", "single file", "static analysis", "cli"]
 ---
 
-`mehen` (with the `-m` flag) computes static metrics for a file or directory.
+`mehen metrics` is the single-file analysis command. It takes one path, auto-detects the language, and
+emits a complete metrics report.
 
-## Display metrics
-
-```bash
-mehen -m -p /path/to/your/file/or/directory
+```text
+mehen metrics [OPTIONS] <PATH>
 ```
 
-| Flag | Description |
+| Argument | Description |
 |---|---|
-| `-m` | Compute metrics. |
-| `-p` | Path to the file or directory to analyze. If a directory, analyzes all supported files in it. |
-| `-I` | Glob pattern to include (e.g., `"*.ts"`). Repeatable. |
-| `-X` | Glob pattern to exclude. Repeatable. |
+| `<PATH>` | Path to the file to analyze. `mehen metrics` never walks directories. |
 
-## Export metrics
-
-mehen supports five output formats: `text` (default), `json`, `yaml`, `toml`, and `cbor`.
-
-```bash
-mehen -m -p /path/to/your/file/or/directory -O json -o /path/to/output/directory
-```
-
-| Flag | Description |
-|---|---|
-| `-O` | Output format (`json`, `toml`, `yaml`, `cbor`). |
-| `-o` | Path to save the output file. The output filename is the input filename plus the format extension. If omitted, the result is printed to stdout. |
-| `--pr` | Pretty-print (JSON / TOML). |
-
-## Pretty-printed JSON
-
-```bash
-mehen -m -p src --pr -O json
-```
+| Flag | Default | Description |
+|---|---|---|
+| `--language <LANGUAGE>` | auto-detected | Override language detection. Accepts canonical names or aliases (e.g. `python`, `py`, `ts`, `tsx`, `markdown`, `md`). |
+| `--format <FORMAT>` | `json` | One of `json`, `markdown`, `yaml`, `toml`. |
+| `--pretty` | off | Pretty-print JSON output. |
+| `--profile <PROFILE>` | `default` | One of `default`, `ci`, `strict`. |
 
 ## Examples
 
 <Tabs>
-  <Tab title="Console (default)">
+  <Tab title="JSON (default)">
     ```bash
-    mehen -m -p src
+    mehen metrics src/main.py
     ```
   </Tab>
-  <Tab title="JSON to disk">
+  <Tab title="Pretty JSON">
     ```bash
-    mehen -m -p src -O json -o ./metrics
+    mehen metrics src/main.py --pretty
     ```
   </Tab>
-  <Tab title="YAML to stdout">
+  <Tab title="Markdown report">
     ```bash
-    mehen -m -p src -O yaml
+    mehen metrics docs/architecture.md --format markdown
     ```
   </Tab>
-  <Tab title="Filter by extension">
+  <Tab title="Forced language">
     ```bash
-    mehen -m -p . -I "*.ts" -I "*.tsx" -X "**/*.test.ts"
+    mehen metrics app.tsx --language tsx --format json --pretty
+    ```
+  </Tab>
+  <Tab title="CI profile">
+    ```bash
+    mehen metrics src/main.py --profile ci --pretty
     ```
   </Tab>
 </Tabs>
 
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success. |
+| 1 | IO error, unsupported language, or analyzer-fatal diagnostic on this file. |
+| 3 | Invalid serialization state — should not happen in production runs. |
+
+## What gets reported
+
+Source-code files yield the
+[code metric family](/metrics/code/overview) (cyclomatic, cognitive, Halstead, MI, ABC, LOC family,
+NOM, NPA, NPM, NARGS, NEXITS, WMC).
+
+Markdown files yield the [Markdown metric suite](/metrics/markdown/overview) — DMI, MRPC, MCC,
+Markdown Halstead, link debt, table burden, visual scaffold, artifact debt, repository grounding,
+evidence coverage, filler/lazy risk, review criticality, section balance, good scaffold. The opt-in
+[prose layer](/metrics/markdown/prose/overview) ships behind Cargo features.
+
+## Profiles
+
+`--profile` selects a built-in preset for what gets reported and how thresholds are interpreted:
+
+| Profile | Use case |
+|---|---|
+| `default` | Local developer output. No implicit failure policy. |
+| `ci` | GitHub Action-friendly defaults. Stable tables, standard metric selector set. |
+| `strict` | Same output as `ci`, with tighter built-in threshold suggestions. |
+
+Explicit CLI flags always override profile defaults.
+
 ## See also
 
-- [`mehen diff`](/commands/diff) — compare metrics between two revisions.
+- [`mehen diff`](/commands/diff) — compare metrics between revisions.
+- [`mehen top-offenders`](/commands/top-offenders) — rank files by metric.
 - [Concepts → Output formats](/concepts/output-formats) — schema details.
-- [Code metrics](/metrics/code/overview), [Markdown metrics](/metrics/markdown/overview) — what each
-  metric means.

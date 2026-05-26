@@ -14,12 +14,31 @@ mehen's internals are organized around a clean separation between parsing, analy
 | `mehen-engine` | Pipeline orchestration — `run_diff`, `run_top_offenders`, registry, language detection. |
 | `mehen-core` | Parser-neutral domain types and the `LanguageAnalyzer` trait. |
 | `mehen-metrics` | Shared metric formulas, accumulators, finalizers (Halstead, cyclomatic, cognitive, MI, ABC, LOC, NOM, NPA, NPM, WMC). |
-| `mehen-<lang>` | Per-language analyzer crates. Each owns parsing, metric interpretation, and (for tree-sitter-backed languages) its `grammar.rs`. |
-| `mehen-tree-sitter` | Shared tree-sitter wrapper and CST traversal helpers. |
-| `mehen-markdown` | Markdown analyzer with embedded-code dispatch via `LanguageDispatcher`. |
+| `mehen-<lang>` | Per-language analyzer crates. Each owns parsing and metric interpretation. |
+| `mehen-tree-sitter` | Shared tree-sitter wrapper and CST traversal helpers, used only by the tree-sitter-backed languages. |
+| `mehen-markdown` | Markdown analyzer (pulldown-cmark) with embedded-code dispatch via `LanguageDispatcher`. |
 | `mehen-git` | Git operations for `mehen diff`. |
-| `mehen-report` | JSON, CBOR, YAML, TOML, and GitHub-Markdown rendering. |
+| `mehen-report` | JSON, YAML, TOML, and GitHub-Markdown rendering. |
 | `xtask` | Developer-only commands (kind-enum codegen, AST dumps, audits). |
+
+## Parser diversity, single contract
+
+A core architectural decision: **each language uses the parser best suited to it**, but every analyzer
+returns the same `LanguageAnalysis` shape. mehen does not force a single AST model across languages.
+
+| Language | Parser | What it gives us |
+|---|---|---|
+| Python | [Ruff](https://docs.astral.sh/ruff/) | Modern Python syntax (match, exception groups, f-strings, async); typed AST plus semantic model. |
+| TS / JS / TSX / JSX | [Oxc](https://oxc.rs/) | Decorators, class fields, parameter properties, JSX nesting, `satisfies`, dynamic import. |
+| PHP | [Mago](https://github.com/carthage-software/mago) | Attributes, promoted properties, enums, traits, readonly, null-safe calls, `match`. |
+| Ruby | [Prism](https://ruby.github.io/prism/) | Blocks, lambdas, numbered params, rescue modifiers, endless methods, pattern matching. |
+| Rust | [`ra_ap_syntax`](https://docs.rs/ra_ap_syntax/) | The same syntax library rust-analyzer uses internally. |
+| Markdown | [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark) | CommonMark + GFM with byte-accurate spans. |
+| Go, Kotlin, C, PowerShell | tree-sitter | Mature grammars where tree-sitter's coverage is the best available. |
+
+`mehen-metrics` owns the math (Halstead formulas, MI variants, cyclomatic accumulators); each
+per-language analyzer owns the *interpretation* — which syntax constructs count as decisions, which
+tokens classify as Halstead operators, which members count as public methods.
 
 ## Pipeline
 
@@ -28,38 +47,27 @@ file path
   ↓
 language detection (extension-driven)
   ↓
-parser (per-language)
+parser (per-language: Ruff / Oxc / Mago / Prism / ra_ap_syntax / pulldown-cmark / tree-sitter)
   ↓
 analyzer.analyze(tree)              ← per-language metric interpretation
   ↓
-LanguageAnalysis  (Send + 'static)  ← parser-neutral
+LanguageAnalysis  (Send + 'static)  ← parser-neutral, owned, no parser-arena lifetimes
   ↓
 metric finalizers (mehen-metrics)
   ↓
-reporter (mehen-report)             ← JSON / Markdown / etc.
+reporter (mehen-report)             ← JSON / Markdown / YAML / TOML
 ```
 
 The key constraint: `LanguageAnalysis` is parser-neutral and `Send + 'static`. That lets the engine
-analyze files in parallel via `rayon` without holding parser arenas across thread boundaries.
-
-## Why separate analyzers per language
-
-A single "universal" analyzer would fight the grammar of every language. Instead each language crate
-owns:
-
-- The parser pin (a tree-sitter version, or a richer parser like Ruff / Oxc / Mago / Prism /
-  `ra_ap_syntax`).
-- The mapping from grammar nodes to metric increments — what counts as a "decision" for cyclomatic, an
-  operator for Halstead, a public method for NPM, etc.
-
-`mehen-metrics` owns the math; the per-language analyzers own the interpretation.
+analyze files in parallel via `rayon` without arena-backed parsers (Oxc, Mago) leaking lifetimes
+across thread boundaries.
 
 ## Markdown is special
 
-The Markdown analyzer (`mehen-markdown`) parses the document into block/inline AST and dispatches code
-fences back through `LanguageDispatcher`. That is how Markdown
-[Halstead](/metrics/markdown/halstead) and [MCC](/metrics/markdown/mcc) can credit embedded code blocks
-without duplicating language logic.
+The Markdown analyzer (`mehen-markdown`) parses the document into a block/inline AST and dispatches
+code fences back through `LanguageDispatcher`. That is how
+[Markdown Halstead](/metrics/markdown/halstead) and [MCC](/metrics/markdown/mcc) credit embedded code
+blocks without duplicating language logic.
 
 ## See also
 

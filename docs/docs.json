@@ -52,7 +52,7 @@
               "commands/overview",
               "commands/metrics",
               "commands/diff",
-              "commands/nodes"
+              "commands/top-offenders"
             ]
           },
           {

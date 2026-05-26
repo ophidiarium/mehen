@@ -60,11 +60,35 @@ control flow:
 - `sql.maintainability_index` — composite with band interpretation.
 - `sql.modularity_health` — CTE use ratio, fan-out, derived-table penalty.
 
-## Roadmap
+## Prior art and scientific basis
 
-The roadmap and rationale, including the prior-art review (SQLFluff, sqruff, SonarQube PL/SQL,
-SQLShare, Spider, Piattini & Martínez), is in
-[`design-docs/mehen_sql_metrics_research_foundation.md`](https://github.com/ophidiarium/mehen/blob/main/design-docs/mehen_sql_metrics_research_foundation.md).
+The metric model is informed by the following work:
+
+- **SonarQube PL/SQL and T-SQL** — defines cyclomatic complexity for procedural blocks (anonymous
+  blocks, procedures, triggers, loops, `WHEN`, `IF`/`ELSIF`, `RAISE`, `AND`/`OR`).
+  [PL/SQL docs](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/languages/pl-sql) ·
+  [T-SQL docs](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/languages/t-sql).
+- **SQLFluff** and **sqruff** — dialect-aware parsing and linting; their structure rules
+  (nested-CASE, unused-CTE, ambiguous-column-count, qualification, implicit cross-join) are
+  reusable inspiration for metric contributors.
+  [SQLFluff docs](https://docs.sqlfluff.com/en/stable/) ·
+  [sqruff docs](https://playground.quary.dev/docs/).
+- **`sqlfluff-complexity` plugin** — practical baseline for CPX-style metrics: CTE count, join
+  count, nested subquery depth, CASE expressions, boolean operators, window functions, CTE
+  dependency depth, set operations, derived tables.
+  [Repo](https://github.com/yu-iskw/sqlfluff-complexity).
+- **Vashistha & Jain — *Measuring Query Complexity in SQLShare Workload*** — frames query
+  complexity as cognitive load on users authoring SQL, with operators / operands / runtime /
+  Halstead-style measures.
+  [PDF](https://uwescience.github.io/sqlshare/pdfs/Jain-Vashistha.pdf).
+- **Piattini & Martínez — *Measuring for Database Programs Maintainability*** — early SQL
+  maintainability measures with empirical validation.
+  [DOI](https://doi.org/10.1007/3-540-44469-6_7).
+- **Spider** — text-to-SQL benchmark; its hardness criteria (number of components, selections,
+  conditions, keywords like `GROUP BY` / nested subqueries / aggregators) align well with static
+  query complexity features.
+  [arXiv:1809.08887](https://arxiv.org/abs/1809.08887) ·
+  [Benchmark site](https://yale-lily.github.io/spider).
 
 See [SQL metrics roadmap](/metrics/sql/roadmap) for the implementation phases.
 

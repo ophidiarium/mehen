@@ -9,7 +9,8 @@ This section documents how to build mehen, run its tests, and contribute changes
 ## Prerequisites
 
 - A recent stable Rust toolchain. See [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
-- For tree-sitter grammar regeneration: a Linux or macOS shell (or Windows via WSL).
+- For tree-sitter grammar regeneration (Go / Kotlin / C / PowerShell): a Linux or macOS shell, or
+  Windows via WSL.
 
 ## Clone
 
@@ -72,11 +73,16 @@ failures.
 | `crates/mehen-engine` | Pipeline orchestration — `run_diff`, `run_top_offenders`, registry. |
 | `crates/mehen-core` | Parser-neutral domain types and the `LanguageAnalyzer` trait. |
 | `crates/mehen-metrics` | Shared metric formulas, accumulators, finalizers. |
-| `crates/mehen-<lang>` | Per-language analyzers (one crate per language). |
+| `crates/mehen-python` | Python analyzer (Ruff). |
+| `crates/mehen-typescript` | TypeScript / JavaScript / TSX / JSX analyzer (Oxc). |
+| `crates/mehen-php` | PHP analyzer (Mago). |
+| `crates/mehen-ruby` | Ruby analyzer (Prism). |
+| `crates/mehen-rust` | Rust analyzer (`ra_ap_syntax`). |
+| `crates/mehen-go`, `mehen-kotlin`, `mehen-c`, `mehen-powershell` | Tree-sitter-backed analyzers. |
+| `crates/mehen-markdown` | Markdown analyzer (pulldown-cmark) with embedded-code dispatch via `LanguageDispatcher`. |
 | `crates/mehen-tree-sitter` | Shared tree-sitter wrapper and CST traversal helpers. |
-| `crates/mehen-markdown` | Markdown analyzer with embedded-code dispatch via `LanguageDispatcher`. |
 | `crates/mehen-git` | Git operations. |
-| `crates/mehen-report` | JSON and GitHub-Markdown rendering. |
+| `crates/mehen-report` | JSON, YAML, TOML, and GitHub-Markdown rendering. |
 | `xtask` | Developer-only commands (kind-enum codegen, AST dumps, audits). |
 
 ## Coding expectations

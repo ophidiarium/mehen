@@ -12,7 +12,7 @@ comments, and blank lines. It is the simplest possible size metric.
 | Key | Type | Description |
 |---|---|---|
 | `loc.sloc` | int | Total physical lines in the file. |
-| `loc` | int | Alias for `loc.sloc` (legacy). |
+| `loc` | int | Alias for `loc.sloc`. |
 
 ## How it is computed
 
@@ -33,9 +33,12 @@ alongside [PLOC](/metrics/code/ploc), [LLOC](/metrics/code/lloc),
 
 ## References
 
-- Wikipedia: [Source lines of code](https://en.wikipedia.org/wiki/Source_lines_of_code).
-- Sonar: [`ncloc`](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/)
-  — Sonar's analogous metric (non-comment lines).
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/).
+- Nguyen, V., Deeds-Rubin, S., Tan, T. & Boehm, B. (2007). *A SLOC Counting Standard.* USC.
+  [USC PDF](https://csse.usc.edu/TECHRPTS/2007/usc-csse-2007-737/usc-csse-2007-737.pdf).
+- Sonar: [`ncloc` in metric definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
 
 ## See also
 

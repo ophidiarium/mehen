@@ -5,11 +5,12 @@ keywords: ["mehen", "code metrics", "documentation metrics", "complexity", "main
 ---
 
 **mehen** is a fast, deterministic CLI for code and documentation metrics. It analyzes nine source
-languages plus Markdown, runs in a few seconds even on large monorepos, and ships a GitHub Action that
+languages plus Markdown, runs in seconds even on large monorepos, and ships a GitHub Action that
 publishes per-PR metric trends out of the box.
 
 ```bash
-mehen -m -p src
+mehen metrics src/main.py --pretty
+mehen top-offenders src --metric cognitive
 mehen diff --from main --to HEAD --paths src
 ```
 
@@ -31,8 +32,9 @@ mehen diff --from main --to HEAD --paths src
 ## Why mehen?
 
 <Columns cols={2}>
-  <Card title="Polyglot, per-file" icon="layer-group">
-    Per-file language detection across nine languages plus Markdown. Built for monorepos.
+  <Card title="Real language parsers" icon="microchip">
+    Ruff for Python, Oxc for TS/JS/JSX/TSX, Mago for PHP, Prism for Ruby, ra_ap_syntax for Rust,
+    pulldown-cmark for Markdown, tree-sitter for Go, C, Kotlin, PowerShell.
   </Card>
   <Card title="Code and documentation" icon="files">
     A single tool covers source-code complexity *and* Markdown documentation health.
@@ -74,6 +76,6 @@ For Markdown documentation:
 
 ## What is Mehen?
 
-In the Ophidiarium projects, names matter. **Mehen** is a mythical ancient Egyptian serpent associated
+In Ophidiarium projects, names matter. **Mehen** is a mythical ancient Egyptian serpent associated
 with guarding Ra. In the same spirit, the `mehen` CLI helps guard your codebase and documentation from
 slowly collapsing under complexity.

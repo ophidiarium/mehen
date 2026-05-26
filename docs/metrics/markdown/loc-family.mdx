@@ -20,7 +20,7 @@ that.
 | `MD.BLOC` | Blank lines. |
 | `MD.ALOC` | Artifact lines = `CLOC + TLOC + MLOC` + diagram / raw HTML / MDX lines. |
 
-## Derived ratios (§5.1)
+## Derived ratios
 
 Each component / `max(1, DLOC)` produces a ratio:
 
@@ -61,9 +61,12 @@ loc:
 
 ## References
 
-- [Markdown metrics overview](/metrics/markdown/overview).
-- Research foundation §5 — derivation and component definitions.
-- [LOC family for source code](/metrics/code/loc) — analogous split for code.
+- Park, R. E. (1992). *Software Size Measurement: A Framework for Counting Source Statements.*
+  CMU/SEI-92-TR-20 — the standard reference for LOC categorization that this Markdown family
+  extends to prose / code / table / math / blank lines.
+  [SEI report](https://insights.sei.cmu.edu/library/software-size-measurement-a-framework-for-counting-source-statements/).
+- CommonMark Spec: [Container blocks and leaf blocks](https://spec.commonmark.org/0.30/) — the
+  parser-level distinctions the per-construct counts rely on.
 
 ## See also
 
