@@ -1,0 +1,67 @@
+---
+title: "LOC family"
+description: "Lines of code measured five ways: SLOC, PLOC, LLOC, CLOC, and blank lines."
+keywords: ["loc", "sloc", "ploc", "lloc", "cloc", "lines of code"]
+---
+
+The **Lines of Code (LOC)** family is the simplest size metric mehen reports — and one of the oldest. A
+single number is misleading, so mehen separates physical lines, instruction lines, statements, comments,
+and blanks.
+
+## What mehen emits
+
+| Key | Page | Counts |
+|---|---|---|
+| `loc.sloc` | [SLOC](/metrics/code/sloc) | Every physical line, including comments and blanks. |
+| `loc.ploc` | [PLOC](/metrics/code/ploc) | Physical instruction lines (excludes comments and blanks). |
+| `loc.lloc` | [LLOC](/metrics/code/lloc) | Logical lines — statements per the language's grammar. |
+| `loc.cloc` | [CLOC](/metrics/code/cloc) | Comment lines (line, block, and doc comments). |
+| `loc.blank` | [Blank](/metrics/code/blank) | Whitespace-only lines. |
+| `loc` | — | Alias for `loc.sloc`, retained for legacy compatibility. |
+
+## Worked example
+
+```rust
+/*
+Instruction: Implement factorial function
+For extra credits, do not use mutable state or imperative loops.
+ */
+
+/// Factorial: n! = n*(n-1)*(n-2)*...*3*2*1
+fn factorial(num: u64) -> u64 {
+
+    // use `product` on `Iterator`
+    (1..=num).product()
+}
+```
+
+| Metric | Value |
+|---|---|
+| `loc.sloc` | 11 |
+| `loc.ploc` | 3 |
+| `loc.lloc` | 1 |
+| `loc.cloc` | 6 |
+| `loc.blank` | 2 |
+
+## Why split the count
+
+The LOC family separates concerns that "lines of code" conflates:
+
+- **SLOC** is the simplest size signal — useful for repository-level dashboards.
+- **PLOC** removes whitespace and comments and is closest to "real code".
+- **LLOC** counts statements, so it is the right axis for comparing language idioms (one Python
+  comprehension vs. a multi-line Rust loop).
+- **CLOC** and **Blank** are reported separately because comment and whitespace ratios are themselves
+  signals of style and readability.
+
+## References
+
+- Wikipedia: [Source lines of code](https://en.wikipedia.org/wiki/Source_lines_of_code).
+- NIST: [Lines of Code](https://www.nist.gov/itl/ssd/software-assurance-metrics-and-tool-evaluation-samate)
+  (background and pitfalls).
+- Sonar: [Metrics definitions — lines](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [Concepts → Spaces](/concepts/spaces) — how the LOC family aggregates from spaces to files.
+- [Developers → How-to: implement LoC](/developers/loc) — internal implementation guide.

@@ -1,0 +1,67 @@
+---
+title: "Link Debt"
+description: "Link health and reference burden for Markdown documents."
+keywords: ["link debt", "broken links", "documentation", "references"]
+---
+
+**Link Debt** quantifies link health as a 0–1 score. Broken and unresolved links dominate the score
+because they are objective defects; external links are not bad by default but make a document fragile
+when over-represented.
+
+## Link classification (§11.1)
+
+Every link in the AST is bucketed by destination:
+
+- Internal anchor.
+- Relative repository file.
+- Absolute same-repo URL.
+- External.
+- Issue / PR.
+- Bare URL.
+- Image target.
+- Broken / unresolved.
+
+## Link Debt Score (§11.2)
+
+```text
+broken_rate      = L_broken / max(1, L_total)
+external_rate    = L_ext    / max(1, L_total)
+bare_rate        = L_bare   / max(1, L_total)
+anchor_miss_rate = missing_internal_anchors / max(1, L_int)
+
+LinkDebtScore = clamp01(
+    0.45 · sat(broken_rate;      0.00, 0.10)
+  + 0.20 · sat(anchor_miss_rate; 0.00, 0.10)
+  + 0.15 · sat(bare_rate;        0.05, 0.30)
+  + 0.10 · sat(external_rate;    0.60, 0.90)
+  + 0.10 · sat(link_density_per_100w; 6, 14)
+)
+```
+
+## Companion scores
+
+- **Information Scent Score (§11.3)** rewards descriptive link text, resolved relative links, working
+  anchors, and a reference section when the doc is citation-heavy.
+- **Link Review Burden (§11.4)** —
+  `0.3·L_int + 0.8·L_rel + 1.0·L_ext + 2.5·L_broken + 0.5·L_footnote` —
+  is the cost-per-PR signal used in diff reporting.
+
+## Bands
+
+| Link Debt | Meaning |
+|---|---|
+| 0.00 – 0.20 | Healthy. |
+| 0.21 – 0.40 | Mild. |
+| 0.41 – 0.60 | Inspect. |
+| 0.61 – 0.80 | High. |
+| 0.81 – 1.00 | Severe. |
+
+## References
+
+- Pirolli, P. (1997). *Information foraging.* Psychological Review — origin of "information scent".
+- Research foundation §11 — Link Debt and companion-score derivations.
+
+## See also
+
+- [DMI](/metrics/markdown/dmi) — uses Link Debt as one of its inputs.
+- [Repository Grounding](/metrics/markdown/repository-grounding) — uses resolved link counts.

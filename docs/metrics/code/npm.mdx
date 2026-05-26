@@ -1,0 +1,60 @@
+---
+title: "NPM — Number of Public Methods"
+description: "Number of public methods declared on classes and interfaces."
+keywords: ["npm metric", "public methods", "interface size", "api surface"]
+---
+
+**NPM** (Number of Public Methods) counts the public methods exposed by classes and interfaces in a
+file. NPM is the size of the unit's API surface.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `npm` | int | Total public methods across classes and interfaces. |
+| `npm.classes` | int | NPM contributed by classes. |
+| `npm.interfaces` | int | NPM contributed by interfaces. |
+| `npm.class_methods` | int | Alias of `npm.classes`. |
+| `npm.interface_methods` | int | Alias of `npm.interfaces`. |
+| `npm.classes_average` | float | Mean public methods per class. |
+| `npm.interfaces_average` | float | Mean public methods per interface. |
+| `npm.total_methods` | int | Alias of `npm`. |
+| `npm.average` | float | Mean public methods per declaration. |
+
+<Note>
+Despite the name, this metric has nothing to do with the npm package manager. NPM here stands for
+*Number of Public Methods*, a classic CK-style object-oriented metric.
+</Note>
+
+## What counts as "public"
+
+| Language | Public method is… |
+|---|---|
+| Java / Kotlin | A method declared `public` (or with no modifier in Kotlin). |
+| TypeScript / JS | A class method without `private` / `protected` / `#` prefix. |
+| Python | A method that does not start with `_`. |
+| Ruby | A method *not* declared `private` or `protected`. |
+
+## How to read it
+
+Conventional reading:
+
+| `npm` | Interpretation |
+|---|---|
+| 1–10 | Small, focused class. |
+| 11–25 | Normal application class. |
+| 26+ | God-class candidate. |
+
+Pair with [WMC](/metrics/code/wmc) to gauge whether the surface is wide *and* heavy, and with
+[NPA](/metrics/code/npa) to gauge whether the class encapsulates state.
+
+## References
+
+- Lorenz, M. & Kidd, J. (1994). *Object-Oriented Software Metrics: A Practical Guide.* Prentice Hall.
+- Chidamber & Kemerer (1994). *A Metrics Suite for Object Oriented Design.* IEEE TSE.
+
+## See also
+
+- [NPA](/metrics/code/npa) — number of public attributes.
+- [NOM](/metrics/code/nom) — total methods (public + private).
+- [WMC](/metrics/code/wmc) — weighted methods per class.

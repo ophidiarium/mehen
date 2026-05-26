@@ -1,0 +1,56 @@
+---
+title: "Section tree"
+description: "Heading-derived section structure with quality flags (skips, chunking smell, fragmentation smell)."
+keywords: ["section tree", "headings", "structure", "documentation"]
+---
+
+Headings produce a derived **section tree** that downstream metrics ([MCC](/metrics/markdown/mcc),
+[Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk),
+[Section Balance](/metrics/markdown/section-balance)) read from. Every section has a heading level,
+byte/line range, parent/child IDs, word count, and per-section artifact and link counts.
+
+## Structure
+
+Each section node carries:
+
+```text
+Section
+├── heading_level   : 1..6
+├── byte_range
+├── line_range
+├── parent_id, children_ids
+├── word_count
+├── artifact_counts : { code, table, image, diagram, math }
+└── link_counts     : { internal, relative, external, broken }
+```
+
+## Quality flags (§3.4)
+
+mehen marks three structural smells on the section tree:
+
+| Flag | Trigger |
+|---|---|
+| **Heading skip** | Direct nesting jump (e.g., `H1 → H4` without an intervening `H2`/`H3`). |
+| **Chunking smell** | An `H2` section that is oversized relative to the document's `p95` length. |
+| **Fragmentation smell** | A document flooded with very short `H5`/`H6` nodes — over-decomposition. |
+
+These flags surface on the [PR comment](/guides/pr-comment-design) as advisory callouts.
+
+## How downstream metrics use the tree
+
+- [**MCC**](/metrics/markdown/mcc) reads heading-level changes to charge nesting penalties.
+- [**Filler / Lazy Risk**](/metrics/markdown/filler-lazy-risk) reads section sizes to detect "shallow big
+  doc".
+- [**Section Balance**](/metrics/markdown/section-balance) penalizes oversized sections at the 95th
+  percentile.
+- [**Evidence Coverage**](/metrics/markdown/evidence-coverage) computes per-section evidence anchor
+  density.
+
+## References
+
+- Research foundation §3.4 — section-tree derivation.
+
+## See also
+
+- [LOC family](/metrics/markdown/loc-family) — feeds per-section line counts.
+- [Section Balance](/metrics/markdown/section-balance) — balance scoring on the tree.

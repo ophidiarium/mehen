@@ -1,0 +1,109 @@
+---
+title: "Add a new language"
+description: "How to add a new language analyzer to mehen — tree-sitter or richer parser backends."
+keywords: ["new language", "analyzer", "tree-sitter", "developers"]
+---
+
+Each language is owned by a single per-language analyzer crate at `crates/mehen-<lang>/`. The analyzer:
+
+- Pins its own parser (a tree-sitter grammar, or a richer language-specific parser like Ruff / Oxc /
+  Mago / Prism / `ra_ap_syntax`).
+- Owns metric interpretation for that language's syntax — what counts as a decision, an operator, a
+  method, a comment, etc.
+- Returns `LanguageAnalysis` (owned, `Send + 'static`) so `mehen-engine` can analyze files in parallel
+  and never holds onto parser arenas.
+
+For tree-sitter-backed languages the analyzer also owns its `grammar.rs` kind enum, generated from the
+pinned grammar's `node-kind` table.
+
+## Adding a tree-sitter-backed language
+
+**Prerequisite:** a `tree-sitter-<lang>` crate compatible with the `tree-sitter` version pinned in the
+workspace (`Cargo.toml` `[workspace.dependencies]`).
+
+<Steps>
+  <Step title="Pin the grammar">
+    Two files must stay in sync — both reference the grammar at compile time:
+
+    - `xtask/Cargo.toml` — the kind-enum generator imports the grammar at codegen time.
+    - `crates/mehen-<lang>/Cargo.toml` — the analyzer imports the grammar at runtime to drive
+      `tree_sitter::Parser`.
+
+    Workspace-managed grammars (those listed in root `Cargo.toml` `[workspace.dependencies]`) can be
+    referenced as `{ workspace = true }` from both places. Inline-pinned grammars must be kept in
+    lockstep manually.
+  </Step>
+  <Step title="Register the language for codegen">
+    Add a `GeneratorTarget` to `xtask/src/tree_sitter.rs::TARGETS`:
+
+    ```rust
+    GeneratorTarget {
+        slug: "rust",
+        enum_name: "Rust",
+        crate_dir: "crates/mehen-rust/src",
+        language: || tree_sitter_rust::LANGUAGE.into(),
+    },
+    ```
+  </Step>
+  <Step title="Generate the kind enum">
+    ```bash
+    cargo xtask tree-sitter generate rust
+    ```
+
+    The result lands at `crates/mehen-rust/src/grammar.rs`.
+
+    <Warning>
+    Never edit `grammar.rs` directly. `cargo xtask tree-sitter check-generated` runs in CI and fails the
+    build if the checked-in file doesn't match a fresh render.
+    </Warning>
+  </Step>
+  <Step title="Implement the analyzer">
+    In `crates/mehen-<lang>/src/lib.rs`:
+
+    - Define a `<Lang>Analyzer` struct that implements `mehen_core::LanguageAnalyzer`.
+    - Walk the parse tree and emit metrics through `mehen_metrics::{State, MetricTreeBuilder, ...}` and
+      the per-metric helpers.
+    - Use the generated `crate::grammar::<Lang>` enum for kind-id matching — it deduplicates positional
+      kinds and exposes mnemonic identifiers (`PLUS`, `EQ_EQ`, etc.).
+  </Step>
+  <Step title="Register the analyzer">
+    Add it to `mehen-engine`'s registry (`crates/mehen-engine/src/registry.rs`) so
+    `Language::<YourLang>` dispatches to it.
+  </Step>
+  <Step title="Add tests">
+    Per-metric integration tests under `crates/mehen-<lang>/tests/` — typically one file per metric
+    family, snapshotting the rendered metric JSON via `insta`.
+  </Step>
+</Steps>
+
+## Adding a non-tree-sitter language
+
+Some languages flow through richer parsers (Ruff for Python, Oxc for TS/JS, Mago for PHP, Prism for
+Ruby, `ra_ap_syntax` for Rust). Those analyzers don't need a `grammar.rs` — they walk the parser's typed
+AST directly. Skip the codegen steps and go straight to the analyzer implementation step, importing the
+parser crates you need into `crates/mehen-<lang>/Cargo.toml`.
+
+## Bumping a pinned grammar
+
+When dependabot bumps a `tree-sitter-<lang>` version (or you do it manually):
+
+1. Update both `xtask/Cargo.toml` and `crates/mehen-<lang>/Cargo.toml` to the new version. The
+   `regenerate-grammars` workflow does this automatically for inline-pinned grammars.
+2. Run `cargo xtask tree-sitter generate --all` and commit the regenerated `grammar.rs` files.
+3. CI's `cargo xtask tree-sitter check-generated` will fail until the regenerated files are committed.
+
+## Validation
+
+```bash
+cargo check --workspace
+cargo nextest run --all-features
+cargo insta test --workspace --all-features --check --unreferenced reject \
+    --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
+cargo clippy --all-targets --all-features --locked
+cargo xtask tree-sitter check-generated
+```
+
+## See also
+
+- [Update grammars](/developers/update-grammars) — bumping pinned tree-sitter versions.
+- [Implement LoC](/developers/loc) — example of a metric trait implementation.

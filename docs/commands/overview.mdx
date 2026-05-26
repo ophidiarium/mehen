@@ -1,0 +1,35 @@
+---
+title: "Commands overview"
+description: "What the mehen CLI does and how its commands compose."
+keywords: ["commands", "cli", "mehen commands"]
+---
+
+The mehen CLI offers a small, focused set of commands. They compose around two ideas:
+
+1. **Compute static metrics** for one or more files / directories.
+2. **Compare metrics** across two git revisions (the basis of the
+   [GitHub Action](/guides/github-action)).
+
+## Commands
+
+| Page | What it does |
+|---|---|
+| [`mehen` (metrics)](/commands/metrics) | Compute and display source-code and Markdown metrics for a path. |
+| [`mehen diff`](/commands/diff) | Diff metrics between two git revisions and emit JSON or Markdown. |
+| [`mehen` (nodes)](/commands/nodes) | Inspect AST nodes, detect parser errors, count specific node kinds. |
+
+## Why "static"?
+
+mehen does not run your code. Every metric is derived from the parser's tree representation —
+deterministic, network-free, and safe for air-gapped CI.
+
+## Output formats
+
+All commands accept:
+
+- `text` — pretty-printed console output (default).
+- `json` (`--pr` for pretty).
+- `yaml`, `toml`, `cbor`.
+- `markdown` (`mehen diff` only) — GitHub-flavored Markdown for sticky comments.
+
+See [Concepts → Output formats](/concepts/output-formats) for the schema of each.

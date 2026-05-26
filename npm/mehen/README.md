@@ -1,13 +1,14 @@
 # mehen
 
-Rust-powered CLI for detecting heuristic source code metrics at scale: complexity, maintainability, lines of code, and more.
+Rust-powered CLI for heuristic source code and documentation metrics: complexity, maintainability,
+lines of code, and Markdown documentation health.
 
-Designed for fast, deterministic analysis over large codebases, helping both human and AI engineers track how complexity evolves over time.
+📚 **Documentation: <https://mehen.ophi.dev>**
 
 ## Install
 
 ```bash
-npm install mehen
+npm install -g mehen
 ```
 
 Or run without installing:
@@ -23,44 +24,44 @@ Also available on [PyPI](https://pypi.org/project/mehen/):
 uvx mehen --help
 ```
 
-## Supported Languages
+## What mehen computes
 
-- Python (.py)
-- TypeScript (.ts)
-- TSX (.tsx)
-- Rust (.rs)
-- Go (.go)
+For source code: cyclomatic complexity, cognitive complexity, Halstead suite, Maintainability Index,
+ABC, LOC family (SLOC, PLOC, LLOC, CLOC, blank), NARGS, NEXITS, NOM, NPA, NPM, WMC.
 
-## Usage
+For Markdown documentation: Documentation Maintainability Index (DMI), Markdown Reading Path Complexity
+(MRPC), Markdown Cognitive Complexity (MCC), Markdown Halstead, Link Debt, Table Burden, Visual
+Scaffold, Artifact Debt, Repository Grounding, Evidence Coverage, Filler / Lazy Structure Risk, Review
+Criticality Index, plus an opt-in English / Japanese prose layer.
 
-Analyze metrics for a directory:
+Full metric catalog with formulas and references: <https://mehen.ophi.dev/metrics/code/overview>.
+
+## Supported languages
+
+Python, TypeScript / JavaScript (`.ts` / `.mts` / `.cts` / `.js` / `.mjs` / `.cjs`),
+TSX / JSX, Rust, Go, Ruby, Kotlin, PowerShell, C, and Markdown.
+
+## Quick start
 
 ```bash
+# Compute metrics for a directory
 npx -y mehen -m -p src
-```
 
-Export metrics as JSON:
-
-```bash
+# Export as JSON
 npx -y mehen -m -p src -O json -o ./metrics
+
+# Diff metrics against main
+npx -y mehen diff --from main --to HEAD --paths src
 ```
 
 Other supported output formats: YAML, TOML, CBOR.
 
-## What Mehen Computes
+Full quickstart: <https://mehen.ophi.dev/quickstart>.
 
-- **Cyclomatic complexity** -- control flow complexity
-- **Cognitive complexity** -- human-perceived complexity with nesting
-- **Maintainability Index** -- overall maintainability score
-- **Halstead metrics** -- volume, difficulty, effort, bugs prediction
-- **ABC metric** -- assignments, branches, conditionals
-- **LOC family** -- SLOC, PLOC, LLOC, CLOC, blanks
-- **NArgs / NOM / NExit** -- arguments, methods, exit points
-- **NPA / NPM / WMC** -- public attributes, public methods, weighted methods per class
+## CI integration
 
-## CI Integration
-
-`mehen` ships a GitHub Action that computes changed-file metric trends on pull requests, compares against the base branch, and posts a summary comment:
+`mehen` ships a GitHub Action that computes changed-file metric trends on pull requests, compares
+against the base branch, and posts a summary comment:
 
 ```yaml
 permissions:
@@ -69,11 +70,10 @@ permissions:
   issues: write
 
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v6
     with:
       fetch-depth: 0
-
-  - uses: ophidiarium/mehen@v1
+  - uses: ophidiarium/mehen@v0
     with:
       paths: src
       thresholds: |
@@ -81,7 +81,7 @@ steps:
         cognitive=4
 ```
 
-The action is backed by `mehen diff`, so polyglot repositories can pass multiple roots and let `mehen` pick supported languages from changed files.
+Full reference: <https://mehen.ophi.dev/guides/github-action>.
 
 ## Platforms
 
@@ -100,6 +100,7 @@ Requires Node.js >= 18.
 
 ## Links
 
+- [Documentation](https://mehen.ophi.dev)
 - [GitHub](https://github.com/ophidiarium/mehen)
 - [Issues](https://github.com/ophidiarium/mehen/issues)
 - [PyPI package](https://pypi.org/project/mehen/)

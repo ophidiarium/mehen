@@ -1,160 +1,62 @@
 # mehen
 
-**mehen** is a Rust-powered CLI for detecting heuristic source code metrics at scale: complexity, maintainability, lines of code, and more.
+**mehen** is a Rust-powered CLI for detecting heuristic source code metrics at scale: complexity,
+maintainability, lines of code, documentation health, and more.
 
-It is designed for fast, deterministic analysis over large codebases, helping both human and AI engineers track how complexity evolves over time.
+It is designed for fast, deterministic analysis over large codebases, helping both human and AI
+engineers track how complexity evolves over time.
+
+📚 **Documentation: <https://mehen.ophi.dev>**
 
 ## What is Mehen?
 
-In Ophidiarium projects, names matter.
+In Ophidiarium projects, names matter. **Mehen** is a mythical ancient Egyptian serpent associated with
+guarding Ra. In the same spirit, `mehen` helps guard your codebase from slowly collapsing under
+complexity.
 
-**Mehen** is a mythical ancient Egyptian serpent associated with guarding Ra. In the same spirit, `mehen` helps guard your codebase from slowly collapsing under complexity.
+## Why teams use mehen
 
-## Why Teams Use Mehen
+- **Polyglot by design** — per-file language detection across nine source languages plus Markdown.
+  Useful for monorepos.
+- **Code and documentation in one tool** — source-code complexity *and* Markdown documentation health.
+- **Deterministic, no network** — pure static analysis. Same input → same output. Safe for air-gapped
+  CI.
+- **Pull-request native** — built-in `mehen diff` plus a sticky comment GitHub Action.
 
-Most common usage patterns we see:
-
-- CI jobs that compute metrics for changed files and publish trend reports
-- Pre-PR / pre-CR hooks that provide immediate quality feedback
-- Automation workflows that enrich pull request templates with a glance view of metric deltas
-
-## Current Language Support
-
-Today `mehen` supports:
-
-- Python
-- TypeScript / JavaScript (`.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`)
-- TSX / JSX (`.tsx`, `.jsx`)
-- Rust
-- Go
-- Ruby
-- Kotlin
-- PowerShell
-- C (`.c`, `.h`)
-- Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdx`) — documentation metrics only
-
-Because TypeScript is a superset of JavaScript, `mehen` analyzes `.js`/`.mjs`/`.cjs`
-files through the TypeScript grammar and `.jsx` files through the TSX grammar.
-
-Markdown files receive a dedicated documentation metric suite (maintainability,
-reading path complexity, link debt, filler/lazy risk, readability) rather than
-the code-style metrics — Markdown has no functions, classes, or interfaces to
-score. See the [Markdown metric chapter](mehen-book/src/metrics/markdown.md).
-
-We also providing comprehensive support for polyglot monorepos, with per-file language detection and reporting.
-
-## What Mehen Computes
-
-`mehen` provides a broad metric set for source code, including:
-
-- Cyclomatic complexity
-- Cognitive complexity
-- Maintainability Index
-- Halstead metrics
-- ABC metrics
-- NArgs / NOM / NExit
-- LOC family (SLOC, PLOC, LLOC, CLOC, blanks)
-- NPA / NPM / WMC
-
-### Markdown documentation metrics
-
-For Markdown (README, ADRs, runbooks, API references, tutorials, generated
-docs), `mehen` ships a dedicated metric suite that treats code fences,
-diagrams, tables, images, links, math, and repository references as
-first-class document constructs instead of stripping them before counting
-words. The structural layer covers a Markdown LOC family (prose vs. code
-vs. tables vs. math vs. blank lines), Markdown Reading Path Complexity, a
-Markdown Cognitive Complexity analogue, Markdown Halstead, a Documentation
-Maintainability Index (DMI), link debt, table burden, visual scaffold,
-repository grounding, evidence coverage, filler/lazy structure risk, and a
-review criticality index. An opt-in language-aware prose layer adds
-English readability (Flesch, Flesch-Kincaid, Fog, SMOG, ARI, Coleman-Liau,
-Dale-Chall, FORCAST, LIX/RIX), lexical diversity (MATTR, hapax, density),
-wording quality (passive, hedges, weasels, wordy, adverbs, nominalizations,
-cliches, illusions), inclusive-language flags, Japanese script composition,
-the Tateishi simplified readability score, a Jōyō-grade proxy, JTF
-rule conformance, and a textlint-ja subset. Full reference in the
-[Markdown metric chapter](mehen-book/src/metrics/markdown.md) of the book.
-
-## Distribution
-
-`mehen` ships native binaries through:
-
-- npm (`mehen` + platform packages)
-- PyPI (`mehen` via maturin binary packaging)
-- GitHub Releases (per-target archives, also installable via `cargo binstall`)
-
-## Quick Start
-
-### Install
-
-Pick the path that matches the toolchain you already have. All three
-install the same native binaries published from each release.
-
-From npm:
+## Install
 
 ```bash
+# npm
 npm install -g mehen
-# or, project-local
-npm install --save-dev mehen
-```
 
-From PyPI:
-
-```bash
-pip install mehen
-# or with uv
+# PyPI / uv
 uv tool install mehen
-```
+# or: pip install mehen
 
-From a Rust toolchain via [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall)
-(downloads the pre-built binary from the GitHub Release — much
-faster than `cargo install`, which would build from source):
-
-```bash
+# cargo binstall
 cargo binstall --git https://github.com/ophidiarium/mehen mehen
 ```
 
-### Run without installation
+Full installation guide: <https://mehen.ophi.dev/installation>.
 
-From npm ecosystem:
-
-```bash
-bunx mehen --help
-```
-
-From Python/uv ecosystem:
+## Quick start
 
 ```bash
-uv tool run mehen --help
-# or
-uvx mehen --help
-```
-
-### Run locally from source
-
-```bash
-cargo run -- --help
-```
-
-### Typical examples
-
-Analyze metrics for a directory:
-
-```bash
+# Compute metrics for a directory
 mehen -m -p src
-```
 
-Export metrics as JSON/TOML/YAML/CBOR:
-
-```bash
+# Export as JSON
 mehen -m -p src -O json -o ./metrics
+
+# Diff metrics against main
+mehen diff --from main --to HEAD --paths src
 ```
 
-## GitHub Actions
+Quickstart: <https://mehen.ophi.dev/quickstart>.
 
-Use the in-repository action to publish changed-file metric trends on pull
-requests:
+## GitHub Action
+
+Drop the action into a workflow to publish per-PR metric trends:
 
 ```yaml
 permissions:
@@ -166,99 +68,29 @@ steps:
   - uses: actions/checkout@v6
     with:
       fetch-depth: 0
-
   - uses: ophidiarium/mehen@v0
     with:
       paths: src
 ```
 
-For polyglot monorepos, pass each root you want tracked. `mehen` will analyze
-only supported languages in changed files under those roots:
+Full reference: <https://mehen.ophi.dev/guides/github-action>.
 
-```yaml
-- uses: ophidiarium/mehen@v0
-  with:
-    paths: |
-      crates/api/src
-      apps/web/src
-      tools
-    thresholds: |
-      cyclomatic=5
-      cognitive=4
-      loc.lloc=120
-```
+## Documentation
 
-Thresholds are optional. When configured, the action fails if an adverse
-per-file metric delta exceeds the configured limit.
+Everything else lives in the docs site:
 
-When enabled and a PR touches one or more Markdown files, `mehen diff`
-will also emit a Documentation Metrics section inside the same sticky
-comment, anchored by `<!-- mehen-docs -->`. Once fully wired, it will
-report DMI, word count, FKGL / Tateishi RS, link debt, and filler risk
-per file, plus a template-driven callout list for objective defects
-(broken links, new inclusive-language flags, long sentences, heading
-skips, unlabelled code fences, etc.). The full specification — anchor
-rules, cell format, callout template catalog, planned `--fail-on`
-gating — is in
-[`commands/pr-comment.md`](mehen-book/src/commands/pr-comment.md). Until
-the Markdown renderer emits the anchor and the callout catalog is
-wired end-to-end, the GitHub Action only publishes the source-code
-metrics section.
-
-## Reporting and Integrations
-
-Current machine-readable outputs:
-
-- JSON
-- YAML
-- TOML
-- CBOR
-
-Roadmap direction:
-
-- Native git integration for changed-file detection
-- Rich markdown reports for AI/human review flows
-- More polished console reporting for local developer loops
-
-## Implementation Notes
-
-Internally, `mehen` is built on:
-
-- [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for parsing
-- The excellent foundational work from Mozilla's [rust-code-analysis](https://github.com/mozilla/rust-code-analysis)
-
-`mehen` continues in its own CLI-focused direction while preserving and evolving that foundation.
-
-## Development
-
-Build and check:
-
-```bash
-cargo check
-cargo build
-cargo fmt --all
-cargo clippy --all-targets --all-features --locked
-```
-
-Tests:
-
-```bash
-cargo test --all-targets --locked
-```
-
-Snapshot tests (`insta`):
-
-```bash
-cargo insta test --all-features --check --unreferenced reject --test-runner nextest --no-test-runner-fallback --disable-nextest-doctest
-```
-
-See `mehen-book/src/developers/` for developer docs, including language and grammar updates.
+- [Code metrics](https://mehen.ophi.dev/metrics/code/overview) — cyclomatic, cognitive, Halstead, MI,
+  ABC, LOC family, NOM, NPA, NPM, WMC.
+- [Markdown metrics](https://mehen.ophi.dev/metrics/markdown/overview) — DMI, MRPC, MCC, link debt,
+  filler/lazy risk, English/Japanese prose layer.
+- [SQL metrics (preview)](https://mehen.ophi.dev/metrics/sql/overview) — roadmap for `mehen-sql`.
+- [Commands](https://mehen.ophi.dev/commands/overview) — `mehen`, `mehen diff`, AST inspection.
+- [Developers guide](https://mehen.ophi.dev/developers/overview) — build, test, contribute, add a
+  language.
 
 ## Contributing
 
-Contributions are welcome via issues and pull requests:
-
-- https://github.com/ophidiarium/mehen/issues
+Issues and pull requests welcome at <https://github.com/ophidiarium/mehen/issues>.
 
 ## License
 

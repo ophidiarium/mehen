@@ -1,0 +1,52 @@
+---
+title: "Repository Grounding"
+description: "How much a Markdown file connects to repository reality — files, commands, packages, APIs, configs, tests, and versioned facts."
+keywords: ["repository grounding", "documentation", "cross-references"]
+---
+
+A Markdown file in a software project should connect to repository reality — files, commands, packages,
+APIs, configs, tests, and versioned facts — or at least acknowledge that it doesn't.
+
+## Formula (§15)
+
+```text
+RepositoryGroundingScore = clamp01(
+    0.25 · sat(repo_link_density;    0.5, 4.0)
+  + 0.25 · path_resolution_rate
+  + 0.20 · sat(code_example_density; 0.5, 3.0)
+  + 0.15 · sat(identifier_density;   0.02, 0.12)
+  + 0.15 · sat(version_fact_density; 0.01, 0.08)
+)
+```
+
+## Components
+
+- **Repo link density** — relative repo links per 100 words.
+- **Path resolution rate** — how many path-like tokens resolve to actual files.
+- **Code example density** — labelled code-fence count per 100 words.
+- **Identifier density** — identifier-like tokens (CamelCase, snake_case, dotted paths) per word.
+- **Version fact density** — version pins, semver, dates, hash references per word.
+
+## Bands (§15.3)
+
+| Score | Meaning |
+|---|---|
+| 0.00–0.20 | Almost none. |
+| 0.21–0.50 | Weak. |
+| 0.51–0.80 | Useful. |
+| 0.81–1.00 | Very grounded. |
+
+## How downstream metrics use it
+
+- [**Filler / Lazy Risk**](/metrics/markdown/filler-lazy-risk) consumes `1 − RepositoryGroundingScore`
+  as one of its sub-scores.
+- The PR comment surfaces a 🔴 callout when grounding crosses a band downward.
+
+## References
+
+- Research foundation §15 — Repository Grounding derivation.
+
+## See also
+
+- [Evidence Coverage](/metrics/markdown/evidence-coverage) — per-section structural support.
+- [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) — uses grounding as an input.

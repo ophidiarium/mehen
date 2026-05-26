@@ -1,0 +1,65 @@
+---
+title: "WMC — Weighted Methods per Class"
+description: "Sum of cyclomatic complexity across all methods declared in a class or interface."
+keywords: ["wmc", "weighted methods", "ck metrics", "chidamber kemerer"]
+---
+
+**Weighted Methods per Class (WMC)** is one of the six classic CK (Chidamber & Kemerer) object-oriented
+metrics. It sums the [cyclomatic complexity](/metrics/code/cyclomatic) of every method declared in a
+class or interface.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `wmc` | int | Sum of cyclomatic complexity across all methods in the file. |
+| `wmc.classes` | int | WMC summed over classes only. |
+| `wmc.interfaces` | int | WMC summed over interfaces only. |
+
+## Definition
+
+```text
+WMC(C) = Σ cyclomatic_complexity(m_i)
+```
+
+for each method `m_i` defined in class `C`. A class with five methods of cyclomatic complexity
+`{1, 1, 4, 5, 8}` has `WMC = 19`.
+
+## Why a sum, not an average
+
+A class with one 50-CC method is different from a class with fifty 1-CC methods, even though the
+average is the same. WMC captures the **total** decision burden of a class, which correlates with how
+much of the class a maintainer must understand to make a change.
+
+## How to read it
+
+There is no universal threshold; common conventions:
+
+| `WMC` | Interpretation |
+|---|---|
+| 1–14 | Small/cohesive class. |
+| 15–40 | Normal in Java/C# / TS classes. |
+| 41+ | Likely god-class candidate. |
+
+Read WMC alongside [NOM](/metrics/code/nom): a high WMC with low NOM signals a few very complex methods;
+a high WMC with high NOM signals a class doing too much.
+
+## Languages where WMC applies
+
+WMC is meaningful for languages with explicit class/interface declarations: Java, Kotlin, TypeScript,
+Python (classes), Ruby, C++, C#. mehen reports `wmc = 0` for files with no declarations of those kinds
+(e.g., a Go file or a procedural C file).
+
+## References
+
+- Chidamber, S. R. & Kemerer, C. F. (1994). *A Metrics Suite for Object Oriented Design.*
+  IEEE Transactions on Software Engineering, 20(6): 476–493.
+  [DOI](https://doi.org/10.1109/32.295895).
+- Wikipedia: [Programming complexity — Object-oriented metrics](https://en.wikipedia.org/wiki/Programming_complexity#Chidamber_and_Kemerer's_object-oriented_metrics).
+- Sonar: [Metrics definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — the per-method input.
+- [NOM](/metrics/code/nom) — number of methods.
+- [NPM](/metrics/code/npm) — number of public methods.

@@ -1,0 +1,46 @@
+---
+title: "CLOC — Comment Lines of Code"
+description: "Comment lines: line, block, and documentation comments."
+keywords: ["cloc", "comments", "comment density"]
+---
+
+**CLOC** (Comment Lines of Code) counts lines that contain at least one comment token. Mehen does not
+distinguish line, block, or doc comments in the headline metric — they all contribute one line per
+physical line they occupy.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `loc.cloc` | int | Comment lines (line + block + doc comments). |
+
+## How it is computed
+
+A line counts toward CLOC when the parser reports at least one comment trivia token on it.
+A pure comment line (e.g., a `//` line in Rust or a `#` line in Python) counts once. Mixed lines (code
+followed by an inline comment) count toward both [PLOC](/metrics/code/ploc) and CLOC.
+
+## When it is useful
+
+- **Comment density** — `cloc / (cloc + ploc)` is a coarse proxy for documentation effort.
+- **Generated code detection** — heavily generated files often have unusually low or unusually high
+  comment density.
+- **Maintainability** — the [Maintainability Index](/metrics/code/mi) `mi.original` variant uses comment
+  count as one of its inputs.
+
+<Note>
+A high CLOC is **not** automatically a good thing. Stale, copy-pasted, or boilerplate comments hurt
+maintainability. Read CLOC alongside [Cognitive complexity](/metrics/code/cognitive) — clear code with
+few comments often beats opaque code with many.
+</Note>
+
+## References
+
+- Wikipedia: [Comment (computer programming)](https://en.wikipedia.org/wiki/Comment_(computer_programming)).
+- Sonar: [`comment_lines` and `comment_lines_density`](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [LOC family](/metrics/code/loc) — overview.
+- [PLOC](/metrics/code/ploc) — physical instruction lines.
+- [Maintainability Index](/metrics/code/mi) — uses comment counts.

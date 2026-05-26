@@ -1,0 +1,68 @@
+---
+title: "Architecture"
+description: "How mehen's parsers, analyzers, metric pipeline, and reporters compose."
+keywords: ["architecture", "design", "internals"]
+---
+
+mehen's internals are organized around a clean separation between parsing, analyzing, and reporting.
+
+## Crate layout
+
+| Crate | Responsibility |
+|---|---|
+| `mehen-cli` | CLI binary — entry point, command routing, exit codes. |
+| `mehen-engine` | Pipeline orchestration — `run_diff`, `run_top_offenders`, registry, language detection. |
+| `mehen-core` | Parser-neutral domain types and the `LanguageAnalyzer` trait. |
+| `mehen-metrics` | Shared metric formulas, accumulators, finalizers (Halstead, cyclomatic, cognitive, MI, ABC, LOC, NOM, NPA, NPM, WMC). |
+| `mehen-<lang>` | Per-language analyzer crates. Each owns parsing, metric interpretation, and (for tree-sitter-backed languages) its `grammar.rs`. |
+| `mehen-tree-sitter` | Shared tree-sitter wrapper and CST traversal helpers. |
+| `mehen-markdown` | Markdown analyzer with embedded-code dispatch via `LanguageDispatcher`. |
+| `mehen-git` | Git operations for `mehen diff`. |
+| `mehen-report` | JSON, CBOR, YAML, TOML, and GitHub-Markdown rendering. |
+| `xtask` | Developer-only commands (kind-enum codegen, AST dumps, audits). |
+
+## Pipeline
+
+```text
+file path
+  ↓
+language detection (extension-driven)
+  ↓
+parser (per-language)
+  ↓
+analyzer.analyze(tree)              ← per-language metric interpretation
+  ↓
+LanguageAnalysis  (Send + 'static)  ← parser-neutral
+  ↓
+metric finalizers (mehen-metrics)
+  ↓
+reporter (mehen-report)             ← JSON / Markdown / etc.
+```
+
+The key constraint: `LanguageAnalysis` is parser-neutral and `Send + 'static`. That lets the engine
+analyze files in parallel via `rayon` without holding parser arenas across thread boundaries.
+
+## Why separate analyzers per language
+
+A single "universal" analyzer would fight the grammar of every language. Instead each language crate
+owns:
+
+- The parser pin (a tree-sitter version, or a richer parser like Ruff / Oxc / Mago / Prism /
+  `ra_ap_syntax`).
+- The mapping from grammar nodes to metric increments — what counts as a "decision" for cyclomatic, an
+  operator for Halstead, a public method for NPM, etc.
+
+`mehen-metrics` owns the math; the per-language analyzers own the interpretation.
+
+## Markdown is special
+
+The Markdown analyzer (`mehen-markdown`) parses the document into block/inline AST and dispatches code
+fences back through `LanguageDispatcher`. That is how Markdown
+[Halstead](/metrics/markdown/halstead) and [MCC](/metrics/markdown/mcc) can credit embedded code blocks
+without duplicating language logic.
+
+## See also
+
+- [Spaces](/concepts/spaces) — the language-aware container model.
+- [Output formats](/concepts/output-formats) — how each crate's output is rendered.
+- [Developers → Add a new language](/developers/new-language).

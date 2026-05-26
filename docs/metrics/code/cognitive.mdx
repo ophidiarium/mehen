@@ -1,0 +1,82 @@
+---
+title: "Cognitive complexity"
+description: "How difficult code is to understand, weighted by nesting and control-flow breaks."
+keywords: ["cognitive complexity", "sonar", "readability", "complexity"]
+---
+
+**Cognitive complexity** measures how difficult code is to understand. Unlike
+[cyclomatic complexity](/metrics/code/cyclomatic), which measures paths through the control-flow graph,
+cognitive complexity penalizes constructs that disrupt the linear flow of reading and rewards constructs
+that aid comprehension.
+
+The metric was introduced by SonarSource in 2018 explicitly to address shortcomings of cyclomatic
+complexity. It applies three rules:
+
+1. Ignore structures that allow multiple statements to be readably shorthanded into one.
+2. Increment for break in linear flow (`if`, `else`, ternary, `switch`, loop, `catch`, `goto`, recursion,
+   `&&`/`||` chains).
+3. Increment for nested flow-breaking structures, with the increment proportional to the nesting depth.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `cognitive` | int | Cognitive complexity for the space. |
+| `cognitive.sum` | int | Sum across child spaces. |
+| `cognitive.average` | float | Mean across functions. |
+| `cognitive.min` | int | Minimum across functions. |
+| `cognitive.max` | int | Maximum across functions. |
+
+## How it differs from cyclomatic
+
+```python
+# Cyclomatic: 4   (one + for each of the four boolean operators)
+# Cognitive:  4   (1 for the if, +1 nesting, +2 for &&/|| mix)
+def is_eligible(user):
+    if user and (user.is_active or user.is_admin) and not user.is_banned:
+        return True
+    return False
+```
+
+```python
+# Cyclomatic: 4   (one + for the three branches)
+# Cognitive:  6   (1 + 2 + 3 because each nested branch costs nesting depth)
+def deep(x):
+    if x > 0:
+        if x < 100:
+            if x % 2 == 0:
+                return True
+    return False
+```
+
+## Per-language increments
+
+mehen mirrors Sonar's specification closely. Each language analyzer contributes:
+
+- **+1** for each control-flow break: `if`, `else if`, `else`, ternary, `switch` (Sonar counts the
+  `switch` itself, not each `case`), loop, `catch`, `goto`, recursive call, etc.
+- **+1 per nesting level** of the construct relative to its enclosing function.
+- **+1** for each *change* in a sequence of `&&` / `||` operators (chains of the same operator do not
+  re-charge).
+
+## How to read it
+
+| Value | Interpretation |
+|---|---|
+| 0–5 | Easy to read. |
+| 6–10 | Moderate; usually fine. |
+| 11–15 | Hard; consider extracting helpers. |
+| 16+ | Likely a refactor candidate — readers will get lost. |
+
+## References
+
+- Campbell, G. A. (2018). *Cognitive Complexity — A new way of measuring understandability*. SonarSource.
+  [PDF](https://www.sonarsource.com/resources/cognitive-complexity/).
+- Sonar: [Cognitive complexity overview](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+- Wikipedia: [Cognitive complexity (software)](https://en.wikipedia.org/wiki/Cognitive_complexity).
+
+## See also
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — paths through the CFG.
+- [Halstead metrics](/metrics/code/halstead) — vocabulary-based complexity.
+- [Maintainability Index](/metrics/code/mi) — composite that blends cyclomatic + Halstead + LOC.

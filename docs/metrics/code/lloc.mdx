@@ -1,0 +1,54 @@
+---
+title: "LLOC — Logical Lines of Code"
+description: "Logical lines — statements as defined by each language's grammar."
+keywords: ["lloc", "logical lines", "statements", "code metric"]
+---
+
+**LLOC** (Logical Lines of Code) counts statements as the language's grammar defines them. Where PLOC
+counts physical instruction lines, LLOC counts logical units of work — independent of how those units
+happen to be wrapped across physical lines.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `loc.lloc` | int | Logical lines (statements). |
+
+## How it is computed
+
+The exact rule is language-specific because what counts as a statement depends on the grammar. Each
+analyzer crate implements LLOC by walking the parse tree and counting nodes that match its language's
+statement kinds — `expression_statement`, `declaration_statement`, `if_statement`, `for_statement`,
+`return_statement`, etc.
+
+## Worked example
+
+```rust
+fn factorial(num: u64) -> u64 {
+    (1..=num).product()
+}
+```
+
+This file has **one** logical line: the single expression returned from `factorial`. PLOC for the same
+file is 3 (the function signature line, the body line, and the closing brace), and SLOC is the full file
+length.
+
+The split between PLOC and LLOC is sharper in languages where one statement spans many lines (e.g., a
+chained call in JavaScript or a multi-line tuple in Python).
+
+## When it is useful
+
+- Comparing language idioms: a Python list comprehension might be 1 LLOC where the equivalent loop is 5
+  PLOC. LLOC normalizes for that.
+- Detecting "hidden" complexity: when LLOC is much larger than PLOC suggests, the file is statement-dense.
+
+## References
+
+- Wikipedia: [Source lines of code — logical](https://en.wikipedia.org/wiki/Source_lines_of_code#Logical_LOC).
+- Halstead's *Elements of Software Science* (1977) — early discussion of statement-level counting.
+
+## See also
+
+- [LOC family](/metrics/code/loc) — overview.
+- [PLOC](/metrics/code/ploc) — physical instruction lines.
+- [SLOC](/metrics/code/sloc) — total physical lines.

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48">
+  <text x="0" y="34" font-family="ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="700"
+        fill="#E6F8EF">mehen</text>
+  <circle cx="170" cy="24" r="10" fill="#0F8A5F"/>
+  <path d="M165 20 q5 8 10 0" fill="none" stroke="#ffffff" stroke-width="2"/>
+</svg>

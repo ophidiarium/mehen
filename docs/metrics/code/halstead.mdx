@@ -1,0 +1,95 @@
+---
+title: "Halstead metrics"
+description: "Maurice Halstead's vocabulary-based suite — volume, difficulty, effort, bugs, and time."
+keywords: ["halstead", "volume", "difficulty", "effort", "bugs", "complexity"]
+---
+
+The **Halstead metrics** are a suite of measures derived purely from the operators and operands in a
+source file. Maurice Halstead proposed them in *Elements of Software Science* (1977) as a way to
+characterize program size, difficulty, effort, and bug count from token statistics alone — without
+running the code.
+
+mehen reports the canonical Halstead suite per space and per file.
+
+## What mehen emits
+
+| Key | Type | Definition |
+|---|---|---|
+| `halstead` | float | Default surface; equals `halstead.volume`. |
+| `halstead.volume` | float | `V = N · log₂(η)` |
+| `halstead.difficulty` | float | `D = (η₁ / 2) · (N₂ / η₂)` |
+| `halstead.effort` | float | `E = D · V` |
+| `halstead.vocabulary` | int | `η = η₁ + η₂` |
+| `halstead.length` | int | `N = N₁ + N₂` |
+| `halstead.n1` | int | Distinct operators. |
+| `halstead.N1` | int | Total operators. |
+| `halstead.n2` | int | Distinct operands. |
+| `halstead.N2` | int | Total operands. |
+| `halstead.bugs` | float | `B = V / 3000` (estimated delivered bugs). |
+| `halstead.time` | float | `T = E / 18` (estimated implementation time, seconds). |
+| `halstead.estimated_program_length` | float | `Ñ = η₁ · log₂(η₁) + η₂ · log₂(η₂)` |
+| `halstead.level` | float | `L = 1 / D` |
+| `halstead.purity_ratio` | float | `Ñ / N` |
+
+## Definitions
+
+| Term | Meaning |
+|---|---|
+| η₁ | Number of **distinct** operators in the program. |
+| η₂ | Number of **distinct** operands. |
+| N₁ | Total occurrences of operators. |
+| N₂ | Total occurrences of operands. |
+
+The classical Halstead derived quantities follow:
+
+```text
+η = η₁ + η₂                       (vocabulary)
+N = N₁ + N₂                       (length)
+V = N · log₂(η)                   (volume)
+D = (η₁ / 2) · (N₂ / η₂)          (difficulty)
+E = D · V                         (effort)
+B = V / 3000                      (estimated bugs)
+T = E / 18                        (estimated implementation time)
+```
+
+The constant `18` in the time formula is Halstead's "Stroud number" — the number of mental
+discriminations per second a programmer is assumed to make.
+
+## Per-language operator/operand split
+
+What counts as an operator vs. an operand is language-specific. mehen's analyzers follow the prevailing
+convention:
+
+- **Operators:** keywords (`if`, `for`, `return`, …), arithmetic and logical symbols (`+`, `&&`, …),
+  parentheses pair `()`, brackets `[]`, and assignment operators.
+- **Operands:** identifiers, literal values (numbers, strings, booleans, null/undefined), and type names.
+
+The exact mapping for each language lives in its analyzer crate at `crates/mehen-<lang>/`.
+
+## How to read it
+
+| Halstead | Interpretation |
+|---|---|
+| `volume` low, `difficulty` low | Small, easy code. |
+| `volume` high, `difficulty` low | Long but mechanical (e.g., big lookup table). |
+| `volume` low, `difficulty` high | Compact but tricky (clever one-liner). |
+| `volume` high, `difficulty` high | Large *and* tricky — refactor candidate. |
+
+`halstead.bugs` and `halstead.time` are **rough estimates** with limited empirical backing. Treat them as
+order-of-magnitude signals, not promises.
+
+## References
+
+- Halstead, M. H. (1977). *Elements of Software Science*. Operating, and Programming Systems Series.
+  Elsevier. [Original book](https://www.osti.gov/biblio/5685613).
+- Wikipedia: [Halstead complexity measures](https://en.wikipedia.org/wiki/Halstead_complexity_measures).
+- Sonar: [Metrics definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/)
+  (Halstead is referenced in the maintainability index inputs).
+- Radon: [Halstead](https://radon.readthedocs.io/en/latest/intro.html#halstead-metrics) — Python
+  implementation reference for formulas.
+
+## See also
+
+- [Maintainability Index](/metrics/code/mi) — uses Halstead volume.
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — control-flow complexity.
+- [Cognitive complexity](/metrics/code/cognitive) — readability complexity.

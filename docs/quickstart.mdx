@@ -1,0 +1,94 @@
+---
+title: "Quickstart"
+description: "Run your first mehen analysis, read the output, and wire mehen into a pull request workflow."
+keywords: ["mehen quickstart", "first run", "github action"]
+---
+
+This guide walks through three things: running mehen locally, exporting metrics, and producing a per-PR
+metric report from CI.
+
+<Steps>
+  <Step title="Install mehen">
+    See the full [installation guide](/installation). The shortest path:
+
+    ```bash
+    npm install -g mehen
+    ```
+  </Step>
+  <Step title="Run a metrics report">
+    Point mehen at any directory and pass `-m` to compute metrics:
+
+    ```bash
+    mehen -m -p src
+    ```
+
+    mehen detects each file's language by extension, dispatches it to the matching analyzer, and prints a
+    table of metrics per file. Source-code files yield cyclomatic, cognitive, Halstead, MI, ABC, LOC family,
+    and class/function shape metrics; Markdown files yield the
+    [documentation suite](/metrics/markdown/overview).
+  </Step>
+  <Step title="Export to JSON">
+    Most teams plug the report into other tooling. Use `-O` to choose a format and `-o` to write to a
+    directory:
+
+    ```bash
+    mehen -m -p src -O json -o ./metrics
+    ```
+
+    Other formats: `yaml`, `toml`, `cbor`. See [Output formats](/concepts/output-formats).
+  </Step>
+  <Step title="Diff against a base revision">
+    `mehen diff` reports per-file metric deltas against a base ref. This is the workhorse behind the
+    GitHub Action:
+
+    ```bash
+    mehen diff --from main --to HEAD --paths src --output-format markdown
+    ```
+
+    The same command renders a sticky GitHub comment when run from the
+    [GitHub Action](/guides/github-action).
+  </Step>
+  <Step title="Add the GitHub Action">
+    Drop these few lines into `.github/workflows/mehen.yml` to publish a metric trend on every PR:
+
+    ```yaml
+    name: mehen
+    on: pull_request
+
+    jobs:
+      mehen:
+        runs-on: ubuntu-latest
+        permissions:
+          contents: read
+          pull-requests: write
+          issues: write
+        steps:
+          - uses: actions/checkout@v6
+            with:
+              fetch-depth: 0
+          - uses: ophidiarium/mehen@v0
+            with:
+              paths: src
+    ```
+
+    See the [GitHub Action guide](/guides/github-action) for thresholds, monorepos, and the sticky
+    comment template.
+  </Step>
+</Steps>
+
+## Where to next
+
+<Columns cols={2}>
+  <Card title="Pick a metric" icon="ruler" href="/metrics/code/overview">
+    Read what each metric means, with links to authoritative references.
+  </Card>
+  <Card title="Markdown analysis" icon="book-open" href="/metrics/markdown/overview">
+    Documentation Maintainability Index, link debt, filler/lazy risk, prose layer.
+  </Card>
+  <Card title="GitHub Action" icon="github" href="/guides/github-action">
+    Inputs, outputs, thresholds, and PR comment design.
+  </Card>
+  <Card title="Concepts" icon="diagram-project" href="/concepts/architecture">
+    How mehen organizes parsers, analyzers, and the metric pipeline.
+  </Card>
+</Columns>

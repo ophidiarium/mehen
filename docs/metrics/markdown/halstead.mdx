@@ -1,0 +1,73 @@
+---
+title: "Markdown Halstead"
+description: "Halstead vocabulary and volume measured over Markdown-native operators and operands."
+keywords: ["markdown halstead", "halstead", "documentation halstead", "documentation complexity"]
+---
+
+**Markdown Halstead** measures token vocabulary and volume using Markdown-native operators and operands
+instead of code operators. It uses the same shape as
+[source-code Halstead](/metrics/code/halstead) but with a documentation-specific operator/operand
+taxonomy.
+
+## Operators (§9.1)
+
+- Heading markers by level (`#`, `##`, …).
+- List markers (`-`, `*`, `1.`, …).
+- Table delimiters (`|`, alignment markers).
+- Link / image operators (`[…](…)`, `![…](…)`).
+- Code-fence openers by language (`` ```python ``).
+- Inline code, blockquote (`>`), math delimiters (`$…$`, `$$…$$`).
+- Emphasis markers (`*`, `_`, `**`).
+- Footnote operators.
+- Raw-HTML / MDX / directive operators.
+- Punctuation classes.
+- Diagram DSL statement classes.
+- Embedded-code operators (scaled — see §9.4).
+
+## Operands (§9.2)
+
+- Word-like tokens.
+- Numeric / version tokens.
+- Identifier-like tokens.
+- Path-like tokens.
+- Link destinations.
+- Table headers.
+- Image destinations / alt hashes.
+- Code identifiers from embedded analyzers.
+- Diagram node / edge labels.
+- Math symbols and commands.
+
+## Formulas (§9.3)
+
+Same shape as source-code Halstead:
+
+```text
+MDH_vocab  = n1 + n2
+MDH_length = N1 + N2
+MDH_volume = MDH_length · log2(max(2, MDH_vocab))
+MDH_diff   = (n1 / 2) · (N2 / max(1, n2))
+MDH_effort = MDH_volume · MDH_diff
+```
+
+## Embedded-code adjustment (§9.4)
+
+Embedded analyzers contribute:
+
+```text
+0.20 · sqrt(code_halstead_volume)
++ 0.50 · code_cognitive
++ 0.10 · code_loc
+```
+
+per code block. Raw embedded volume is square-rooted because it can otherwise dwarf document-level
+signals; cognitive complexity stays linear because a hard example genuinely requires review.
+
+## References
+
+- Halstead, M. H. (1977). *Elements of Software Science.* Elsevier.
+- Research foundation §9 — Markdown Halstead derivation.
+
+## See also
+
+- [Halstead metrics for code](/metrics/code/halstead) — same formulas, different operator set.
+- [DMI](/metrics/markdown/dmi) — uses MDH volume as one of its inputs.

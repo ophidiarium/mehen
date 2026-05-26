@@ -1,0 +1,48 @@
+---
+title: "Good Scaffold"
+description: "Bonus credit for helpful technical structure: visuals, tables, code examples, navigation."
+keywords: ["good scaffold", "scaffolding", "documentation"]
+---
+
+**Good Scaffold (§21)** rewards helpful technical structure. Where most Markdown metrics measure
+problems, this one measures structural assets that aid review.
+
+## Formula
+
+```text
+GoodScaffoldScore = clamp01(
+    0.25 · VisualScaffoldScore
+  + 0.20 · TableScaffoldScore
+  + 0.20 · bounded_labelled_code_example_score
+  + 0.15 · InformationScentScore
+  + 0.10 · section_summary_score
+  + 0.10 · successful_internal_navigation_score
+)
+```
+
+## What each component captures
+
+- [**Visual Scaffold**](/metrics/markdown/visual-scaffold) — well-labelled, bounded, locally explained
+  diagrams and images.
+- [**Table Scaffold**](/metrics/markdown/table-burden) — tables in the 6–60 cell sweet spot.
+- **Bounded labelled code examples** — code fences with explicit language tags and bounded sizes.
+- **Information Scent** ([Link Debt §11.3](/metrics/markdown/link-debt)) — descriptive link text.
+- **Section summary** — sections that open with a short summary paragraph.
+- **Internal navigation** — anchor links resolve and there's a usable navigation structure.
+
+## How DMI uses it
+
+Good Scaffold contributes **positively** to [DMI](/metrics/markdown/dmi) via the `+0.10 · G_norm` term.
+
+It offsets maintainability penalties **modestly**. It never erases objective defects like broken links,
+parse failures, or inclusive-language flags.
+
+## References
+
+- Research foundation §21 — Good Scaffold derivation.
+
+## See also
+
+- [DMI](/metrics/markdown/dmi) — destination of the bonus credit.
+- [Visual Scaffold](/metrics/markdown/visual-scaffold), [Table Burden](/metrics/markdown/table-burden) —
+  largest contributors.

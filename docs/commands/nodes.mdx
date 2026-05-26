@@ -1,0 +1,66 @@
+---
+title: "Inspect AST nodes"
+description: "Detect parser errors, count node kinds, and print the AST for a source file."
+keywords: ["nodes", "ast", "parse errors", "tree-sitter"]
+---
+
+mehen exposes the parser's tree representation through CLI flags. This is useful for debugging analyzer
+behavior, validating new grammars, or simply understanding how a file decomposes into syntactic
+constructs.
+
+## Detect syntactic errors
+
+```bash
+mehen -p /path/to/your/file/or/directory -I "*.ext" -f error
+```
+
+| Flag | Description |
+|---|---|
+| `-p` | Path to a file or directory. |
+| `-I` | Glob filter for selecting files by extension. |
+| `-f` | Search for nodes of a specific kind (`error` reports parser-error nodes). |
+
+## Count nodes by kind
+
+```bash
+mehen -p /path/to/your/file/or/directory -I "*.ext" --count <NODE_KIND>
+```
+
+This counts how many nodes of the specified kind exist in the analyzed files. Useful when verifying
+analyzer node-handling against a real corpus.
+
+## Print the AST
+
+```bash
+mehen -p /path/to/your/file/or/directory -d
+```
+
+The `-d` flag prints the entire AST, allowing you to inspect the file's syntactic structure.
+
+## Analyze a code range
+
+For large files, narrow analysis to a specific line range with `--ls` (line start) and `--le` (line
+end):
+
+```bash
+mehen -p /path/to/your/file/or/directory -d --ls 5 --le 10
+```
+
+## Reference: AST
+
+mehen's parsers build an
+[Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) for each source file. A
+**node** is an element of this tree representing any syntactic construct present in a language.
+
+Nodes can be used to:
+
+- Reconstruct the syntactic structure of a source file.
+- Discover whether a particular construct is present.
+- Count constructs of a given kind.
+- Detect parser errors.
+
+## See also
+
+- [Developers → How-to: Add a new language](/developers/new-language) — how the kind enums are
+  generated.
+- [Developers → How-to: Update grammars](/developers/update-grammars) — how to bump tree-sitter pins.

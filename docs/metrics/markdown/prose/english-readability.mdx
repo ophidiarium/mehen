@@ -1,0 +1,83 @@
+---
+title: "English readability ensemble"
+description: "Nine readability formulas reported with provenance: Flesch, FKGL, Fog, SMOG, ARI, Coleman-Liau, Dale-Chall, FORCAST, LIX/RIX."
+keywords: ["readability", "flesch", "fkgl", "smog", "fog", "english"]
+---
+
+mehen emits **every formula's raw score with provenance** rather than averaging. Two formulas on the
+same text routinely disagree by 2–4 grade levels because they target different comprehension thresholds
+(SMOG ~100%, FKGL ~75%, Dale-Chall in between). Averaging them is statistically wrong.
+
+## Formulas (§31)
+
+| Formula | Section | Syllables | Key notes |
+|---|---|---|---|
+| **Flesch Reading Ease** | §31.1 | yes | `206.835 − 1.015·ASL − 84.6·ASW`. Higher = easier. |
+| **Flesch-Kincaid Grade** | §31.2 | yes | `0.39·ASL + 11.8·ASW − 15.59`. MIL-M-38784A standard. |
+| **Gunning Fog** | §31.3 | yes | `0.4·(ASL + 100·P_complex)`. Target grade 7–12 for business writing. |
+| **SMOG** | §31.4 | yes | `1.0430·sqrt(poly·30/sentences) + 3.1291`. `null` below 30 sentences. |
+| **ARI** | §31.5 | no | `4.71·CPW + 0.5·ASL − 21.43`. Syllable-free. |
+| **Coleman-Liau** | §31.6 | no | `0.0588·L − 0.296·S − 15.8`. Syllable-free. |
+| **New Dale-Chall** | §31.7 | no | `0.1579·PDW + 0.0496·ASL` (+ `3.6365` if PDW > 5%). |
+| **FORCAST** | §31.8 | counts 1-syllable | `20 − (N/10)`. Non-narrative text. |
+| **LIX** | §31.9 | no | `ASL + 100·(long_words/words)`. |
+| **RIX** | §31.9 | no | `long_words / sentences`. |
+
+## Ensemble reporting (§31.10)
+
+1. Emit every formula with provenance.
+2. Compute an **ensemble grade band** as `[min(FKGL, Fog, ARI, CLI), max(…)]` — the interval where those
+   four "running-prose" formulas agree.
+3. Emit FORCAST separately as the preferred single score for non-narrative docs.
+4. Suppress SMOG when `sentences < 30`.
+5. Report Dale-Chall only with an explicit `list:` provenance tag (NGSL 1.2 by default — Browne et al.,
+   2013).
+
+## Syllable counting (§31.11)
+
+Tier 0 default is a vowel-group heuristic (~85% agreement with CMU on open-domain text). Behind
+`--features syllables-cmu`, mehen links the **CMU Pronouncing Dictionary** for exact counts on ~134k
+words with the heuristic as an OOV fallback.
+
+## Sentence segmentation (§31.12)
+
+UAX #29 (`unicode-segmentation`) plus:
+
+- A bundled ~150-entry English abbreviation list (`Mr.`, `e.g.`, `i.e.`, `U.S.`, `v1.2.3`).
+- No split when the period is followed by a lowercase letter, a digit, or `<space><digit>`.
+- Markdown block boundaries (blank line, heading, fence open/close, list item start) are **hard**
+  terminators regardless of punctuation.
+
+## Doc-type thresholds (§31.13)
+
+| Doc type | FKGL | Fog | Passive max | Max sentence words |
+|---|---:|---:|---:|---:|
+| README / overview | ≤ 10 | ≤ 12 | 15 % | 30 |
+| Tutorial | ≤ 9 | ≤ 11 | 10 % | 25 |
+| API reference | ≤ 12 | ≤ 14 | 20 % | 35 |
+| ADR / design | ≤ 12 | ≤ 14 | 25 % | 40 |
+| Error messages | ≤ 7 | ≤ 9 | 5 % | 15 |
+| Release notes | ≤ 11 | ≤ 13 | 15 % | 30 |
+
+These are conventions synthesized from Google, Microsoft, and 18F style guides. They are tunable
+profile defaults.
+
+## References
+
+- Flesch, R. (1948). *A new readability yardstick.* Journal of Applied Psychology, 32(3): 221–233.
+- Kincaid, J. P., et al. (1975). *Derivation of new readability formulas.* (FKGL paper.)
+- McLaughlin, G. H. (1969). *SMOG grading — a new readability formula.* Journal of Reading.
+- Gunning, R. (1952). *The Technique of Clear Writing.* (Fog Index.)
+- Coleman, M. & Liau, T. L. (1975). *A computer readability formula designed for machine scoring.*
+- Senter, R. J. & Smith, E. A. (1967). *Automated Readability Index.* Aerospace Medical Research Laboratory.
+- Chall, J. S. & Dale, E. (1995). *Readability Revisited: The New Dale-Chall Readability Formula.*
+- Caylor, J. S. & Sticht, T. G. (1973). *FORCAST.* HumRRO.
+- Björnsson, C.-H. (1968). *Läsbarhet.* (LIX.)
+- Anderson, J. (1983). *Lix and Rix: Variations on a little-known readability index.* Journal of Reading.
+- Wikipedia: [Readability](https://en.wikipedia.org/wiki/Readability).
+
+## See also
+
+- [Lexical diversity](/metrics/markdown/prose/lexical-diversity) — formula-independent vocabulary
+  measures.
+- [Wording quality](/metrics/markdown/prose/wording-quality) — passive voice, hedges, wordy phrases.

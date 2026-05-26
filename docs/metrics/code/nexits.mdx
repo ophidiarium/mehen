@@ -1,0 +1,55 @@
+---
+title: "NEXITS — Number of Exit Points"
+description: "Exit-point count per function or method (returns + throws + early breaks of control)."
+keywords: ["nexits", "exit points", "early return", "control flow"]
+---
+
+**NEXITS** counts the number of exit points each function/method has. The classic structured-programming
+recommendation is one exit per function — a high NEXITS suggests the function ought to be split.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `nexit` | int | Total exit points across functions in the space. |
+| `nexit.average` | float | Mean exit-point count per function. |
+| `nexit.min` | int | Minimum across functions. |
+| `nexit.max` | int | Maximum across functions. |
+| `nexit.sum` | int | Sum across child spaces. |
+
+## What counts as an exit
+
+Each language analyzer maps its language's exit-flow constructs:
+
+- `return` and value-returning expressions.
+- `throw` / `raise` / `panic!` statements.
+- `yield` / `yield return` (generator functions).
+- `exit`, `os.exit`, and the equivalent process-exit calls where unambiguous.
+- Labeled `break` that exits the function (rare in practice).
+
+The count is per-function: the parser walks each function body and adds 1 per matching node.
+
+## How to read it
+
+| `nexit` | Interpretation |
+|---|---|
+| 1 | Single exit point — classic structured style. |
+| 2–4 | Pragmatic — early returns for guard clauses are a popular style. |
+| 5+ | Function does multiple things — extract methods. |
+
+<Tip>
+Modern Rust, TypeScript, and Kotlin codebases tend to use early returns liberally. A NEXITS of 3–4 is
+not, by itself, a problem. Read NEXITS alongside [Cognitive complexity](/metrics/code/cognitive) — if
+both are high, the function is likely a refactor candidate.
+</Tip>
+
+## References
+
+- Dijkstra, E. W. (1968). *Go To Statement Considered Harmful.* Communications of the ACM, 11(3).
+- Sonar: [Metrics definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/).
+
+## See also
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — exit points are not branches; they're orthogonal.
+- [NARGS](/metrics/code/nargs) — argument count.
+- [NOM](/metrics/code/nom) — number of methods.

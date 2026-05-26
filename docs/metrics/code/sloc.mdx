@@ -1,0 +1,44 @@
+---
+title: "SLOC — Source Lines of Code"
+description: "Total physical lines of source code, including comments and blanks."
+keywords: ["sloc", "lines of code", "size metric"]
+---
+
+**SLOC** (Source Lines of Code) is the total count of physical lines in a source file, including code,
+comments, and blank lines. It is the simplest possible size metric.
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `loc.sloc` | int | Total physical lines in the file. |
+| `loc` | int | Alias for `loc.sloc` (legacy). |
+
+## How it is computed
+
+mehen counts physical lines in the source bytes — every newline-terminated region is one line. Files that
+do not end with a newline still count the trailing fragment.
+
+## When it is useful
+
+- Repository-level dashboards: total SLOC is a coarse but stable size signal.
+- Trend reports: SLOC delta is what most engineering organizations track week over week.
+- Sanity checking PR size: if a PR adds 5,000 SLOC, that's worth a comment.
+
+<Warning>
+SLOC is **not** a quality metric. A 50-line file can be more complex than a 500-line one. Use SLOC
+alongside [PLOC](/metrics/code/ploc), [LLOC](/metrics/code/lloc),
+[Cyclomatic complexity](/metrics/code/cyclomatic), and [Cognitive complexity](/metrics/code/cognitive).
+</Warning>
+
+## References
+
+- Wikipedia: [Source lines of code](https://en.wikipedia.org/wiki/Source_lines_of_code).
+- Sonar: [`ncloc`](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/)
+  — Sonar's analogous metric (non-comment lines).
+
+## See also
+
+- [LOC family](/metrics/code/loc) — overview of all five LOC variants.
+- [PLOC](/metrics/code/ploc) — instruction lines only.
+- [LLOC](/metrics/code/lloc) — logical (statement) lines.

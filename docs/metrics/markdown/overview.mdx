@@ -1,0 +1,70 @@
+---
+title: "Markdown metrics overview"
+description: "What mehen reports for Markdown documentation: structural metrics, prose layer, and the AI-era 'filler/lazy structure' family."
+keywords: ["markdown metrics", "documentation maintainability", "dmi", "filler risk", "readability"]
+---
+
+mehen treats Markdown as a first-class artifact. Instead of stripping code fences, diagrams, tables,
+images, links, and math before counting words, every construct contributes to a dedicated metric suite.
+
+The suite is split into two layers:
+
+- **[Structural layer](#structural-layer)** — language-opaque, AST-driven: LOC family, section tree,
+  reading-path complexity, link/table/visual scaffolds, repository grounding, filler/lazy risk, review
+  criticality.
+- **[Prose layer](/metrics/markdown/prose/overview)** — language-aware (English and Japanese): readability
+  ensemble, lexical diversity, wording quality, JTF rules, textlint subset.
+
+<Note>
+Code-style metrics like cyclomatic complexity, NOM, NPA, NPM, and WMC do **not** apply to Markdown —
+prose has no functions, classes, or interfaces to score. mehen emits a Markdown-specific suite tailored
+to prose, code blocks, and references.
+</Note>
+
+## Structural layer
+
+| Page | Purpose |
+|---|---|
+| [LOC family](/metrics/markdown/loc-family) | Markdown LOC variants by construct: prose / code / tables / math / blank / artifact. |
+| [Section tree](/metrics/markdown/section-tree) | Heading-derived structure with quality flags. |
+| [Effective Content Units](/metrics/markdown/effective-content-units) | Review-mass normalization across prose and artifacts. |
+| [MRPC](/metrics/markdown/mrpc) | Reading Path Complexity — cyclomatic-complexity analogue for navigation. |
+| [MCC](/metrics/markdown/mcc) | Cognitive Complexity — local reading burden. |
+| [Markdown Halstead](/metrics/markdown/halstead) | Markdown-native operators / operands. |
+| [DMI](/metrics/markdown/dmi) | Documentation Maintainability Index — composite 0–100. |
+| [Link Debt](/metrics/markdown/link-debt) | Link health and reference burden. |
+| [Table Burden + Scaffold](/metrics/markdown/table-burden) | Table cost and cognitive scaffolding. |
+| [Visual Scaffold](/metrics/markdown/visual-scaffold) | Diagrams and images: helping or hurting? |
+| [Artifact Debt](/metrics/markdown/artifact-debt) | Unlabelled, unparsable, oversized, unexplained artifacts. |
+| [Repository Grounding](/metrics/markdown/repository-grounding) | Resolved repo links, paths, identifiers, version facts. |
+| [Evidence Coverage](/metrics/markdown/evidence-coverage) | Per-section structural support density. |
+| [Filler / Lazy Structure Risk](/metrics/markdown/filler-lazy-risk) | AI-era flag for "big but vacuous". |
+| [Review Criticality Index](/metrics/markdown/review-criticality-index) | "Should I review this carefully?" score. |
+| [Section Balance](/metrics/markdown/section-balance) | Are sections sized in a maintainable way? |
+| [Good Scaffold](/metrics/markdown/good-scaffold) | Bonus credit for helpful technical structure. |
+
+## Prose layer (opt-in, feature-gated)
+
+| Page | Purpose |
+|---|---|
+| [Overview](/metrics/markdown/prose/overview) | Architectural constraints and tier model. |
+| [Block-level language detection](/metrics/markdown/prose/language-detection) | Per-block language tagging. |
+| [English readability](/metrics/markdown/prose/english-readability) | FKGL, Fog, SMOG, ARI, Coleman-Liau, Dale-Chall, FORCAST, LIX/RIX. |
+| [Lexical diversity](/metrics/markdown/prose/lexical-diversity) | MATTR, hapax, density. |
+| [Wording quality](/metrics/markdown/prose/wording-quality) | Passive, hedges, weasels, wordy, adverbs, nominalizations, cliches. |
+| [Inclusive language](/metrics/markdown/prose/inclusive-language) | alex / retext-equality flags. |
+| [Japanese script composition](/metrics/markdown/prose/japanese-script-composition) | Kanji/hiragana/katakana ratios, registers. |
+| [Tateishi RS + Jōyō grade](/metrics/markdown/prose/tateishi-and-jouyou) | Japanese readability scores. |
+| [JTF rules](/metrics/markdown/prose/jtf-rules) | Japan Translation Federation 12 rules. |
+| [textlint-ja subset](/metrics/markdown/prose/textlint-ja) | Selected rules from `textlint-rule-preset-ja-technical-writing`. |
+
+## Reference document
+
+The normative reference for derivations and citation graph is
+[`design-docs/mehen_markdown_metrics_research_foundation.md`](https://github.com/ophidiarium/mehen/blob/main/design-docs/mehen_markdown_metrics_research_foundation.md).
+Each metric page below cites the corresponding `(§N.N)` section so you can find the source derivation.
+
+## See also
+
+- [PR comment design](/guides/pr-comment-design) — how Markdown metric deltas surface on pull requests.
+- [Concepts → Output formats](/concepts/output-formats) — Markdown vs. JSON shape.

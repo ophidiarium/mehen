@@ -1,0 +1,69 @@
+---
+title: "Output formats"
+description: "JSON, YAML, TOML, CBOR, text, and GitHub-flavored Markdown."
+keywords: ["output formats", "json", "yaml", "toml", "cbor", "markdown"]
+---
+
+mehen emits five machine-readable formats plus two human-friendly ones.
+
+## Available formats
+
+| Format | Flag | Use |
+|---|---|---|
+| Text | (default) | Console-friendly tables. |
+| JSON | `-O json` | Tooling integration. Use `--pr` for pretty-print. |
+| YAML | `-O yaml` | Human-readable structured output. |
+| TOML | `-O toml` | Config-friendly format. |
+| CBOR | `-O cbor` | Compact binary format. |
+| Markdown | `-O markdown` (diff only) | GitHub-flavored Markdown for PR comments. |
+
+## JSON shape
+
+JSON output is the canonical machine-readable shape. Each file produces:
+
+```json
+{
+  "name": "src/foo.rs",
+  "language": "Rust",
+  "spaces": [
+    {
+      "name": "factorial",
+      "kind": "Function",
+      "start_line": 6,
+      "end_line": 10,
+      "metrics": {
+        "cyclomatic": 1,
+        "cognitive": 0,
+        "loc": { "sloc": 5, "ploc": 4, "lloc": 1, "cloc": 1, "blank": 0 },
+        "halstead": { "volume": 12.0, "difficulty": 1.5, "effort": 18.0 }
+      },
+      "spaces": []
+    }
+  ]
+}
+```
+
+Markdown files have a separate top-level shape with a dedicated
+[`markdown:` block](/metrics/markdown/overview) that reflects the documentation suite.
+
+## Markdown (diff) shape
+
+`mehen diff -O markdown` produces a sticky-comment-friendly Markdown table. See
+[PR comment design](/guides/pr-comment-design) for the layout, the cell-format rules, and the callout
+catalog.
+
+## Pretty printing
+
+JSON and TOML support `--pr`:
+
+```bash
+mehen -m -p src --pr -O json
+```
+
+Without `--pr`, output is compact (one line per file).
+
+## See also
+
+- [Commands → metrics](/commands/metrics).
+- [Commands → diff](/commands/diff).
+- [PR comment design](/guides/pr-comment-design).

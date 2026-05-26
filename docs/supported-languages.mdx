@@ -1,0 +1,54 @@
+---
+title: "Supported languages"
+description: "Source-code and documentation languages mehen analyzes today, plus the parser backing each one."
+keywords: ["mehen languages", "supported languages", "tree-sitter", "polyglot"]
+---
+
+mehen supports nine source languages and Markdown. Per-file language detection is by extension, and the
+matching analyzer crate owns parsing and metric interpretation.
+
+## Source languages
+
+| Language | Extensions | Parser |
+|---|---|---|
+| **C** | `.c`, `.h` | [tree-sitter-c](https://github.com/tree-sitter/tree-sitter-c) |
+| **Go** | `.go` | [tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go) |
+| **Kotlin** | `.kt`, `.kts` | [tree-sitter-kotlin-sg](https://github.com/fwcd/tree-sitter-kotlin) |
+| **PowerShell** | `.ps1`, `.psm1`, `.psd1` | [tree-sitter-pwsh](https://github.com/wharflab/tree-sitter-powershell) |
+| **Python** | `.py` | [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) |
+| **Ruby** | `.rb` | [tree-sitter-ruby](https://github.com/tree-sitter/tree-sitter-ruby) |
+| **Rust** | `.rs` | [tree-sitter-rust](https://github.com/tree-sitter/tree-sitter-rust) |
+| **TypeScript / JavaScript** | `.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs` | [tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript) |
+| **TSX / JSX** | `.tsx`, `.jsx` | [tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript) (TSX grammar) |
+
+<Note>
+TypeScript is a superset of JavaScript, so mehen analyzes `.js` / `.mjs` / `.cjs` through the
+TypeScript grammar and `.jsx` through the TSX grammar.
+</Note>
+
+## Documentation
+
+| Format | Extensions | Parser |
+|---|---|---|
+| **Markdown** | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mdx` | [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark) |
+
+Markdown gets a dedicated documentation metric suite — code-style metrics like cyclomatic complexity and
+NOM/NPA/NPM/WMC do not apply because Markdown has no functions or classes. See
+[Markdown metrics](/metrics/markdown/overview) for the full set.
+
+## SQL (preview)
+
+A dedicated SQL analyzer (`mehen-sql`) is on the roadmap with its own metric family — query-block
+structure, CTE graphs, join graphs, predicate complexity, object-touch risk, dialect portability, and an
+SQL-flavored Halstead. See [SQL metrics overview](/metrics/sql/overview) for the design.
+
+## Polyglot monorepos
+
+mehen runs per-file language detection over any directory tree. Pass multiple roots to limit which trees
+are walked and let mehen pick supported languages from each:
+
+```bash
+mehen -m -p crates/api/src -p apps/web/src -p tools
+```
+
+The [GitHub Action](/guides/github-action) accepts the same multi-path input.

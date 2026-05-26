@@ -1,0 +1,100 @@
+---
+title: "Installation"
+description: "Install mehen via npm, PyPI, or cargo binstall. Native binaries are published for Linux, macOS, and Windows on every release."
+keywords: ["mehen install", "npm", "pypi", "cargo binstall", "homebrew"]
+---
+
+mehen ships native binaries from a single GitHub Release. Pick the toolchain you already have — all three
+paths download the same binaries.
+
+## npm (Node.js)
+
+<Tabs>
+  <Tab title="Global install">
+    ```bash
+    npm install -g mehen
+    ```
+  </Tab>
+  <Tab title="Project-local">
+    ```bash
+    npm install --save-dev mehen
+    ```
+  </Tab>
+  <Tab title="Run without installing">
+    ```bash
+    npx -y mehen --help
+    bunx mehen --help
+    ```
+  </Tab>
+</Tabs>
+
+`mehen` requires Node.js 18 or newer. The correct platform-specific binary is selected automatically at
+install time via npm's `optionalDependencies`.
+
+## PyPI (Python / uv)
+
+<Tabs>
+  <Tab title="uv">
+    ```bash
+    uv tool install mehen
+    # or run without installing
+    uv tool run mehen --help
+    uvx mehen --help
+    ```
+  </Tab>
+  <Tab title="pip">
+    ```bash
+    pip install mehen
+    ```
+  </Tab>
+</Tabs>
+
+The PyPI distribution is built with [maturin](https://maturin.rs) and ships the same Rust binary inside the
+wheel — there is no Python runtime cost.
+
+## cargo binstall (Rust)
+
+If you have a Rust toolchain, [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) downloads
+the pre-built binary from the GitHub Release directly — much faster than `cargo install`, which would build
+from source.
+
+```bash
+cargo binstall --git https://github.com/ophidiarium/mehen mehen
+```
+
+## Build from source
+
+```bash
+git clone https://github.com/ophidiarium/mehen.git
+cd mehen
+cargo build --release
+./target/release/mehen --help
+```
+
+See the [developers guide](/developers/overview) for prerequisites and validation commands.
+
+## Supported platforms
+
+mehen runs on the most common platforms. Native binaries are published for:
+
+| OS | x64 | arm64 |
+|---|---|---|
+| Linux (glibc) | `@mehen/linux-x64-gnu` | `@mehen/linux-arm64-gnu` |
+| Linux (musl) | `@mehen/linux-x64-musl` | `@mehen/linux-arm64-musl` |
+| macOS | `@mehen/darwin-x64` | `@mehen/darwin-arm64` |
+| Windows | `@mehen/win32-x64` | `@mehen/win32-arm64` |
+
+The same archives are attached to each
+[GitHub Release](https://github.com/ophidiarium/mehen/releases) and are what `cargo binstall` consumes.
+
+## Verify the install
+
+```bash
+mehen --help
+mehen --version
+```
+
+<Tip>
+On macOS you may need to allow the binary the first time it runs. Either remove the quarantine attribute
+(`xattr -d com.apple.quarantine $(which mehen)`) or run mehen via your shell once and accept the dialog.
+</Tip>

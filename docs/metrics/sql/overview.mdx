@@ -1,0 +1,75 @@
+---
+title: "SQL metrics — preview"
+description: "What the upcoming mehen-sql analyzer will measure: query-block structure, CTE graphs, join graphs, predicate complexity, object-touch risk, and an SQL Halstead."
+keywords: ["sql metrics", "mehen-sql", "query complexity", "cte", "halstead sql"]
+---
+
+A dedicated SQL analyzer (`mehen-sql`) is on mehen's roadmap. It will introduce a new `sql.*` metric
+namespace tailored to standalone `.sql` files — ad-hoc queries, analytics models, migration scripts,
+stored-program bodies, DDL packages, and mixed scripts.
+
+<Note>
+SQL support is **not yet shipped**. This page documents the design so consumers of mehen can plan
+ahead. Tracking issue: [ophidiarium/mehen#sql-metrics](https://github.com/ophidiarium/mehen/issues).
+</Note>
+
+## Why SQL gets its own family
+
+SQL should not be squeezed into the existing function/class-centric metric model. The dominant
+complexity mechanism in standalone SQL is **relational/dataflow structure** rather than imperative
+control flow:
+
+- Cyclomatic complexity is meaningful for procedural PL/SQL or T-SQL, but not for ordinary declarative
+  SELECT-heavy files.
+- A SELECT with 10 joins and 5 CTEs may have no imperative branches while still being difficult to
+  review.
+- Object-touch risk (DROP, TRUNCATE, MERGE without WHERE) often dominates "review burden" in migration
+  scripts.
+
+## Planned metric namespaces
+
+| Namespace | Examples |
+|---|---|
+| `sql.loc.*` | `physical`, `code`, `comment`, `blank`, `logical`, `comment_density`, `max_statement_lines`. |
+| `sql.statement.*` | `count`, `kind_count.<kind>`, `kind_distinct`, `kind_entropy`, `unparsed_count`. |
+| `sql.query_block.*` | `count`, `max_depth`, `avg_select_items`, `max_select_items`. |
+| `sql.cte.*` | `count`, `recursive_count`, `dependency_edges`, `max_dependency_depth`, `unused_count`, `trivial_count`. |
+| `sql.join.*` | `count`, `kind_count.<kind>`, `outer_count`, `cross_count`, `non_equi_count`, `complex_condition_count`. |
+| `sql.subquery.*` | `count`, `max_depth`, `correlated_count`, `scalar_count`, `exists_count`. |
+| `sql.predicate.*` | `boolean_operator_count`, `max_boolean_depth`, `null_semantics_risk_count`, `sargability_risk_count`. |
+| `sql.case.*` | `count`, `max_depth`, `when_count`, `missing_else_count`. |
+| `sql.aggregate.*` | `function_count`, `distinct_count`, `group_by.*`, `having.count`. |
+| `sql.window.*` | `function_count`, `distinct_spec_count`, `frame_count`. |
+| `sql.set_op.*` | `count`, `kind_count.<kind>`, `union_all_ratio`. |
+| `sql.expression.*` | `count`, `max_depth`, `function.call_count`, `function.nested_call_depth`. |
+| `sql.select.*` | `star_count`, `outer_star_count`, `expression_without_alias_count`. |
+| `sql.identifier.*` | `unqualified_column_ratio`, `quoted_count`, `keyword_identifier_count`. |
+| `sql.object.*`, `sql.dml.*`, `sql.ddl.*`, `sql.dcl.*` | Object-touch and migration-risk metrics. |
+| `sql.dialect.*` | `requested`, `inferred`, `confidence`, `feature_count.<feature>`, `portability_risk_count`. |
+| `sql.parser.*` | `diagnostic_count`, `unparsable_segment_count`, `unparsable_ratio`, `recovery_count`. |
+| `sql.halstead.*` | SQL-flavored Halstead with explicit operator/operand taxonomy. |
+| `sql.procedural.*` | Cyclomatic and cognitive complexity for PL/SQL / T-SQL routines. |
+
+## Planned composite scores
+
+- `sql.structural_complexity` — CTE depth, join count, subquery depth, CASE depth, window count, set op
+  count.
+- `sql.cognitive_complexity` — SQL analogue of code cognitive complexity.
+- `sql.review_burden_index` — file-level rank for likely PR review effort.
+- `sql.change_risk_score` — operational risk in migration scripts.
+- `sql.maintainability_index` — composite with band interpretation.
+- `sql.modularity_health` — CTE use ratio, fan-out, derived-table penalty.
+
+## Roadmap
+
+The roadmap and rationale, including the prior-art review (SQLFluff, sqruff, SonarQube PL/SQL,
+SQLShare, Spider, Piattini & Martínez), is in
+[`design-docs/mehen_sql_metrics_research_foundation.md`](https://github.com/ophidiarium/mehen/blob/main/design-docs/mehen_sql_metrics_research_foundation.md).
+
+See [SQL metrics roadmap](/metrics/sql/roadmap) for the implementation phases.
+
+## See also
+
+- [Code metrics](/metrics/code/overview) — the existing source-code suite.
+- [Markdown metrics](/metrics/markdown/overview) — the existing documentation suite.
+- [Concepts → Spaces](/concepts/spaces) — how SQL spaces will fit the existing model.

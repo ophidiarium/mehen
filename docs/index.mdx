@@ -1,0 +1,79 @@
+---
+title: "mehen — code & documentation metrics"
+description: "Rust-powered CLI for heuristic code and documentation metrics: complexity, maintainability, lines of code, and Markdown documentation health."
+keywords: ["mehen", "code metrics", "documentation metrics", "complexity", "maintainability"]
+---
+
+**mehen** is a fast, deterministic CLI for code and documentation metrics. It analyzes nine source
+languages plus Markdown, runs in a few seconds even on large monorepos, and ships a GitHub Action that
+publishes per-PR metric trends out of the box.
+
+```bash
+mehen -m -p src
+mehen diff --from main --to HEAD --paths src
+```
+
+<Columns cols={2}>
+  <Card title="Get started" icon="rocket" href="/quickstart">
+    Run mehen against your project in under a minute.
+  </Card>
+  <Card title="GitHub Action" icon="github" href="/guides/github-action">
+    Add the action and start posting metric trends on PRs.
+  </Card>
+  <Card title="Code metrics" icon="ruler" href="/metrics/code/overview">
+    Cyclomatic, cognitive, Halstead, MI, ABC, LOC family, NOM, NPA, NPM, WMC.
+  </Card>
+  <Card title="Markdown metrics" icon="book-open" href="/metrics/markdown/overview">
+    DMI, MRPC, MCC, link debt, filler/lazy risk, English/Japanese prose layer.
+  </Card>
+</Columns>
+
+## Why mehen?
+
+<Columns cols={2}>
+  <Card title="Polyglot, per-file" icon="layer-group">
+    Per-file language detection across nine languages plus Markdown. Built for monorepos.
+  </Card>
+  <Card title="Code and documentation" icon="files">
+    A single tool covers source-code complexity *and* Markdown documentation health.
+  </Card>
+  <Card title="Deterministic, no network" icon="lock">
+    Pure static analysis. Same input → same output. Safe for air-gapped CI.
+  </Card>
+  <Card title="PR-native reporting" icon="git-pull-request">
+    Built-in `mehen diff` with sticky GitHub comment via the official action.
+  </Card>
+</Columns>
+
+## What mehen computes
+
+For source code:
+
+- [Cyclomatic complexity](/metrics/code/cyclomatic), [Cognitive complexity](/metrics/code/cognitive),
+  [Halstead metrics](/metrics/code/halstead), [Maintainability Index](/metrics/code/mi),
+  [ABC](/metrics/code/abc).
+- [Function & class shape](/metrics/code/overview): [NOM](/metrics/code/nom), [NARGS](/metrics/code/nargs),
+  [NEXITS](/metrics/code/nexits), [NPA](/metrics/code/npa), [NPM](/metrics/code/npm),
+  [WMC](/metrics/code/wmc).
+- The [LOC family](/metrics/code/loc): SLOC, PLOC, LLOC, CLOC, blanks.
+
+For Markdown documentation:
+
+- [Documentation Maintainability Index (DMI)](/metrics/markdown/dmi).
+- [Markdown Reading Path Complexity (MRPC)](/metrics/markdown/mrpc),
+  [Markdown Cognitive Complexity (MCC)](/metrics/markdown/mcc),
+  [Markdown Halstead](/metrics/markdown/halstead).
+- [Link Debt](/metrics/markdown/link-debt), [Table Burden](/metrics/markdown/table-burden),
+  [Visual Scaffold](/metrics/markdown/visual-scaffold), [Artifact Debt](/metrics/markdown/artifact-debt).
+- [Repository Grounding](/metrics/markdown/repository-grounding),
+  [Evidence Coverage](/metrics/markdown/evidence-coverage),
+  [Filler / Lazy Structure Risk](/metrics/markdown/filler-lazy-risk),
+  [Review Criticality Index](/metrics/markdown/review-criticality-index).
+- An opt-in [English readability ensemble](/metrics/markdown/prose/english-readability) and
+  [Japanese prose layer](/metrics/markdown/prose/japanese-script-composition).
+
+## What is Mehen?
+
+In the Ophidiarium projects, names matter. **Mehen** is a mythical ancient Egyptian serpent associated
+with guarding Ra. In the same spirit, the `mehen` CLI helps guard your codebase and documentation from
+slowly collapsing under complexity.

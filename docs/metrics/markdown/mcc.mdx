@@ -1,0 +1,63 @@
+---
+title: "MCC — Markdown Cognitive Complexity"
+description: "Local reading burden caused by flow breaks, nesting, context switches, and dense artifact clusters."
+keywords: ["mcc", "markdown cognitive", "readability", "documentation complexity"]
+---
+
+**MCC** estimates local reading burden caused by flow breaks, nesting, context switches, and dense
+artifact clusters. It is the documentation analogue of
+[cognitive complexity](/metrics/code/cognitive) for source code.
+
+## Base weights (§8.1)
+
+Each construct contributes a base weight, ranging from `0.20` for a normal heading-level increment up to
+`+4.00` for a verified broken external link.
+
+## Formula
+
+The MCC formula has three multiplicative layers:
+
+```text
+MCC_positive = Σ base_weight(c) · nesting_multiplier(c) · clustering_multiplier(c)
+
+MCC = max(0, MCC_positive − min(Σ scaffold_credit(a), MCC_credit_cap))
+```
+
+### Nesting multiplier (§8.2)
+
+```text
+nesting_multiplier = 1 + 0.18 · nest(n)
+```
+
+Smaller than code-oriented nesting penalties because Markdown nesting is cheaper than control-flow
+nesting.
+
+### Artifact clustering multiplier (§8.3)
+
+Dense clusters of artifacts in a 20-rendered-line window increase local switching cost.
+
+### Scaffolding credit (§8.4)
+
+Well-labelled, bounded, locally explained artifacts earn credit capped at `0.25 · MCC_positive`. Credit
+applies only when label, nearby explanation, and bounded size are all present.
+
+## Interpretation (§8.5)
+
+| MCC | Meaning |
+|---|---|
+| 0–10 | Easy to read. |
+| 11–25 | Normal. |
+| 26–50 | Dense. |
+| > 100 | Documentation subsystem rather than one page. |
+
+## References
+
+- Campbell, G. A. (2018). *Cognitive Complexity — A new way of measuring understandability.* SonarSource.
+  [PDF](https://www.sonarsource.com/resources/cognitive-complexity/) — the design ancestor.
+- Research foundation §8 — MCC derivation and weights.
+
+## See also
+
+- [Cognitive complexity](/metrics/code/cognitive) — the source-code analogue.
+- [MRPC](/metrics/markdown/mrpc) — global reading-path complexity.
+- [Visual Scaffold](/metrics/markdown/visual-scaffold) — artifact scaffolding credit driver.

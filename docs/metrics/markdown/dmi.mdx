@@ -1,0 +1,59 @@
+---
+title: "DMI — Documentation Maintainability Index"
+description: "Composite 0–100 score blending Markdown Halstead, MCC, MRPC, link/table/artifact debt, section balance, filler risk, and good scaffold."
+keywords: ["dmi", "documentation maintainability", "composite score", "documentation quality"]
+---
+
+**DMI** summarizes how maintainable a Markdown file is as a repository artifact. It is the documentation
+analogue of the [Maintainability Index](/metrics/code/mi) for source code.
+
+## Formula (§10)
+
+Components are first normalized to `[0, 1]` (§10.1), then combined:
+
+```text
+DMI = clamp01(
+      1
+    − 0.18 · V_norm       (Markdown Halstead volume)
+    − 0.18 · M_norm       (MCC)
+    − 0.10 · R_norm       (MRPC)
+    − 0.16 · L_norm       (Link Debt)
+    − 0.10 · T_norm       (Table Burden)
+    − 0.10 · A_norm       (Artifact Debt)
+    − 0.10 · S_norm       (Poor Section Balance)
+    − 0.12 · F_norm       (Filler / Lazy Risk)
+    + 0.10 · G_norm       (Good Scaffold)
+) · 100
+```
+
+## Bands (§10.4)
+
+| DMI | Band | Meaning |
+|---|---|---|
+| 85–100 | Highly maintainable | Easy to extend; low review cost. |
+| 70–84 | Good | Normal repository documentation. |
+| 50–69 | Needs attention | Inspect top contributors. |
+| 30–49 | Hard | Review burden is real. |
+| 0–29 | Documentation debt | Likely refactor / split candidate. |
+
+## DMI is not "usefulness"
+
+A long, linear filler document can score respectable DMI while scoring high on
+[Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk). A short dense architecture note can score low
+DMI but be extremely high-value. DMI measures maintainability burden, not value.
+
+The combined **DMI × RCI × Filler Risk** matrix
+([review criticality §18.3](/metrics/markdown/review-criticality-index)) is the canonical way to read
+DMI in context.
+
+## References
+
+- Oman, P. & Hagemeister, J. (1992). *Metrics for assessing a software system's maintainability.*
+  IEEE Conference on Software Maintenance — the source-code MI ancestor.
+- Research foundation §10 — DMI derivation, weights, and bands.
+
+## See also
+
+- [Maintainability Index](/metrics/code/mi) — the source-code analogue.
+- [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) — the orthogonal "is this filler?" axis.
+- [Review Criticality Index](/metrics/markdown/review-criticality-index) — combines DMI with deltas.

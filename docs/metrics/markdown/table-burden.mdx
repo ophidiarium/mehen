@@ -1,0 +1,48 @@
+---
+title: "Table Burden + Scaffold"
+description: "When tables help comprehension and when they become maintenance artifacts."
+keywords: ["table burden", "table scaffold", "documentation", "tables"]
+---
+
+Tables are valuable up to a point. A table with 6–60 cells usually improves comprehension; a table with
+300+ cells is usually a maintenance artifact that belongs in generated output or structured data.
+
+## Per-table burden (§13.1)
+
+Combines wide, long, and cell-count saturation terms with missing-header, empty-cell, and
+alignment-complexity penalties:
+
+```text
+TableBurdenScore = 0.5 · mean(T_burden) + 0.5 · max(T_burden)
+```
+
+The blend of mean and max means a single very large table moves the score even when most other tables
+are fine.
+
+## Table Scaffolding Score (§13.2)
+
+Uses a piecewise size credit:
+
+| Cells | Credit |
+|---|---|
+| 1–5 | `0.2` — too small to matter. |
+| 6–60 | `1.0` — useful comparison scaffold. |
+| 61–150 | `max(0, 1 − (cells − 60) / 120)`. |
+| > 150 | More burden than scaffold; credit is near zero. |
+
+A **hard warning** fires when `cells > 300` OR `cols > 12` OR `rows > 100`, with the suggested
+remediation: split the table, generate it from structured data, or move the source to YAML/JSON/CSV.
+
+## How DMI uses it
+
+Table Burden contributes to [DMI](/metrics/markdown/dmi) via the `T_norm` term; Table Scaffolding is one
+of the components of [Good Scaffold](/metrics/markdown/good-scaffold).
+
+## References
+
+- Research foundation §13 — Table Burden and Scaffolding derivations.
+
+## See also
+
+- [Visual Scaffold](/metrics/markdown/visual-scaffold) — same idea for diagrams and images.
+- [Artifact Debt](/metrics/markdown/artifact-debt) — broader artifact-hygiene metric.

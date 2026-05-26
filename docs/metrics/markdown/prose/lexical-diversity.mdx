@@ -1,0 +1,40 @@
+---
+title: "Lexical diversity"
+description: "Formula-independent vocabulary richness: MATTR, hapax, lexical density, sentence/word moments."
+keywords: ["lexical diversity", "mattr", "hapax", "ttr", "vocabulary"]
+---
+
+Formula-independent indicators of vocabulary richness and content-word saturation. They do not depend on
+syllable counts and are robust across document types.
+
+## What mehen emits (§32)
+
+- **MATTR₅₀ (§32.2)** — Moving-Average Type-Token Ratio over 50-token sliding windows
+  (Covington & McFall 2010). Length-invariant by construction and cheap to compute. MTLD and HD-D are
+  reported as alternative diversity measures behind `--features lexical-diversity`.
+- **Hapax ratio / dis-legomena ratio (§32.4)** — `V_1 / V` and `V_2 / V`. Zipf's law predicts hapax ≈ 0.5
+  on natural prose; > 0.6 flags laundry-list reference dumps, extremely low values flag repetitive
+  template content.
+- **Lexical density (§32.1)** — content words / total words. Without POS tagging, approximated as
+  `1 − stopwords / tokens` using the 175-entry NLTK English stopword list. Typical ranges: spoken ~0.40,
+  written ~0.52, academic ~0.60.
+- **Yule's K (§32.3)** — optional; MATTR is usually sufficient.
+- **Sentence/word length moments (§32.5)** — `avg_sentence_words`, `p90_sentence_words`,
+  `max_sentence_words`, `stddev_sentence_words`, `avg_word_chars`, `p90_word_chars`. These drive the
+  readability formulas but are reported individually so writers see the levers directly.
+
+## References
+
+- Covington, M. A. & McFall, J. D. (2010). *Cutting the Gordian knot: The Moving-Average Type-Token
+  Ratio (MATTR).* Journal of Quantitative Linguistics.
+- McCarthy, P. M. & Jarvis, S. (2010). *MTLD, vocd-D, and HD-D.* Behavior Research Methods.
+- Yule, G. U. (1944). *The Statistical Study of Literary Vocabulary.* Cambridge University Press.
+- Wikipedia: [Lexical density](https://en.wikipedia.org/wiki/Lexical_density),
+  [Type–token ratio](https://en.wikipedia.org/wiki/Type%E2%80%93token_ratio).
+- Research foundation §32 — derivations and threshold rationale.
+
+## See also
+
+- [English readability ensemble](/metrics/markdown/prose/english-readability) — uses sentence-length
+  moments.
+- [Wording quality](/metrics/markdown/prose/wording-quality) — orthogonal style metric.

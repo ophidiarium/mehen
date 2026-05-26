@@ -14,7 +14,7 @@
 - `crates/mehen-markdown/`: Markdown analyzer with embedded-code dispatch via `LanguageDispatcher`.
 - `crates/mehen-git/`, `crates/mehen-report/`: git operations and rendering (JSON, GitHub Markdown).
 - `xtask/`: developer-only commands (kind-enum codegen, AST dumps, audits).
-- `mehen-book/`: mdBook documentation.
+- `docs/`: Mintlify documentation site (replaces the legacy `mehen-book/`).
 
 ## Build and Lint
 Run from repo root:
@@ -83,4 +83,4 @@ When adding or updating a tree-sitter-backed language:
 ## Useful References
 - `README.md`
 - `AGENTS.md`
-- `mehen-book/src/developers/new-language.md`
+- `docs/developers/new-language.mdx`

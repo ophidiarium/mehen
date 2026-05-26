@@ -1,0 +1,63 @@
+---
+title: "Tateishi RS + Jōyō grade"
+description: "Japanese readability scores built from script composition without a morphological analyzer."
+keywords: ["tateishi", "japanese readability", "jouyou grade", "rs"]
+---
+
+mehen's Tier-0 Japanese readability score is the **Tateishi simplified RS** (Tateishi, Ono & Yamada
+1988). It needs only sentence boundaries and script-run features — both computable without a tokenizer.
+
+## Tateishi RS (§35.1)
+
+Simplified 6-variable form:
+
+```text
+RS = −0.12·ls − 1.37·la + 7.4·lh − 23.18·lc − 5.4·lk − 4.67·cp + 115.79
+```
+
+Calibrated so mean ≈ 50, SD ≈ 10. **Higher = easier**. Mehen emits this as `tateishi_rs` with sanity
+guards:
+
+- Refuse when `hiragana_ratio > 0.90` (the formula is gamed upward).
+- Refuse when character count < 300.
+
+## Jōyō grade proxy (§35.2)
+
+The 2,136-character 2010 Jōyō list maps each character to a grade 1–8 (1–6 elementary, 7 = secondary
+Jōyō, 8 = non-Jōyō `hyōgai`). Ships as a ~6 KB static table behind `--features japanese-jouyou`:
+
+```text
+jouyou_grade_mean = mean(grade(c) for each kanji c)
+hyougai_ratio     = non_jouyou_kanji_chars / kanji_chars
+```
+
+`jouyou_grade_mean` is a direct school-grade analogue to Flesch-Kincaid: < 3 indicates elementary
+reading; > 6 indicates high-school+ technical prose.
+
+## Higher-tier formulas (gated)
+
+Behind `--features japanese-morph` (Lindera + IPADIC) or `--features japanese-unidic` (Vibrato +
+UniDic):
+
+- **Shibasaki & Hara (§35.4)** — adds bunsetsu and morphological inputs.
+- **Lee & Hasebe jReadability (§35.5)** — modern web-corpus-trained formula.
+- **Obi / Obi2 (§35.6)** — Japanese textbook-grade analogue.
+- **Mizuno / Goda (§35.7)** — alternative readability work.
+
+JLPT bands (§35.3) — N5–N1 word and kanji bands — are optional behind `--features japanese-jlpt`
+(~300 KB).
+
+## References
+
+- Tateishi, K., Ono, Y., & Yamada, H. (1988). *A Computer Readability Formula of Japanese Texts for
+  Machine Scoring.*
+- 文化審議会 (2010). *常用漢字表.* (Jōyō kanji list, 2010 revision.)
+- Lee, J. & Hasebe, Y. (2017). *jReadability: Web-based Japanese Text Readability Indexing System.*
+- Wikipedia: [Jōyō kanji](https://en.wikipedia.org/wiki/Jōyō_kanji).
+- Research foundation §35 — derivations and threshold rationale.
+
+## See also
+
+- [Japanese script composition](/metrics/markdown/prose/japanese-script-composition) — provides the
+  inputs.
+- [JTF rules](/metrics/markdown/prose/jtf-rules) — Japan Translation Federation conformance.

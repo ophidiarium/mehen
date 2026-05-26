@@ -1,0 +1,75 @@
+---
+title: "Implement LoC"
+description: "Implementation guide for the Lines of Code metric family inside a language analyzer."
+keywords: ["lines of code", "loc", "developers", "implementation"]
+---
+
+This page walks through implementing the [LOC family](/metrics/code/loc) — `loc.sloc`, `loc.ploc`,
+`loc.lloc`, `loc.cloc`, `loc.blank` — for a new language analyzer.
+
+## Five LOC variants
+
+```rust
+/*
+Instruction: Implement factorial function
+For extra credits, do not use mutable state or imperative loops.
+ */
+
+/// Factorial: n! = n*(n-1)*(n-2)*...*3*2*1
+fn factorial(num: u64) -> u64 {
+
+    // use `product` on `Iterator`
+    (1..=num).product()
+}
+```
+
+The example above will be used to illustrate each LOC metric.
+
+### SLOC
+
+A straight count of all lines in the file including code, comments, and blank lines.
+**Value:** 11.
+
+### PLOC
+
+A count of the instruction lines of code contained in the source code. This includes any brackets or
+similar syntax on a new line. Comments and blank lines are excluded.
+**Value:** 3.
+
+### LLOC
+
+The "logical" line count is the number of statements in the code. What a statement is depends on the
+language. In the example there is only a single statement — the function call of `product` with the
+`Iterator` as its argument.
+**Value:** 1.
+
+### CLOC
+
+Number of comments in the code. The type of comment does not matter — single line, block, or doc.
+**Value:** 6.
+
+### Blank
+
+Whitespace-only lines.
+**Value:** 2.
+
+## Implementation
+
+To implement the LOC metrics for a new language, contribute the appropriate node-kind matchers in your
+analyzer crate's `loc` module. mehen's `mehen-metrics::loc` exposes the `LocStats` accumulator that all
+analyzers feed.
+
+The accumulator pattern:
+
+1. Walk the parse tree per-line, deciding whether each line is code, comment, blank, or mixed.
+2. For LLOC, walk the AST and count nodes whose kind matches the language's statement kinds
+   (`expression_statement`, `if_statement`, `for_statement`, …).
+3. Emit `LocStats` on file-close; `mehen-metrics::halstead_routing::insert_loc_metrics` writes the
+   resulting `loc.*` keys.
+
+See `crates/mehen-metrics/src/loc.rs` and the per-language `loc` modules for live examples.
+
+## See also
+
+- [LOC family](/metrics/code/loc) — user-facing reference.
+- [How-to: Add a new language](/developers/new-language) — broader analyzer authoring flow.

@@ -1,0 +1,49 @@
+---
+title: "Effective Content Units (ECU)"
+description: "Review-mass normalization across prose, code blocks, tables, diagrams, math, and HTML/MDX."
+keywords: ["effective content units", "ecu", "review mass", "documentation size"]
+---
+
+**ECU** normalizes review mass so that a small-but-dense ADR is not overshadowed by a long linear README
+in volume comparisons. It blends prose word count with weighted contributions from code, tables,
+diagrams, math, and raw HTML/MDX.
+
+## Formula (§6)
+
+```text
+ECU = W / 240
+    + 0.35 · CLOC
+    + 0.06 · table_cells
+    + 0.40 · diagram_nodes
+    + 0.25 · diagram_edges
+    + 0.12 · math_tokens
+    + 0.20 · raw_html_or_mdx_lines
+```
+
+The `W / 240` term anchors on the standard adult silent-reading-rate scale (~240 words per minute).
+Other coefficients are derived to make a small, dense diagram contribute roughly as much as the
+equivalent paragraph of explanation.
+
+## Interpretation bands (§6.2)
+
+| ECU | Meaning |
+|---|---|
+| `< 5` | Small. |
+| `5–20` | Normal. |
+| `20–60` | Large. |
+| `> 60` | Documentation subsystem — likely wants a split. |
+
+## Why not just word count?
+
+Word count systematically undercounts artifact-heavy docs (architecture diagrams, big tables, code-only
+references) and over-weights prose-heavy docs that may be relatively easy to skim. ECU was introduced so
+"dense vs. linear" shows up directly in volume comparisons.
+
+## References
+
+- Research foundation §6 — ECU derivation, coefficient choices, and the silent-reading-rate anchor.
+
+## See also
+
+- [LOC family](/metrics/markdown/loc-family) — components that feed ECU.
+- [Section tree](/metrics/markdown/section-tree) — per-section ECU aggregation.

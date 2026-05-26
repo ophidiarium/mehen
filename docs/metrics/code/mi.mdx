@@ -1,0 +1,87 @@
+---
+title: "Maintainability Index"
+description: "Composite maintainability score that blends Halstead volume, cyclomatic complexity, and SLOC."
+keywords: ["maintainability index", "mi", "sei", "visual studio", "complexity"]
+---
+
+The **Maintainability Index (MI)** is a composite score that blends Halstead volume, cyclomatic
+complexity, and SLOC into a single number representing how maintainable a unit of code is. mehen reports
+all three commonly used variants.
+
+## What mehen emits
+
+| Key | Type | Variant |
+|---|---|---|
+| `mi.original` | float | Oman & Hagemeister, 1992 (raw, can be negative). |
+| `mi.visual_studio` | float | Microsoft Visual Studio rescale to 0–100. |
+| `mi.sei` | float | Software Engineering Institute (SEI) variant including comment ratio. |
+
+## Formulas
+
+### Original (Oman & Hagemeister, 1992)
+
+```text
+MI_original = 171
+            − 5.2 · ln(V_avg)
+            − 0.23 · CC_avg
+            − 16.2 · ln(LOC_avg)
+```
+
+where `V_avg`, `CC_avg`, `LOC_avg` are averages across the unit.
+
+### Visual Studio (rescaled 0–100)
+
+Microsoft rescaled MI to a 0–100 range so a single threshold could be applied across files:
+
+```text
+MI_VS = max(0, MI_original · 100 / 171)
+```
+
+### SEI (with comment ratio)
+
+The SEI variant adds a documentation term:
+
+```text
+MI_SEI = 171
+       − 5.2 · log₂(V)
+       − 0.23 · CC
+       − 16.2 · log₂(SLOC)
+       + 50 · sin(sqrt(2.4 · CM))
+```
+
+where `CM` is the ratio of comment lines to total lines.
+
+## How to read it
+
+| `mi.visual_studio` | Interpretation (Visual Studio default) |
+|---|---|
+| 20–100 | Maintainable (green). |
+| 10–19 | Moderately maintainable (yellow). |
+| 0–9 | Hard to maintain (red). |
+
+Visual Studio uses these thresholds out of the box.
+
+<Tip>
+MI is a **composite** — it aggregates a few simpler signals. When MI changes, look at the components
+([Halstead volume](/metrics/code/halstead), [Cyclomatic complexity](/metrics/code/cyclomatic),
+[SLOC](/metrics/code/sloc), [CLOC](/metrics/code/cloc)) to understand which input moved. The composite is
+useful for ranking files and tracking trends; it is not the right tool to argue about a specific
+function in isolation.
+</Tip>
+
+## References
+
+- Oman, P. & Hagemeister, J. (1992). *Metrics for assessing a software system's maintainability.*
+  Proc. Conf. Software Maintenance.
+  [DOI](https://doi.org/10.1109/ICSM.1992.242525).
+- Welker, K. D. (2001). *The Software Maintainability Index Revisited.* CrossTalk, August 2001.
+- Microsoft: [Code metrics — Maintainability Index range and meaning](https://learn.microsoft.com/visualstudio/code-quality/code-metrics-values).
+- Wikipedia: [Maintainability](https://en.wikipedia.org/wiki/Maintainability).
+- Radon: [Maintainability Index](https://radon.readthedocs.io/en/latest/intro.html#maintainability-index)
+  — Python reference implementation.
+
+## See also
+
+- [Halstead metrics](/metrics/code/halstead) — input for MI.
+- [Cyclomatic complexity](/metrics/code/cyclomatic) — input for MI.
+- [LOC family](/metrics/code/loc) — SLOC and CLOC are inputs.

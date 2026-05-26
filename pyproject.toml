@@ -28,7 +28,7 @@ keywords = ["metrics", "code-analysis", "complexity", "cyclomatic", "halstead"]
 [project.urls]
 Homepage      = "https://github.com/ophidiarium/mehen"
 Repository    = "https://github.com/ophidiarium/mehen"
-Documentation = "https://github.com/ophidiarium/mehen#readme"
+Documentation = "https://mehen.ophi.dev"
 Issues        = "https://github.com/ophidiarium/mehen/issues"
 
 [tool.maturin]

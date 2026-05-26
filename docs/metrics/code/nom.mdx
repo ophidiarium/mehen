@@ -1,0 +1,44 @@
+---
+title: "NOM — Number of Methods"
+description: "Number of functions and closures declared in a file, trait, or class."
+keywords: ["nom", "number of methods", "functions", "closures"]
+---
+
+**NOM** (Number of Methods) counts how many functions and closures live inside a unit (file, trait,
+class, or module).
+
+## What mehen emits
+
+| Key | Type | Description |
+|---|---|---|
+| `nom` | int | Total methods (named functions + closures). |
+| `nom.functions` | int | Number of named functions. |
+| `nom.closures` | int | Number of closures/lambdas. |
+| `nom.functions_min` / `_max` / `_average` | — | Aggregates across child spaces. |
+| `nom.closures_min` / `_max` / `_average` | — | Aggregates across child spaces. |
+| `nom.average_functions` / `nom.average_closures` | float | Means per child space. |
+| `nom.total_functions` / `nom.total_closures` | int | Aliases of `nom.functions` and `nom.closures`. |
+
+## How to read it
+
+| `nom` | Interpretation |
+|---|---|
+| 1–10 | Small file/class; usually fine. |
+| 11–25 | Medium; expected in most app-layer code. |
+| 26+ | Likely a god-class candidate; pair with [WMC](/metrics/code/wmc) to confirm. |
+
+The split between `nom.functions` and `nom.closures` is informative. A file with 5 named functions and
+50 closures is usually a callback-heavy piece (e.g., an event-driven module).
+
+## References
+
+- Chidamber, S. R. & Kemerer, C. F. (1994). *A Metrics Suite for Object Oriented Design.* IEEE TSE.
+  [DOI](https://doi.org/10.1109/32.295895). (NOM is one of the original CK metrics.)
+- Sonar: [Metrics definitions](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/) — `functions` count.
+
+## See also
+
+- [WMC](/metrics/code/wmc) — weighted methods per class (uses NOM as a divisor in some
+  implementations).
+- [NPM](/metrics/code/npm) — public methods only.
+- [NPA](/metrics/code/npa) — public attributes.

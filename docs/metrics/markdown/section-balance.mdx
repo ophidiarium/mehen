@@ -1,0 +1,34 @@
+---
+title: "Section Balance"
+description: "Whether a Markdown document is chunked in a maintainable way."
+keywords: ["section balance", "headings", "structure", "documentation"]
+---
+
+**Section Balance (§20)** checks whether the document is chunked in a maintainable way. It penalizes:
+
+- Oversized sections at the 95th percentile.
+- A high rate of very large sections.
+- A high rate of tiny sections.
+- Heading skips (e.g., `H2 → H4`).
+- Heading depth deviation from a profile-specific expectation.
+
+## Inputs
+
+- The [section tree](/metrics/markdown/section-tree).
+- Per-section word counts (§4) from the LOC family.
+- Profile-specific expected depth (default depends on doc type).
+
+## How DMI uses it
+
+Section Balance feeds [DMI](/metrics/markdown/dmi) via the `S_norm` term — "poor section balance"
+*reduces* DMI.
+
+## References
+
+- Research foundation §20 — Section Balance derivation.
+
+## See also
+
+- [Section tree](/metrics/markdown/section-tree) — input structure.
+- [Filler / Lazy Risk](/metrics/markdown/filler-lazy-risk) — separate "lazy sectioning" sub-score.
+- [Good Scaffold](/metrics/markdown/good-scaffold) — orthogonal "did the scaffolding help?" axis.

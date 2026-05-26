@@ -1,0 +1,81 @@
+---
+title: "SQL metrics roadmap"
+description: "Implementation phases for the upcoming mehen-sql analyzer."
+keywords: ["mehen-sql roadmap", "sql analyzer", "implementation"]
+---
+
+The SQL analyzer ships in phases. Each phase delivers usable output before the next phase compounds on
+it.
+
+## Phase 1 — parser adapter and raw metrics
+
+Deliverables:
+
+- Dialect selection / configuration (CLI flag, project config, conservative inference).
+- Parse diagnostics and parser-confidence metrics.
+- Statement count and statement-kind classification.
+- LOC / comment / blank / code metrics for `.sql` files.
+- Query-block count / depth.
+- CTE count and dependency graph.
+- Join count / kind metrics.
+- Subquery and derived-table metrics.
+- CASE, boolean predicate, window, aggregate, set-operation counts.
+- SELECT `*`, missing alias, unqualified column ratio.
+- Basic DDL/DML risk metrics.
+- SQL Halstead counts.
+
+This phase is enough to produce valuable top-offender output.
+
+## Phase 2 — composite scores and profiles
+
+- `sql.structural_complexity`.
+- `sql.cognitive_complexity`.
+- `sql.review_burden_index`.
+- `sql.change_risk_score`.
+- `sql.maintainability_index`.
+- `sql.modularity_health`.
+- Profile-based thresholds (`sql.analytics_default`, `sql.migration_default`, `sql.procedural_default`).
+- Diff-aware deltas.
+
+## Phase 3 — procedural SQL
+
+- PL/SQL and T-SQL procedural block detection.
+- Procedural cyclomatic / cognitive complexity (using Sonar's PL/SQL increments as reference).
+- Exception / cursor / loop / dynamic-SQL metrics.
+- Embedded query complexity attribution inside routines.
+
+## Phase 4 — optional schema and lineage enrichments
+
+- Optional schema catalog input.
+- More accurate object/column reference resolution.
+- Foreign-key-aware join graph classification.
+- Optional sqruff lineage integration or mehen lineage implementation.
+- Schema blast-radius metrics.
+
+## Dialect coverage (initial)
+
+`ansi`, `postgres`, `sqlite`, `mysql`, `tsql`, `oracle/plsql`, `snowflake`, `bigquery`, `duckdb` (subject
+to parser maturity).
+
+## Validation strategy
+
+- **Golden fixtures** by dialect and file role (analytics, migration, procedural).
+- **Prior-art compatibility tests** against `sqlfluff-complexity` CPX rules.
+- **Repository calibration** on migration-heavy, dbt/analytics, app-embedded SQL, and PL/SQL projects.
+- **Human validation** ranking sampled SQL files against `structural_complexity`, `cognitive_complexity`,
+  `review_burden_index`, Halstead volume, and LOC.
+
+## References
+
+- [`design-docs/mehen_sql_metrics_research_foundation.md`](https://github.com/ophidiarium/mehen/blob/main/design-docs/mehen_sql_metrics_research_foundation.md)
+  — full specification.
+- [SonarQube PL/SQL](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/languages/pl-sql).
+- [SonarQube T-SQL](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/languages/t-sql).
+- [SQLFluff complexity plugin](https://github.com/yu-iskw/sqlfluff-complexity).
+- [sqruff](https://playground.quary.dev/docs/).
+- [Spider benchmark](https://yale-lily.github.io/spider).
+
+## See also
+
+- [SQL metrics overview](/metrics/sql/overview) — namespace inventory.
+- [Concepts → Architecture](/concepts/architecture) — where `mehen-sql` will fit.

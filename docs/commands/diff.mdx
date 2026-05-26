@@ -1,0 +1,64 @@
+---
+title: "mehen diff"
+description: "Diff metrics between two git revisions and emit a per-file delta report as JSON or Markdown."
+keywords: ["mehen diff", "metric delta", "git diff", "pr report"]
+---
+
+`mehen diff` compares metrics between two git revisions and emits a per-file delta report. It is the
+engine behind the [GitHub Action](/guides/github-action) and the recommended way to wire mehen into a
+PR workflow.
+
+## Usage
+
+```bash
+mehen diff --from <base-ref> --to <head-ref> --paths <path>...
+```
+
+| Flag | Description |
+|---|---|
+| `--from` | Base git revision (e.g., `main`, a SHA, or a tag). |
+| `--to` | Head git revision (default: `HEAD`). |
+| `--paths` | One or more paths to scan. Repeatable. |
+| `--metrics` | Comma-separated list of metrics to include. |
+| `--include` | Glob pattern to include. Repeatable. |
+| `--exclude` | Glob pattern to exclude. Repeatable. |
+| `--output-format` | `json` or `markdown`. |
+| `--show-unchanged` | Include files where every selected metric is unchanged. |
+| `--ignore-generated` | Skip files matched by `.gitattributes linguist-generated`. |
+
+## Output formats
+
+<Tabs>
+  <Tab title="Markdown">
+    GitHub-flavored Markdown table optimized for sticky PR comments. This is what the
+    [GitHub Action](/guides/github-action) posts on each PR.
+  </Tab>
+  <Tab title="JSON">
+    Per-file deltas with both old and new values for every metric. Designed to be parsed by CI scripts
+    that want their own threshold logic.
+  </Tab>
+</Tabs>
+
+## Example
+
+```bash
+# Compare PR head against main
+mehen diff --from main --to HEAD --paths src --output-format markdown
+```
+
+```bash
+# JSON output for CI scripts
+mehen diff --from "$BASE_SHA" --to "$HEAD_SHA" --paths . \
+           --output-format json > metrics-diff.json
+```
+
+## What gets compared
+
+mehen runs `mehen -m` against each side, joins by file path, and computes per-metric deltas. Files that
+exist on only one side are reported as new or deleted.
+
+## See also
+
+- [GitHub Action](/guides/github-action) — runs `mehen diff` for you and posts the report on PRs.
+- [PR comment design](/guides/pr-comment-design) — Markdown comment template.
+- [Concepts → Thresholds and diffs](/concepts/thresholds-and-diffs) — how thresholds gate the action.

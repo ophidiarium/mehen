@@ -1,0 +1,72 @@
+---
+title: "Compute metrics"
+description: "Compute and display source-code and Markdown metrics for files or directories."
+keywords: ["mehen", "metrics command", "cli", "static analysis"]
+---
+
+`mehen` (with the `-m` flag) computes static metrics for a file or directory.
+
+## Display metrics
+
+```bash
+mehen -m -p /path/to/your/file/or/directory
+```
+
+| Flag | Description |
+|---|---|
+| `-m` | Compute metrics. |
+| `-p` | Path to the file or directory to analyze. If a directory, analyzes all supported files in it. |
+| `-I` | Glob pattern to include (e.g., `"*.ts"`). Repeatable. |
+| `-X` | Glob pattern to exclude. Repeatable. |
+
+## Export metrics
+
+mehen supports five output formats: `text` (default), `json`, `yaml`, `toml`, and `cbor`.
+
+```bash
+mehen -m -p /path/to/your/file/or/directory -O json -o /path/to/output/directory
+```
+
+| Flag | Description |
+|---|---|
+| `-O` | Output format (`json`, `toml`, `yaml`, `cbor`). |
+| `-o` | Path to save the output file. The output filename is the input filename plus the format extension. If omitted, the result is printed to stdout. |
+| `--pr` | Pretty-print (JSON / TOML). |
+
+## Pretty-printed JSON
+
+```bash
+mehen -m -p src --pr -O json
+```
+
+## Examples
+
+<Tabs>
+  <Tab title="Console (default)">
+    ```bash
+    mehen -m -p src
+    ```
+  </Tab>
+  <Tab title="JSON to disk">
+    ```bash
+    mehen -m -p src -O json -o ./metrics
+    ```
+  </Tab>
+  <Tab title="YAML to stdout">
+    ```bash
+    mehen -m -p src -O yaml
+    ```
+  </Tab>
+  <Tab title="Filter by extension">
+    ```bash
+    mehen -m -p . -I "*.ts" -I "*.tsx" -X "**/*.test.ts"
+    ```
+  </Tab>
+</Tabs>
+
+## See also
+
+- [`mehen diff`](/commands/diff) — compare metrics between two revisions.
+- [Concepts → Output formats](/concepts/output-formats) — schema details.
+- [Code metrics](/metrics/code/overview), [Markdown metrics](/metrics/markdown/overview) — what each
+  metric means.
