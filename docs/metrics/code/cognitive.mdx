@@ -31,7 +31,7 @@ complexity. It applies three rules:
 
 ```python
 # Cyclomatic: 4   (one + for each of the four boolean operators)
-# Cognitive:  4   (1 for the if, +1 nesting, +2 for &&/|| mix)
+# Cognitive:  3   (1 for the if, +2 for the &&/|| mix; no nesting increment for a top-level if)
 def is_eligible(user):
     if user and (user.is_active or user.is_admin) and not user.is_banned:
         return True
