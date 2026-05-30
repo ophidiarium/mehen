@@ -71,7 +71,7 @@ num-traits = "^0.2"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 smol_str = { version = "^0.3", features = ["serde"] }
-gix = { version = "^0.83", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
+gix = { version = "^0.84", default-features = false, features = ["attributes", "max-performance-safe", "revision", "sha1"] }
 
 tree-sitter = "=0.26.9"
 # Per-language grammars (`tree-sitter-c`, `tree-sitter-go`,
