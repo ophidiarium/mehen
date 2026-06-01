@@ -38,6 +38,38 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please rewrites [workspace.package].version in Cargo.toml but
+      # only patches the top-level mehen entry in Cargo.lock — the 17 workspace
+      # crates that inherit `version.workspace = true` stay at the old version,
+      # which makes `cargo build --locked` fail in CI on the release PR.
+      - name: Sync workspace versions in Cargo.lock
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH=$(echo "$PR_JSON" | jq -r '.headBranchName')
+          if [ -z "$BRANCH" ] || [ "$BRANCH" = "null" ]; then
+            echo "No release-please branch reported; skipping lockfile sync."
+            exit 0
+          fi
+          echo "Syncing Cargo.lock on $BRANCH"
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          rustup toolchain install stable --profile minimal --no-self-update
+          cargo update --workspace
+          if git diff --quiet -- Cargo.lock; then
+            echo "Cargo.lock already in sync."
+            exit 0
+          fi
+          git config user.name "ophiarch[bot]"
+          git config user.email "ophiarch[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "build: sync workspace crate versions in Cargo.lock"
+          git push origin "$BRANCH"
+
       # The release-please action creates the git tag when a release PR is merged.
       # Tags created with a GitHub App token (not GITHUB_TOKEN) trigger the
       # release.yml workflow (on tags matching 'v*.*.*').
